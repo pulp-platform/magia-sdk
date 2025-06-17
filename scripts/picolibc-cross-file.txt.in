@@ -1,0 +1,21 @@
+# Copyright 2024 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+[binaries]
+c = [ '@CROSS_C_COMPILER@', @CROSS_C_COMPILER_ARGS_LIST@ ]
+ar = '@CROSS_AR@'
+strip = '@CROSS_STRIP@'
+
+[host_machine]
+system = '@CROSS_SYSTEM@'
+cpu_family = '@CROSS_CPU_FAMILY@'
+cpu = '@CROSS_CPU@'
+endian = '@CROSS_ENDIAN@'
+
+[built-in options]
+c_args = [ @CROSS_C_ARGS_LIST@ ]
+c_link_args = [ @CROSS_C_LINK_ARGS_LIST@ ]
+
+[properties]
+skip_sanity_check = @CROSS_SKIP_SANITY_CHECK@
