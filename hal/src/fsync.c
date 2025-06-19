@@ -28,10 +28,18 @@ __attribute__((weak)) int fsync_sync(fsync_controller_t *ctrl, uint32_t level){
     return 1;
 }*/
 
+/*
+__attribute__((weak)) int fsync_getgroup(fsync_controller_t *ctrl, uint32_t level){
+    (void) ctrl;
+    (void) level;
+    return 1;
+}*/
+
 /*----------------------------------------*/
 /* Export the controller API for the Fsync */
 /*----------------------------------------*/
 __attribute__((weak)) fsync_controller_api_t fsync_api = {
     .init = fsync_init,
     .sync = fsync_sync,
+    .getgroup = fsync_getgroup,
 };

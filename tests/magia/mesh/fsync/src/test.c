@@ -11,21 +11,17 @@
 #include "fsync.h"
 
 /**
- * Writes a value to the L1 memory address to be used to verify correct synchronization.
+ * Writes the group ID increased by an offset to the L1 memory address to be used to verify correct synchronization.
  * Delays the write by an increasing number of nops depending on the core id.
- * The value written is calculated based on the tile's X and Y position in the mesh and the current synchronization level.
- * The value is a "mock-id" of the synchronized area the tile is part of, plus an offset depending of the current sync level.
- * Refer to MAGIA pubblication and documentation for a detailed explanation of the different synchronization level geometries. 
  */
-int write_delayed(uint8_t lvl, uint32_t id, uint32_t x, uint32_t y, uint32_t addr){
-    uint8_t val = (uint8_t)((x >> ((lvl + 2) / 2)) + ((y >> ((lvl + 1) / 2))*(MESH_X_TILES >> ((lvl + 2) / 2))));
+int write_delayed(uint8_t lvl, uint32_t id, uint8_t groupid, uint32_t addr){
     if(lvl){
         for(uint8_t i = lvl; i > 0; i--){
-            val += (NUM_HARTS >> i);
+            groupid += (NUM_HARTS >> i);
         }
     }
     wait_nop(100 * id);
-    mmio8(addr) = val;
+    mmio8(addr) = groupid;
     return 0;
 }
 
@@ -33,15 +29,9 @@ int write_delayed(uint8_t lvl, uint32_t id, uint32_t x, uint32_t y, uint32_t add
  * Compares the value written in L1 memory with the value written in L1 memory of the tile_0 of the same synched mesh area.
  * To locate which tile is the tile_0, the value stored in L1 (the "mock-id") is used to calculate the X and Y of tile_0 (and its ID).
  */
-int check_values(uint8_t lvl, uint32_t id, uint32_t x, uint32_t y, uint32_t addr){
+int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr){
     uint8_t val = *(volatile uint8_t*)(addr);
-    uint8_t val2 = val;
-    if(lvl){
-        for(uint8_t i = lvl; i > 0; i--){
-            val2 = val2 - (NUM_HARTS >> i);
-        }
-    }
-    uint8_t id_0 = (((val2 % (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 2) / 2)) + (((val2 / (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 1) / 2)) * MESH_X_TILES));
+    uint8_t id_0 = (((groupid % (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 2) / 2)) + (((groupid / (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 1) / 2)) * MESH_X_TILES));
     uint8_t val_0 = *(volatile uint8_t*)(L1_BASE + (id_0 * L1_TILE_OFFSET));
     uint8_t flag = 0;
     if(val_0 != val){
@@ -74,9 +64,8 @@ int main(void){
 
     fsync_init(&fsync_ctrl);
 
-    uint32_t y_id = GET_Y_ID(hartid);
-    uint32_t x_id = GET_X_ID(hartid);
     uint32_t l1_tile_base = L1_BASE + hartid * L1_TILE_OFFSET;
+    uint8_t groupid;
     uint8_t flag = 0;
 
     /**
@@ -86,14 +75,14 @@ int main(void){
     for(uint8_t i = 0; i < MAX_SYNC_LVL; i++){
         //printf("Entering synchronization level %d", i);
         /**
-        * 1_a. Synchronize before write (waits the read of the previous cycle).
+        * 1_a. Get the group ID for the current synch level.
         */
-        fsync_sync(&fsync_ctrl, (uint32_t) i);
+        groupid = (uint8_t)fsync_getgroup(&fsync_ctrl, (uint32_t) i);
 
         /**
         * 1_b. Write value.
         */
-        write_delayed(i, hartid, x_id, y_id, l1_tile_base);
+        write_delayed(i, hartid, groupid, l1_tile_base);
 
         /**
         * 1_c. Synchronize on the current level.
@@ -103,8 +92,13 @@ int main(void){
         /**
         * 1_d. Check if the other tiles have written the correct value.
         */
-        if(check_values(i, hartid, x_id, y_id, l1_tile_base))
-            flag=1;    
+        if(check_values(i, groupid, l1_tile_base))
+            flag=1;
+            
+        /**
+        * 1_e. Synchronize before next cycle write.
+        */
+        fsync_sync(&fsync_ctrl, (uint32_t) i);
     }
 
     if(!flag){

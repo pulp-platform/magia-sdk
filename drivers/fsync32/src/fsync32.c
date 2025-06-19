@@ -44,14 +44,28 @@ int fsync32_sync(fsync_controller_t *ctrl, uint32_t level){
     return 0;
 }
 
+/**
+ * Gets the group ID of the current tile in the selected synchronization level.
+ * When calling sync(level), all the tiles with the same group ID of that level will synchronize.
+ *
+ * @param level Synch level to get the group ID from.
+ */
+int fsync32_getgroup(fsync_controller_t *ctrl, uint32_t level){
+    uint32_t id = get_hartid();
+    return ((GET_X_ID(id) >> ((level + 2) / 2)) + ((GET_Y_ID(id) >> ((level + 1) / 2))*(MESH_X_TILES >> ((level + 2) / 2))));
+}
+
 extern int fsync_init(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_init"), used, visibility("default")));
 extern int fsync_sync(fsync_controller_t *ctrl, uint32_t level)
     __attribute__((alias("fsync32_sync"), used, visibility("default")));
+extern int fsync_getgroup(fsync_controller_t *ctrl, uint32_t level)
+    __attribute__((alias("fsync32_getgroup"), used, visibility("default")));
 
 /* Export the FSYNC-specific controller API */
 fsync_controller_api_t fsync_api = {
     .init = fsync32_init,
     .sync = fsync32_sync,
+    .getgroup = fsync32_getgroup,
 };
 

@@ -46,6 +46,11 @@ extern int fsync_init(fsync_controller_t *ctrl);
  */
 extern int fsync_sync(fsync_controller_t *ctrl, uint32_t level);
 
+/**
+ * Gets the current tile's group ID for the selected synchronization level.
+ */
+extern int fsync_getgroup(fsync_controller_t *ctrl, uint32_t level);
+
 
 /**
  * WIP
@@ -54,6 +59,7 @@ extern int fsync_sync(fsync_controller_t *ctrl, uint32_t level);
 struct fsync_controller_api {
     int (*init)(fsync_controller_t *ctrl);
     int (*sync)(fsync_controller_t *ctrl, uint32_t level);
+    int (*getgroup)(fsync_controller_t *ctrl, uint32_t level);
 };
 
 /*
