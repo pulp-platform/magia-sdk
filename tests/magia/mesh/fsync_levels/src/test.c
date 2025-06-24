@@ -11,7 +11,7 @@
 #include "fsync.h"
 
 /**
- * Writes the group ID increased by an offset to the L1 memory address to be used to verify correct synchronization.
+ * Writes the group ID increased by an offset to the L1 memory address to be used to verify correct horizzontal synchronization.
  * Delays the write by an increasing number of nops depending on the core id.
  */
 int write_delayed(uint8_t lvl, uint32_t id, uint8_t groupid, uint32_t addr){
@@ -27,7 +27,7 @@ int write_delayed(uint8_t lvl, uint32_t id, uint8_t groupid, uint32_t addr){
 
 /**
  * Compares the value written in L1 memory with the value written in L1 memory of the tile_0 of the same synched mesh area.
- * To locate which tile is the tile_0, the value stored in L1 (the "mock-id") is used to calculate the X and Y of tile_0 (and its ID).
+ * To locate which tile is the tile_0, the value stored in L1 (the "group-id") is used to calculate the X and Y of tile_0 (and its ID).
  */
 int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr){
     uint8_t val = *(volatile uint8_t*)(addr);
@@ -44,7 +44,7 @@ int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr){
 }
 
 /**
- * This test checks the correctness of the Fractal Sync mechanism for synchronizing mesh tiles at different tree levels.
+ * This test checks the correctness of the Fractal Sync mechanism for synchronizing mesh tiles at different horizzontal tree levels.
  * Each tiles of the same synchronization level writes an identical value in its L1 memory.
  * After the write, each tile reads the value written by the others in the same synchronization level to check their correctness.
  * Each tile has a delay on the write proportional to its ID, making the synchronization mechanism mandatory. 
@@ -77,7 +77,7 @@ int main(void){
         /**
         * 1_a. Get the group ID for the current synch level.
         */
-        groupid = (uint8_t)fsync_getgroup(&fsync_ctrl, (uint32_t) i);
+        groupid = (uint8_t)fsync_getgroup_level_h(&fsync_ctrl, (uint32_t) i);
 
         /**
         * 1_b. Write value.
@@ -85,9 +85,9 @@ int main(void){
         write_delayed(i, hartid, groupid, l1_tile_base);
 
         /**
-        * 1_c. Synchronize on the current level.
+        * 1_c. Synchronize on the current horizzontal level.
         */
-        fsync_sync(&fsync_ctrl, (uint32_t) i);
+        fsync_sync_level_h(&fsync_ctrl, (uint32_t) i);
 
         /**
         * 1_d. Check if the other tiles have written the correct value.
@@ -96,13 +96,13 @@ int main(void){
             flag=1;
             
         /**
-        * 1_e. Synchronize before next cycle write.
+        * 1_e. Synchronize again before next cycle write.
         */
-        fsync_sync(&fsync_ctrl, (uint32_t) i);
+        fsync_sync_level_h(&fsync_ctrl, (uint32_t) i);
     }
 
     if(!flag){
-        printf("No errors detected for all synchronization levels! (MAX LEVEL: %d)\n", (MAX_SYNC_LVL-1));
+        printf("No errors detected for all horizzontal synchronization levels! (MAX H LEVEL: %d)\n", (MAX_SYNC_LVL-1));
     }
 
     magia_return(hartid, PASS_EXIT_CODE);

@@ -42,14 +42,14 @@ extern fsync_config_t default_cfg;
 extern int fsync_init(fsync_controller_t *ctrl);
 
 /**
- * Synchronizes the current tile with the ones of the same synchronization level.
+ * Synchronizes the current tile with the ones of the same horizzontal synchronization level.
  */
-extern int fsync_sync(fsync_controller_t *ctrl, uint32_t level);
+extern int fsync_sync_level_h(fsync_controller_t *ctrl, uint32_t level);
 
 /**
- * Gets the current tile's group ID for the selected synchronization level.
+ * Gets the current tile's horizzontal group ID for the selected synchronization level.
  */
-extern int fsync_getgroup(fsync_controller_t *ctrl, uint32_t level);
+extern int fsync_getgroup_level_h(fsync_controller_t *ctrl, uint32_t level);
 
 
 /**
@@ -58,8 +58,8 @@ extern int fsync_getgroup(fsync_controller_t *ctrl, uint32_t level);
  */
 struct fsync_controller_api {
     int (*init)(fsync_controller_t *ctrl);
-    int (*sync)(fsync_controller_t *ctrl, uint32_t level);
-    int (*getgroup)(fsync_controller_t *ctrl, uint32_t level);
+    int (*sync_level_h)(fsync_controller_t *ctrl, uint32_t level);
+    int (*getgroup_level_h)(fsync_controller_t *ctrl, uint32_t level);
 };
 
 /*

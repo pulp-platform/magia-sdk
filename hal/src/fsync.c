@@ -40,6 +40,6 @@ __attribute__((weak)) int fsync_getgroup(fsync_controller_t *ctrl, uint32_t leve
 /*----------------------------------------*/
 __attribute__((weak)) fsync_controller_api_t fsync_api = {
     .init = fsync_init,
-    .sync = fsync_sync,
-    .getgroup = fsync_getgroup,
+    .sync_level_h = fsync_sync_level_h,
+    .getgroup_level_h = fsync_getgroup_level_h,
 };
