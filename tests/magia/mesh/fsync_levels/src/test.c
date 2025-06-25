@@ -32,7 +32,7 @@ int write_delayed(uint8_t lvl, uint32_t id, uint8_t groupid, uint32_t addr){
 int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr){
     uint8_t val = *(volatile uint8_t*)(addr);
     uint8_t id_0 = (((groupid % (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 2) / 2)) + (((groupid / (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 1) / 2)) * MESH_X_TILES));
-    uint8_t val_0 = *(volatile uint8_t*)(L1_BASE + (id_0 * L1_TILE_OFFSET));
+    uint8_t val_0 = *(volatile uint8_t*)(get_l1_base(id_0));
     uint8_t flag = 0;
     if(val_0 != val){
         printf("Error detected at sync level %d - val is: %d but val_0 (id_0:%d) is %d", lvl, val, id_0, val_0);
@@ -51,7 +51,7 @@ int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr){
  */
 int main(void){
     /** 
-     * 0. Get the tile's hartid, mesh coordinates and define its L1 base, also initialize the controllers for fsync.
+     * 0. Get the tile's hartid and define its L1 base, also initialize the controllers for fsync.
      */
     uint32_t hartid = get_hartid();
 
@@ -64,7 +64,7 @@ int main(void){
 
     fsync_init(&fsync_ctrl);
 
-    uint32_t l1_tile_base = L1_BASE + hartid * L1_TILE_OFFSET;
+    uint32_t l1_tile_base = get_l1_base(hartid);
     uint8_t groupid;
     uint8_t flag = 0;
 

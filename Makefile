@@ -33,6 +33,7 @@ tiles 			?= 2
 
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
+tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
 clean:
 	rm -rf build/
@@ -40,6 +41,7 @@ clean:
 build:
 	sed -i -E 's/^#define MESH_([XY])_TILES[[:space:]]*[0-9]+/#define MESH_\1_TILES $(tiles)/' ./targets/magia/include/addr_map/tile_addr_map.h
 	sed -i -E 's/^(#define MAX_SYNC_LVL[[:space:]]*)[0-9]+/\1$(tiles_log)/' ./targets/magia/include/addr_map/tile_addr_map.h
+	sed -i -E 's/^(#define MESH_2_POWER[[:space:]]*)[0-9]+/\1$(tiles_log_real)/' ./targets/magia/include/addr_map/tile_addr_map.h
 ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
 endif

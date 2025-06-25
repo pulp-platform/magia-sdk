@@ -39,6 +39,10 @@ inline uint32_t get_hartid(){
     return hartid;
 }
 
+inline uint32_t get_l1_base(uint32_t hartid){
+    return L1_BASE + hartid * L1_TILE_OFFSET;
+}
+
 inline void amo_increment(volatile uint32_t addr){
     asm volatile("addi t0, %0, 0" ::"r"(addr));
     asm volatile("li t1, 1" ::);

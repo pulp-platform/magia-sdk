@@ -56,12 +56,39 @@ int fsync32_getgroup_level_h(fsync_controller_t *ctrl, uint32_t level){
     return ((GET_X_ID(id) >> ((level + 2) / 2)) + ((GET_Y_ID(id) >> ((level + 1) / 2))*(MESH_X_TILES >> ((level + 2) / 2))));
 }
 
+/**
+ * Synchronize the tile with the others of the same mesh row.
+ * ID is the tile row id multiplied by 2 (even=horizontal fsync).
+ * Rows past the middle point can use the same ID as the ones before it.
+ * Aggregate is 1 in even levels, 0 in odd levels.
+ * Since each architecture rows/columns are a power of 2 (up to 32), I'm shifting 2 bits for each power difference.
+ * It just works - Todd howard
+ */
+int fsync32_sync_row(fsync_controller_t *ctrl) {
+    uint32_t y_id = GET_Y_ID(get_hartid()) % (MESH_Y_TILES/2);
+    fsync(y_id * 2, (0b101010101 >> ((5 - MESH_2_POWER) * 2)));
+    return 0;
+}
+
+/**
+ * Synchronize the tile with the others of the same mesh column.
+ */
+int fsync32_sync_col(fsync_controller_t *ctrl) {
+    uint32_t x_id = GET_X_ID(get_hartid()) % (MESH_X_TILES/2);
+    fsync(((x_id * 2) + 1), (0b101010101 >> ((5 - MESH_2_POWER) * 2)));
+    return 0;
+}
+
 extern int fsync_init(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_init"), used, visibility("default")));
 extern int fsync_sync_level_h(fsync_controller_t *ctrl, uint32_t level)
     __attribute__((alias("fsync32_sync_level_h"), used, visibility("default")));
 extern int fsync_getgroup_level_h(fsync_controller_t *ctrl, uint32_t level)
     __attribute__((alias("fsync32_getgroup_level_h"), used, visibility("default")));
+extern int fsync_sync_row(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_sync_row"), used, visibility("default")));
+extern int fsync_sync_col(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_sync_col"), used, visibility("default")));
 
 /* Export the FSYNC-specific controller API */
 fsync_controller_api_t fsync_api = {

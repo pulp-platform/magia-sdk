@@ -4,11 +4,11 @@
 //
 // Alberto Dequino <alberto.dequino@unibo.it>
 
-#ifndef _TEST_FSYNC_INCLUDE_GUARD_
-#define _TEST_FSYNC_INCLUDE_GUARD_
+#ifndef _TEST_FSYNC_LEVELS_INCLUDE_GUARD_
+#define _TEST_FSYNC_LEVELS_INCLUDE_GUARD_
 
 int write_delayed(uint8_t lvl, uint32_t id, uint8_t groupid, uint32_t addr);
 
 int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr);
 
-#endif //_TEST_FSYNC_INCLUDE_GUARD_
+#endif //_TEST_FSYNC_LEVELS_INCLUDE_GUARD_
