@@ -25,35 +25,45 @@ int fsync32_init(fsync_controller_t *ctrl) {
 }
 
 /**
- * Synchronize the tile with the others of the selected horizzontal synchronization tree level.
+ * Synchronize the tile with the others of the selected synchronization tree level.
  * Level 0 will synchronize with the neighbor tile.
- * Increasing the level will synchronize with more neighborhoods following the horizzontal fsync tree.
+ * Increasing the level will synchronize with more neighborhoods following the fsync tree.
  * At maximum level (log_2(N_tiles)) the entire mesh is synchronized.
  * Uncomment the asm volatile line only if you enabled interrupt mode when building the MAGIA architecture.
  *
- * @param level Horizzontal tree level over which synchronize.
+ * @param level Tree level over which synchronize.
+ * @param dir Direction of the tree, 0 = Horizontal 1 = Vertical
  */
-int fsync32_sync_level_h(fsync_controller_t *ctrl, uint32_t level){
+int fsync32_sync_level(fsync_controller_t *ctrl, uint32_t level, uint8_t dir){
     if(level >= MAX_SYNC_LVL){
         printf("Error: synchronization level is too high! Maximum level is: %d", MAX_SYNC_LVL);
         return 1;
     }
     //printf("Calling sync level %d, using %d", level, (uint32_t) (0xFFFFFFFF >> (31 - level)));
     //fsync((uint8_t) (1 << (level)));
-    fsync(0, (uint32_t) (0xFFFFFFFF >> (31 - level)));
+    fsync(dir, (uint32_t) (0xFFFFFFFF >> (31 - level)));
     //asm volatile("wfi" ::: "memory");
     return 0;
 }
 
 /**
- * Gets the group ID of the current tile in the selected synchronization level on the horizzontal fsync tree.
- * When calling sync_level_h(level), all the tiles with the same horizzontal group ID of that level will synchronize.
+ * Gets the group ID of the the tile ID in the selected synchronization level on the fsync tree.
+ * When calling sync_level(level, dir), all the tiles with the same group ID of that level will synchronize,
+ * as long as the tree direction is the same.
  *
  * @param level Synch level to get the horizzontal group ID from.
+ * @param id Tile ID we want to know the synch group of.
+ * @param dir Synchronization tree direction 0 = Horizontal 1 = Vertical
  */
-int fsync32_getgroup_level_h(fsync_controller_t *ctrl, uint32_t level){
-    uint32_t id = get_hartid();
-    return ((GET_X_ID(id) >> ((level + 2) / 2)) + ((GET_Y_ID(id) >> ((level + 1) / 2))*(MESH_X_TILES >> ((level + 2) / 2))));
+int fsync32_getgroup_level(fsync_controller_t *ctrl, uint32_t level, uint32_t id, uint8_t dir){
+    if(dir == 0)
+        return ((GET_X_ID(id) >> ((level + 2) / 2)) + ((GET_Y_ID(id) >> ((level + 1) / 2))*(MESH_X_TILES >> ((level + 2) / 2))));
+    else if(dir == 1)
+        return ((GET_X_ID(id) >> ((level + 1) / 2)) + ((GET_Y_ID(id) >> ((level + 2) / 2))*(MESH_X_TILES >> ((level + 1) / 2))));
+    else{
+        printf("Direction value incorrect. Correct values: 0 for horizontal tree, 1 for vertical tree.");
+        return -1;
+    }
 }
 
 /**
@@ -79,21 +89,68 @@ int fsync32_sync_col(fsync_controller_t *ctrl) {
     return 0;
 }
 
+/**
+ * Synchronize the tile with the others of the diagonal.
+ */
+int fsync32_sync_diag(fsync_controller_t *ctrl) {
+    if(GET_X_ID(get_hartid()) != GET_Y_ID(get_hartid())){
+        printf("Error: non-diagonal tile attempted to synchronize with the diagonal.");
+        return 1;
+    }
+    fsync(0, (0b1010101010 >> ((5 - MESH_2_POWER) * 2)));
+    return 0;
+}
+
+/**
+ * Synchronizes an arbitrary subset of tiles listed by a vector.
+ * This algorithm follows the same logic you should be utilizing for writing the fsync function on your own,
+ * but it does it automatically.
+ * 
+ * @param ids Vector list of the ids of the tiles we want to synchronize.
+ * @param n_tiles Number of tiles to be synchronized.
+ * @param dir Fractalsync tree direction (0=horizontal, 1=vertical)
+ */
+int fsync32_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir) {
+    uint32_t aggregate = 0x00000000;
+    uint32_t hartid = get_hartid();
+    for(uint8_t i = 0; i < n_tiles; i++){
+        if(hartid == ids[i])
+            continue;
+        for(uint8_t j = 0; j < MAX_SYNC_LVL; j++){
+            if(fsync32_getgroup_level(ctrl, j, hartid, dir) == fsync32_getgroup_level(ctrl, j, ids[i], dir)){
+                aggregate = aggregate | ((uint32_t)(1 << j));
+                break;
+            }
+        }
+    }
+    if(aggregate)
+        fsync(dir, aggregate);
+    return 0;
+}
+
 extern int fsync_init(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_init"), used, visibility("default")));
-extern int fsync_sync_level_h(fsync_controller_t *ctrl, uint32_t level)
-    __attribute__((alias("fsync32_sync_level_h"), used, visibility("default")));
-extern int fsync_getgroup_level_h(fsync_controller_t *ctrl, uint32_t level)
-    __attribute__((alias("fsync32_getgroup_level_h"), used, visibility("default")));
+extern int fsync_sync_level(fsync_controller_t *ctrl, uint32_t level, uint8_t dir)
+    __attribute__((alias("fsync32_sync_level"), used, visibility("default")));
+extern int fsync_getgroup_level(fsync_controller_t *ctrl, uint32_t level, uint32_t id, uint8_t dir)
+    __attribute__((alias("fsync32_getgroup_level"), used, visibility("default")));
 extern int fsync_sync_row(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_sync_row"), used, visibility("default")));
 extern int fsync_sync_col(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_sync_col"), used, visibility("default")));
+extern int fsync_sync_diag(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_sync_diag"), used, visibility("default")));
+extern int fsync_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir)
+    __attribute__((alias("fsync32_sync"), used, visibility("default")));
 
 /* Export the FSYNC-specific controller API */
 fsync_controller_api_t fsync_api = {
     .init = fsync32_init,
-    .sync_level_h = fsync32_sync_level_h,
-    .getgroup_level_h = fsync32_getgroup_level_h,
+    .sync_level = fsync32_sync_level,
+    .getgroup_level = fsync32_getgroup_level,
+    .sync_col = fsync32_sync_col,
+    .sync_row = fsync32_sync_row,
+    .sync_diag = fsync32_sync_diag,
+    .sync = fsync32_sync,
 };
 

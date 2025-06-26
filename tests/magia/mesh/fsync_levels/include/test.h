@@ -9,6 +9,6 @@
 
 int write_delayed(uint8_t lvl, uint32_t id, uint8_t groupid, uint32_t addr);
 
-int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr);
+int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr, uint8_t dir);
 
 #endif //_TEST_FSYNC_LEVELS_INCLUDE_GUARD_

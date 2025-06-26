@@ -20,7 +20,7 @@ int write_delayed(uint8_t lvl, uint32_t id, uint8_t groupid, uint32_t addr){
             groupid += (NUM_HARTS >> i);
         }
     }
-    wait_nop(100 * id);
+    //wait_nop(100 * id);
     mmio8(addr) = groupid;
     return 0;
 }
@@ -29,9 +29,13 @@ int write_delayed(uint8_t lvl, uint32_t id, uint8_t groupid, uint32_t addr){
  * Compares the value written in L1 memory with the value written in L1 memory of the tile_0 of the same synched mesh area.
  * To locate which tile is the tile_0, the value stored in L1 (the "group-id") is used to calculate the X and Y of tile_0 (and its ID).
  */
-int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr){
+int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr, uint8_t dir){
     uint8_t val = *(volatile uint8_t*)(addr);
-    uint8_t id_0 = (((groupid % (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 2) / 2)) + (((groupid / (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 1) / 2)) * MESH_X_TILES));
+    uint8_t id_0;
+    if(!dir)
+        id_0 = (((groupid % (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 2) / 2)) + (((groupid / (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 1) / 2)) * MESH_X_TILES));
+    else
+        id_0 = (((groupid % (MESH_X_TILES >> ((lvl + 1) / 2))) << ((lvl + 1) / 2)) + (((groupid / (MESH_X_TILES >> ((lvl + 1) / 2))) << ((lvl + 2) / 2)) * MESH_X_TILES));
     uint8_t val_0 = *(volatile uint8_t*)(get_l1_base(id_0));
     uint8_t flag = 0;
     if(val_0 != val){
@@ -67,6 +71,7 @@ int main(void){
     uint32_t l1_tile_base = get_l1_base(hartid);
     uint8_t groupid;
     uint8_t flag = 0;
+    uint8_t dir = 1;
 
     /**
      * 1. Cycle over the synchronization levels.
@@ -77,7 +82,7 @@ int main(void){
         /**
         * 1_a. Get the group ID for the current synch level.
         */
-        groupid = (uint8_t)fsync_getgroup_level_h(&fsync_ctrl, (uint32_t) i);
+        groupid = (uint8_t)fsync_getgroup_level(&fsync_ctrl, (uint32_t) i, hartid, dir);
 
         /**
         * 1_b. Write value.
@@ -87,22 +92,22 @@ int main(void){
         /**
         * 1_c. Synchronize on the current horizzontal level.
         */
-        fsync_sync_level_h(&fsync_ctrl, (uint32_t) i);
+        fsync_sync_level(&fsync_ctrl, (uint32_t) i, dir);
 
         /**
         * 1_d. Check if the other tiles have written the correct value.
         */
-        if(check_values(i, groupid, l1_tile_base))
+        if(check_values(i, groupid, l1_tile_base, dir))
             flag=1;
             
         /**
         * 1_e. Synchronize again before next cycle write.
         */
-        fsync_sync_level_h(&fsync_ctrl, (uint32_t) i);
+        fsync_sync_level(&fsync_ctrl, (uint32_t) i, dir);
     }
 
     if(!flag){
-        printf("No errors detected for all horizzontal synchronization levels! (MAX H LEVEL: %d)\n", (MAX_SYNC_LVL-1));
+        printf("No errors detected for all synchronization levels! (MAX LEVEL: %d)\n", (MAX_SYNC_LVL-1));
     }
 
     magia_return(hartid, PASS_EXIT_CODE);
