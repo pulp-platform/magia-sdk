@@ -109,10 +109,35 @@ int fsync32_sync_diag(fsync_controller_t *ctrl) {
  * @param ids Vector list of the ids of the tiles we want to synchronize.
  * @param n_tiles Number of tiles to be synchronized.
  * @param dir Fractalsync tree direction (0=horizontal, 1=vertical)
+ * @param bid Barrier ID for synchronization
  */
-int fsync32_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir) {
+int fsync32_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid) {
     uint32_t aggregate = 0x00000000;
     uint32_t hartid = get_hartid();
+    if(n_tiles <= 2){
+        for(uint8_t i = 0; i < n_tiles; i++){
+            if(hartid == ids[i])
+                continue; 
+            uint32_t x_diff = GET_X_ID(hartid) - GET_X_ID(ids[i]);
+            uint32_t y_diff = GET_Y_ID(hartid) - GET_Y_ID(ids[i]);
+            x_diff = x_diff * x_diff;
+            y_diff = y_diff * y_diff;
+            if(x_diff == 0 && y_diff == 1){
+                if(fsync32_getgroup_level(ctrl, 0, hartid, 1) == fsync32_getgroup_level(ctrl, 0, ids[i], 1))
+                    fsync(1, 0b1);
+                else
+                    fsync(3, 0b1);
+                return 0;
+            }
+            else if(x_diff == 1 && y_diff == 0){
+                if(fsync32_getgroup_level(ctrl, 0, hartid, 0) == fsync32_getgroup_level(ctrl, 0, ids[i], 0))
+                    fsync(0, 0b1);
+                else
+                    fsync(2, 0b1);
+                return 0;
+            }
+        }
+    }
     for(uint8_t i = 0; i < n_tiles; i++){
         if(hartid == ids[i])
             continue;
@@ -123,9 +148,11 @@ int fsync32_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8
             }
         }
     }
-    if(aggregate)
-        fsync(dir, aggregate);
-    return 0;
+    if(aggregate){
+        fsync((uint32_t)((bid * 2) + dir), aggregate);
+        return 0;
+    }    
+    return 1;
 }
 
 extern int fsync_init(fsync_controller_t *ctrl)
@@ -140,7 +167,7 @@ extern int fsync_sync_col(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_sync_col"), used, visibility("default")));
 extern int fsync_sync_diag(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_sync_diag"), used, visibility("default")));
-extern int fsync_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir)
+extern int fsync_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid)
     __attribute__((alias("fsync32_sync"), used, visibility("default")));
 
 /* Export the FSYNC-specific controller API */

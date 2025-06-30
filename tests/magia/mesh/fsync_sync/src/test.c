@@ -58,8 +58,8 @@ int main(void){
     /**
      * 1. Select which tiles to be synchronized.
      */
-    uint8_t N_TILES = 7;
-    uint32_t ids[] = {2, 7, 9, 10, 44, 58, 63};
+    uint8_t N_TILES = 2;
+    uint32_t ids[] = {27, 28};
 
     /**
      * 2. Cycle over the ids. If the current tile is part of the ids, test the synchronization.
@@ -75,7 +75,8 @@ int main(void){
             /**
              * 2b. Synchronize with the other tiles
              */
-            fsync_sync(&fsync_ctrl, ids, N_TILES, 0);
+            if(fsync_sync(&fsync_ctrl, ids, N_TILES, 0, 0))
+                printf("Error in synchronization.");
 
             /**
              * 2c. Check that all tiles wrote the same value

@@ -59,11 +59,12 @@ __attribute__((weak)) int fsync_sync_diag(fsync_controller_t *ctrl){
 }*/
 
 /*
-__attribute__((weak)) int fsync_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir){
+__attribute__((weak)) int fsync_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid){
     (void) ctrl;
     (void) ids;
     (void) n_tiles;
     (void) dir;
+    (void) bid;
     return 1;
 }*/
 

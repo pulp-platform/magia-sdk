@@ -69,7 +69,7 @@ extern int fsync_sync_diag(fsync_controller_t *ctrl);
 /**
  * Synchronizes an arbitrary subset of tiles selected by the ids vector.
  */
-extern int fsync_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir);
+extern int fsync_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid);
 
 /**
  * WIP
@@ -82,7 +82,7 @@ struct fsync_controller_api {
     int (*sync_row)(fsync_controller_t *ctrl);
     int (*sync_col)(fsync_controller_t *ctrl);
     int (*sync_diag)(fsync_controller_t *ctrl);
-    int (*sync)(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir);
+    int (*sync)(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid);
 };
 
 /*
