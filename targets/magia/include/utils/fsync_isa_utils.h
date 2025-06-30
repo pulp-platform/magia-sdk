@@ -50,7 +50,7 @@ inline void fsync_legacy(volatile uint32_t level){
 /**
  * This ISA instruction is the bread and butter for synchronizing the current tile with an arbitrary subset of 
  * other tiles in the MAGIA mesh. The functionality of this instruction is NOT easy to understand or correctly 
- * utilize, it is heavily reccomended to avoid directly using this instruction and instead use the API wrappers  
+ * utilize, it is heavily recomended to avoid directly using this instruction and instead use the API wrappers  
  * hiding this behemoth.
  * 
  * But if you insist to use it for your little, special experiment, then be my fucking guest.
@@ -67,7 +67,7 @@ inline void fsync_legacy(volatile uint32_t level){
  * 
  * The MSB is the highest level explored, the LSB is the lowest.
  * 
- * If there is at least one tile you want to synchronize with visible from a certain level, you should put 1 in 
+ * If there is at least one tile you want to synchronize with, which visible from a certain level, you should put 1 in 
  * the bit associated for that level. Instead, if there are no tiles you have to synchronize with in a certain 
  * level THAT YOU HAVEN'T SYNCHRONIZED WITH IN A PREVIOUS ONE, then you put 0 in its associated bit.
  * 
@@ -76,7 +76,7 @@ inline void fsync_legacy(volatile uint32_t level){
  * 
  * Told you to use the fucking APIs!
  * 
- * If the AGGREGATE value is EXACTLY 1, then a special behaviour is activated. 
+ * If the AGGREGATE value is EXACTLY 1, then a special behavior is activated. 
  * 
  * Depending on the ID value, the current tile will synchronize with:
  * 
@@ -86,26 +86,25 @@ inline void fsync_legacy(volatile uint32_t level){
  * ID == 3 : The tile vertically neighboring NOT visible at synch level 0 in the vertical fsync tree
  * 
  * If you have no fucking clue on what you just read means, then I'm sorry but you are not in the right place.
+ * Try the MAGIA repository README file!
  * 
- * There is more! The ID value, in fact, isn't just used to decide wheter we explore the horizontal or vertical
+ * There is more! The ID value, in fact, isn't just used to decide whether we explore the horizontal or vertical
  * tree. In fact, through a single synchronization tree node there might be multiple fsync calls going through in
  * parallel at the same time. 
  * 
  * To avoid collisions, multiple barriers are set up for each node, the one on which the instruction waits is 
  * chosen by the ID value.
  * 
- * It's up to YOU to make sure that the tiles that are synchronizing are calling the fsync over the same ID.
+ * It's up to YOU to make sure that the tiles that are synchronizing are calling the fsync over the same barrier ID.
  * 
- * Unfortunately, you can't choose whichever ID you fucking want. First off, you need an even ID if you want to 
- * explore the horizontal fsync tree, and an odd one if you want the vertical one. Then, there is a physical ID
- * limit equal to:
+ * Unfortunately, you can't choose whichever ID you want. There is a physical ID limit equal to:
  * 
  * - For the horizontal fsync tree: 2 * ((2^L) - 1)
  * - For the vertical fsync tree: 2 * ((2^L) - 1) + 1
  * - For the nodes that are in both fsync trees: ((2^L) - 1)
  * 
  * Where L is the level of the MSB in the AGGREGATE value. This means that you must have a solid idea of the 
- * nature of the highest node you are synchronizing with. And of the fsync map, in general.
+ * nature of the highest node you are synchronizing with. And of the fsync map, in general. If you mess up, you're screwed.
  * 
  * I'd gladly write down some examples, but my ASCII art skills are dogshit, so instead just open the APIs and
  * take a look on how it is possible to do stuff like synchronizing specific rows, columns, diagnolas, the outer
