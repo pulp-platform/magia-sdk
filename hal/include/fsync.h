@@ -32,11 +32,6 @@ typedef struct {
 } fsync_config_t;
 
 /**
- * Default Fsync configuration settings.
- */
-extern fsync_config_t default_cfg;
-
-/**
  * Opens and initializes the fsync interface.
  */
 extern int fsync_init(fsync_controller_t *ctrl);
@@ -72,6 +67,26 @@ extern int fsync_sync_diag(fsync_controller_t *ctrl);
 extern int fsync_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid);
 
 /**
+ * Synchronizes with the tile on the left.
+ */
+extern int fsync_sync_left(fsync_controller_t *ctrl);
+
+/**
+ * Synchronizes with the tile on the right.
+ */
+extern int fsync_sync_right(fsync_controller_t *ctrl);
+
+/**
+ * Synchronizes with the tile above.
+ */
+extern int fsync_sync_up(fsync_controller_t *ctrl);
+
+/**
+ * Synchronizes with the tile below.
+ */
+extern int fsync_sync_down(fsync_controller_t *ctrl);
+
+/**
  * WIP
  * Fsync API
  */
@@ -83,6 +98,10 @@ struct fsync_controller_api {
     int (*sync_col)(fsync_controller_t *ctrl);
     int (*sync_diag)(fsync_controller_t *ctrl);
     int (*sync)(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid);
+    int (*sync_left)(fsync_controller_t *ctrl);
+    int (*sync_right)(fsync_controller_t *ctrl);
+    int (*sync_up)(fsync_controller_t *ctrl);
+    int (*sync_down)(fsync_controller_t *ctrl);
 };
 
 /*

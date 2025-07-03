@@ -33,11 +33,6 @@ typedef struct {
 } idma_config_t;
 
 /**
- * Default IDMA configuration settings.
- */
-extern idma_config_t default_cfg;
-
-/**
  * Opens and initializes the IDMA interface.
  */
 extern int idma_init(idma_controller_t *ctrl);

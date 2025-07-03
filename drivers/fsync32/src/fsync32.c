@@ -36,7 +36,7 @@ int fsync32_init(fsync_controller_t *ctrl) {
  */
 int fsync32_sync_level(fsync_controller_t *ctrl, uint32_t level, uint8_t dir){
     if(level >= MAX_SYNC_LVL){
-        printf("Error: synchronization level is too high! Maximum level is: %d", MAX_SYNC_LVL);
+        printf("Error: synchronization level is too high! Maximum level is: %d", MAX_SYNC_LVL - 1);
         return 1;
     }
     //printf("Calling sync level %d, using %d", level, (uint32_t) (0xFFFFFFFF >> (31 - level)));
@@ -155,6 +155,62 @@ int fsync32_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8
     return 1;
 }
 
+/**
+ * Synchronizes with the tile on the left.
+ */
+int fsync32_sync_left(fsync_controller_t *ctrl){
+    uint32_t hartid = get_hartid();
+    if(GET_X_ID(hartid) == 0)
+        return 1;
+    if(fsync32_getgroup_level(ctrl, 0, hartid, 0) == fsync32_getgroup_level(ctrl, 0, (hartid - 1), 0))
+        fsync(0, 0b1);
+    else
+        fsync(2, 0b1);
+    return 0; 
+}
+
+/**
+ * Synchronizes with the tile on the right.
+ */
+int fsync32_sync_right(fsync_controller_t *ctrl){
+    uint32_t hartid = get_hartid();
+    if(GET_X_ID(hartid) == MESH_X_TILES - 1)
+        return 1;
+    if(fsync32_getgroup_level(ctrl, 0, hartid, 0) == fsync32_getgroup_level(ctrl, 0, (hartid + 1), 0))
+        fsync(0, 0b1);
+    else
+        fsync(2, 0b1);
+    return 0; 
+}
+
+/**
+ * Synchronizes with the tile above.
+ */
+int fsync32_sync_up(fsync_controller_t *ctrl){
+    uint32_t hartid = get_hartid();
+    if(GET_Y_ID(hartid) == 0)
+        return 1;
+    if(fsync32_getgroup_level(ctrl, 0, hartid, 1) == fsync32_getgroup_level(ctrl, 0, (hartid - MESH_X_TILES), 1))
+        fsync(1, 0b1);
+    else
+        fsync(3, 0b1);
+    return 0; 
+}
+
+/**
+ * Synchronizes with the tile below.
+ */
+int fsync32_sync_down(fsync_controller_t *ctrl){
+    uint32_t hartid = get_hartid();
+    if(GET_Y_ID(hartid) == MESH_Y_TILES - 1)
+        return 1;
+    if(fsync32_getgroup_level(ctrl, 0, hartid, 1) == fsync32_getgroup_level(ctrl, 0, (hartid + MESH_X_TILES), 1))
+        fsync(1, 0b1);
+    else
+        fsync(3, 0b1);
+    return 0; 
+}
+
 extern int fsync_init(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_init"), used, visibility("default")));
 extern int fsync_sync_level(fsync_controller_t *ctrl, uint32_t level, uint8_t dir)
@@ -169,6 +225,14 @@ extern int fsync_sync_diag(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_sync_diag"), used, visibility("default")));
 extern int fsync_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid)
     __attribute__((alias("fsync32_sync"), used, visibility("default")));
+extern int fsync_sync_left(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_sync_left"), used, visibility("default")));
+extern int fsync_sync_right(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_sync_right"), used, visibility("default")));
+extern int fsync_sync_up(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_sync_up"), used, visibility("default")));
+extern int fsync_sync_down(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_sync_down"), used, visibility("default")));
 
 /* Export the FSYNC-specific controller API */
 fsync_controller_api_t fsync_api = {
@@ -179,5 +243,9 @@ fsync_controller_api_t fsync_api = {
     .sync_row = fsync32_sync_row,
     .sync_diag = fsync32_sync_diag,
     .sync = fsync32_sync,
+    .sync_left = fsync32_sync_left,
+    .sync_right = fsync32_sync_right,
+    .sync_up = fsync32_sync_up,
+    .sync_down = fsync32_sync_down,
 };
 
