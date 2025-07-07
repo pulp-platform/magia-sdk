@@ -34,12 +34,11 @@
 #define STACK_START    (0x00010000)
 #define STACK_END      (0x0001FFFF)
 #define L1_BASE        (0x00020000)
-#define L1_SIZE        (0x000E0000)
+#define L1_SIZE        (0x000DFFFF)
 #define L1_TILE_OFFSET (0x00100000)
 #define MHARTID_OFFSET (0x00100000)
 #define L2_BASE        (0xCC000000)
 #define TEST_END_ADDR  (0xCC030000)
-#define MOCK_UART_ADDR (0xCC008000)
 #define PRINT_ADDR     (0xFFFF0004)
 
 #define MESH_X_TILES 4

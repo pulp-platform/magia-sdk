@@ -40,6 +40,9 @@ target_compile_options(runtime
   -march=${ISA}
   -mabi=${ABI}
   -D__riscv__
+  -fdata-sections -ffunction-sections #ZL-MOD 03072025
+  -Wno-incompatible-pointer-types #ZL-MOD 03072025
+  -Wno-int-conversion #ZL-MOD 03072025
 )
 
 target_link_options(runtime
@@ -50,4 +53,7 @@ target_link_options(runtime
   -mabi=${ABI}
   -nostartfiles
   -ffreestanding
+  -Wno-incompatible-pointer-types #ZL-MOD 03072025
+  -Wno-int-conversion #ZL-MOD 03072025
+  -Wl,--gc-sections #ZL-MOD 03072025
 )

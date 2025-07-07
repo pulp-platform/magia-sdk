@@ -63,6 +63,7 @@ int main(void){
     uint8_t y_id = (uint8_t) GET_Y_ID(hartid);
     uint8_t flag = 0;
 
+    
     /** 
      * 1. Test row synchronization.
      * 1a - Write the row value in L1 after a delay (depending on ID).
@@ -77,11 +78,12 @@ int main(void){
     fsync_sync_row(&fsync_ctrl);
     if(!flag)
         printf("No errors detected in row synch!");
+    
 
     /** 
-     * 2. Test row synchronization.
-     * 2a - Write the row value in L1 after a delay (depending on ID).
-     * 2b - Wait for the other tiles in the row to write.
+     * 2. Test column synchronization.
+     * 2a - Write the column value in L1 after a delay (depending on ID).
+     * 2b - Wait for the other tiles in the column to write.
      * 2c - Check the correctness of all the other tile values.
      * 2d - Wait for the read before proceding to the next test.
      */
