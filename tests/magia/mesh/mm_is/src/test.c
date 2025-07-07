@@ -118,7 +118,8 @@ int main(void){
     /**
      * 2b. Initialize the obi addresses for the output buffers.
      */
-    uint32_t obi_addr_y = obi_addr_w + (tile_w * t_size * 2);
+    uint32_t obi_addr_y_0 = obi_addr_w + (tile_w * t_size * 2);
+    uint32_t obi_addr_y_1 = obi_addr_y_0 + (tile_h * t_size * 2);
 
     /**
      * 3. Cycle over the timeslots.
@@ -152,21 +153,66 @@ int main(void){
             uint32_t reps_y = (uint32_t) tile_h;
             uint32_t axi_addr_y = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2) + (i * t_size * 2);
 
-            idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
+            if(i % 2)
+                idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y_1, len_y, std_y, reps_y);
+            else
+                idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y_0, len_y, std_y, reps_y);
+            //printf("Loaded data from L2: %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2), *(volatile uint16_t*)(obi_addr_y + 4), *(volatile uint16_t*)(obi_addr_y + 6));
         }
         else{
             if(fsync_sync_left(&fsync_ctrl))
                 printf("Error when synchronizing with left tile.");
 
-            uint32_t src_addr = get_l1_base(hartid - 1) + (tile_h_max * tile_w_max * 2) + (tile_w_max * t_size * 2);
-            idma_memcpy_1d(&idma_ctrl, 0, src_addr, obi_addr_y, tile_h * t_size * 2);
+            if(i % 2){
+                uint32_t src_addr = get_l1_base(hartid - 1) + (tile_h_max * tile_w_max * 2) + (tile_w_max * t_size * 2) + (tile_h_max * t_size * 2);
+                idma_memcpy_1d(&idma_ctrl, 0, src_addr, obi_addr_y_1, tile_h * t_size * 2);
+            }                
+            else{
+                uint32_t src_addr = get_l1_base(hartid - 1) + (tile_h_max * tile_w_max * 2) + (tile_w_max * t_size * 2);
+                idma_memcpy_1d(&idma_ctrl, 0, src_addr, obi_addr_y_0, tile_h * t_size * 2);
+            }
+            //printf("Received this data: %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2), *(volatile uint16_t*)(obi_addr_y + 4), *(volatile uint16_t*)(obi_addr_y + 6));
         }
         
         /**
          * 3c. Evoke the RED MULE 
          * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
          */
-        redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
+        /*
+        if(hartid == 0){
+            printf("INPUT GEMM:");
+            for(uint8_t j = 0; j < tile_h; j++){
+                printf("%x, %x, %x, %x, %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_x + 16 * j), *(volatile uint16_t*)(obi_addr_x + 16 * j + 2), *(volatile uint16_t*)(obi_addr_x + 16 * j + 4), *(volatile uint16_t*)(obi_addr_x + 16 * j + 6), *(volatile uint16_t*)(obi_addr_x + 16 * j + 8), *(volatile uint16_t*)(obi_addr_x + 16 * j + 10), *(volatile uint16_t*)(obi_addr_x + 16 * j + 12), *(volatile uint16_t*)(obi_addr_x + 16 * j + 14));
+            }
+        }
+
+        if(hartid == 0){
+            printf("WEIGHT GEMM:");
+            for(uint8_t j = 0; j < tile_w; j++){
+                printf("%x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_w + 8 * j), *(volatile uint16_t*)(obi_addr_w + 8 * j + 2), *(volatile uint16_t*)(obi_addr_w + 8 * j + 4), *(volatile uint16_t*)(obi_addr_w + 8 * j + 6));
+            }
+        }
+
+        if(hartid == 0){
+            printf("INITIAL OUTPUT BUFFER:");
+            for(uint8_t j = 0; j < tile_h; j++){
+                printf("%x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y + 8 * j), *(volatile uint16_t*)(obi_addr_y + 8 * j + 2), *(volatile uint16_t*)(obi_addr_y + 8 * j + 4), *(volatile uint16_t*)(obi_addr_y + 8 * j + 6));
+            }
+        }
+        */
+        if(i % 2)
+            redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y_1, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
+        else
+            redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y_0, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
+
+        /*
+        if(hartid == 0){
+            printf("GEMM OUTPUT:");
+            for(uint8_t j = 0; j < tile_h; j++){
+                printf("%x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y + 8 * j), *(volatile uint16_t*)(obi_addr_y + 8 * j + 2), *(volatile uint16_t*)(obi_addr_y + 8 * j + 4), *(volatile uint16_t*)(obi_addr_y + 8 * j + 6));
+            }
+        }
+        */
 
         /**
          * 3d. Sync with the next tile to ready the data.
@@ -178,22 +224,22 @@ int main(void){
             uint32_t reps_y = (uint32_t) tile_h;
             uint32_t axi_addr_y = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2) + (i * t_size * 2);
 
-            idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);   
+            if(i % 2)
+                idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y_1, len_y, std_y, reps_y);
+            else
+                idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y_0, len_y, std_y, reps_y);   
         }
         else{
+            //printf("Sending this data: %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2), *(volatile uint16_t*)(obi_addr_y + 4), *(volatile uint16_t*)(obi_addr_y + 6));
             if(fsync_sync_right(&fsync_ctrl))
                 printf("Error when synchronizing with right tile");
         }
-
-        /**
-         * Synchronize to make sure all tiles enter the next timestep at the same time.
-         */
-        fsync_sync_row(&fsync_ctrl);
     }
 
     /**
      * 5. Check results
      */
+    fsync_sync_row(&fsync_ctrl);
     if(x_id == MESH_X_TILES - 1){
         uint32_t errors=0;
         uint16_t computed, expected, diff = 0;
@@ -203,8 +249,8 @@ int main(void){
                 expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
                 diff = (computed > expected) ? (computed - expected) : (expected - computed);
                 if(diff > 0x0011){
-                    if(y_id == 0)
-                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                    //if(y_id == 0)
+                        //printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
                     errors++;
                 }       
             }
