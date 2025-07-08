@@ -3,3 +3,4 @@ build/
 output.*
 list/
 transcript
+.vscode/

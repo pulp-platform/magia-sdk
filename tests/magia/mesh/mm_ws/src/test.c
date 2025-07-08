@@ -178,41 +178,11 @@ int main(void){
          * 3c. Evoke the RED MULE 
          * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
          */
-        /*
-        if(hartid == 0){
-            printf("INPUT GEMM:");
-            for(uint8_t j = 0; j < tile_h; j++){
-                printf("%x, %x, %x, %x, %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_x + 16 * j), *(volatile uint16_t*)(obi_addr_x + 16 * j + 2), *(volatile uint16_t*)(obi_addr_x + 16 * j + 4), *(volatile uint16_t*)(obi_addr_x + 16 * j + 6), *(volatile uint16_t*)(obi_addr_x + 16 * j + 8), *(volatile uint16_t*)(obi_addr_x + 16 * j + 10), *(volatile uint16_t*)(obi_addr_x + 16 * j + 12), *(volatile uint16_t*)(obi_addr_x + 16 * j + 14));
-            }
-        }
-
-        if(hartid == 0){
-            printf("WEIGHT GEMM:");
-            for(uint8_t j = 0; j < tile_w; j++){
-                printf("%x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_w + 8 * j), *(volatile uint16_t*)(obi_addr_w + 8 * j + 2), *(volatile uint16_t*)(obi_addr_w + 8 * j + 4), *(volatile uint16_t*)(obi_addr_w + 8 * j + 6));
-            }
-        }
-
-        if(hartid == 0){
-            printf("INITIAL OUTPUT BUFFER:");
-            for(uint8_t j = 0; j < tile_h; j++){
-                printf("%x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y + 8 * j), *(volatile uint16_t*)(obi_addr_y + 8 * j + 2), *(volatile uint16_t*)(obi_addr_y + 8 * j + 4), *(volatile uint16_t*)(obi_addr_y + 8 * j + 6));
-            }
-        }
-        */
         if(i % 2)
             redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y_1, (uint16_t) t_size, (uint16_t) tile_h, (uint16_t) tile_w);
         else
             redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y_0, (uint16_t) t_size, (uint16_t) tile_h, (uint16_t) tile_w);
-
-        /*
-        if(hartid == 0){
-            printf("GEMM OUTPUT:");
-            for(uint8_t j = 0; j < tile_h; j++){
-                printf("%x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y + 8 * j), *(volatile uint16_t*)(obi_addr_y + 8 * j + 2), *(volatile uint16_t*)(obi_addr_y + 8 * j + 4), *(volatile uint16_t*)(obi_addr_y + 8 * j + 6));
-            }
-        }
-        */
+            
 
         /**
          * 3d. Sync with the lower tile to ready the data.

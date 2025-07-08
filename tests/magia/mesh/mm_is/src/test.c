@@ -178,41 +178,10 @@ int main(void){
          * 3c. Evoke the RED MULE 
          * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
          */
-        /*
-        if(hartid == 0){
-            printf("INPUT GEMM:");
-            for(uint8_t j = 0; j < tile_h; j++){
-                printf("%x, %x, %x, %x, %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_x + 16 * j), *(volatile uint16_t*)(obi_addr_x + 16 * j + 2), *(volatile uint16_t*)(obi_addr_x + 16 * j + 4), *(volatile uint16_t*)(obi_addr_x + 16 * j + 6), *(volatile uint16_t*)(obi_addr_x + 16 * j + 8), *(volatile uint16_t*)(obi_addr_x + 16 * j + 10), *(volatile uint16_t*)(obi_addr_x + 16 * j + 12), *(volatile uint16_t*)(obi_addr_x + 16 * j + 14));
-            }
-        }
-
-        if(hartid == 0){
-            printf("WEIGHT GEMM:");
-            for(uint8_t j = 0; j < tile_w; j++){
-                printf("%x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_w + 8 * j), *(volatile uint16_t*)(obi_addr_w + 8 * j + 2), *(volatile uint16_t*)(obi_addr_w + 8 * j + 4), *(volatile uint16_t*)(obi_addr_w + 8 * j + 6));
-            }
-        }
-
-        if(hartid == 0){
-            printf("INITIAL OUTPUT BUFFER:");
-            for(uint8_t j = 0; j < tile_h; j++){
-                printf("%x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y + 8 * j), *(volatile uint16_t*)(obi_addr_y + 8 * j + 2), *(volatile uint16_t*)(obi_addr_y + 8 * j + 4), *(volatile uint16_t*)(obi_addr_y + 8 * j + 6));
-            }
-        }
-        */
         if(i % 2)
             redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y_1, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
         else
             redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y_0, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
-
-        /*
-        if(hartid == 0){
-            printf("GEMM OUTPUT:");
-            for(uint8_t j = 0; j < tile_h; j++){
-                printf("%x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y + 8 * j), *(volatile uint16_t*)(obi_addr_y + 8 * j + 2), *(volatile uint16_t*)(obi_addr_y + 8 * j + 4), *(volatile uint16_t*)(obi_addr_y + 8 * j + 6));
-            }
-        }
-        */
 
         /**
          * 3d. Sync with the next tile to ready the data.
@@ -243,7 +212,7 @@ int main(void){
     if(x_id == MESH_X_TILES - 1){
         uint32_t errors=0;
         uint16_t computed, expected, diff = 0;
-        for(uint8_t i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h_max); i++){
+        for(uint8_t i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
             for(uint8_t j = 0; j < K_SIZE; j++){
                 computed = *(volatile uint16_t*)(y_inp + (i * K_SIZE + j));
                 expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
