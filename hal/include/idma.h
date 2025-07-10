@@ -38,6 +38,11 @@ typedef struct {
 extern int idma_init(idma_controller_t *ctrl);
 
 /**
+ * Waits for the IDMA IRQ_DONE.
+ */
+extern int idma_wait(idma_controller_t *ctrl);
+
+/**
  * Start 1-dimensional memory copy.
  */
 extern int idma_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len);
@@ -53,6 +58,7 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_add
  */
 struct idma_controller_api {
     int (*init)(idma_controller_t *ctrl);
+    int (*wait)(idma_controller_t *ctrl);
     int (*memcpy_1d)(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, volatile uint32_t len);
     int (*memcpy_2d)(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps);
 };

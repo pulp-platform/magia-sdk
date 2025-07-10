@@ -96,6 +96,7 @@ int main(void){
     uint32_t axi_addr_y = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
     
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
+    idma_wait(&idma_ctrl);
     
     /**
      * 2a. Initalize the IDMA transfer variables for input data-tile transfers.
@@ -127,19 +128,23 @@ int main(void){
          * 3a. IDMA to load the input and weight data-tile for current timeslot
          */
         idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_x + (t_size * i * 2)), obi_addr_x, len_x, std_x, reps_x);
+        idma_wait(&idma_ctrl);
         idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_w + (t_size * K_SIZE * i * 2)), obi_addr_w, len_w, std_w, reps_w);
+        idma_wait(&idma_ctrl);
         
         /**
          * 3b. Evoke the RED MULE 
          * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
          */
         redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
+        redmule_wait(&redmule_ctrl);
     }
 
     /**
      * 4. Store the output data-tile back to L2
      */
     idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
+    idma_wait(&idma_ctrl);
 
     /**
      * 5. Check results

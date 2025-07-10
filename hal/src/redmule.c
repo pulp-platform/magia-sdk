@@ -17,6 +17,12 @@
     return 1;
 }*/
 
+
+/*__attribute__((weak)) int redmule_wait(redmule_controller_t *ctrl){
+    (void) ctrl;
+    return 1;
+}*/
+
 /**
  * This function prepares and execute an accelerated generic matrix multiplication.
  * (N x M * M x K) + (N x K) = (N x K)
@@ -47,5 +53,6 @@
 /*-------------------------------------------*/
 __attribute__((weak)) redmule_controller_api_t redmule_api = {
     .init = redmule_init,
+    .wait = redmule_wait,
     .gemm = redmule_gemm,
 };

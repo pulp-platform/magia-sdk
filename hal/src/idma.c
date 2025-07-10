@@ -48,6 +48,7 @@ __attribute__((weak)) int idma_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, u
 /*----------------------------------------*/
 __attribute__((weak)) idma_controller_api_t idma_api = {
     .init = idma_init,
+    .wait = idma_wait,
     .memcpy_1d = idma_memcpy_1d,
     .memcpy_2d = idma_memcpy_2d,
 };

@@ -23,6 +23,11 @@ int idma32_init(idma_controller_t *ctrl) {
     return 0;
 }
 
+int idma32_wait(idma_controller_t *ctrl){
+    asm volatile("wfi" ::: "memory");
+    return 0;
+}
+
 /**
  * Start 1-dimensional memory copy
  *
@@ -38,7 +43,6 @@ int idma32_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
         idma_set_std2_rep2_out(0, 0, 1);
         idma_set_std3_rep3_out(0, 0, 1);
         idma_start_out();
-        asm volatile("wfi" ::: "memory");
         //printf("IDMA_memcpy_1d: Detected IRQ...\n");
     }
     else{ // AXI to OBI (L2 to L1)
@@ -47,7 +51,6 @@ int idma32_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
         idma_set_std2_rep2_in(0, 0, 1);
         idma_set_std3_rep3_in(0, 0, 1);
         idma_start_in();
-        asm volatile("wfi" ::: "memory");
         //printf("IDMA_memcpy_1d: Detected IRQ...\n");
     }
     return 0;
@@ -72,7 +75,6 @@ int idma32_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
         idma_set_std2_rep2_out(std, len, reps);
         idma_set_std3_rep3_out(0, 0, 1);
         idma_start_out();
-        asm volatile("wfi" ::: "memory");
         //printf("IDMA_memcpy_2d: Detected IRQ...\n");
     }
     else{ // AXI to OBI (L2 to L1)
@@ -81,7 +83,6 @@ int idma32_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
         idma_set_std2_rep2_in(len, std, reps);
         idma_set_std3_rep3_in(0, 0, 1);
         idma_start_in();
-        asm volatile("wfi" ::: "memory");
         //printf("IDMA_memcpy_2d: Detected IRQ...\n");  
     }
     return 0;
@@ -89,6 +90,8 @@ int idma32_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
 
 extern int idma_init(idma_controller_t *ctrl)
     __attribute__((alias("idma32_init"), used, visibility("default")));
+extern int idma_wait(idma_controller_t *ctrl)
+    __attribute__((alias("idma32_wait"), used, visibility("default")));
 extern int idma_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
     __attribute__((alias("idma32_memcpy_1d"), used, visibility("default")));
 extern int idma_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps)
@@ -98,6 +101,7 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_add
 /* Export the IDMA-specific controller API */
 idma_controller_api_t idma_api = {
     .init = idma32_init,
+    .wait = idma32_wait,
     .memcpy_1d = idma32_memcpy_1d,
     .memcpy_2d = idma32_memcpy_2d,
 };
