@@ -10,11 +10,11 @@
 
 #define S_SIZE (512)
 #define D_SIZE (128)
-#define D_SIZE_SQRT (11.3137)
 
 extern uint16_t q_inp [S_SIZE * D_SIZE] = {};
 extern uint16_t k_inp [D_SIZE * S_SIZE] = {};
 extern uint16_t v_inp [S_SIZE * D_SIZE] = {};
+extern uint16_t o_out [S_SIZE * D_SIZE] = {};
 
 int max_compare(uint32_t prev, uint32_t curr, uint32_t dim);
 int rowmax(uint32_t s, uint32_t maxes, uint32_t dim_h, uint32_t dim_w);

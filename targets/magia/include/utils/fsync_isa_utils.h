@@ -15,6 +15,7 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Authors: Victor Isachi <victor.isachi@unibo.it>
+ * Alberto Dequino <alberto.dequino@unibo.it>
  * 
  * MAGIA FractalSync ISA Utils
  */
