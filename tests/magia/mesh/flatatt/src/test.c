@@ -66,6 +66,12 @@ int main(void){
     uint32_t B_SIZE         = 16;
     uint32_t T              = S_SIZE / B_SIZE;
 
+    /**
+     * 1b. Set arbitrary timestep value to further divide the Q and K tiles in subtiles.
+     */
+    uint32_t n_timesteps    = 16;
+    uint32_t t_size         = D_SIZE / n_timesteps;
+
     /** TODO: if S_SIZE is not a multiple of B_SIZE, we should do something for the leftover.
      * "We" is most likely Future Me.
      * Fuck you, Future Me! - signed Past Me.
@@ -95,6 +101,8 @@ int main(void){
 
     /**
      * 1d. Initialize the L1 addresses for the tiles
+     * Buffers point to one of these tiles, swap out current and prev buffer at each cycle, as each cycle requires
+     * data from the previous one.
      */
     uint32_t obi_addr_m_0   = l1_tile_base;
     uint32_t obi_addr_m_1   = obi_addr_m_0  +   (tile_h * 2);
@@ -103,9 +111,10 @@ int main(void){
     uint32_t obi_addr_o_0   = obi_addr_l_1  +   (tile_h * 2);
     uint32_t obi_addr_o_1   = obi_addr_o_0  +   (tile_h * D_SIZE * 2);
     uint32_t obi_addr_q     = obi_addr_o_1  +   (tile_h * D_SIZE * 2);
-    uint32_t obi_addr_k     = obi_addr_q    +   (tile_h * D_SIZE * 2);
-    uint32_t obi_addr_v     = obi_addr_k    +   (tile_w * D_SIZE * 2);
-    uint32_t obi_addr_s     = obi_addr_v    +   (tile_w * D_SIZE * 2);
+    uint32_t obi_addr_k     = obi_addr_q    +   (tile_h * t_size * 2);
+    uint32_t obi_addr_v     = obi_addr_k    +   (tile_w * t_size * 2);
+    uint32_t obi_addr_s     = obi_addr_v    +   (tile_w * t_size * 2);
+    uint32_t obi_addr_sb    = obi_addr_s    +   (tile_h * tile_w * 2);
     
 
     uint32_t max_buffer;
@@ -118,17 +127,17 @@ int main(void){
     /**
      * 1e. Initialize the L2 addresses for the tiles
      */
-    uint32_t len_q      = D_SIZE * 2;
+    uint32_t len_q      = t_size * 2;
     uint32_t std_q      = D_SIZE * 2;
     uint32_t reps_q     = (uint32_t) tile_h;
     uint32_t axi_addr_q = (uint32_t) q_inp + (y_id * tile_h_max * D_SIZE * 2);
     
     uint32_t len_k      = tile_w * 2;
     uint32_t std_k      = S_SIZE * 2;
-    uint32_t reps_k     = (uint32_t) D_SIZE;
+    uint32_t reps_k     = (uint32_t) t_size;
     uint32_t axi_addr_k = (uint32_t) k_inp + (x_id * tile_w_max * 2);
 
-    uint32_t len_v      = D_SIZE * 2;
+    uint32_t len_v      = t_size * 2;
     uint32_t std_v      = D_SIZE * 2;
     uint32_t reps_v     = (uint32_t) tile_w;
     uint32_t axi_addr_v = (uint32_t) v_inp + (x_id * tile_w_max * D_SIZE * 2);
@@ -145,11 +154,7 @@ int main(void){
         flush(obi_addr_o_0, tile_h * D_SIZE);
         flush(obi_addr_o_1, tile_h * D_SIZE);
 
-        /**
-         * 2b. Load the Q data-tile required for the i-th block row
-         */
-        idma_memcpy_2d(&idma_ctrl, 0, axi_addr_q + (i * B_SIZE * D_SIZE * 2), obi_addr_q, len_q, std_q, reps_q);
-        idma_wait(&idma_ctrl);
+        axi_addr_q = axi_addr_q + (i * B_SIZE * D_SIZE * 2);
 
         /**
          * 3. Cycle over the blocks columns of the attention map
@@ -175,23 +180,28 @@ int main(void){
                 prev_output_buffer  = obi_addr_o_1;
             }
 
-
             /**
-             * 3b. Load the K (transposed) and V data-tile required for the j-th block column
+             * 3b. Output static matmul Q * Kt
              */
-            idma_memcpy_2d(&idma_ctrl, 0, axi_addr_k + (j * B_SIZE * 2), obi_addr_k, len_k, std_k, reps_k);
-            idma_wait(&idma_ctrl);
-            idma_memcpy_2d(&idma_ctrl, 0, axi_addr_v + (j * B_SIZE * D_SIZE * 2), obi_addr_v, len_v, std_v, reps_v);
-            idma_wait(&idma_ctrl);
+            for(uint32_t k = 0; k < t_size; k++){
+                /**
+                * 3ba. IDMA to load the input and weight data-tile for current timeslot
+                */
+                idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_q + (t_size * k * 2)), obi_addr_q, len_q, std_q, reps_q);
+                idma_wait(&idma_ctrl);
+                idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_k + (j * B_SIZE * 2) + (t_size * S_SIZE * i * 2)), obi_addr_k, len_k, std_k, reps_k);
+                idma_wait(&idma_ctrl);
+
+                /**
+                * 3bb. Evoke the RED MULE 
+                * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
+                */
+                redmule_gemm(&redmule_ctrl, obi_addr_q, obi_addr_k, obi_addr_s, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
+                redmule_wait(&redmule_ctrl);
+            }
 
             /**
-             * 3c. Q * Kt
-             */
-            redmule_gemm(&redmule_ctrl, obi_addr_q, obi_addr_k, obi_addr_s, (uint16_t) tile_h, (uint16_t) D_SIZE, (uint16_t) tile_w);
-            redmule_wait(&redmule_ctrl);
-
-            /**
-             * 3d. Find row maxes.
+             * 3c. Find row maxes.
              * Each tile compares with the max of the previous tile, and propagates them to the following tile.
              * When reaching the rightmost tile, compare with the maxes of the previous block.
              * Then, propagate the values back to the entire row.
@@ -218,18 +228,18 @@ int main(void){
             fsync_sync_row(&fsync_ctrl);
 
             /**
-             * 3e. Element wise substraction for each row with their maximum
+             * 3d. Element wise substraction for each row with their maximum
              */
             rowdiff(obi_addr_s, max_buffer, tile_h, tile_w);
 
             /**
-             * 3f. Exponential on the scores
+             * 3e. Exponential on the scores
              * TODO: Actually implement the exponential function lol
              */
             //exponential(obi_addr_s, tile_h, tile_w);
 
             /**
-             * 3g. Row wise summation of the elements.
+             * 3f. Row wise summation of the elements.
              * After summing, add the contribution of the previous tile and send them forward.
              * When reaching the end, "broadcast" it back.
              */
@@ -254,35 +264,35 @@ int main(void){
             fsync_sync_row(&fsync_ctrl);
 
             /**
-             * 3h. Add retroactive contribution of previous blocks
+             * 3g. Add retroactive contribution of previous blocks
              */
             if(j > 0){
                 /**
-                 * 3ha. Do the difference between current block's maxes vector and the previous one.
+                 * 3ga. Do the difference between current block's maxes vector and the previous one.
                  * You'll get a bunch of zeroes if the previous block had bigger maxes 
                  * (because they replaced the current block's in step 3d)
                  */
                 vect_diff(prev_max_buffer, max_buffer, tile_h);
 
                 /**
-                 * 3hb. Exponential of the max difference.
+                 * 3gb. Exponential of the max difference.
                  * 1 in the rows dimension as the input is a vector.
                  * TODO: Exponential is still not implemented. 
                  */
                 //exponential(prev_max_buffer, 1, tile_h);
 
                 /**
-                 * 3hc. Element-wise multiply the exponential with the previous block's sum vector.
+                 * 3gc. Element-wise multiply the exponential with the previous block's sum vector.
                  */
                 vect_prod(prev_sum_buffer, prev_max_buffer, tile_h);
 
                 /**
-                 * 3hd. Sum previous block's sum on current block's sum
+                 * 3gd. Sum previous block's sum on current block's sum
                  */
                 vect_sum(sum_buffer, prev_sum_buffer, tile_h);
 
                 /**
-                 * 3he. Row-wise divide each row of the previous block's output by the exponential of the difference
+                 * 3ge. Row-wise divide each row of the previous block's output by the exponential of the difference
                  * between the current block rows' maxes and the previous block's ones.
                  * (Sadly, I'm serious.)
                  */
@@ -290,10 +300,29 @@ int main(void){
             }
 
             /**
-             * 3i. Activation * V
+             * 3h. Input static Activation * V
              */
-            redmule_gemm(&redmule_ctrl, obi_addr_s, obi_addr_v, output_buffer, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) D_SIZE);
-            redmule_wait(&redmule_ctrl);
+            for(uint32_t k = 0; k < n_timesteps; k++){
+                /**
+                * 3ha. Load V data-tile required for the j-th block column and k-th timestep
+                */
+                idma_memcpy_2d(&idma_ctrl, 0, axi_addr_v + (j * B_SIZE * D_SIZE * 2) + (k * t_size * 2), obi_addr_v, len_v, std_v, reps_v);
+                idma_wait(&idma_ctrl);
+
+                /**
+                 * 3hb. Evoke REDMULE
+                 * https://www.youtube.com/watch?v=xDbIDKel-O4
+                 */
+                redmule_gemm(&redmule_ctrl, obi_addr_s, obi_addr_v, obi_addr_sb, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
+                redmule_wait(&redmule_ctrl);
+
+                /**
+                 * 3hc. Strided store of the current timestep buffer in the output
+                 */
+                idma_memcpy_2d(&idma_ctrl, 0, obi_addr_sb, output_buffer + (k * t_size * 2), t_size * 2, D_SIZE * 2, tile_h);
+                idma_wait(&idma_ctrl);
+            }
+            
 
             /**
              * 3j. Add in the previous blocks' contribution
