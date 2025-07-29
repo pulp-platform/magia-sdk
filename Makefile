@@ -25,6 +25,7 @@ MAGIA_DIR 		?= ../
 BIN 			?= $(BUILD_DIR)/verif
 build_mode		?= update
 fsync_mode		?= stall
+mesh_dv			?= 1
 
 target_platform ?= magia
 compiler 		?= GCC
@@ -48,7 +49,12 @@ endif
 	cmake -DTARGET_PLATFORM=$(target_platform) -DCOMPILER=$(compiler) -B build --trace-expand
 	cmake --build build --verbose
 
-run: 
+set_mesh:
+ifeq ($(tiles), 1)
+	$(eval mesh_dv=0)
+endif 
+
+run: set_mesh
 	@echo 'Magia is available at https://github.com/pulp-platform/MAGIA.git'
 	@echo 'please run "source setup_env.sh" in the magia folder before running this script'
 	@echo 'and make sure the risc-v objdump binary is visible on path using "which riscv32-unknown-elf-objdump".'
@@ -76,15 +82,17 @@ else ifeq ($(platform), rtl)
 	riscv32-unknown-elf-objdump -d -l -s $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
 	cd $(MAGIA_DIR) 												&& \
-	make run test=$(test) gui=$(gui)
+	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv)
 else
 	$(error Only rtl and gvsoc are supported as platforms.)
 endif
 
-MAGIA: 
+MAGIA: set_mesh
 ifeq ($(target_platform), magia)
 	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_DIR)/Makefile
+ifneq ($(tiles), 1)
 	sed -i -E 's/^( *localparam int unsigned N_TILES_[XY][[:space:]]*=[[:space:]]*)[0-9]+;/\1$(tiles);/' $(MAGIA_DIR)/hw/mesh/magia_pkg.sv
+endif
 else
 	$(error unrecognized platform (acceptable platform: magia).)
 endif
@@ -96,14 +104,14 @@ else
 	$(error unrecognized fractal sync mode (acceptable modes: stall|interrupt).)
 endif
 ifneq (,$(filter $(build_mode), update synth profile))
-	cd $(MAGIA_DIR)												&& \
-	make python_venv || true									&& \
-	source setup_env.sh 										&& \
-	make python_deps || true									&& \
-	make bender													&& \
-	make $(build_mode)-ips > $(build_mode)-ips.log mesh_dv=1	&& \
-	make floonoc-patch || true									&& \
-	make build-hw > build-hw.log mesh_dv=1
+	cd $(MAGIA_DIR)														&& \
+	make python_venv || true											&& \
+	source setup_env.sh 												&& \
+	make python_deps || true											&& \
+	make bender															&& \
+	make $(build_mode)-ips > $(build_mode)-ips.log mesh_dv=$(mesh_dv)	&& \
+	make floonoc-patch || true											&& \
+	make build-hw > build-hw.log mesh_dv=$(mesh_dv)
 else
 	$(error unrecognized mode (acceptable build modes: update|profile|synth).)
 endif
