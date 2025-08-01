@@ -16,7 +16,7 @@ The following *optional* parameters can be specified when running the make comma
 
 `compiler`: **GCC**|**LLVM** (**Default**: GCC). Selects the compiler to be used. LLVM is currently WIP.
 
-`platform`: **rtl**|**gvsoc** (**Default**: rtl). Selects the simulation platform. GVSoC is currently WIP.
+`platform`: **rtl**|**gvsoc** (**Default**: rtl). Selects the simulation platform. GVSoC is currently WIP, some tests may fail.
 
 `tiles`: **2**|**4**|**8**|**16** (**Default**: 2). Selects number of rows and columns for the mesh architecture.
 
@@ -32,9 +32,20 @@ The following *optional* parameters can be specified when running the make comma
 
         BUILD_DIR ?= $(MAGIA_DIR)//work/sw/tests/$(test).c
 
+1. Make sure the GVSoC submodule is set up correctly:
+
+        git submodule update --init --recursive
+        cd gvsoc
+        git checkout magia
+        git submodule update --init --recursive
+
 2. Build the Magia architecture (*this command may take time and return an error, please be patient.*):
         
     `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode>`
+
+    And/Or the GVSoC module:
+
+    `make gvsoc <tiles>`
 
 3. Make sure the RISC-V GCC compiler is installed and visible in the `$PATH` environment variable. You can check if and where the compiler is installed by running the following command on your root (`/`) directory:
 
@@ -44,6 +55,8 @@ The following *optional* parameters can be specified when running the make comma
 
     `export PATH=<absolute path to directory containing the compiler binary>:$PATH`
 
+    In case you don't have a toolchain, or the toolchain in your machine has compiler errors (such as requiring strange strange ISA extensions), you can build your own toolchain by following the steps listed [HERE](https://github.com/pulp-platform/pulp-riscv-gnu-toolchain.git).
+
 4. To compile and build the test binaries for a desired architecture run:
 
     `make clean build <target_platform> <tiles> <compiler>`
@@ -51,6 +64,8 @@ The following *optional* parameters can be specified when running the make comma
     To run one of the tests:
 
     `make run test=<test_name> <platform>`
+
+***WARNING: YOU HAVE TO REBUILD BOTH RTL/GVSOC AND THE TEST BINARY EACH TIME YOU WANT TO TEST A MAGIA MESH WITH A DIFFERENT NUMBER OF TILES.*** 
 
 ## Adding your own test
 
@@ -129,4 +144,7 @@ If MAGIA ever evolves to have a host-offload mechanism, this folder will contain
 
 ### cmake
 Contains utility files for *cmake* automatic compilation.
+
+### gvsoc
+A submodule containing the Germain Virtual System on Chip, built to simulate MAGIA (and other PULP-related platforms).
 
