@@ -15,7 +15,7 @@ int main(void){
 
     int test_int = -123;
     
-    printf("Hello world! %d", test_int);
+    printf("Hello world! %d\n", test_int);
 
     magia_return(hartid, PASS_EXIT_CODE);
     

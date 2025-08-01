@@ -1,0 +1,4 @@
+[submodule "gvsoc"]
+	path = gvsoc
+	url = git@github.com:TheSSDGuy/gvsoc.git
+	branch = magia

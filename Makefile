@@ -22,6 +22,7 @@ SHELL 			:= /bin/bash
 
 BUILD_DIR 		?= ../work/sw/tests/$(test).c
 MAGIA_DIR 		?= ../
+GVSOC_DIR 		?= ./gvsoc
 BIN 			?= $(BUILD_DIR)/verif
 build_mode		?= update
 fsync_mode		?= stall
@@ -35,6 +36,8 @@ tiles 			?= 2
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
+
+.PHONY: gvsoc
 
 clean:
 	rm -rf build/
@@ -68,7 +71,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(error COMING SOON!)
+	$(GVSOC_DIR)/install/bin/gvsoc --target=magia-base --binary=./build/bin/$(test) --trace-level=trace run
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR)
 	cp ./build/bin/$(test) $(BUILD_DIR)/verif
@@ -116,4 +119,13 @@ else
 	$(error unrecognized mode (acceptable build modes: update|profile|synth).)
 endif
 
+gvsoc:
+ifeq ($(target_platform), magia)
+	sed -i -E "s/^[[:space:]]*N_TILES_X[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_X           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_base/magia_arch.py
+	sed -i -E "s/^[[:space:]]*N_TILES_Y[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_Y           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_base/magia_arch.py
+else
+	$(error unrecognized platform (acceptable platform: magia).)
+endif
+	cd $(GVSOC_DIR)	&& \
+	make build TARGETS=magia-base DEBUG=1
 

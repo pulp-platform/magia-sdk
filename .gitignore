@@ -4,3 +4,6 @@ output.*
 list/
 transcript
 .vscode/
+gvsoc_config.json
+power_report.csv
+trace_file.txt
