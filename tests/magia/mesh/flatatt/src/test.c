@@ -63,13 +63,13 @@ int main(void){
      * 1a. Set arbitrary B value, dimension of the square block to be computed by the mesh at each cycle 
      * Calculate number of blocks, and dimension of the leftover block
      */
-    uint32_t B_SIZE         = 16;
+    uint32_t B_SIZE         = S_SIZE;
     uint32_t T              = S_SIZE / B_SIZE;
 
     /**
      * 1b. Set arbitrary timestep value to further divide the Q and K tiles in subtiles.
      */
-    uint32_t n_timesteps    = 16;
+    uint32_t n_timesteps    = 1;
     uint32_t t_size         = D_SIZE / n_timesteps;
 
     /** TODO: if S_SIZE is not a multiple of B_SIZE, we should do something for the leftover.
@@ -234,9 +234,8 @@ int main(void){
 
             /**
              * 3e. Exponential on the scores
-             * TODO: Actually implement the exponential function lol
              */
-            //exponential(obi_addr_s, tile_h, tile_w);
+            exponential(obi_addr_s, (uint32_t) tile_h, (uint32_t) tile_w);
 
             /**
              * 3f. Row wise summation of the elements.
@@ -277,9 +276,8 @@ int main(void){
                 /**
                  * 3gb. Exponential of the max difference.
                  * 1 in the rows dimension as the input is a vector.
-                 * TODO: Exponential is still not implemented. 
                  */
-                //exponential(prev_max_buffer, 1, tile_h);
+                exponential(prev_max_buffer, 1, (uint32_t) tile_h);
 
                 /**
                  * 3gc. Element-wise multiply the exponential with the previous block's sum vector.

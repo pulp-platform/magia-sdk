@@ -30,8 +30,8 @@
  */
 int max_compare(uint32_t curr, uint32_t prev, uint32_t dim){
     for(uint32_t i = 0; i < dim; i++){
-        if((*(volatile uint16_t*)(prev + (i * 2))) > (*(volatile uint16_t*)(curr + (i * 2))))
-            mmio16(curr + (i * 2)) = (*(volatile uint16_t*)(prev + (i * 2)));
+        if((*(volatile _Float16*)(prev + (i * 2))) > (*(volatile _Float16*)(curr + (i * 2))))
+            (*(volatile _Float16*)(curr + (i * 2))) = (*(volatile _Float16*)(prev + (i * 2)));
     }
 }
 
@@ -41,12 +41,12 @@ int max_compare(uint32_t curr, uint32_t prev, uint32_t dim){
 int rowmax(uint32_t s, uint32_t maxes, uint32_t dim_h, uint32_t dim_w){
     for(uint32_t i = 0; i < dim_h; i++){
         uint32_t row = s + i * dim_w * 2;
-        uint16_t rowmax = 0;
+        _Float16 rowmax = 0;
         for(uint32_t j = 0; j < dim_w; j++){
-            if((*(volatile uint16_t*)(row + j * 2)) > rowmax)
-                rowmax = *(volatile uint16_t*)(row + j * 2);
+            if((*(volatile _Float16*)(row + j * 2)) > rowmax)
+                rowmax = *(volatile _Float16*)(row + j * 2);
         }
-        mmio16(maxes + i * 2) = rowmax;
+        (*(volatile _Float16*)(maxes + i * 2)) = rowmax;
     }
 }
 
@@ -56,9 +56,9 @@ int rowmax(uint32_t s, uint32_t maxes, uint32_t dim_h, uint32_t dim_w){
 int rowdiff(uint32_t s, uint32_t m, uint32_t h, uint32_t w){
     for(uint32_t i = 0; i < h; i++){
         uint32_t row = s + i * w * 2;
-        uint16_t diff = *(volatile uint16_t*)(m + i * 2);
+        _Float16 diff = *(volatile _Float16*)(m + i * 2);
         for(uint32_t j = 0; j < w; j++){
-            mmio16(row + j * 2) = (*(volatile uint16_t*)(row + j * 2)) - diff;
+            (*(volatile _Float16*)(row + j * 2)) = (*(volatile _Float16*)(row + j * 2)) - diff;
         }
     }
 }
@@ -71,9 +71,9 @@ int rowsum(uint32_t s, uint32_t l, uint32_t h, uint32_t w){
         uint32_t row = s + i * 2 * w;
         uint16_t sum = 0;
         for(uint32_t j = 0; j < w; j++){
-            sum = sum + *(volatile uint16_t*)(row + j * 2);
+            sum = sum + *(volatile _Float16*)(row + j * 2);
         }
-        mmio16(l + i * 2) = sum;
+        (*(volatile _Float16*)(l + i * 2)) = sum;
     }
 }
 
@@ -83,9 +83,9 @@ int rowsum(uint32_t s, uint32_t l, uint32_t h, uint32_t w){
 int rowdiv(uint32_t s, uint32_t m, uint32_t h, uint32_t w){
     for(uint32_t i = 0; i < h; i++){
         uint32_t row = s + i * w * 2;
-        uint16_t div = *(volatile uint16_t*)(m + i * 2);
+        _Float16 div = *(volatile _Float16*)(m + i * 2);
         for(uint32_t j = 0; j < w; j++){
-            mmio16(row + j * 2) = (*(volatile uint16_t*)(row + j * 2)) / div;
+            (*(volatile _Float16*)(row + j * 2)) = (*(volatile _Float16*)(row + j * 2)) / div;
         }
     }
 }
@@ -95,7 +95,7 @@ int rowdiv(uint32_t s, uint32_t m, uint32_t h, uint32_t w){
  */
 int vect_sum(uint32_t v1, uint32_t v2, uint32_t dim){
     for(uint32_t i = 0; i < dim; i++){
-        mmio16(v1 + i * 2) = *(volatile uint16_t*)(v1 + i * 2) + *(volatile uint16_t*)(v2 + i * 2);
+        (*(volatile _Float16*)(v1 + i * 2)) = *(volatile _Float16*)(v1 + i * 2) + *(volatile _Float16*)(v2 + i * 2);
     }
 }
 
@@ -104,7 +104,7 @@ int vect_sum(uint32_t v1, uint32_t v2, uint32_t dim){
  */
 int vect_diff(uint32_t v1, uint32_t v2, uint32_t dim){
     for(uint32_t i = 0; i < dim; i++){
-        mmio16(v1 + i * 2) = *(volatile uint16_t*)(v1 + i * 2) - *(volatile uint16_t*)(v2 + i * 2);
+        (*(volatile _Float16*)(v1 + i * 2)) = *(volatile _Float16*)(v1 + i * 2) - *(volatile _Float16*)(v2 + i * 2);
     }
 }
 
@@ -113,7 +113,30 @@ int vect_diff(uint32_t v1, uint32_t v2, uint32_t dim){
  */
 int vect_prod(uint32_t v1, uint32_t v2, uint32_t dim){
     for(uint32_t i = 0; i < dim; i++){
-        mmio16(v1 + i * 2) = (*(volatile uint16_t*)(v1 + i * 2)) * (*(volatile uint16_t*)(v2 + i * 2));
+        (*(volatile _Float16*)(v1 + i * 2)) = (*(volatile _Float16*)(v1 + i * 2)) * (*(volatile _Float16*)(v2 + i * 2));
+    }
+}
+
+#define GIST_A  12102203.17133801f
+#define GIST_B  1064986823.010288f
+#define GIST_C  8388608
+#define GIST_D  2139095040
+
+float fastexp_gist(float x) {
+    x = GIST_A * x + GIST_B;
+
+    if (x < GIST_C || x > GIST_D)
+        x = (x < GIST_C) ? 0.0f : GIST_D;
+
+    uint32_t n = (uint32_t)(x);
+    return *(float *) &n;
+}
+
+int exponential(uint32_t matrix, uint32_t rows, uint32_t columns){
+    for(uint32_t i = 0; i < rows; i++){
+        for(uint32_t j = 0; j < columns; j++){
+            (*(volatile _Float16 *)(matrix + i * columns * 2 + j * 2)) = (_Float16) fastexp_gist((float) (*(volatile _Float16 *)(matrix + i * columns * 2 + j * 2)));
+        }
     }
 }
 

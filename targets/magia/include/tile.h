@@ -8,6 +8,7 @@
 #define _TILE_INCLUDE_GUARD_
 
 #include <stdint.h>
+#include <stddef.h>
 #include "regs/tile_ctrl.h"
 #include "addr_map/tile_addr_map.h"
 #include "utils/tinyprintf.h"
