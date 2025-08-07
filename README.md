@@ -49,13 +49,15 @@ The following *optional* parameters can be specified when running the make comma
 
 3. Make sure the RISC-V GCC compiler is installed and visible in the `$PATH` environment variable. You can check if and where the compiler is installed by running the following command on your root (`/`) directory:
 
-    `find . ! -readable -prune -o -name "riscv32-unknown-elf-gcc" -print`
+    `find . ! -readable -prune -o -name "riscv64-unknown-elf-gcc" -print`
 
     Then add the compiler to the `$PATH` environment variable with:
 
     `export PATH=<absolute path to directory containing the compiler binary>:$PATH`
 
-    In case you don't have a toolchain, or the toolchain in your machine has compiler errors (such as requiring strange strange ISA extensions), you can build your own toolchain by following the steps listed [HERE](https://github.com/pulp-platform/pulp-riscv-gnu-toolchain.git).
+    In case you don't have a toolchain, or the toolchain in your machine has compiler errors (such as requiring strange strange ISA extensions), you can build your own toolchain by following the steps listed [HERE](https://github.com/riscv-collab/riscv-gnu-toolchain). **Make sure you enable multilib to support 32-bit.** Despite having 64 in the name, the toolchain also supports 32-bit targets.
+
+    In case you want to use a different toolchain, or want to specify a particular toolchain installed in your filesystem, you can edit the file *magia-sdk/cmake/toolchain_gcc.cmake* to point to your desired toolchain binary file.
 
 4. To compile and build the test binaries for a desired architecture run:
 
