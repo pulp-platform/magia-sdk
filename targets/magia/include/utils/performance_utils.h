@@ -38,7 +38,7 @@ static inline unsigned int perf_get_cycles(){
 }
 
 /**
- * @brief Returns the cycles of the performance counter
+ * @brief Returns the n. instructions of the performance counter
  */
 static inline unsigned int perf_get_instr(){
     unsigned int value = 0;

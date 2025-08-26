@@ -19,5 +19,6 @@
 #include "utils/fsync_isa_utils.h"
 #include "utils/attention_utils.h"
 #include "utils/performance_utils.h"
+#include "utils/amo_utils.h"
 
 #endif //_TILE_INCLUDE_GUARD_

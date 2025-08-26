@@ -41,11 +41,11 @@
 #define TEST_END_ADDR  (0xCC030000)
 #define PRINT_ADDR     (0xFFFF0004)
 
-#define MESH_X_TILES 4
-#define MESH_Y_TILES 4
+#define MESH_X_TILES 2
+#define MESH_Y_TILES 2
 #define NUM_HARTS    (MESH_X_TILES*MESH_Y_TILES)
-#define MAX_SYNC_LVL 4
-#define MESH_2_POWER 2
+#define MAX_SYNC_LVL 2
+#define MESH_2_POWER 1
 
 #define STR_OFFSET  (0x00000000)
 #define STR_BASE    (RESERVED_START + STR_OFFSET)

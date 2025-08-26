@@ -122,20 +122,20 @@ int vect_prod(uint32_t v1, uint32_t v2, uint32_t dim){
 #define GIST_C  8388608
 #define GIST_D  2139095040
 
-float fastexp_gist(float x) {
+_Float16 fastexp_gist(_Float16 x) {
     x = GIST_A * x + GIST_B;
 
     if (x < GIST_C || x > GIST_D)
         x = (x < GIST_C) ? 0.0f : GIST_D;
 
     uint32_t n = (uint32_t)(x);
-    return *(float *) &n;
+    return *(_Float16 *) &n;
 }
 
 int exponential(uint32_t matrix, uint32_t rows, uint32_t columns){
     for(uint32_t i = 0; i < rows; i++){
         for(uint32_t j = 0; j < columns; j++){
-            (*(volatile _Float16 *)(matrix + i * columns * 2 + j * 2)) = (_Float16) fastexp_gist((float) (*(volatile _Float16 *)(matrix + i * columns * 2 + j * 2)));
+            (*(volatile _Float16 *)(matrix + i * columns * 2 + j * 2)) = (_Float16) fastexp_gist((_Float16) (*(volatile _Float16 *)(matrix + i * columns * 2 + j * 2)));
         }
     }
 }
