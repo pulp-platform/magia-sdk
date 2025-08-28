@@ -128,6 +128,7 @@ static void psprint(uint32_t hartid, const char* string){
 }
 
 static void magia_return(uint32_t hartid, uint32_t exit_code){
+    printf("Tile %d returned.\n", hartid);
     mmio16(TEST_END_ADDR + hartid*2) = (uint16_t) (exit_code - get_hartid());
 }
 
