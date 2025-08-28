@@ -353,8 +353,6 @@ int main(void){
         fsync_sync_row(&fsync_ctrl);
     }
 
-    printf("I survived bitch.\n");
-
     magia_return(hartid, PASS_EXIT_CODE);
     return 0;  
 }
