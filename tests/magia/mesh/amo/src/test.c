@@ -49,7 +49,7 @@ int main(void){
      */
     for(uint32_t i = 0; i < N_ITERS; i++){
         for(uint8_t j = 0; j < NUM_HARTS; j++){
-            amoadd_immediate(get_l1_base(j), 1);
+            amo_add_immediate(get_l1_base(j), 1);
         }
     }
 

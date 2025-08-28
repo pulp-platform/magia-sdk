@@ -43,12 +43,6 @@ inline uint32_t get_l1_base(uint32_t hartid){
     return L1_BASE + hartid * L1_TILE_OFFSET;
 }
 
-inline void amo_increment(volatile uint32_t addr){
-    asm volatile("addi t0, %0, 0" ::"r"(addr));
-    asm volatile("li t1, 1" ::);
-    asm volatile("amoadd.w t2, t1, (t0)" ::);
-}
-
 static char* utoa(unsigned int value, unsigned int base, char* result) {
     if (base < 2 || base > 16){
         *result = '\0'; 

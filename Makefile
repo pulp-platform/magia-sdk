@@ -127,5 +127,6 @@ else
 	$(error unrecognized platform (acceptable platform: magia).)
 endif
 	cd $(GVSOC_DIR)	&& \
+	git submodule update --init --recursive && \
 	make build TARGETS=magia-base DEBUG=1
 

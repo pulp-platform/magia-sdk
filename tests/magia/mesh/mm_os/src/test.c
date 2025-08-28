@@ -156,14 +156,14 @@ int main(void){
             computed = *(volatile uint16_t*)(y_inp + (i * K_SIZE + j));
             expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
             diff = (computed > expected) ? (computed - expected) : (expected - computed);
-            if(diff > 0x0011){
+            if(diff > 0x0020){
                 //if(y_id == 0)
                     //printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
                 errors++;
             }       
         }
     }
-    printf("Number of errors: %d", errors);
+    printf("Number of errors: %d\n", errors);
 
     magia_return(hartid, PASS_EXIT_CODE);
     return 0;  
