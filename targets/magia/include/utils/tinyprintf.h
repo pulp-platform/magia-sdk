@@ -262,7 +262,6 @@ struct param {
     char sign;          /**<  The sign to display (if any) */
     unsigned int base;  /**<  number base (e.g.: 8, 10, 16) */
     char *bf;           /**<  Buffer to output */
-    char flush;         /**<  Flag to flush the print */
 };
 
 
@@ -433,8 +432,6 @@ static void putchw(void *putp, putcf putf__, struct param *p)
         while (n-- > 0)
             putf(putp, ' ');
     }
-
-    p->flush = 1;
 }
 
 static void tfp_format(void *putp, putcf putf__, const char *fmt, va_list va)
@@ -447,17 +444,10 @@ static void tfp_format(void *putp, putcf putf__, const char *fmt, va_list va)
 #endif
     char ch;
     p.bf = bf;
-    p.flush = 0;
 
     while ((ch = *(fmt++))) {
         if (ch != '%') {
             putf(putp, ch);
-            if(ch=='\n'){
-                p.flush=0;
-            }
-            else{
-                p.flush=1;
-            }
         } else {
 #ifdef PRINTF_LONG_SUPPORT
             char lng = 0;  /* 1 for long, 2 for long long */
@@ -608,14 +598,10 @@ static void tfp_format(void *putp, putcf putf__, const char *fmt, va_list va)
                 break;
             case '%':
                 putf(putp, ch);
-                p.flush = 1;
             default:
                 break;
             }
         }
-    }
-    if(p.flush){
-        putf(putp, 0x0A);
     } 
  abort:;
 }
