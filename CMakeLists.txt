@@ -39,7 +39,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 project(magia-sdk LANGUAGES C ASM)
 
 set(ABI ilp32)
-set(ISA rv32imafc)
+set(ISA rv32imaf)
 
 
 message(STATUS "[MAGIA-SDK] ABI                     : ${ABI}")

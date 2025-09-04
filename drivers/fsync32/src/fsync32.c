@@ -36,7 +36,7 @@ int fsync32_init(fsync_controller_t *ctrl) {
  */
 int fsync32_sync_level(fsync_controller_t *ctrl, uint32_t level, uint8_t dir){
     if(level >= MAX_SYNC_LVL){
-        printf("Error: synchronization level is too high! Maximum level is: %d", MAX_SYNC_LVL - 1);
+        printf("Error: synchronization level is too high! Maximum level is: %d\n", MAX_SYNC_LVL - 1);
         return 1;
     }
     //printf("Calling sync level %d, using %d", level, (uint32_t) (0xFFFFFFFF >> (31 - level)));
@@ -61,7 +61,7 @@ int fsync32_getgroup_level(fsync_controller_t *ctrl, uint32_t level, uint32_t id
     else if(dir == 1)
         return ((GET_X_ID(id) >> ((level + 1) / 2)) + ((GET_Y_ID(id) >> ((level + 2) / 2))*(MESH_X_TILES >> ((level + 1) / 2))));
     else{
-        printf("Direction value incorrect. Correct values: 0 for horizontal tree, 1 for vertical tree.");
+        printf("Direction value incorrect. Correct values: 0 for horizontal tree, 1 for vertical tree.\n");
         return -1;
     }
 }
@@ -94,7 +94,7 @@ int fsync32_sync_col(fsync_controller_t *ctrl) {
  */
 int fsync32_sync_diag(fsync_controller_t *ctrl) {
     if(GET_X_ID(get_hartid()) != GET_Y_ID(get_hartid())){
-        printf("Error: non-diagonal tile attempted to synchronize with the diagonal.");
+        printf("Error: non-diagonal tile attempted to synchronize with the diagonal.\n");
         return 1;
     }
     fsync(0, (0b1010101010 >> ((5 - MESH_2_POWER) * 2)));
