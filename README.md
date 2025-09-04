@@ -14,7 +14,7 @@ The following *optional* parameters can be specified when running the make comma
 
 `fsync_mode`: **stall**|**interrupt** (**Default** stall). Selects the Fractal Sync module synchronization behaviour.
 
-`compiler`: **GCC**|**LLVM** (**Default**: GCC). Selects the compiler to be used. LLVM is currently WIP.
+`compiler`: **GCC_MULTILIB**|**GCC_PULP**|**LLVM** (**Default**: GCC_MULTILIB). Selects the compiler to be used. LLVM is currently WIP. PULP is the risc-v 32 bits only toolchain NOT supporting floating point instructions, wheras the MULTILIB toolchain is the nightly risc-v one.
 
 `platform`: **rtl**|**gvsoc** (**Default**: rtl). Selects the simulation platform. GVSoC is currently WIP, some tests may fail.
 
@@ -51,13 +51,17 @@ The following *optional* parameters can be specified when running the make comma
 
     `find . ! -readable -prune -o -name "riscv64-unknown-elf-gcc" -print`
 
+    Or (in case you want to use the 32-bit only PULP toolchain):
+
+    `find . ! -readable -prune -o -name "riscv32-unknown-elf-gcc" -print`
+
     Then add the compiler to the `$PATH` environment variable with:
 
     `export PATH=<absolute path to directory containing the compiler binary>:$PATH`
 
     In case you don't have a toolchain, or the toolchain in your machine has compiler errors (such as requiring strange strange ISA extensions), you can build your own toolchain by following the steps listed [HERE](https://github.com/riscv-collab/riscv-gnu-toolchain). **Make sure you enable multilib to support 32-bit.** Despite having 64 in the name, the toolchain also supports 32-bit targets.
 
-    In case you want to use a different toolchain, or want to specify a particular toolchain installed in your filesystem, you can edit the file *magia-sdk/cmake/toolchain_gcc.cmake* to point to your desired toolchain binary file.
+    In case you want to use a different toolchain, or want to specify a particular toolchain installed in your filesystem, you can edit the file *magia-sdk/cmake/toolchain_gcc_multilib.cmake* to point to your desired toolchain binary file. Make sure the ILP and API extensions in *CMakeLists.txt* are supported by the toolchain.
 
 4. To compile and build the test binaries for a desired architecture run:
 

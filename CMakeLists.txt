@@ -24,8 +24,10 @@ set(CMAKE_LINK_LIBRARY_USING_WHOLE_ARCHIVE_SUPPORTED True)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-if (COMPILER STREQUAL "GCC")
-    set(CMAKE_TOOLCHAIN_FILE cmake/toolchain_gcc.cmake)
+if (COMPILER STREQUAL "GCC_PULP")
+    set(CMAKE_TOOLCHAIN_FILE cmake/toolchain_gcc_pulp.cmake)
+elseif (COMPILER STREQUAL "GCC_MULTILIB")
+    set(CMAKE_TOOLCHAIN_FILE cmake/toolchain_gcc_multilib.cmake)
 elseif (COMPILER STREQUAL "LLVM")
     set(CMAKE_TOOLCHAIN_FILE cmake/toolchain_llvm.cmake)
 else()
@@ -39,7 +41,12 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 project(magia-sdk LANGUAGES C ASM)
 
 set(ABI ilp32)
-set(ISA rv32imaf)
+if (COMPILER STREQUAL "GCC_PULP")
+    set(ISA rv32imaf)
+elseif (COMPILER STREQUAL "GCC_MULTILIB")
+    set(ISA rv32imafc)
+endif ()
+
 
 
 message(STATUS "[MAGIA-SDK] ABI                     : ${ABI}")

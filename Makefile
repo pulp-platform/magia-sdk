@@ -29,7 +29,7 @@ fsync_mode		?= stall
 mesh_dv			?= 1
 
 target_platform ?= magia
-compiler 		?= GCC
+compiler 		?= GCC_MULTILIB
 gui 			?= 0
 tiles 			?= 2
 
@@ -48,6 +48,14 @@ build:
 	sed -i -E 's/^(#define MESH_2_POWER[[:space:]]*)[0-9]+/\1$(tiles_log_real)/' ./targets/magia/include/addr_map/tile_addr_map.h
 ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
+endif
+ifeq ($(compiler), GCC_PULP)
+	sed -i -E 's/^add_subdirectory\(flatatt\)/#&/' ./tests/magia/mesh/CMakeLists.txt
+	sed -i -E 's/^#include "utils\/attention_utils.h"/\/\/&/' ./targets/magia/include/tile.h
+endif
+ifeq ($(compiler), GCC_MULTILIB)
+	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
+	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/magia/include/tile.h
 endif
 	cmake -DTARGET_PLATFORM=$(target_platform) -DCOMPILER=$(compiler) -B build --trace-expand
 	cmake --build build --verbose
