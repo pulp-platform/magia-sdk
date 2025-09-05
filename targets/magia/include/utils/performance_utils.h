@@ -24,8 +24,8 @@ static inline void perf_stop(void) {
  * @brief Resets all performance counters to 0 without stopping them
  */
 static inline void perf_reset(void) {
-    perf_stop();
-    asm volatile("csrw 0x320, %0" : : "r"(0));
+    asm volatile("csrw 0xB00, %0" : : "r"(0));
+    asm volatile("csrw 0xB02, %0" : : "r"(0));
 }
 
 /**
@@ -44,6 +44,14 @@ static inline unsigned int perf_get_instr(){
     unsigned int value = 0;
     asm volatile ("csrr %0, 0xB02" : "=r" (value));
     return value;
+}
+
+static inline void sentinel_start(){
+    asm volatile("addi x0, x0, 0x5AA" ::);
+}
+
+static inline void sentinel_end(){
+    asm volatile("addi x0, x0, 0x5FF" ::);
 }
 
 

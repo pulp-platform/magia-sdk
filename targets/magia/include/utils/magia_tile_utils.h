@@ -71,14 +71,6 @@ inline void sentinel_instr_ex(){
     asm volatile("addi x0, x0, 0x505" ::);
 }
 
-static inline void sentinel_start(){
-    asm volatile("addi x0, x0, 0x5AA" ::);
-}
-
-static inline void sentinel_end(){
-    asm volatile("addi x0, x0, 0x5FF" ::);
-}
-
 inline void ccount_en(){
     asm volatile("csrrci zero, 0x320, 0x1" ::);
 }
