@@ -44,7 +44,7 @@ set(ABI ilp32)
 if (COMPILER STREQUAL "GCC_PULP")
     set(ISA rv32imaf)
 elseif (COMPILER STREQUAL "GCC_MULTILIB")
-    set(ISA rv32imafc)
+    set(ISA rv32imac_zfinx_zhinx)
 endif ()
 
 
