@@ -22,6 +22,8 @@
 #ifndef IDMA_ISA_UTILS_H
 #define IDMA_ISA_UTILS_H
 
+#define idma_wait() __asm__ __volatile__("wfi" ::: "memory")
+
 /* conf instruction */
   // asm volatile(
   //      ".word (0x0       << 27) | \     /* Reserved - 0x0 */

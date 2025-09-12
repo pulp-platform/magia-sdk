@@ -73,7 +73,7 @@ int main(void){
         return 0;
     }
     else{
-        //printf("ID:%d, Mesh-Tile-X:%d, Mesh-Tile-Y:%d, Data-Tile w: %d, Data-Tile h: %d", hartid, x_id, y_id, tile_w, tile_h);
+        //printf("ID:%d, Mesh-Tile-X:%d, Mesh-Tile-Y:%d, Data-Tile w: %d, Data-Tile h: %d\n", hartid, x_id, y_id, tile_w, tile_h);
     }
 
     /**
@@ -83,7 +83,7 @@ int main(void){
      * Weight data-tile: (t_size x tile_w) * data_dim
      * Output data-tile: ((tile_h x tile_w) * data_dim)
      */
-    uint8_t timeslots = 4;
+    uint8_t timeslots = 2;
     uint8_t t_size = N_SIZE / timeslots;
 
     /**
@@ -95,8 +95,9 @@ int main(void){
     uint32_t obi_addr_y = (l1_tile_base);
     uint32_t axi_addr_y = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
     
+    //printf("Doing idma memcpy y\n");
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
-    idma_wait(&idma_ctrl);
+    idma_wait();
     
     /**
      * 2a. Initalize the IDMA transfer variables for input data-tile transfers.
@@ -116,6 +117,8 @@ int main(void){
     uint32_t obi_addr_w = obi_addr_x + (t_size * tile_h * 2);
     uint32_t axi_addr_w = (uint32_t) w_inp + (x_id * tile_w_max * 2);
 
+    //printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
+
     /**
      * 3. Cycle over the timeslots.
      * For each timeslot, the mesh-tile will:
@@ -127,24 +130,27 @@ int main(void){
         /**
          * 3a. IDMA to load the input and weight data-tile for current timeslot
          */
+        //printf("Doing idma memcpy x\n");
         idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_x + (t_size * i * 2)), obi_addr_x, len_x, std_x, reps_x);
-        idma_wait(&idma_ctrl);
+        idma_wait();
+        //printf("Doing idma memcpy w\n");
         idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_w + (t_size * K_SIZE * i * 2)), obi_addr_w, len_w, std_w, reps_w);
-        idma_wait(&idma_ctrl);
+        idma_wait();
         
         /**
          * 3b. Evoke the RED MULE 
          * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
          */
+        //printf("Doing redmule\n");
         redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
-        redmule_wait(&redmule_ctrl);
+        redmule_wait();
     }
 
     /**
      * 4. Store the output data-tile back to L2
      */
     idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
-    idma_wait(&idma_ctrl);
+    idma_wait();
 
     /**
      * 5. Check results
@@ -156,7 +162,7 @@ int main(void){
             computed = *(volatile uint16_t*)(y_inp + (i * K_SIZE + j));
             expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
             diff = (computed > expected) ? (computed - expected) : (expected - computed);
-            if(diff > 0x0020){
+            if(diff > 0x0011){
                 //if(y_id == 0)
                     //printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
                 errors++;

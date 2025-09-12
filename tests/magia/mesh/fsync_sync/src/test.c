@@ -22,7 +22,7 @@ int check_values(uint32_t *ids, uint8_t n_tiles){
             continue;
         val2 = *(volatile uint8_t*)(get_l1_base(ids[i]));
         if(val != val2){
-            printf("Error detected: val=%d val2=%d (id of other tile:%d)", val, val2, ids[i]);
+            printf("Error detected: val=%d val2=%d (id of other tile:%d)\n", val, val2, ids[i]);
             return 1;
         }
     }
@@ -75,20 +75,23 @@ int main(void){
             /**
              * 2b. Synchronize with the other tiles
              */
-            if(fsync_sync(&fsync_ctrl, ids, N_TILES, 0, 0))
-                printf("Error in synchronization.");
+            if(fsync_sync(&fsync_ctrl, ids, N_TILES, 0, 0)){
+                printf("Error in synchronization.\n");
+                magia_return(hartid, 1);
+                return 1;
+            }
+                
 
             /**
              * 2c. Check that all tiles wrote the same value
              */
             if(!check_values(ids, N_TILES))
-                printf("No errors detected for arbitrary sync!");
+                printf("No errors detected for arbitrary sync!\n");
             
             break;
         }
     }
 
-    magia_return(hartid, PASS_EXIT_CODE);
-    
+    magia_return(hartid, 0);
     return 0;
 }

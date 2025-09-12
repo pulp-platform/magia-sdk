@@ -16,11 +16,13 @@ The following *optional* parameters can be specified when running the make comma
 
 `compiler`: **GCC_MULTILIB**|**GCC_PULP**|**LLVM** (**Default**: GCC_MULTILIB). Selects the compiler to be used. LLVM is currently WIP. PULP is the risc-v 32 bits only toolchain NOT supporting floating point instructions, wheras the MULTILIB toolchain is the nightly risc-v one.
 
-`platform`: **rtl**|**gvsoc** (**Default**: rtl). Selects the simulation platform. GVSoC is currently WIP, some tests may fail.
+`platform`: **rtl**|**gvsoc**. Selects the simulation platform. GVSoC is currently WIP, some tests may fail.
 
 `tiles`: **2**|**4**|**8**|**16** (**Default**: 2). Selects number of rows and columns for the mesh architecture.
 
 `test_name`: Name of the test binary to be run.
+
+`gui`: **0**|**1** (**Default**: 0). Activates the graphic user interface on the simulator (rtl only).
 
 0. In case you are using this SDK as non-submodule: Clone the [MAGIA](https://github.com/pulp-platform/MAGIA/tree/main) repository:
 
@@ -31,6 +33,8 @@ The following *optional* parameters can be specified when running the make comma
         MAGIA_DIR ?= path/to/MAGIA/repository
 
         BUILD_DIR ?= $(MAGIA_DIR)//work/sw/tests/$(test).c
+
+    It is also required to have a cmake version >= 3.13.
 
 1. Make sure the GVSoC submodule is set up correctly:
 

@@ -89,13 +89,13 @@ int main(void){
 
 
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_z, obi_addr, len, std, reps);
-    idma_wait(&idma_ctrl);
+    idma_wait();
 
     /**
      * 3. Use IDMA to write the L1 data in the input vector in L2.
      */
     idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr, len, std, reps);
-    idma_wait(&idma_ctrl);
+    idma_wait();
 
     /**
      * 4. Wait that all the tiles have finished
@@ -106,8 +106,8 @@ int main(void){
     /**
      * 5. Check results
      */
+    uint32_t errors=0;
     if(hartid==0){
-        uint32_t errors=0;
         uint16_t computed, expected, diff = 0;
         for(uint8_t i = 0; i < M_SIZE; i++){
             for(uint8_t j = 0; j < K_SIZE; j++){
@@ -121,10 +121,10 @@ int main(void){
                 }       
             }
         }
-        printf("Number of errors: %d", errors);
+        printf("Number of errors: %d\n", errors);
     }
     
 
-    magia_return(hartid, PASS_EXIT_CODE);
-    return 0;  
+    magia_return(hartid, errors);
+    return errors;  
 }

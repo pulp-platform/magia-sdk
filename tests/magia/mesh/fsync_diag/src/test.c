@@ -63,11 +63,18 @@ int main(void){
         fsync_sync_diag(&fsync_ctrl);
         flag = check_values((uint8_t) 123);
         fsync_sync_diag(&fsync_ctrl);
-        if(!flag)
-            printf("No errors detected in diagonal!");
+        if(!flag){
+            printf("No errors detected in diagonal!\n");
+            magia_return(hartid, 0);
+            return 0;
+        }
+        else{
+            printf("Errors detected in diagonal!\n");
+            magia_return(hartid, 1);
+            return 1;
+        }        
     }
 
-    magia_return(hartid, PASS_EXIT_CODE);
-
-    return 0;
+    magia_return(hartid, 0);
+    return 0; 
 }

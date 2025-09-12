@@ -39,7 +39,7 @@ int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr, uint8_t dir){
     uint8_t val_0 = *(volatile uint8_t*)(get_l1_base(id_0));
     uint8_t flag = 0;
     if(val_0 != val){
-        printf("Error detected at sync level %d - val is: %d but val_0 (id_0:%d) is %d", lvl, val, id_0, val_0);
+        printf("Error detected at sync level %d - val is: %d but val_0 (id_0:%d) is %d\n", lvl, val, id_0, val_0);
         flag = 1;
     }
     //else
@@ -108,9 +108,12 @@ int main(void){
 
     if(!flag){
         printf("No errors detected for all synchronization levels! (MAX LEVEL: %d)\n", (MAX_SYNC_LVL-1));
+        magia_return(hartid, 0);
+        return 0;
     }
-
-    magia_return(hartid, PASS_EXIT_CODE);
-    
-    return 0;
+    else{
+        printf("Errors detected when synchronizing some of the levels!\n");
+        magia_return(hartid, 1);
+        return 1;
+    }
 }

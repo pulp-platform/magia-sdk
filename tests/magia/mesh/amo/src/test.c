@@ -61,11 +61,13 @@ int main(void){
      */
     if(*(volatile uint32_t*)(l1_tile_base) != (INITIAL_VALUE + N_ITERS * NUM_HARTS)){
         printf("Error: expected %d but got %d\n", (INITIAL_VALUE + N_ITERS * NUM_HARTS), *(volatile uint32_t*)(l1_tile_base));
+        magia_return(hartid, 1);
+        return 1;  
     }
     else{
-        printf("Correct value!");
+        printf("Correct value!\n");
     }
 
-    magia_return(hartid, PASS_EXIT_CODE);
+    magia_return(hartid, 0);
     return 0;
 }

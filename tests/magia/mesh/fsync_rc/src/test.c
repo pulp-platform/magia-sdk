@@ -18,7 +18,7 @@ int check_values(uint8_t val, uint32_t hartid){
         uint32_t id_0 = GET_ID(0, val - MESH_X_TILES);
         uint8_t val_0 = *(volatile uint8_t*)get_l1_base(id_0);
         if(val != val_0){
-            printf("Column Error detected: val=%d val_0=%d (id_0=%d)", val, val_0, id_0);
+            printf("Column Error detected: val=%d val_0=%d (id_0=%d)\n", val, val_0, id_0);
             return 1;
         }
         return 0;
@@ -27,13 +27,13 @@ int check_values(uint8_t val, uint32_t hartid){
         uint32_t id_0 = GET_ID(val, 0);
         uint8_t val_0 = *(volatile uint8_t*)get_l1_base(id_0);
         if(val != val_0){
-            printf("Row Error detected: val=%d val_0=%d (id_0=%d)", val, val_0, id_0);
+            printf("Row Error detected: val=%d val_0=%d (id_0=%d)\n", val, val_0, id_0);
             return 1;
         }
         return 0;
     }
     else
-        printf("Error in check_values: val is invalid (val=%d)", val);
+        printf("Error in check_values: val is invalid (val=%d)\n", val);
     return 1;
 }
 
@@ -76,8 +76,14 @@ int main(void){
     fsync_sync_row(&fsync_ctrl);
     flag = check_values(y_id, hartid);
     fsync_sync_row(&fsync_ctrl);
-    if(!flag)
-        printf("No errors detected in row synch!");
+    if(!flag){
+        printf("No errors detected in row synch!\n");
+    }
+    else{
+        printf("Errors detected in row synch!\n");
+        magia_return(hartid, 1);
+        return 1;
+    }
     
 
     /** 
@@ -93,10 +99,15 @@ int main(void){
     fsync_sync_col(&fsync_ctrl);
     flag = check_values(val, hartid);
     fsync_sync_col(&fsync_ctrl);
-    if(!flag)
-        printf("No errors detected in column synch!");
-
-    magia_return(hartid, PASS_EXIT_CODE);
-
+    if(!flag){
+        printf("No errors detected in column synch!\n");
+    }
+    else{
+        printf("Errors detected in column synch!\n");
+        magia_return(hartid, 1);
+        return 1;
+    }
+    
+    magia_return(hartid, 0);
     return 0;
 }

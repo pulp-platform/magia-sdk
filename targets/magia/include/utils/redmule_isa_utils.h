@@ -22,6 +22,8 @@
 #ifndef REDMULE_ISA_UTILS_H
 #define REDMULE_ISA_UTILS_H
 
+#define redmule_wait() __asm__ __volatile__("wfi" ::: "memory")
+
 /* mcnfig instruction */
   // asm volatile(
   //      ".word (0x0       << 25) | \     /* Empty */
