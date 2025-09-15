@@ -10,6 +10,7 @@
 #include "tile.h"
 #include "idma.h"
 #include "redmule.h"
+#include "utils/performance_utils.h"
 
 /**
  * This test aims to verify the functionality of MAGIA as a systolic array for matrix multiplications,
@@ -97,7 +98,7 @@ int main(void){
     
     //printf("Doing idma memcpy y\n");
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
-    idma_wait();
+    // idma_wait();
     
     /**
      * 2a. Initalize the IDMA transfer variables for input data-tile transfers.
@@ -132,10 +133,10 @@ int main(void){
          */
         // printf("Doing idma memcpy x\n");
         idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_x + (t_size * i * 2)), obi_addr_x, len_x, std_x, reps_x);
-        idma_wait();
-        // printf("Doing idma memcpy w\n");
+        // idma_wait();
+        //printf("Doing idma memcpy w\n");
         idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_w + (t_size * K_SIZE * i * 2)), obi_addr_w, len_w, std_w, reps_w);
-        idma_wait();
+        // idma_wait();
         
         /**
          * 3b. Evoke the RED MULE 
@@ -143,14 +144,14 @@ int main(void){
          */
         // printf("Doing redmule\n");
         redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
-        redmule_wait();
+        // redmule_wait();
     }
 
     /**
      * 4. Store the output data-tile back to L2
      */
     idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
-    idma_wait();
+    // idma_wait();
 
     /**
      * 5. Check results

@@ -10,6 +10,7 @@
 #include "tile.h"
 #include "idma.h"
 #include "fsync.h"
+#include "utils/performance_utils.h"
 
 /**
  * This test aims to verify the functionality of MAGIA as a systolic array for matrix multiplications,
@@ -89,13 +90,13 @@ int main(void){
 
 
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_z, obi_addr, len, std, reps);
-    idma_wait();
+    // idma_wait();
 
     /**
      * 3. Use IDMA to write the L1 data in the input vector in L2.
      */
     idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr, len, std, reps);
-    idma_wait();
+    // idma_wait();
 
     /**
      * 4. Wait that all the tiles have finished

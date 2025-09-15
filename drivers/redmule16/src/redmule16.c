@@ -16,6 +16,7 @@
 #include "utils/redmule_isa_utils.h"
 #include "utils/magia_utils.h"
 #include "utils/tinyprintf.h"
+#include "utils/performance_utils.h"
 
 int redmule16_init(redmule_controller_t *ctrl) {
     irq_en(1<<IRQ_REDMULE_EVT_0);
@@ -42,10 +43,14 @@ int redmule16_init(redmule_controller_t *ctrl) {
  * 
  */
 int redmule16_gemm(redmule_controller_t *ctrl, uint32_t x, uint32_t w, uint32_t y, uint16_t m, uint16_t n, uint16_t k){
+    printf("RedMulE with parameter: x=0x%0x, w=0x%0x, y=0x%0x, m=%0d, n=%0d, k=%0d\n", x, w, y, m, n, k);
+    sentinel_start();
     //printf("Redmule GEMM!");
     redmule_mcnfig(k, m, n);
     redmule_marith(y, w, x);
     //printf("Redmule GEMM: Detected IRQ...\n");
+    redmule_wait();
+    sentinel_end();
 
     return 0;
 }
