@@ -188,16 +188,16 @@ int main(void){
                 * 3ba. IDMA to load the input and weight data-tile for current timeslot
                 */
                 idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_q + (t_size * k * 2)), obi_addr_q, len_q, std_q, reps_q);
-                idma_wait(&idma_ctrl);
+                idma_wait();
                 idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_k + (j * B_SIZE * 2) + (t_size * S_SIZE * i * 2)), obi_addr_k, len_k, std_k, reps_k);
-                idma_wait(&idma_ctrl);
+                idma_wait();
 
                 /**
                 * 3bb. Evoke the RED MULE 
                 * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
                 */
                 redmule_gemm(&redmule_ctrl, obi_addr_q, obi_addr_k, obi_addr_s, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
-                redmule_wait(&redmule_ctrl);
+                redmule_wait();
             }
 
             /**
@@ -258,7 +258,7 @@ int main(void){
                     idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(GET_ID(y_id, (MESH_X_TILES - 1))) + (tile_h * 6), sum_buffer, tile_h * 2);
                 else
                     idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(GET_ID(y_id, (MESH_X_TILES - 1))) + (tile_h * 4), sum_buffer, tile_h * 2);
-                idma_wait(&idma_ctrl);
+                idma_wait();
             }
             fsync_sync_row(&fsync_ctrl);
 
@@ -305,20 +305,20 @@ int main(void){
                 * 3ha. Load V data-tile required for the j-th block column and k-th timestep
                 */
                 idma_memcpy_2d(&idma_ctrl, 0, axi_addr_v + (j * B_SIZE * D_SIZE * 2) + (k * t_size * 2), obi_addr_v, len_v, std_v, reps_v);
-                idma_wait(&idma_ctrl);
+                idma_wait();
 
                 /**
                  * 3hb. Evoke REDMULE
                  * https://www.youtube.com/watch?v=xDbIDKel-O4
                  */
                 redmule_gemm(&redmule_ctrl, obi_addr_s, obi_addr_v, obi_addr_sb, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
-                redmule_wait(&redmule_ctrl);
+                redmule_wait();
 
                 /**
                  * 3hc. Strided store of the current timestep buffer in the output
                  */
                 idma_memcpy_2d(&idma_ctrl, 0, obi_addr_sb, output_buffer + (k * t_size * 2), t_size * 2, D_SIZE * 2, tile_h);
-                idma_wait(&idma_ctrl);
+                idma_wait();
             }
             
 
@@ -348,7 +348,7 @@ int main(void){
             fsync_sync_right(&fsync_ctrl);
         else{
             idma_memcpy_2d(&idma_ctrl, 1, o_out, output_buffer, D_SIZE, D_SIZE, tile_h);
-            idma_wait(&idma_ctrl);
+            idma_wait();
         }
         fsync_sync_row(&fsync_ctrl);
     }

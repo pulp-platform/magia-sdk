@@ -58,8 +58,8 @@ int main(void){
     /**
      * 1. Select which tiles to be synchronized.
      */
-    uint8_t N_TILES = 2;
-    uint32_t ids[] = {27, 28};
+    uint8_t N_TILES = 3;
+    uint32_t ids[] = {0, 2, 3};
 
     /**
      * 2. Cycle over the ids. If the current tile is part of the ids, test the synchronization.
