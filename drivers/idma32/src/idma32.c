@@ -16,6 +16,7 @@
 #include "utils/idma_isa_utils.h"
 #include "utils/magia_utils.h"
 #include "utils/tinyprintf.h"
+#include "utils/performance_utils.h"
 
 int idma32_init(idma_controller_t *ctrl) {
     uint32_t index = (1<<IRQ_A2O_DONE) | (1<<IRQ_O2A_DONE);
@@ -36,6 +37,8 @@ int idma32_init(idma_controller_t *ctrl) {
  * @param len Byte length of memory block to transfer.
  */
 int idma32_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len){
+    printf("iDMA 1D with parameter: dir=%0d, axi_addr=0x%0x, obi_addr=0x%0x, len=%0d\n", dir, axi_addr, obi_addr, len);
+    sentinel_start();
     if(dir){ // OBI to AXI (L1 to L2)
         idma_conf_out();
         idma_set_addr_len_out(axi_addr, obi_addr, len);
@@ -52,6 +55,8 @@ int idma32_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
         idma_start_in();
         //printf("IDMA_memcpy_1d: Detected IRQ...\n");
     }
+    idma_wait();
+    sentinel_end();
     return 0;
 }
 
@@ -68,6 +73,8 @@ int idma32_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
 int idma32_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps){
     //printf("IDMA Transfer! Direction: %d\n", dir);
     
+    printf("iDMA 2D with parameter: dir=%0d, axi_addr=0x%0x, obi_addr=0x%0x, len=%0d, std=%0d, reps=%0d\n", dir, axi_addr, obi_addr, len, std, reps);
+    sentinel_start();
     if(dir){ // OBI to AXI (L1 to L2)
         idma_conf_out();
         idma_set_addr_len_out(axi_addr, obi_addr, len);
@@ -84,6 +91,8 @@ int idma32_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
         idma_start_in();
         //printf("IDMA_memcpy_2d: Detected IRQ...\n");  
     }
+    idma_wait();
+    sentinel_end();
     return 0;
 }
 

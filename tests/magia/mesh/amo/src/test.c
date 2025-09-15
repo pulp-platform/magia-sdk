@@ -9,6 +9,7 @@
 
 #include "tile.h"
 #include "fsync.h"
+#include "utils/performance_utils.h"
 
 #define INITIAL_VALUE 1234
 #define N_ITERS 1000
@@ -47,11 +48,13 @@ int main(void){
      * Iterate N_ITERS times over the L1 counters of all the mesh tiles, increasing them by 1.
      * No errors and contention should occur by using AMO.
      */
+    sentinel_start();
     for(uint32_t i = 0; i < N_ITERS; i++){
         for(uint8_t j = 0; j < NUM_HARTS; j++){
             amo_add_immediate(get_l1_base(j), 1);
         }
     }
+    sentinel_end();
 
     // Synch all the tiles
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
