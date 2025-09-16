@@ -93,8 +93,10 @@ int main(void){
      * Weight data-tile: (tile_h x tile_w) * data_dim
      * Output data-tile: ((t_size x tile_w) * data_dim) * 2 (Double buffering)
      */
-    uint8_t timeslots = 16;
+    uint8_t timeslots = 8;
     uint8_t t_size = M_SIZE / timeslots;
+
+    printf("timeslots: %0d\n", timeslots);
 
     /**
      * 2. Use IDMA to transfer static weight data-tile
@@ -144,6 +146,8 @@ int main(void){
      * If the mesh-tile is the bottommost of the column: output data-tile is stored in L2 memory.
      */
     for(uint8_t i = 0; i < timeslots; i++){
+        if (i == timeslots-1) printf("LAST TIMESLOT\n");
+        
         /**
          * 3a. IDMA to load the input data-tile for current timeslot
          */
@@ -168,11 +172,8 @@ int main(void){
             //printf("Loaded data from L2: %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2), *(volatile uint16_t*)(obi_addr_y + 4), *(volatile uint16_t*)(obi_addr_y + 6));
         }
         else{
-            printf("FractalSync\n");
-            sentinel_start();
             if(fsync_sync_up(&fsync_ctrl))
                 printf("Error when synchronizing with upper tile.\n");
-            sentinel_end();
 
             if(i % 2){
                 uint32_t src_addr = get_l1_base(hartid - MESH_X_TILES) + (tile_h_max * tile_w_max * 2) + (tile_h_max * t_size * 2) + (tile_w_max * t_size * 2);
@@ -217,11 +218,8 @@ int main(void){
         }
         else{
             //printf("Sending this data: %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2), *(volatile uint16_t*)(obi_addr_y + 4), *(volatile uint16_t*)(obi_addr_y + 6));
-            printf("FractalSync\n");
-            sentinel_start();
             if(fsync_sync_down(&fsync_ctrl))
                 printf("Error when synchronizing with lower tile\n");
-            sentinel_end();
         }
     }
 
