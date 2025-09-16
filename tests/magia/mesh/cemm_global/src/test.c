@@ -145,7 +145,8 @@ int main(void){
     uint32_t weight_pt_next;
 
     uint32_t left_id = ((x_id == 0) ? GET_ID(y_id, MESH_X_TILES - 1) : hartid - 1);
-    uint32_t down_id = ((y_id == MESH_Y_TILES - 1) ? GET_ID(0, x_id) : GET_ID(y_id + 1, x_id));
+    uint32_t up_id = ((y_id == 0) ? GET_ID(MESH_Y_TILES - 1, x_id) : GET_ID(y_id - 1, x_id));
+    // printf("UP ID IS: %d\n", up_id);
 
     //printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
 
@@ -160,17 +161,17 @@ int main(void){
         /**
          * 3a. Choose which of the 2 buffers use (double buffering is in effect)
          */
-        if(!(i % 2)){
-            input_pt = obi_addr_x_0;
-            weight_pt = obi_addr_w_0;
-            input_pt_next = obi_addr_x_1;
-            weight_pt_next = obi_addr_w_1;
-        }
-        else{
+        if(i % 2){
             input_pt = obi_addr_x_1;
             weight_pt = obi_addr_w_1;
             input_pt_next = obi_addr_x_0;
             weight_pt_next = obi_addr_w_0;
+        }
+        else{
+            input_pt = obi_addr_x_0;
+            weight_pt = obi_addr_w_0;
+            input_pt_next = obi_addr_x_1;
+            weight_pt_next = obi_addr_w_1;
         }
 
         /**
@@ -178,13 +179,27 @@ int main(void){
          */
         if(i != (timeslots - 1)){
             //printf("Syncing\n");
+            // if(hartid == 0)
+            //     printf("TIMESLOT NUMBER %d\n", i);
             fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
             //printf("Loading next input tile\n");
-            idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(left_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 2 * (i % 2)), input_pt_next, tile_h * t_size * 2);
-            idma_wait();
+            idma_conf_out();
+            idma_set_addr_len_out(get_l1_base(up_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 4) + (tile_w * t_size * 2 * (((i + 1) % 2))), weight_pt, tile_w * t_size * 2);
+            idma_set_std2_rep2_out(0, 0, 1);
+            idma_set_std3_rep3_out(0, 0, 1);
+            idma_conf_in();
+            idma_set_addr_len_in(input_pt_next, get_l1_base(left_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 2 * (i % 2)), tile_h * t_size * 2);
+            idma_set_std2_rep2_in(0, 0, 1);
+            idma_set_std3_rep3_in(0, 0, 1);
+            //idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(left_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 2 * (i % 2)), input_pt_next, tile_h * t_size * 2);
             //printf("Loading next weight tile\n");
-            idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(down_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 4) + (tile_w * t_size * 2 * (i % 2)), weight_pt_next, tile_w * t_size * 2);
+            //idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(down_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 4) + (tile_w * t_size * 2 * (!(i % 2))), weight_pt, tile_w * t_size * 2);
+            idma_start_out();
+            idma_start_in();
             idma_wait();
+            idma_wait();
+        //     printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(weight_pt), *(volatile uint16_t*)(weight_pt + 2));
+        //     printf("Received this data: %x, %x\n", *(volatile uint16_t*)(weight_pt_next), *(volatile uint16_t*)(weight_pt_next + 2));
         }
         
         /**
@@ -213,8 +228,8 @@ int main(void){
             expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
             diff = (computed > expected) ? (computed - expected) : (expected - computed);
             if(diff > 0x0011){
-                if(y_id == 0)
-                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                //if(y_id == 0)
+                    //printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
                 errors++;
             }       
         }

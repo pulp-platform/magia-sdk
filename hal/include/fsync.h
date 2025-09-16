@@ -86,6 +86,12 @@ extern int fsync_sync_up(fsync_controller_t *ctrl);
  */
 extern int fsync_sync_down(fsync_controller_t *ctrl);
 
+extern void fsync_hnbr(fsync_controller_t *ctrl);
+extern void fsync_vnbr(fsync_controller_t *ctrl);
+extern void fsync_hring(fsync_controller_t *ctrl);
+extern void fsync_vring(fsync_controller_t *ctrl);
+
+
 /**
  * WIP
  * Fsync API
@@ -102,6 +108,10 @@ struct fsync_controller_api {
     int (*sync_right)(fsync_controller_t *ctrl);
     int (*sync_up)(fsync_controller_t *ctrl);
     int (*sync_down)(fsync_controller_t *ctrl);
+    void (*hnbr)(fsync_controller_t *ctrl);
+    void (*vnbr)(fsync_controller_t *ctrl);
+    void (*hring)(fsync_controller_t *ctrl);
+    void (*vring)(fsync_controller_t *ctrl);
 };
 
 /*

@@ -24,7 +24,7 @@ BUILD_DIR 		?= ../work/sw/tests/$(test).c
 MAGIA_DIR 		?= ../
 GVSOC_DIR 		?= ./gvsoc
 BIN 			?= $(BUILD_DIR)/verif
-build_mode		?= update
+build_mode		?= profile
 fsync_mode		?= stall
 mesh_dv			?= 1
 

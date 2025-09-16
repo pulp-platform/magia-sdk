@@ -83,4 +83,8 @@ __attribute__((weak)) fsync_controller_api_t fsync_api = {
     .sync_right = fsync_sync_right,
     .sync_up = fsync_sync_up,
     .sync_down = fsync_sync_down,
+    .hnbr = fsync_hnbr,
+    .vnbr = fsync_vnbr,
+    .hring = fsync_hring,
+    .vring = fsync_vring,
 };

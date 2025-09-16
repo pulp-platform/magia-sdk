@@ -23,6 +23,19 @@
 #ifndef FSYNC_ISA_UTILS_H
 #define FSYNC_ISA_UTILS_H
 
+#define _FS_GLOBAL_AGGR (0xFFFFFFFF >> (1+__builtin_clz(NUM_HARTS)))
+#define _FS_GLOBAL_ID   (-1)
+#define _FS_HNBR_AGGR   (0x1)
+#define _FS_HNBR_ID     (0)
+#define _FS_VNBR_AGGR   (0x1)
+#define _FS_VNBR_ID     (1)
+#define _FS_HRING_AGGR  (0x1)
+#define _FS_HRING_ID    (2)
+#define _FS_VRING_AGGR  (0x1)
+#define _FS_VRING_ID    (3)
+#define _FS_RC_LVL      (0x1 << (29-__builtin_clz(NUM_HARTS)))
+#define _FS_RC_AGGR     (0x155 >> (__builtin_clz(NUM_HARTS)-21))
+
 /* synch instruction */
   // asm volatile(
   //      ".word (0x0       << 20) | \     /* Reserved - 0x0 */
