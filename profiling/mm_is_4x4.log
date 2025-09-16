@@ -1,0 +1,2033 @@
+Magia is available at https://github.com/pulp-platform/MAGIA.git
+please run "source setup_env.sh" in the magia folder before running this script
+and make sure the risc-v objdump binary is visible on path using "which riscv32-unknown-elf-objdump".
+mkdir -p ../work/sw/tests/test_mm_is.c
+cp ./build/bin/test_mm_is ../work/sw/tests/test_mm_is.c/verif
+objcopy --srec-len 1 --output-target=srec ../work/sw/tests/test_mm_is.c/verif ../work/sw/tests/test_mm_is.c/verif.s19
+scripts/parse_s19.pl ../work/sw/tests/test_mm_is.c/verif.s19 > ../work/sw/tests/test_mm_is.c/verif.txt
+python3 scripts/s19tomem.py ../work/sw/tests/test_mm_is.c/verif.txt ../work/sw/tests/test_mm_is.c/stim_instr.txt ../work/sw/tests/test_mm_is.c/stim_data.txt
+cd ../work/sw/tests/test_mm_is.c													&& \
+cp -sf ../../../../modelsim.ini modelsim.ini    				&& \
+ln -sfn ../../../../work work         			
+riscv32-unknown-elf-objdump -d -S ../work/sw/tests/test_mm_is.c/verif > ../work/sw/tests/test_mm_is.c/verif.dump
+riscv32-unknown-elf-objdump -d -l -s ../work/sw/tests/test_mm_is.c/verif > ../work/sw/tests/test_mm_is.c/verif.objdump
+python3 scripts/objdump2itb.py ../work/sw/tests/test_mm_is.c/verif.objdump > ../work/sw/tests/test_mm_is.c/verif.itb
+cd /scratch/visachi/magia_sdk/profiling/MAGIA 												&& \
+make run test=test_mm_is gui=0 mesh_dv=1
+make[1]: Entering directory `/scratch/visachi/magia_sdk/profiling/MAGIA'
+riscv32-unknown-elf-gcc -march=rv32imafc -mabi=ilp32f -D__riscv__ -O2 -g -Wextra -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wundef -fdata-sections -ffunction-sections -MMD -MP -c sw/kernel/crt0.S -o /scratch/visachi/magia_sdk/profiling/MAGIA//work/crt0.o
+cd /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c;                                                                \
+questa-2025.1 vsim -c vopt_tb -t 1ns -suppress 3009 -do "run -a"                               \
++INST_HEX=stim_instr.txt                                                                    \
++DATA_HEX=stim_data.txt                                                                    \
++INST_ENTRY=0xCC000000                                                                    \
++DATA_ENTRY=0xCC010000                                                                    \
++BOOT_ADDR=0xCC000080                                                                      \
+ +log_file_0=./core_0_traces.log   +log_file_1=./core_1_traces.log   +log_file_2=./core_2_traces.log   +log_file_3=./core_3_traces.log   +log_file_4=./core_4_traces.log   +log_file_5=./core_5_traces.log   +log_file_6=./core_6_traces.log   +log_file_7=./core_7_traces.log   +log_file_8=./core_8_traces.log   +log_file_9=./core_9_traces.log   +log_file_10=./core_10_traces.log   +log_file_11=./core_11_traces.log   +log_file_12=./core_12_traces.log   +log_file_13=./core_13_traces.log   +log_file_14=./core_14_traces.log   +log_file_15=./core_15_traces.log                                                                                             \
++itb_file=/scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+Reading pref.tcl
+
+# 2025.1_2
+
+# vsim -c vopt_tb -t 1ns -suppress 3009 -do "run -a" "+INST_HEX=stim_instr.txt" "+DATA_HEX=stim_data.txt" "+INST_ENTRY=0xCC000000" "+DATA_ENTRY=0xCC010000" "+BOOT_ADDR=0xCC000080" "+log_file_0=./core_0_traces.log" "+log_file_1=./core_1_traces.log" "+log_file_2=./core_2_traces.log" "+log_file_3=./core_3_traces.log" "+log_file_4=./core_4_traces.log" "+log_file_5=./core_5_traces.log" "+log_file_6=./core_6_traces.log" "+log_file_7=./core_7_traces.log" "+log_file_8=./core_8_traces.log" "+log_file_9=./core_9_traces.log" "+log_file_10=./core_10_traces.log" "+log_file_11=./core_11_traces.log" "+log_file_12=./core_12_traces.log" "+log_file_13=./core_13_traces.log" "+log_file_14=./core_14_traces.log" "+log_file_15=./core_15_traces.log" "+itb_file=/scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb" 
+# Start time: 14:34:50 on Sep 16,2025
+# //  Questa Sim-64
+# //  Version 2025.1_2 linux_x86_64 Apr  7 2025
+# //
+# // Unpublished work. Copyright 2025 Siemens
+# //
+# // This material contains trade secrets or otherwise confidential information
+# // owned by Siemens Industry Software Inc. or its affiliates (collectively,
+# // "SISW"), or its licensors. Access to and use of this information is strictly
+# // limited as set forth in the Customer's applicable agreements with SISW.
+# //
+# // This material may not be copied, distributed, or otherwise disclosed outside
+# // of the Customer's facilities without the express written permission of SISW,
+# // and may not be used in any way not expressly authorized by SISW.
+# //
+# Loading sv_std.std
+# Loading work.axi_pkg(fast)
+# Loading work.magia_pkg(fast)
+# Loading work.magia_tb_pkg(fast)
+# Loading work.magia_tb(fast)
+# Loading work.floo_pkg(fast)
+# Loading work.floo_axi_mesh_32x32_noc_pkg(fast)
+# Loading work.floo_axi_mesh_16x16_noc_pkg(fast)
+# Loading work.floo_axi_mesh_8x8_noc_pkg(fast)
+# Loading work.floo_axi_mesh_4x4_noc_pkg(fast)
+# Loading work.floo_axi_mesh_2x2_noc_pkg(fast)
+# Loading work.idma_pkg(fast)
+# Loading work.cf_math_pkg(fast)
+# Loading work.obi_pkg(fast)
+# Loading work.fpnew_pkg(fast)
+# Loading work.magia_tile_pkg(fast)
+# Loading work.magia_noc_pkg(fast)
+# Loading work.magia_tile_tb_pkg(fast)
+# Loading work.magia_fixture(fast)
+# Loading work.magia(fast)
+# Loading work.snitch_icache_pkg(fast)
+# Loading work.fpu_ss_pkg(fast)
+# Loading work.cv32e40x_pkg(fast)
+# Loading work.hwpe_stream_package(fast)
+# Loading work.hci_package(fast)
+# Loading work.redmule_pkg(fast)
+# Loading work.magia_tile(fast)
+# Loading work.data2obi_req(fast)
+# Loading work.obi2data_rsp(fast)
+# Loading work.obi2hci_req(fast)
+# Loading work.hci2obi_rsp(fast)
+# Loading work.obi_to_axi(fast)
+# Loading work.fifo_v3(fast)
+# Loading work.fifo_v3(fast__1)
+# Loading work.instr2cache_req(fast)
+# Loading work.cache2instr_rsp(fast)
+# Loading work.obi2hci_req(fast__1)
+# Loading work.hci2obi_rsp(fast__1)
+# Loading work.axi_to_obi(fast)
+# Loading work.axi_demux_simple(fast)
+# Loading work.counter(fast)
+# Loading work.delta_counter(fast)
+# Loading work.rr_arb_tree(fast)
+# Loading work.lzc(fast)
+# Loading work.axi_to_detailed_mem_user(fast)
+# Loading work.stream_mux(fast)
+# Loading work.stream_fork(fast)
+# Loading work.stream_fifo(fast)
+# Loading work.fifo_v3(fast__2)
+# Loading work.stream_fifo(fast__1)
+# Loading work.fifo_v3(fast__3)
+# Loading work.stream_to_mem(fast)
+# Loading work.stream_fifo(fast__2)
+# Loading work.fifo_v3(fast__4)
+# Loading work.mem_to_banks_detailed(fast)
+# Loading work.stream_fifo(fast__3)
+# Loading work.fifo_v3(fast__5)
+# Loading work.fifo_v3(fast__6)
+# Loading work.stream_fifo(fast__4)
+# Loading work.fifo_v3(fast__7)
+# Loading work.stream_join(fast)
+# Loading work.stream_join_dynamic(fast)
+# Loading work.stream_fork_dynamic(fast)
+# Loading work.stream_fork(fast__1)
+# Loading work.axi_to_detailed_mem_user(fast__1)
+# Loading work.stream_mux(fast__1)
+# Loading work.stream_fifo(fast__5)
+# Loading work.fifo_v3(fast__8)
+# Loading work.stream_to_mem(fast__1)
+# Loading work.stream_fifo(fast__6)
+# Loading work.fifo_v3(fast__9)
+# Loading work.mem_to_banks_detailed(fast__1)
+# Loading work.stream_fifo(fast__7)
+# Loading work.fifo_v3(fast__10)
+# Loading work.obi_mux(fast)
+# Loading work.rr_arb_tree(fast__1)
+# Loading work.fifo_v3(fast__11)
+# Loading work.tc_clk_gating(fast)
+# Loading work.cv32e40x_if_xif(fast__1)
+# Loading work.cv32e40x_if_xif(fast__2)
+# Loading work.cv32e40x_if_xif(fast__3)
+# Loading work.hwpe_ctrl_package(fast)
+# Loading work.redmule_top(fast)
+# Loading work.hci_core_intf(fast__4)
+# Loading work.hwpe_ctrl_intf_periph(fast__1)
+# Loading work.redmule_inst_decoder(fast)
+# Loading work.tc_clk_gating(fast__1)
+# Loading work.hwpe_stream_intf_stream(fast__1)
+# Loading work.hwpe_stream_intf_stream(fast__2)
+# Loading work.hwpe_stream_intf_stream(fast__3)
+# Loading work.redmule_streamer(fast)
+# Loading work.hci_core_assign_sv_unit(fast)
+# Loading work.hci_core_assign(fast)
+# Loading work.hci_core_mux_dynamic_sv_unit(fast)
+# Loading work.hci_core_mux_dynamic(fast)
+# Loading work.hci_core_sink_sv_unit(fast)
+# Loading work.hci_core_sink(fast)
+# Loading work.hwpe_stream_intf_stream(fast__4)
+# Loading work.hwpe_stream_intf_stream(fast__5)
+# Loading work.hci_core_intf(fast__7)
+# Loading work.hwpe_stream_addressgen_v3_sv_unit(fast)
+# Loading work.hwpe_stream_addressgen_v3(fast)
+# Loading work.hwpe_stream_fifo_sv_unit(fast)
+# Loading work.hwpe_stream_fifo(fast)
+# Loading work.hci_core_assign(fast__1)
+# Loading work.hci_core_intf(fast__2)
+# Loading work.hci_core_intf(fast__8)
+# Loading work.redmule_castout_sv_unit(fast)
+# Loading work.redmule_castout(fast)
+# Loading work.fpnew_cast_multi(fast)
+# Loading work.fpnew_classifier(fast)
+# Loading work.fpnew_classifier(fast__1)
+# Loading work.fpnew_classifier(fast__2)
+# Loading work.lzc(fast__1)
+# Loading work.fpnew_rounding(fast)
+# Loading work.hci_core_fifo_sv_unit(fast)
+# Loading work.hci_core_fifo(fast)
+# Loading work.hwpe_stream_intf_stream(fast__6)
+# Loading work.hwpe_stream_intf_stream(fast__7)
+# Loading work.hwpe_stream_intf_stream(fast__8)
+# Loading work.hwpe_stream_intf_stream(fast__9)
+# Loading work.hwpe_stream_fifo(fast__1)
+# Loading work.hwpe_stream_fifo(fast__2)
+# Loading work.hci_core_assign(fast__2)
+# Loading work.hci_core_mux_dynamic(fast__1)
+# Loading work.redmule_castin_sv_unit(fast)
+# Loading work.redmule_castin(fast)
+# Loading work.hci_core_source_sv_unit(fast)
+# Loading work.hci_core_source(fast)
+# Loading work.hwpe_stream_intf_stream(fast__10)
+# Loading work.hwpe_stream_intf_stream(fast__11)
+# Loading work.hwpe_stream_addressgen_v3(fast__1)
+# Loading work.hwpe_stream_fifo(fast__3)
+# Loading work.hwpe_stream_intf_stream(fast__12)
+# Loading work.hwpe_stream_intf_stream(fast__13)
+# Loading work.hwpe_stream_fifo(fast__4)
+# Loading work.hwpe_stream_assign_sv_unit(fast)
+# Loading work.hwpe_stream_assign(fast)
+# Loading work.hwpe_stream_fifo(fast__5)
+# Loading work.hwpe_stream_fifo(fast__6)
+# Loading work.redmule_x_buffer(fast)
+# Loading work.redmule_w_buffer(fast)
+# Loading work.redmule_z_buffer(fast)
+# Loading work.redmule_engine(fast)
+# Loading work.redmule_row(fast)
+# Loading work.redmule_ce(fast)
+# Loading work.cluster_clock_gating(fast)
+# Loading work.tc_clk_gating(fast__2)
+# Loading work.redmule_noncomp(fast)
+# Loading work.fpnew_classifier(fast__3)
+# Loading work.redmule_fma(fast)
+# Loading work.fpnew_classifier(fast__4)
+# Loading work.lzc(fast__2)
+# Loading work.fpnew_rounding(fast__1)
+# Loading work.redmule_noncomp(fast__1)
+# Loading work.redmule_ctrl_sv_unit(fast)
+# Loading work.redmule_ctrl(fast)
+# Loading work.hwpe_ctrl_slave(fast)
+# Loading work.hwpe_ctrl_regfile(fast)
+# Loading work.hwpe_ctrl_regfile_latch_test_wrap(fast)
+# Loading work.hwpe_ctrl_regfile_ff(fast)
+# Loading work.redmule_tiler(fast)
+# Loading work.hwpe_ctrl_seq_mult(fast)
+# Loading work.hwpe_ctrl_seq_mult(fast__1)
+# Loading work.redmule_scheduler(fast)
+# Loading work.cv32e40x_wrapper(fast)
+# Loading work.cv32e40x_core_log(fast)
+# Loading work.cv32e40x_rvfi_pkg(fast)
+# Loading work.cv32e40x_rvfi(fast)
+# Loading work.cv32e40x_rvfi_instr_obi(fast)
+# Loading work.cv32e40x_rvfi_data_obi(fast)
+# Loading work.cv32e40x_rvfi_sim_trace(fast)
+# Loading work.cv32e40x_core(fast)
+# Loading work.cv32e40x_if_c_obi(fast__1)
+# Loading work.cv32e40x_if_c_obi(fast__2)
+# Loading work.cv32e40x_sleep_unit(fast)
+# Loading work.cv32e40x_clock_gate(fast)
+# Loading work.cv32e40x_if_stage(fast)
+# Loading work.cv32e40x_prefetch_unit(fast)
+# Loading work.cv32e40x_prefetcher(fast)
+# Loading work.cv32e40x_alignment_buffer(fast)
+# Loading work.cv32e40x_mpu(fast)
+# Loading work.cv32e40x_pma(fast)
+# Loading work.cv32e40x_instr_obi_interface(fast)
+# Loading work.cv32e40x_compressed_decoder(fast)
+# Loading work.cv32e40x_sequencer(fast)
+# Loading work.cv32e40x_id_stage(fast)
+# Loading work.cv32e40x_pc_target(fast)
+# Loading work.cv32e40x_decoder(fast)
+# Loading work.cv32e40x_i_decoder(fast)
+# Loading work.cv32e40x_a_decoder(fast)
+# Loading work.cv32e40x_b_decoder(fast)
+# Loading work.cv32e40x_m_decoder(fast)
+# Loading work.cv32e40x_ex_stage(fast)
+# Loading work.cv32e40x_alu(fast)
+# Loading work.cv32e40x_ff_one(fast)
+# Loading work.cv32e40x_alu_b_cpop(fast)
+# Loading work.cv32e40x_div(fast)
+# Loading work.cv32e40x_mult(fast)
+# Loading work.cv32e40x_load_store_unit(fast)
+# Loading work.cv32e40x_wpt(fast)
+# Loading work.cv32e40x_mpu(fast__1)
+# Loading work.cv32e40x_pma(fast__1)
+# Loading work.cv32e40x_align_check(fast)
+# Loading work.cv32e40x_lsu_response_filter(fast)
+# Loading work.cv32e40x_write_buffer(fast)
+# Loading work.cv32e40x_data_obi_interface(fast)
+# Loading work.cv32e40x_wb_stage(fast)
+# Loading work.cv32e40x_cs_registers(fast)
+# Loading work.cv32e40x_csr(fast)
+# Loading work.cv32e40x_csr(fast__1)
+# Loading work.cv32e40x_csr(fast__2)
+# Loading work.cv32e40x_csr(fast__3)
+# Loading work.cv32e40x_csr(fast__4)
+# Loading work.cv32e40x_csr(fast__5)
+# Loading work.cv32e40x_csr(fast__6)
+# Loading work.cv32e40x_csr(fast__7)
+# Loading work.cv32e40x_debug_triggers(fast)
+# Loading work.cv32e40x_csr(fast__8)
+# Loading work.cv32e40x_controller(fast)
+# Loading work.cv32e40x_controller_fsm(fast)
+# Loading work.cv32e40x_controller_bypass(fast)
+# Loading work.cv32e40x_int_controller(fast)
+# Loading work.cv32e40x_register_file_wrapper(fast)
+# Loading work.cv32e40x_register_file(fast)
+# Loading work.obi_atop_resolver(fast)
+# Loading work.lzc(fast__3)
+# Loading work.spill_register(fast)
+# Loading work.spill_register_flushable(fast)
+# Loading work.fifo_v3(fast__12)
+# Loading work.obi_cut(fast)
+# Loading work.spill_register(fast__1)
+# Loading work.spill_register_flushable(fast__1)
+# Loading work.spill_register(fast__2)
+# Loading work.spill_register_flushable(fast__2)
+# Loading work.obi_xbar(fast)
+# Loading work.addr_decode(fast)
+# Loading work.addr_decode_dync(fast)
+# Loading work.obi_demux(fast)
+# Loading work.hci_interconnect_sv_unit(fast)
+# Loading work.hci_interconnect(fast)
+# Loading work.hci_log_interconnect_l2_sv_unit(fast)
+# Loading work.hci_log_interconnect_l2(fast)
+# Loading work.XBAR_L2(fast)
+# Loading work.ResponseBlock_L2(fast)
+# Loading work.ResponseTree_L2(fast)
+# Loading work.FanInPrimitive_Resp_L2(fast)
+# Loading work.AddressDecoder_Req_L2(fast)
+# Loading work.ResponseBlock_L2(fast__1)
+# Loading work.AddressDecoder_Req_L2(fast__1)
+# Loading work.ResponseBlock_L2(fast__2)
+# Loading work.AddressDecoder_Req_L2(fast__2)
+# Loading work.RequestBlock_L2_2CH(fast)
+# Loading work.ArbitrationTree_L2(fast)
+# Loading work.FanInPrimitive_Req_L2(fast)
+# Loading work.RR_Flag_Req_L2(fast)
+# Loading work.MUX2_REQ_L2(fast)
+# Loading work.AddressDecoder_Resp_L2(fast)
+# Loading work.hci_hwpe_interconnect(fast)
+# Loading work.hci_core_intf(fast__11)
+# Loading work.hci_core_assign(fast__3)
+# Loading work.hci_hwpe_reorder_sv_unit(fast)
+# Loading work.hci_hwpe_reorder(fast)
+# Loading work.addr_dec_resp_mux(fast)
+# Loading work.hci_shallow_interconnect_sv_unit(fast)
+# Loading work.hci_shallow_interconnect(fast)
+# Loading work.hci_core_assign(fast__4)
+# Loading work.l1_spm(fast)
+# Loading work.tc_sram(fast)
+# Loading work.xif_inst_dispatcher(fast)
+# Loading work.idma_ctrl(fast)
+# Loading work.cv32e40x_if_xif(fast__5)
+# Loading work.idma_reg32_3d_reg_pkg(fast)
+# Loading work.idma_xif_inst_decoder(fast)
+# Loading work.idma_axi_obi_transfer_ch(fast)
+# Loading work.idma_reg32_3d(fast)
+# Loading work.idma_reg32_3d_reg_top(fast)
+# Loading work.prim_subreg(fast)
+# Loading work.prim_subreg_arb(fast)
+# Loading work.prim_subreg(fast__1)
+# Loading work.prim_subreg_arb(fast__1)
+# Loading work.prim_subreg(fast__2)
+# Loading work.prim_subreg_arb(fast__2)
+# Loading work.prim_subreg_ext(fast)
+# Loading work.prim_subreg_ext(fast__1)
+# Loading work.prim_subreg(fast__3)
+# Loading work.prim_subreg_arb(fast__3)
+# Loading work.rr_arb_tree(fast__2)
+# Loading work.idma_transfer_id_gen(fast)
+# Loading work.stream_fifo_optimal_wrap(fast)
+# Loading work.spill_register_flushable(fast__3)
+# Loading work.idma_nd_midend(fast)
+# Loading work.idma_nd_counter(fast)
+# Loading work.popcount(fast)
+# Loading work.idma_backend_r_axi_w_obi(fast)
+# Loading work.idma_legalizer_r_axi_w_obi(fast)
+# Loading work.idma_legalizer_page_splitter(fast)
+# Loading work.stream_fifo_optimal_wrap(fast__1)
+# Loading work.spill_register_flushable(fast__4)
+# Loading work.stream_fifo_optimal_wrap(fast__2)
+# Loading work.spill_register_flushable(fast__5)
+# Loading work.fall_through_register(fast)
+# Loading work.fifo_v3(fast__13)
+# Loading work.stream_fifo_optimal_wrap(fast__3)
+# Loading work.stream_fifo(fast__8)
+# Loading work.fifo_v3(fast__14)
+# Loading work.idma_transport_layer_r_axi_w_obi(fast)
+# Loading work.idma_axi_read(fast)
+# Loading work.idma_dataflow_element(fast)
+# Loading work.passthrough_stream_fifo(fast)
+# Loading work.idma_obi_write(fast)
+# Loading work.stream_fifo_optimal_wrap(fast__4)
+# Loading work.spill_register_flushable(fast__6)
+# Loading work.idma_axi_obi_transfer_ch(fast__1)
+# Loading work.idma_backend_r_obi_w_axi(fast)
+# Loading work.idma_legalizer_r_obi_w_axi(fast)
+# Loading work.stream_fifo_optimal_wrap(fast__5)
+# Loading work.spill_register_flushable(fast__7)
+# Loading work.stream_fifo_optimal_wrap(fast__6)
+# Loading work.spill_register_flushable(fast__8)
+# Loading work.idma_transport_layer_r_obi_w_axi(fast)
+# Loading work.idma_obi_read(fast)
+# Loading work.idma_axi_write(fast)
+# Loading work.fall_through_register(fast__1)
+# Loading work.fifo_v3(fast__15)
+# Loading work.axi_rw_join(fast)
+# Loading work.pulp_icache_wrap(fast)
+# Loading work.spill_register(fast__3)
+# Loading work.spill_register_flushable(fast__9)
+# Loading work.snitch_icache(fast)
+# Loading work.riscv_instr_branch(fast)
+# Loading work.snitch_icache_l0(fast)
+# Loading work.tc_clk_inverter(fast)
+# Loading work.plru_tree(fast)
+# Loading work.isochronous_spill_register(fast)
+# Loading work.isochronous_spill_register(fast__1)
+# Loading work.l0_to_bypass(fast)
+# Loading work.stream_arbiter(fast)
+# Loading work.stream_arbiter_flushable(fast)
+# Loading work.rr_arb_tree(fast__3)
+# Loading work.fifo_v3(fast__16)
+# Loading work.onehot_to_bin(fast)
+# Loading work.stream_demux(fast)
+# Loading work.isochronous_spill_register(fast__2)
+# Loading work.isochronous_spill_register(fast__3)
+# Loading work.multi_accept_rr_arb(fast)
+# Loading work.rr_arb_tree(fast__4)
+# Loading work.snitch_icache_lookup_serial(fast)
+# Loading work.register_file_1r_1w(fast)
+# Loading work.lzc(fast__4)
+# Loading work.tc_sram_impl(fast)
+# Loading work.tc_sram(fast__1)
+# Loading work.snitch_icache_handler(fast)
+# Loading work.onehot_to_bin(fast__1)
+# Loading work.stream_arbiter(fast__1)
+# Loading work.stream_arbiter_flushable(fast__1)
+# Loading work.rr_arb_tree(fast__5)
+# Loading work.stream_demux(fast__1)
+# Loading work.snitch_icache_refill(fast)
+# Loading work.fifo_v3(fast__17)
+# Loading work.axi_xbar(fast)
+# Loading work.axi_xbar_unmuxed(fast)
+# Loading work.addr_decode(fast__1)
+# Loading work.addr_decode_dync(fast__1)
+# Loading work.axi_demux(fast)
+# Loading work.spill_register(fast__4)
+# Loading work.spill_register_flushable(fast__10)
+# Loading work.spill_register(fast__5)
+# Loading work.spill_register_flushable(fast__11)
+# Loading work.spill_register(fast__6)
+# Loading work.spill_register_flushable(fast__12)
+# Loading work.spill_register(fast__7)
+# Loading work.spill_register_flushable(fast__13)
+# Loading work.spill_register(fast__8)
+# Loading work.spill_register_flushable(fast__14)
+# Loading work.spill_register(fast__9)
+# Loading work.spill_register_flushable(fast__15)
+# Loading work.axi_demux_simple(fast__1)
+# Loading work.axi_demux_id_counters(fast)
+# Loading work.delta_counter(fast__1)
+# Loading work.counter(fast__1)
+# Loading work.rr_arb_tree(fast__6)
+# Loading work.lzc(fast__5)
+# Loading work.axi_err_slv(fast)
+# Loading work.axi_atop_filter(fast)
+# Loading work.stream_register(fast)
+# Loading work.fifo_v3(fast__18)
+# Loading work.fifo_v3(fast__19)
+# Loading work.fifo_v3(fast__20)
+# Loading work.counter(fast__2)
+# Loading work.delta_counter(fast__2)
+# Loading work.axi_multicut(fast)
+# Loading work.axi_mux(fast)
+# Loading work.axi_id_prepend(fast)
+# Loading work.rr_arb_tree(fast__7)
+# Loading work.fifo_v3(fast__21)
+# Loading work.spill_register(fast__10)
+# Loading work.spill_register_flushable(fast__16)
+# Loading work.spill_register(fast__11)
+# Loading work.spill_register_flushable(fast__17)
+# Loading work.rr_arb_tree(fast__8)
+# Loading work.spill_register(fast__12)
+# Loading work.spill_register_flushable(fast__18)
+# Loading work.spill_register(fast__13)
+# Loading work.spill_register_flushable(fast__19)
+# Loading work.floo_axi_chimney(fast)
+# Loading work.floo_rob_wrapper(fast)
+# Loading work.axi_demux_id_counters(fast__1)
+# Loading work.delta_counter(fast__3)
+# Loading work.floo_rob_wrapper(fast__1)
+# Loading work.floo_route_comp(fast)
+# Loading work.addr_decode(fast__2)
+# Loading work.addr_decode_dync(fast__2)
+# Loading work.floo_wormhole_arbiter(fast)
+# Loading work.floo_wormhole_arbiter(fast__1)
+# Loading work.floo_meta_buffer(fast)
+# Loading work.fifo_v3(fast__22)
+# Loading work.lzc(fast__6)
+# Loading work.floo_axi_router(fast)
+# Loading work.floo_router(fast)
+# Loading work.stream_fifo_optimal_wrap(fast__7)
+# Loading work.spill_register_flushable(fast__20)
+# Loading work.floo_route_select(fast)
+# Loading work.floo_wormhole_arbiter(fast__2)
+# Loading work.rr_arb_tree(fast__9)
+# Loading work.floo_vc_arbiter(fast)
+# Loading work.floo_router(fast__1)
+# Loading work.stream_fifo_optimal_wrap(fast__8)
+# Loading work.spill_register_flushable(fast__21)
+# Loading work.floo_route_select(fast__1)
+# Loading work.floo_wormhole_arbiter(fast__3)
+# Loading work.floo_vc_arbiter(fast__1)
+# Loading work.fractal_sync_xif_inst_decoder(fast)
+# Loading work.fpu_ss_prd_f_pkg(fast)
+# Loading work.fpu_ss(fast)
+# Loading work.fpu_ss_instr_pkg(fast)
+# Loading work.fpu_ss_compressed_predecoder(fast)
+# Loading work.fpu_ss_predecoder(fast)
+# Loading work.stream_fifo(fast__9)
+# Loading work.fifo_v3(fast__23)
+# Loading work.fpu_ss_decoder(fast)
+# Loading work.stream_fifo(fast__10)
+# Loading work.fifo_v3(fast__24)
+# Loading work.fpu_ss_csr(fast)
+# Loading work.fpu_ss_controller(fast)
+# Loading work.fpu_ss_regfile(fast)
+# Loading work.fpnew_top(fast)
+# Loading work.fpnew_opgroup_block(fast)
+# Loading work.fpnew_opgroup_fmt_slice(fast)
+# Loading work.fpnew_fma(fast)
+# Loading work.fpnew_classifier(fast__5)
+# Loading work.lzc(fast__7)
+# Loading work.fpnew_rounding(fast__2)
+# Loading work.rr_arb_tree(fast__10)
+# Loading work.lzc(fast__8)
+# Loading work.fpnew_opgroup_block(fast__1)
+# Loading work.fpnew_opgroup_multifmt_slice(fast)
+# Loading work.fpnew_divsqrt_th_32(fast)
+# Loading work.pa_fdsu_top(fast)
+# Loading work.pa_fdsu_special(fast)
+# Loading work.pa_fdsu_prepare(fast)
+# Loading work.pa_fdsu_ff1(fast)
+# Loading work.pa_fdsu_srt_single(fast)
+# Loading work.gated_clk_cell(fast)
+# Loading work.pa_fdsu_round_single(fast)
+# Loading work.pa_fdsu_pack_single(fast)
+# Loading work.pa_fdsu_ctrl(fast)
+# Loading work.pa_fpu_dp(fast)
+# Loading work.pa_fpu_src_type(fast)
+# Loading work.pa_fpu_frbus(fast)
+# Loading work.rr_arb_tree(fast__11)
+# Loading work.fpnew_opgroup_block(fast__2)
+# Loading work.fpnew_opgroup_fmt_slice(fast__1)
+# Loading work.fpnew_noncomp(fast)
+# Loading work.fpnew_classifier(fast__6)
+# Loading work.rr_arb_tree(fast__12)
+# Loading work.fpnew_opgroup_block(fast__3)
+# Loading work.fpnew_opgroup_multifmt_slice(fast__1)
+# Loading work.fpnew_cast_multi(fast__1)
+# Loading work.fpnew_classifier(fast__7)
+# Loading work.lzc(fast__9)
+# Loading work.fpnew_rounding(fast__3)
+# Loading work.rr_arb_tree(fast__13)
+# Loading work.fpnew_opgroup_block(fast__4)
+# Loading work.rr_arb_tree(fast__14)
+# Loading work.rr_arb_tree(fast__15)
+# Loading work.lzc(fast__10)
+# Loading work.xif_if2struct(fast)
+# Loading work.fractal_sync_pkg(fast)
+# Loading work.fractal_sync_4x4_pkg(fast)
+# Loading work.fractal_sync_4x4(fast)
+# Loading work.fractal_sync_neighbor(fast)
+# Loading work.fractal_sync_4x4_core(fast)
+# Loading work.fractal_sync_2x2_pkg(fast)
+# Loading work.fractal_sync_2x2_core(fast)
+# Loading work.fractal_sync_pipeline(fast)
+# Loading work.fractal_sync_1d(fast)
+# Loading work.fractal_sync_rx(fast)
+# Loading work.fractal_sync_fifo(fast)
+# Loading work.fractal_sync_arbiter(fast)
+# Loading work.fractal_sync_arbiter_fa(fast)
+# Loading work.fractal_sync_tx(fast)
+# Loading work.fractal_sync_fifo(fast__1)
+# Loading work.fractal_sync_arbiter(fast__1)
+# Loading work.fractal_sync_arbiter_fa(fast__1)
+# Loading work.fractal_sync_cc(fast)
+# Loading work.fractal_sync_1d_rf(fast)
+# Loading work.fractal_sync_1d_local_rf(fast)
+# Loading work.fractal_sync_mp_rf(fast)
+# Loading work.fractal_sync_1d_remote_rf(fast)
+# Loading work.fractal_sync_mp_cam_br(fast)
+# Loading work.fractal_sync_mp_cam_line(fast)
+# Loading work.fractal_sync_1d(fast__1)
+# Loading work.fractal_sync_cc(fast__1)
+# Loading work.fractal_sync_pipeline(fast__1)
+# Loading work.fractal_sync_2d(fast)
+# Loading work.fractal_sync_rx(fast__1)
+# Loading work.fractal_sync_fifo(fast__2)
+# Loading work.fractal_sync_arbiter(fast__2)
+# Loading work.fractal_sync_arbiter_fa(fast__2)
+# Loading work.fractal_sync_tx(fast__1)
+# Loading work.fractal_sync_fifo(fast__3)
+# Loading work.fractal_sync_arbiter(fast__3)
+# Loading work.fractal_sync_arbiter_fa(fast__3)
+# Loading work.fractal_sync_cc(fast__2)
+# Loading work.fractal_sync_2d_rf(fast)
+# Loading work.fractal_sync_2d_local_rf(fast)
+# Loading work.fractal_sync_2d_remote_rf(fast)
+# Loading work.fractal_sync_1d_remote_rf(fast__1)
+# Loading work.fractal_sync_mp_cam_br(fast__1)
+# Loading work.fractal_sync_mp_cam_line(fast__1)
+# Loading work.fractal_sync_2x2_core(fast__1)
+# Loading work.fractal_sync_pipeline(fast__2)
+# Loading work.fractal_sync_1d(fast__2)
+# Loading work.fractal_sync_rx(fast__2)
+# Loading work.fractal_sync_fifo(fast__4)
+# Loading work.fractal_sync_arbiter(fast__4)
+# Loading work.fractal_sync_arbiter_fa(fast__4)
+# Loading work.fractal_sync_arbiter(fast__5)
+# Loading work.fractal_sync_arbiter_fa(fast__5)
+# Loading work.fractal_sync_cc(fast__3)
+# Loading work.fractal_sync_1d_rf(fast__1)
+# Loading work.fractal_sync_1d_local_rf(fast__1)
+# Loading work.fractal_sync_mp_rf(fast__1)
+# Loading work.fractal_sync_1d_remote_rf(fast__2)
+# Loading work.fractal_sync_mp_rf_br(fast)
+# Loading work.fractal_sync_1d(fast__3)
+# Loading work.fractal_sync_cc(fast__4)
+# Loading work.fractal_sync_pipeline(fast__3)
+# Loading work.fractal_sync_2d(fast__1)
+# Loading work.fractal_sync_rx(fast__3)
+# Loading work.fractal_sync_fifo(fast__5)
+# Loading work.fractal_sync_arbiter(fast__6)
+# Loading work.fractal_sync_arbiter_fa(fast__6)
+# Loading work.fractal_sync_arbiter(fast__7)
+# Loading work.fractal_sync_arbiter_fa(fast__7)
+# Loading work.fractal_sync_cc(fast__5)
+# Loading work.fractal_sync_2d_rf(fast__1)
+# Loading work.fractal_sync_2d_local_rf(fast__1)
+# Loading work.fractal_sync_2d_remote_rf(fast__1)
+# Loading work.fractal_sync_1d_remote_rf(fast__3)
+# Loading work.fractal_sync_mp_rf_br(fast__1)
+# Loading work.magia_vip(fast)
+# Loading work.clk_rst_gen(fast)
+# Loading work.magia_l2_mem_wrapper(fast)
+# Loading work.floo_axi_chimney(fast__1)
+# Loading work.axi_err_slv(fast__1)
+# Loading work.axi_atop_filter(fast__1)
+# Loading work.stream_register(fast__2)
+# Loading work.fifo_v3(fast__25)
+# Loading work.fifo_v3(fast__26)
+# Loading work.fifo_v3(fast__27)
+# Loading work.counter(fast__3)
+# Loading work.delta_counter(fast__4)
+# Loading work.floo_rob_wrapper(fast__2)
+# Loading work.axi_demux_id_counters(fast__2)
+# Loading work.delta_counter(fast__5)
+# Loading work.floo_rob_wrapper(fast__3)
+# Loading work.floo_route_comp(fast__1)
+# Loading work.floo_wormhole_arbiter(fast__4)
+# Loading work.rr_arb_tree(fast__16)
+# Loading work.floo_wormhole_arbiter(fast__5)
+# Loading work.floo_meta_buffer(fast__1)
+# Loading work.fifo_v3(fast__28)
+# Loading work.axi_sim_mem(fast)
+# Loading work.fractal_sync_if(fast__1)
+# Loading work.fractal_sync_if(fast__2)
+# Loading work.stream_register(fast__3)
+# Loading work.hci_core_intf(fast__1)
+# Loading work.hci_core_intf(fast__3)
+# Loading work.stream_register(fast__1)
+# Loading work.hci_core_intf(fast__10)
+# Loading work.hci_mem_intf(fast__2)
+# Loading work.hwpe_stream_intf_tcdm(fast__1)
+# Loading work.hwpe_stream_intf_tcdm(fast__2)
+# Loading work.hci_core_intf(fast__5)
+# Loading work.hci_core_intf(fast__6)
+# Loading work.hci_core_intf(fast__9)
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[0]/gen_x_tile[0]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[0]/gen_x_tile[1]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[0]/gen_x_tile[2]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[0]/gen_x_tile[3]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[1]/gen_x_tile[0]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[1]/gen_x_tile[1]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[1]/gen_x_tile[2]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[1]/gen_x_tile[3]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[2]/gen_x_tile[0]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[2]/gen_x_tile[1]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[2]/gen_x_tile[2]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[2]/gen_x_tile[3]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[3]/gen_x_tile[0]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[3]/gen_x_tile[1]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[3]/gen_x_tile[2]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[3]/gen_x_tile[3]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# run -a
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_0
+# RISC-V Trace: Writing log to: ./core_0_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_1
+# RISC-V Trace: Writing log to: ./core_1_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_2
+# RISC-V Trace: Writing log to: ./core_2_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_3
+# RISC-V Trace: Writing log to: ./core_3_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_4
+# RISC-V Trace: Writing log to: ./core_4_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_5
+# RISC-V Trace: Writing log to: ./core_5_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_6
+# RISC-V Trace: Writing log to: ./core_6_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_7
+# RISC-V Trace: Writing log to: ./core_7_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_8
+# RISC-V Trace: Writing log to: ./core_8_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_9
+# RISC-V Trace: Writing log to: ./core_9_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_10
+# RISC-V Trace: Writing log to: ./core_10_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_11
+# RISC-V Trace: Writing log to: ./core_11_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_12
+# RISC-V Trace: Writing log to: ./core_12_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_13
+# RISC-V Trace: Writing log to: ./core_13_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_14
+# RISC-V Trace: Writing log to: ./core_14_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_15
+# RISC-V Trace: Writing log to: ./core_15_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file /scratch/visachi/magia_sdk/profiling/MAGIA//work/sw/tests/test_mm_is.c/verif.itb
+# RISC-V Trace: Loaded        2351 instructions.
+# [mhartid 0] timeslots: 4
+# [mhartid 4] timeslots: 4
+# [mhartid 8] timeslots: 4
+# [mhartid 12] timeslots: 4
+# [mhartid 1] timeslots: 4
+# [mhartid 5] timeslots: 4
+# [mhartid 9] timeslots: 4
+# [mhartid 13] timeslots: 4
+# [mhartid 2] timeslots: 4
+# [mhartid 6] timeslots: 4
+# [mhartid 10] timeslots: 4
+# [mhartid 14] timeslots: 4
+# [mhartid 3] timeslots: 4
+# [mhartid 7] timeslots: 4
+# [mhartid 11] timeslots: 4
+# [mhartid 15] timeslots: 4
+# [mhartid 0] iDMA 2D with parameter: dir=0, axi_addr=0xcc012000, obi_addr=0x20000, len=32, std=128, reps=24
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 55905ns
+# [mhartid 4] iDMA 2D with parameter: dir=0, axi_addr=0xcc012c00, obi_addr=0x420000, len=32, std=128, reps=24
+# [mhartid 8] iDMA 2D with parameter: dir=0, axi_addr=0xcc013800, obi_addr=0x820000, len=32, std=128, reps=24
+# [mhartid 12] iDMA 2D with parameter: dir=0, axi_addr=0xcc014400, obi_addr=0xc20000, len=32, std=128, reps=24
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 56535ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 56535ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 56565ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 61635ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 5725ns (1145 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 62250ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 5710ns (1142 clock cycles)
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 62275ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 5735ns (1147 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 62285ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 5715ns (1143 clock cycles)
+# [mhartid 9] iDMA 2D with parameter: dir=0, axi_addr=0xcc013820, obi_addr=0x920000, len=32, std=128, reps=24
+# [mhartid 5] iDMA 2D with parameter: dir=0, axi_addr=0xcc012c20, obi_addr=0x520000, len=32, std=128, reps=24
+# [mhartid 1] iDMA 2D with parameter: dir=0, axi_addr=0xcc012020, obi_addr=0x120000, len=32, std=128, reps=24
+# [mhartid 13] iDMA 2D with parameter: dir=0, axi_addr=0xcc014420, obi_addr=0xd20000, len=32, std=128, reps=24
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 63590ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 63605ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 63610ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 63615ns
+# [mhartid 10] iDMA 2D with parameter: dir=0, axi_addr=0xcc013840, obi_addr=0xa20000, len=32, std=128, reps=24
+# [mhartid 2] iDMA 2D with parameter: dir=0, axi_addr=0xcc012040, obi_addr=0x220000, len=32, std=128, reps=24
+# [mhartid 14] iDMA 2D with parameter: dir=0, axi_addr=0xcc014440, obi_addr=0xe20000, len=32, std=128, reps=24
+# [mhartid 6] iDMA 2D with parameter: dir=0, axi_addr=0xcc012c40, obi_addr=0x620000, len=32, std=128, reps=24
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 70985ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 71000ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 71010ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 71035ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 71320ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 7725ns (1545 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 71360ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 7745ns (1549 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 71365ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 7745ns (1549 clock cycles)
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 71370ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 7760ns (1552 clock cycles)
+# [mhartid 3] iDMA 2D with parameter: dir=0, axi_addr=0xcc012060, obi_addr=0x320000, len=32, std=128, reps=24
+# [mhartid 11] iDMA 2D with parameter: dir=0, axi_addr=0xcc013860, obi_addr=0xb20000, len=32, std=128, reps=24
+# [mhartid 7] iDMA 2D with parameter: dir=0, axi_addr=0xcc012c60, obi_addr=0x720000, len=32, std=128, reps=24
+# [mhartid 15] iDMA 2D with parameter: dir=0, axi_addr=0xcc014460, obi_addr=0xf20000, len=32, std=128, reps=24
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 78570ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 78605ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 78610ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 78635ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 80800ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 9810ns (1962 clock cycles)
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 80805ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 9800ns (1960 clock cycles)
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 80840ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 9800ns (1960 clock cycles)
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 80860ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 9845ns (1969 clock cycles)
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 90340ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 11765ns (2353 clock cycles)
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 90355ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 11740ns (2348 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 90390ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 11780ns (2356 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 90395ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 11755ns (2351 clock cycles)
+# [mhartid 0] iDMA 2D with parameter: dir=0, axi_addr=0xcc010000, obi_addr=0x20300, len=32, std=128, reps=16
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 101530ns
+# [mhartid 8] iDMA 2D with parameter: dir=0, axi_addr=0xcc010000, obi_addr=0x820300, len=32, std=128, reps=16
+# [mhartid 4] iDMA 2D with parameter: dir=0, axi_addr=0xcc010000, obi_addr=0x420300, len=32, std=128, reps=16
+# [mhartid 12] iDMA 2D with parameter: dir=0, axi_addr=0xcc010000, obi_addr=0xc20300, len=32, std=128, reps=16
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 102800ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 102845ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 102910ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 105255ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 3720ns (744 clock cycles)
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 106570ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 3765ns (753 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 106585ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 3735ns (747 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 106650ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 3735ns (747 clock cycles)
+# [mhartid 9] iDMA 2D with parameter: dir=0, axi_addr=0xcc010800, obi_addr=0x920300, len=32, std=128, reps=16
+# [mhartid 5] iDMA 2D with parameter: dir=0, axi_addr=0xcc010800, obi_addr=0x520300, len=32, std=128, reps=16
+# [mhartid 1] iDMA 2D with parameter: dir=0, axi_addr=0xcc010800, obi_addr=0x120300, len=32, std=128, reps=16
+# [mhartid 13] iDMA 2D with parameter: dir=0, axi_addr=0xcc010800, obi_addr=0xd20300, len=32, std=128, reps=16
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 115865ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 115930ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 115935ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 116015ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 120855ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 4985ns (997 clock cycles)
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 120920ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 4985ns (997 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 120930ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 4990ns (998 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 121030ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 5010ns (1002 clock cycles)
+# [mhartid 10] iDMA 2D with parameter: dir=0, axi_addr=0xcc011000, obi_addr=0xa20300, len=32, std=128, reps=16
+# [mhartid 2] iDMA 2D with parameter: dir=0, axi_addr=0xcc011000, obi_addr=0x220300, len=32, std=128, reps=16
+# [mhartid 6] iDMA 2D with parameter: dir=0, axi_addr=0xcc011000, obi_addr=0x620300, len=32, std=128, reps=16
+# [mhartid 14] iDMA 2D with parameter: dir=0, axi_addr=0xcc011000, obi_addr=0xe20300, len=32, std=128, reps=16
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 129290ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 129320ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 129335ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 129465ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 135570ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 6275ns (1255 clock cycles)
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 135590ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 6265ns (1253 clock cycles)
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 135610ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 6270ns (1254 clock cycles)
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 135755ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 6285ns (1257 clock cycles)
+# [mhartid 3] iDMA 2D with parameter: dir=0, axi_addr=0xcc011800, obi_addr=0x320300, len=32, std=128, reps=16
+# [mhartid 7] iDMA 2D with parameter: dir=0, axi_addr=0xcc011800, obi_addr=0x720300, len=32, std=128, reps=16
+# [mhartid 15] iDMA 2D with parameter: dir=0, axi_addr=0xcc011800, obi_addr=0xf20300, len=32, std=128, reps=16
+# [mhartid 11] iDMA 2D with parameter: dir=0, axi_addr=0xcc011800, obi_addr=0xb20300, len=32, std=128, reps=16
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 142845ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 142885ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 142895ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 142920ns
+# [mhartid 0] iDMA 2D with parameter: dir=0, axi_addr=0xcc015000, obi_addr=0x20500, len=32, std=128, reps=24
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 144540ns
+# [mhartid 8] iDMA 2D with parameter: dir=0, axi_addr=0xcc016800, obi_addr=0x820500, len=32, std=128, reps=24
+# [mhartid 12] iDMA 2D with parameter: dir=0, axi_addr=0xcc017400, obi_addr=0xc20500, len=32, std=128, reps=24
+# [mhartid 4] iDMA 2D with parameter: dir=0, axi_addr=0xcc015c00, obi_addr=0x420500, len=32, std=128, reps=24
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 146405ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 146535ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 146545ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 150190ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 5645ns (1129 clock cycles)
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 150385ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 7535ns (1507 clock cycles)
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 150420ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 7530ns (1506 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 150445ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 7545ns (1509 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 150455ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 7530ns (1506 clock cycles)
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 152080ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 5670ns (1134 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 152180ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 5640ns (1128 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 152210ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 5660ns (1132 clock cycles)
+# [mhartid 0] RedMulE with parameter: x=0x20000, w=0x20300, y=0x20500, m=24, n=16, k=16
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 189100ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 190795ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 1690ns (338 clock cycles)
+# [mhartid 8] RedMulE with parameter: x=0x820000, w=0x820300, y=0x820500, m=24, n=16, k=16
+# [mhartid 4] RedMulE with parameter: x=0x420000, w=0x420300, y=0x420500, m=24, n=16, k=16
+# [mhartid 12] RedMulE with parameter: x=0xc20000, w=0xc20300, y=0xc20500, m=24, n=16, k=16
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 192855ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 192970ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 193010ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 194550ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 1690ns (338 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 194665ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 1690ns (338 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 194705ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 1690ns (338 clock cycles)
+# [mhartid 1] iDMA 1D with parameter: dir=0, axi_addr=0x20500, obi_addr=0x120500, len=768
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 224835ns
+# [mhartid 9] iDMA 1D with parameter: dir=0, axi_addr=0x820500, obi_addr=0x920500, len=768
+# [mhartid 5] iDMA 1D with parameter: dir=0, axi_addr=0x420500, obi_addr=0x520500, len=768
+# [mhartid 13] iDMA 1D with parameter: dir=0, axi_addr=0xc20500, obi_addr=0xd20500, len=768
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 229220ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 229335ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 229415ns
+# [mhartid 0] iDMA 2D with parameter: dir=0, axi_addr=0xcc010020, obi_addr=0x20300, len=32, std=128, reps=16
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 231675ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 235370ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 3690ns (738 clock cycles)
+# [mhartid 8] iDMA 2D with parameter: dir=0, axi_addr=0xcc010020, obi_addr=0x820300, len=32, std=128, reps=16
+# [mhartid 4] iDMA 2D with parameter: dir=0, axi_addr=0xcc010020, obi_addr=0x420300, len=32, std=128, reps=16
+# [mhartid 12] iDMA 2D with parameter: dir=0, axi_addr=0xcc010020, obi_addr=0xc20300, len=32, std=128, reps=16
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 236060ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 236175ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 236245ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 236730ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 11890ns (2378 clock cycles)
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 239755ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 3690ns (738 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 239870ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 3690ns (738 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 239940ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 3690ns (738 clock cycles)
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 241115ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 11890ns (2378 clock cycles)
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 241230ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 11890ns (2378 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 241300ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 11880ns (2376 clock cycles)
+# [mhartid 0] iDMA 2D with parameter: dir=0, axi_addr=0xcc015020, obi_addr=0x20800, len=32, std=128, reps=24
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 274630ns
+# [mhartid 8] iDMA 2D with parameter: dir=0, axi_addr=0xcc016820, obi_addr=0x820800, len=32, std=128, reps=24
+# [mhartid 4] iDMA 2D with parameter: dir=0, axi_addr=0xcc015c20, obi_addr=0x420800, len=32, std=128, reps=24
+# [mhartid 12] iDMA 2D with parameter: dir=0, axi_addr=0xcc017420, obi_addr=0xc20800, len=32, std=128, reps=24
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 279625ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 279785ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 279855ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 280085ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 5450ns (1090 clock cycles)
+# [mhartid 1] RedMulE with parameter: x=0x120000, w=0x120300, y=0x120500, m=24, n=16, k=16
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 281755ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 283510ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 1750ns (350 clock cycles)
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 285090ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 5460ns (1092 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 285250ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 5460ns (1092 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 285315ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 5455ns (1091 clock cycles)
+# [mhartid 9] RedMulE with parameter: x=0x920000, w=0x920300, y=0x920500, m=24, n=16, k=16
+# [mhartid 5] RedMulE with parameter: x=0x520000, w=0x520300, y=0x520500, m=24, n=16, k=16
+# [mhartid 13] RedMulE with parameter: x=0xd20000, w=0xd20300, y=0xd20500, m=24, n=16, k=16
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 286155ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 286265ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 286375ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 287915ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 1755ns (351 clock cycles)
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 288020ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 1750ns (350 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 288135ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 1755ns (351 clock cycles)
+# [mhartid 0] RedMulE with parameter: x=0x20000, w=0x20300, y=0x20800, m=24, n=16, k=16
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 316155ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 317675ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 2] iDMA 1D with parameter: dir=0, axi_addr=0x120500, obi_addr=0x220500, len=768
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 321350ns
+# [mhartid 8] RedMulE with parameter: x=0x820000, w=0x820300, y=0x820800, m=24, n=16, k=16
+# [mhartid 4] RedMulE with parameter: x=0x420000, w=0x420300, y=0x420800, m=24, n=16, k=16
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 323020ns
+# [mhartid 12] RedMulE with parameter: x=0xc20000, w=0xc20300, y=0xc20800, m=24, n=16, k=16
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 323175ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 323315ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 324540ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 324695ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 324835ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 10] iDMA 1D with parameter: dir=0, axi_addr=0x920500, obi_addr=0xa20500, len=768
+# [mhartid 6] iDMA 1D with parameter: dir=0, axi_addr=0x520500, obi_addr=0x620500, len=768
+# [mhartid 14] iDMA 1D with parameter: dir=0, axi_addr=0xd20500, obi_addr=0xe20500, len=768
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 325790ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 325865ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 326005ns
+# [mhartid 1] iDMA 2D with parameter: dir=0, axi_addr=0xcc010820, obi_addr=0x120300, len=32, std=128, reps=16
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 328880ns
+# [mhartid 9] iDMA 2D with parameter: dir=0, axi_addr=0xcc010820, obi_addr=0x920300, len=32, std=128, reps=16
+# [mhartid 5] iDMA 2D with parameter: dir=0, axi_addr=0xcc010820, obi_addr=0x520300, len=32, std=128, reps=16
+# [mhartid 13] iDMA 2D with parameter: dir=0, axi_addr=0xcc010820, obi_addr=0xd20300, len=32, std=128, reps=16
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 333210ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 11855ns (2371 clock cycles)
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 333250ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 333395ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 333535ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 333880ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 4995ns (999 clock cycles)
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 337635ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 11840ns (2368 clock cycles)
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 337725ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 11855ns (2371 clock cycles)
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 337865ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 11855ns (2371 clock cycles)
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 338230ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 4975ns (995 clock cycles)
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 338395ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 4995ns (999 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 338535ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 4995ns (999 clock cycles)
+# [mhartid 1] iDMA 1D with parameter: dir=0, axi_addr=0x20800, obi_addr=0x120800, len=768
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 367085ns
+# [mhartid 9] iDMA 1D with parameter: dir=0, axi_addr=0x820800, obi_addr=0x920800, len=768
+# [mhartid 5] iDMA 1D with parameter: dir=0, axi_addr=0x420800, obi_addr=0x520800, len=768
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 372095ns
+# [mhartid 13] iDMA 1D with parameter: dir=0, axi_addr=0xc20800, obi_addr=0xd20800, len=768
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 372230ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 372400ns
+# [mhartid 0] iDMA 2D with parameter: dir=0, axi_addr=0xcc010040, obi_addr=0x20300, len=32, std=128, reps=16
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 373935ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 377635ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 3695ns (739 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 378625ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 11535ns (2307 clock cycles)
+# [mhartid 8] iDMA 2D with parameter: dir=0, axi_addr=0xcc010040, obi_addr=0x820300, len=32, std=128, reps=16
+# [mhartid 4] iDMA 2D with parameter: dir=0, axi_addr=0xcc010040, obi_addr=0x420300, len=32, std=128, reps=16
+# [mhartid 12] iDMA 2D with parameter: dir=0, axi_addr=0xcc010040, obi_addr=0xc20300, len=32, std=128, reps=16
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 378955ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 379065ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 379235ns
+# [mhartid 2] RedMulE with parameter: x=0x220000, w=0x220300, y=0x220500, m=24, n=16, k=16
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 382540ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 382655ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 3695ns (739 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 382760ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 3690ns (738 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 382930ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 3690ns (738 clock cycles)
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 383645ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 11545ns (2309 clock cycles)
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 383850ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 11615ns (2323 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 384020ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 11615ns (2323 clock cycles)
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 384360ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 1815ns (363 clock cycles)
+# [mhartid 10] RedMulE with parameter: x=0xa20000, w=0xa20300, y=0xa20500, m=24, n=16, k=16
+# [mhartid 6] RedMulE with parameter: x=0x620000, w=0x620300, y=0x620500, m=24, n=16, k=16
+# [mhartid 14] RedMulE with parameter: x=0xe20000, w=0xe20300, y=0xe20500, m=24, n=16, k=16
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 386965ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 387070ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 387240ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 388785ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 1815ns (363 clock cycles)
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 388885ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 1810ns (362 clock cycles)
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 389055ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 1810ns (362 clock cycles)
+# [mhartid 0] iDMA 2D with parameter: dir=0, axi_addr=0xcc015040, obi_addr=0x20500, len=32, std=128, reps=24
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 416775ns
+# [mhartid 1] RedMulE with parameter: x=0x120000, w=0x120300, y=0x120800, m=24, n=16, k=16
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 419600ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 421120ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 8] iDMA 2D with parameter: dir=0, axi_addr=0xcc016840, obi_addr=0x820500, len=32, std=128, reps=24
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 422270ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 5490ns (1098 clock cycles)
+# [mhartid 4] iDMA 2D with parameter: dir=0, axi_addr=0xcc015c40, obi_addr=0x420500, len=32, std=128, reps=24
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 422375ns
+# [mhartid 12] iDMA 2D with parameter: dir=0, axi_addr=0xcc017440, obi_addr=0xc20500, len=32, std=128, reps=24
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 422565ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 422710ns
+# [mhartid 9] RedMulE with parameter: x=0x920000, w=0x920300, y=0x920800, m=24, n=16, k=16
+# [mhartid 5] RedMulE with parameter: x=0x520000, w=0x520300, y=0x520800, m=24, n=16, k=16
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 424640ns
+# [mhartid 13] RedMulE with parameter: x=0xd20000, w=0xd20300, y=0xd20800, m=24, n=16, k=16
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 424840ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 425080ns
+# [mhartid 3] iDMA 1D with parameter: dir=0, axi_addr=0x220500, obi_addr=0x320500, len=768
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 425740ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 426160ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 426360ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 426600ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 427855ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 5475ns (1095 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 428040ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 5470ns (1094 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 428185ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 5470ns (1094 clock cycles)
+# [mhartid 11] iDMA 1D with parameter: dir=0, axi_addr=0xa20500, obi_addr=0xb20500, len=768
+# [mhartid 7] iDMA 1D with parameter: dir=0, axi_addr=0x620500, obi_addr=0x720500, len=768
+# [mhartid 15] iDMA 1D with parameter: dir=0, axi_addr=0xe20500, obi_addr=0xf20500, len=768
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 430200ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 430280ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 430490ns
+# [mhartid 2] iDMA 2D with parameter: dir=0, axi_addr=0xcc011020, obi_addr=0x220300, len=32, std=128, reps=16
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 433955ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 437650ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 11905ns (2381 clock cycles)
+# [mhartid 10] iDMA 2D with parameter: dir=0, axi_addr=0xcc011020, obi_addr=0xa20300, len=32, std=128, reps=16
+# [mhartid 6] iDMA 2D with parameter: dir=0, axi_addr=0xcc011020, obi_addr=0x620300, len=32, std=128, reps=16
+# [mhartid 14] iDMA 2D with parameter: dir=0, axi_addr=0xcc011020, obi_addr=0xe20300, len=32, std=128, reps=16
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 438495ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 438510ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 438705ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 440270ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 6310ns (1262 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 442135ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 11930ns (2386 clock cycles)
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 442205ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 11920ns (2384 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 442400ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 11905ns (2381 clock cycles)
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 444800ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 6300ns (1260 clock cycles)
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 444825ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 6310ns (1262 clock cycles)
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 445015ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 6305ns (1261 clock cycles)
+# [mhartid 0] RedMulE with parameter: x=0x20000, w=0x20300, y=0x20500, m=24, n=16, k=16
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 458240ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 459760ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 8] RedMulE with parameter: x=0x820000, w=0x820300, y=0x820500, m=24, n=16, k=16
+# [mhartid 4] RedMulE with parameter: x=0x420000, w=0x420300, y=0x420500, m=24, n=16, k=16
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 465685ns
+# [mhartid 12] RedMulE with parameter: x=0xc20000, w=0xc20300, y=0xc20500, m=24, n=16, k=16
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 465845ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 466065ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 467205ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 467365ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 467585ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 2] iDMA 1D with parameter: dir=0, axi_addr=0x120800, obi_addr=0x220800, len=768
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 477130ns
+# [mhartid 10] iDMA 1D with parameter: dir=0, axi_addr=0x920800, obi_addr=0xa20800, len=768
+# [mhartid 6] iDMA 1D with parameter: dir=0, axi_addr=0x520800, obi_addr=0x620800, len=768
+# [mhartid 14] iDMA 1D with parameter: dir=0, axi_addr=0xd20800, obi_addr=0xe20800, len=768
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 481715ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 481745ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 481945ns
+# [mhartid 1] iDMA 2D with parameter: dir=0, axi_addr=0xcc010840, obi_addr=0x120300, len=32, std=128, reps=16
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 484715ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 488640ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 11505ns (2301 clock cycles)
+# [mhartid 9] iDMA 2D with parameter: dir=0, axi_addr=0xcc010840, obi_addr=0x920300, len=32, std=128, reps=16
+# [mhartid 5] iDMA 2D with parameter: dir=0, axi_addr=0xcc010840, obi_addr=0x520300, len=32, std=128, reps=16
+# [mhartid 13] iDMA 2D with parameter: dir=0, axi_addr=0xcc010840, obi_addr=0xd20300, len=32, std=128, reps=16
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 489250ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 489280ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 489475ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 489690ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 4970ns (994 clock cycles)
+# [mhartid 3] RedMulE with parameter: x=0x320000, w=0x320300, y=0x320500, m=24, n=16, k=16
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 491095ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 492980ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 1880ns (376 clock cycles)
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 493175ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 11455ns (2291 clock cycles)
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 493205ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 11455ns (2291 clock cycles)
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 493405ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 11455ns (2291 clock cycles)
+# [mhartid 0] LAST TIMESLOT
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 494225ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 4970ns (994 clock cycles)
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 494255ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 4970ns (994 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 494460ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 4980ns (996 clock cycles)
+# [mhartid 11] RedMulE with parameter: x=0xb20000, w=0xb20300, y=0xb20500, m=24, n=16, k=16
+# [mhartid 7] RedMulE with parameter: x=0x720000, w=0x720300, y=0x720500, m=24, n=16, k=16
+# [mhartid 15] RedMulE with parameter: x=0xf20000, w=0xf20300, y=0xf20500, m=24, n=16, k=16
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 495630ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 495635ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 495915ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 497515ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 1875ns (375 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 497515ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 1880ns (376 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 497790ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 1870ns (374 clock cycles)
+# [mhartid 8] LAST TIMESLOT
+# [mhartid 4] LAST TIMESLOT
+# [mhartid 12] LAST TIMESLOT
+# [mhartid 1] iDMA 1D with parameter: dir=0, axi_addr=0x20500, obi_addr=0x120500, len=768
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 522745ns
+# [mhartid 9] iDMA 1D with parameter: dir=0, axi_addr=0x820500, obi_addr=0x920500, len=768
+# [mhartid 5] iDMA 1D with parameter: dir=0, axi_addr=0x420500, obi_addr=0x520500, len=768
+# [mhartid 13] iDMA 1D with parameter: dir=0, axi_addr=0xc20500, obi_addr=0xd20500, len=768
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 527920ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 527950ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 528205ns
+# [mhartid 2] RedMulE with parameter: x=0x220000, w=0x220300, y=0x220800, m=24, n=16, k=16
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 532680ns
+# [mhartid 0] iDMA 2D with parameter: dir=0, axi_addr=0xcc010060, obi_addr=0x20300, len=32, std=128, reps=16
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 533090ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 534200ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 534205ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 11455ns (2291 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 536790ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 3695ns (739 clock cycles)
+# [mhartid 6] RedMulE with parameter: x=0x620000, w=0x620300, y=0x620800, m=24, n=16, k=16
+# [mhartid 10] RedMulE with parameter: x=0xa20000, w=0xa20300, y=0xa20800, m=24, n=16, k=16
+# [mhartid 14] RedMulE with parameter: x=0xe20000, w=0xe20300, y=0xe20800, m=24, n=16, k=16
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 537220ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 537265ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 537515ns
+# [mhartid 8] iDMA 2D with parameter: dir=0, axi_addr=0xcc010060, obi_addr=0x820300, len=32, std=128, reps=16
+# [mhartid 4] iDMA 2D with parameter: dir=0, axi_addr=0xcc010060, obi_addr=0x420300, len=32, std=128, reps=16
+# [mhartid 12] iDMA 2D with parameter: dir=0, axi_addr=0xcc010060, obi_addr=0xc20300, len=32, std=128, reps=16
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 538220ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 538335ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 538505ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 538740ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 538785ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 539035ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 539410ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 11485ns (2297 clock cycles)
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 539465ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 11510ns (2302 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 539700ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 11490ns (2298 clock cycles)
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 541920ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 3695ns (739 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 542035ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 3695ns (739 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 542210ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 3700ns (740 clock cycles)
+# [mhartid 3] iDMA 2D with parameter: dir=1, axi_addr=0xcc015000, obi_addr=0x320500, len=32, std=128, reps=24
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 544305ns
+# [mhartid 11] iDMA 2D with parameter: dir=1, axi_addr=0xcc016800, obi_addr=0xb20500, len=32, std=128, reps=24
+# [mhartid 7] iDMA 2D with parameter: dir=1, axi_addr=0xcc015c00, obi_addr=0x720500, len=32, std=128, reps=24
+# [mhartid 15] iDMA 2D with parameter: dir=1, axi_addr=0xcc017400, obi_addr=0xf20500, len=32, std=128, reps=24
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 548880ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 548935ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 549195ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 549555ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 5245ns (1049 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 554135ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 5250ns (1050 clock cycles)
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 554190ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 5250ns (1050 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 554450ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 5250ns (1050 clock cycles)
+# [mhartid 1] RedMulE with parameter: x=0x120000, w=0x120300, y=0x120500, m=24, n=16, k=16
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 575120ns
+# [mhartid 0] iDMA 2D with parameter: dir=0, axi_addr=0xcc015060, obi_addr=0x20800, len=32, std=128, reps=24
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 576070ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 576640ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 5] RedMulE with parameter: x=0x520000, w=0x520300, y=0x520500, m=24, n=16, k=16
+# [mhartid 9] RedMulE with parameter: x=0x920000, w=0x920300, y=0x920500, m=24, n=16, k=16
+# [mhartid 13] RedMulE with parameter: x=0xd20000, w=0xd20300, y=0xd20500, m=24, n=16, k=16
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 580295ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 580385ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 580570ns
+# [mhartid 8] iDMA 2D with parameter: dir=0, axi_addr=0xcc016860, obi_addr=0x820800, len=32, std=128, reps=24
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 581530ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 5455ns (1091 clock cycles)
+# [mhartid 4] iDMA 2D with parameter: dir=0, axi_addr=0xcc015c60, obi_addr=0x420800, len=32, std=128, reps=24
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 581760ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 581815ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 12] iDMA 2D with parameter: dir=0, axi_addr=0xcc017460, obi_addr=0xc20800, len=32, std=128, reps=24
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 581905ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 581905ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 582090ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 582100ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 587215ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 5450ns (1090 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 587360ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 5450ns (1090 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 587560ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 5455ns (1091 clock cycles)
+# [mhartid 3] iDMA 2D with parameter: dir=0, axi_addr=0xcc011820, obi_addr=0x320300, len=32, std=128, reps=16
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 601060ns
+# [mhartid 11] iDMA 2D with parameter: dir=0, axi_addr=0xcc011820, obi_addr=0xb20300, len=32, std=128, reps=16
+# [mhartid 7] iDMA 2D with parameter: dir=0, axi_addr=0xcc011820, obi_addr=0x720300, len=32, std=128, reps=16
+# [mhartid 15] iDMA 2D with parameter: dir=0, axi_addr=0xcc011820, obi_addr=0xf20300, len=32, std=128, reps=16
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 605710ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 605715ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 605985ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 608605ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 7540ns (1508 clock cycles)
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 613250ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 7530ns (1506 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 613255ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 7540ns (1508 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 613535ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 7545ns (1509 clock cycles)
+# [mhartid 0] RedMulE with parameter: x=0x20000, w=0x20300, y=0x20800, m=24, n=16, k=16
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 617425ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 618945ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 8] RedMulE with parameter: x=0x820000, w=0x820300, y=0x820800, m=24, n=16, k=16
+# [mhartid 4] RedMulE with parameter: x=0x420000, w=0x420300, y=0x420800, m=24, n=16, k=16
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start instruction in WB stage at time 624945ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 625105ns
+# [mhartid 12] RedMulE with parameter: x=0xc20000, w=0xc20300, y=0xc20800, m=24, n=16, k=16
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start instruction in WB stage at time 625390ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel end instruction in WB stage at time 626465ns
+# [TB][mhartid 8 - Tile (2, 0)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 626625ns
+# [TB][mhartid 4 - Tile (1, 0)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel end instruction in WB stage at time 626910ns
+# [TB][mhartid 12 - Tile (3, 0)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 3] iDMA 1D with parameter: dir=0, axi_addr=0x220800, obi_addr=0x320800, len=768
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 648440ns
+# [mhartid 7] iDMA 1D with parameter: dir=0, axi_addr=0x620800, obi_addr=0x720800, len=768
+# [mhartid 11] iDMA 1D with parameter: dir=0, axi_addr=0xa20800, obi_addr=0xb20800, len=768
+# [mhartid 15] iDMA 1D with parameter: dir=0, axi_addr=0xe20800, obi_addr=0xf20800, len=768
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 653090ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 653130ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 653420ns
+# [mhartid 2] iDMA 2D with parameter: dir=0, axi_addr=0xcc011040, obi_addr=0x220300, len=32, std=128, reps=16
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 656745ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 659865ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 11420ns (2284 clock cycles)
+# [mhartid 6] iDMA 2D with parameter: dir=0, axi_addr=0xcc011040, obi_addr=0x620300, len=32, std=128, reps=16
+# [mhartid 10] iDMA 2D with parameter: dir=0, axi_addr=0xcc011040, obi_addr=0xa20300, len=32, std=128, reps=16
+# [mhartid 14] iDMA 2D with parameter: dir=0, axi_addr=0xcc011040, obi_addr=0xe20300, len=32, std=128, reps=16
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 661395ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 661435ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 661710ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 663010ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 6260ns (1252 clock cycles)
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 664515ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 11420ns (2284 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 664555ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 11420ns (2284 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 664890ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 11465ns (2293 clock cycles)
+# [mhartid 1] LAST TIMESLOT
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 667660ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 6260ns (1252 clock cycles)
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 667700ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 6260ns (1252 clock cycles)
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 667980ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 6265ns (1253 clock cycles)
+# [mhartid 5] LAST TIMESLOT
+# [mhartid 9] LAST TIMESLOT
+# [mhartid 13] LAST TIMESLOT
+# [mhartid 2] iDMA 1D with parameter: dir=0, axi_addr=0x120500, obi_addr=0x220500, len=768
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 699695ns
+# [mhartid 6] iDMA 1D with parameter: dir=0, axi_addr=0x520500, obi_addr=0x620500, len=768
+# [mhartid 10] iDMA 1D with parameter: dir=0, axi_addr=0x920500, obi_addr=0xa20500, len=768
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 704345ns
+# [mhartid 14] iDMA 1D with parameter: dir=0, axi_addr=0xd20500, obi_addr=0xe20500, len=768
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 704395ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 704700ns
+# [mhartid 3] RedMulE with parameter: x=0x320000, w=0x320300, y=0x320800, m=24, n=16, k=16
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 706855ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 708375ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 1] iDMA 2D with parameter: dir=0, axi_addr=0xcc010860, obi_addr=0x120300, len=32, std=128, reps=16
+# [mhartid 7] RedMulE with parameter: x=0x720000, w=0x720300, y=0x720800, m=24, n=16, k=16
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 711200ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 11500ns (2300 clock cycles)
+# [mhartid 11] RedMulE with parameter: x=0xb20000, w=0xb20300, y=0xb20800, m=24, n=16, k=16
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 711390ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 711505ns
+# [mhartid 15] RedMulE with parameter: x=0xf20000, w=0xf20300, y=0xf20800, m=24, n=16, k=16
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 711660ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 711945ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 713025ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 713180ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 713465ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 5] iDMA 2D with parameter: dir=0, axi_addr=0xcc010860, obi_addr=0x520300, len=32, std=128, reps=16
+# [mhartid 9] iDMA 2D with parameter: dir=0, axi_addr=0xcc010860, obi_addr=0x920300, len=32, std=128, reps=16
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 715850ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 11500ns (2300 clock cycles)
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 715905ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 11505ns (2301 clock cycles)
+# [mhartid 13] iDMA 2D with parameter: dir=0, axi_addr=0xcc010860, obi_addr=0xd20300, len=32, std=128, reps=16
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 716040ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 716055ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 716220ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 11515ns (2303 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 716305ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 716400ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 5005ns (1001 clock cycles)
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 721050ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 5005ns (1001 clock cycles)
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 721075ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 5015ns (1003 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 721310ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 5000ns (1000 clock cycles)
+# [mhartid 1] iDMA 1D with parameter: dir=0, axi_addr=0x20800, obi_addr=0x120800, len=768
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 749510ns
+# [mhartid 5] iDMA 1D with parameter: dir=0, axi_addr=0x420800, obi_addr=0x520800, len=768
+# [mhartid 9] iDMA 1D with parameter: dir=0, axi_addr=0x820800, obi_addr=0x920800, len=768
+# [mhartid 2] RedMulE with parameter: x=0x220000, w=0x220300, y=0x220500, m=24, n=16, k=16
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 754780ns
+# [mhartid 13] iDMA 1D with parameter: dir=0, axi_addr=0xc20800, obi_addr=0xd20800, len=768
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 754820ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 754905ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 755095ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 756425ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 3] iDMA 2D with parameter: dir=1, axi_addr=0xcc015020, obi_addr=0x320800, len=32, std=128, reps=24
+# [mhartid 6] RedMulE with parameter: x=0x620000, w=0x620300, y=0x620500, m=24, n=16, k=16
+# [mhartid 10] RedMulE with parameter: x=0xa20000, w=0xa20300, y=0xa20500, m=24, n=16, k=16
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 759545ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 759545ns
+# [mhartid 14] RedMulE with parameter: x=0xe20000, w=0xe20300, y=0xe20500, m=24, n=16, k=16
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 759665ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 759980ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 760805ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 11290ns (2258 clock cycles)
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 761065ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 761185ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 761500ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 7] iDMA 2D with parameter: dir=1, axi_addr=0xcc015c20, obi_addr=0x720800, len=32, std=128, reps=24
+# [mhartid 11] iDMA 2D with parameter: dir=1, axi_addr=0xcc016820, obi_addr=0xb20800, len=32, std=128, reps=24
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 764210ns
+# [mhartid 15] iDMA 2D with parameter: dir=1, axi_addr=0xcc017420, obi_addr=0xf20800, len=32, std=128, reps=24
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 764330ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 764430ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 4880ns (976 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 764635ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 766100ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 11315ns (2263 clock cycles)
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 766170ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 11345ns (2269 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 766405ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 11305ns (2261 clock cycles)
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 769095ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 4880ns (976 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 769220ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 4885ns (977 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 769520ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 4880ns (976 clock cycles)
+# [mhartid 1] RedMulE with parameter: x=0x120000, w=0x120300, y=0x120800, m=24, n=16, k=16
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 801760ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 803280ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 5] RedMulE with parameter: x=0x520000, w=0x520300, y=0x520800, m=24, n=16, k=16
+# [mhartid 9] RedMulE with parameter: x=0x920000, w=0x920300, y=0x920800, m=24, n=16, k=16
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 806965ns
+# [mhartid 13] RedMulE with parameter: x=0xd20000, w=0xd20300, y=0xd20800, m=24, n=16, k=16
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start instruction in WB stage at time 807085ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start instruction in WB stage at time 807370ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 808485ns
+# [TB][mhartid 5 - Tile (1, 1)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel end instruction in WB stage at time 808605ns
+# [TB][mhartid 9 - Tile (2, 1)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel end instruction in WB stage at time 808890ns
+# [TB][mhartid 13 - Tile (3, 1)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 3] iDMA 2D with parameter: dir=0, axi_addr=0xcc011840, obi_addr=0x320300, len=32, std=128, reps=16
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 815380ns
+# [mhartid 7] iDMA 2D with parameter: dir=0, axi_addr=0xcc011840, obi_addr=0x720300, len=32, std=128, reps=16
+# [mhartid 11] iDMA 2D with parameter: dir=0, axi_addr=0xcc011840, obi_addr=0xb20300, len=32, std=128, reps=16
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 820050ns
+# [mhartid 15] iDMA 2D with parameter: dir=0, axi_addr=0xcc011840, obi_addr=0xf20300, len=32, std=128, reps=16
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 820195ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 820505ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 822915ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 7530ns (1506 clock cycles)
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 827585ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 7530ns (1506 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 827730ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 7530ns (1506 clock cycles)
+# [mhartid 2] LAST TIMESLOT
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 828040ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 7530ns (1506 clock cycles)
+# [mhartid 6] LAST TIMESLOT
+# [mhartid 10] LAST TIMESLOT
+# [mhartid 14] LAST TIMESLOT
+# [mhartid 3] iDMA 1D with parameter: dir=0, axi_addr=0x220500, obi_addr=0x320500, len=768
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 862600ns
+# [mhartid 7] iDMA 1D with parameter: dir=0, axi_addr=0x620500, obi_addr=0x720500, len=768
+# [mhartid 11] iDMA 1D with parameter: dir=0, axi_addr=0xa20500, obi_addr=0xb20500, len=768
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 867270ns
+# [mhartid 15] iDMA 1D with parameter: dir=0, axi_addr=0xe20500, obi_addr=0xf20500, len=768
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 867470ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 867780ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 874055ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 11450ns (2290 clock cycles)
+# [mhartid 2] iDMA 2D with parameter: dir=0, axi_addr=0xcc011060, obi_addr=0x220300, len=32, std=128, reps=16
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 875595ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 878725ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 11450ns (2290 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 878905ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 11430ns (2286 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 879215ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 11430ns (2286 clock cycles)
+# [mhartid 6] iDMA 2D with parameter: dir=0, axi_addr=0xcc011060, obi_addr=0x620300, len=32, std=128, reps=16
+# [mhartid 10] iDMA 2D with parameter: dir=0, axi_addr=0xcc011060, obi_addr=0xa20300, len=32, std=128, reps=16
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 880265ns
+# [mhartid 14] iDMA 2D with parameter: dir=0, axi_addr=0xcc011060, obi_addr=0xe20300, len=32, std=128, reps=16
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 880415ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 880725ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 881865ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 6265ns (1253 clock cycles)
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 886535ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 6265ns (1253 clock cycles)
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 886685ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 6265ns (1253 clock cycles)
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 886995ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 6265ns (1253 clock cycles)
+# [mhartid 2] iDMA 1D with parameter: dir=0, axi_addr=0x120800, obi_addr=0x220800, len=768
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 918640ns
+# [mhartid 3] RedMulE with parameter: x=0x320000, w=0x320300, y=0x320500, m=24, n=16, k=16
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 920690ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 922210ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 6] iDMA 1D with parameter: dir=0, axi_addr=0x520800, obi_addr=0x620800, len=768
+# [mhartid 10] iDMA 1D with parameter: dir=0, axi_addr=0x920800, obi_addr=0xa20800, len=768
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 923310ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 923480ns
+# [mhartid 14] iDMA 1D with parameter: dir=0, axi_addr=0xd20800, obi_addr=0xe20800, len=768
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 923820ns
+# [mhartid 7] RedMulE with parameter: x=0x720000, w=0x720300, y=0x720500, m=24, n=16, k=16
+# [mhartid 11] RedMulE with parameter: x=0xb20000, w=0xb20300, y=0xb20500, m=24, n=16, k=16
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 925360ns
+# [mhartid 15] RedMulE with parameter: x=0xf20000, w=0xf20300, y=0xf20500, m=24, n=16, k=16
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 925585ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 925895ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 926880ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 927105ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 927415ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 929880ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 11235ns (2247 clock cycles)
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 934550ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 11235ns (2247 clock cycles)
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 934720ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 11235ns (2247 clock cycles)
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 935065ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 11240ns (2248 clock cycles)
+# [mhartid 3] iDMA 2D with parameter: dir=1, axi_addr=0xcc015040, obi_addr=0x320500, len=32, std=128, reps=24
+# [mhartid 2] RedMulE with parameter: x=0x220000, w=0x220300, y=0x220800, m=24, n=16, k=16
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 973220ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start instruction in WB stage at time 973525ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel end instruction in WB stage at time 975045ns
+# [TB][mhartid 2 - Tile (0, 2)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 7] iDMA 2D with parameter: dir=1, axi_addr=0xcc015c40, obi_addr=0x720500, len=32, std=128, reps=24
+# [mhartid 11] iDMA 2D with parameter: dir=1, axi_addr=0xcc016840, obi_addr=0xb20500, len=32, std=128, reps=24
+# [mhartid 6] RedMulE with parameter: x=0x620000, w=0x620300, y=0x620800, m=24, n=16, k=16
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 977970ns
+# [mhartid 15] iDMA 2D with parameter: dir=1, axi_addr=0xcc017440, obi_addr=0xf20500, len=32, std=128, reps=24
+# [mhartid 10] RedMulE with parameter: x=0xa20000, w=0xa20300, y=0xa20800, m=24, n=16, k=16
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 978105ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 4880ns (976 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 978135ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start instruction in WB stage at time 978190ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 978425ns
+# [mhartid 14] RedMulE with parameter: x=0xe20000, w=0xe20300, y=0xe20800, m=24, n=16, k=16
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start instruction in WB stage at time 978440ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start instruction in WB stage at time 978790ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel end instruction in WB stage at time 979710ns
+# [TB][mhartid 6 - Tile (1, 2)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel end instruction in WB stage at time 979960ns
+# [TB][mhartid 10 - Tile (2, 2)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel end instruction in WB stage at time 980310ns
+# [TB][mhartid 14 - Tile (3, 2)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 982855ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 4880ns (976 clock cycles)
+# [mhartid 3] LAST TIMESLOT
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 983020ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 4880ns (976 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 983310ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 4880ns (976 clock cycles)
+# [mhartid 7] LAST TIMESLOT
+# [mhartid 11] LAST TIMESLOT
+# [mhartid 15] LAST TIMESLOT
+# [mhartid 3] iDMA 2D with parameter: dir=0, axi_addr=0xcc011860, obi_addr=0x320300, len=32, std=128, reps=16
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 1034285ns
+# [mhartid 7] iDMA 2D with parameter: dir=0, axi_addr=0xcc011860, obi_addr=0x720300, len=32, std=128, reps=16
+# [mhartid 11] iDMA 2D with parameter: dir=0, axi_addr=0xcc011860, obi_addr=0xb20300, len=32, std=128, reps=16
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 1039035ns
+# [mhartid 15] iDMA 2D with parameter: dir=0, axi_addr=0xcc011860, obi_addr=0xf20300, len=32, std=128, reps=16
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 1039225ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 1039515ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 1041820ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 7530ns (1506 clock cycles)
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 1046570ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 7530ns (1506 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 1046760ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 7530ns (1506 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 1047050ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 7530ns (1506 clock cycles)
+# [mhartid 3] iDMA 1D with parameter: dir=0, axi_addr=0x220800, obi_addr=0x320800, len=768
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 1081660ns
+# [mhartid 7] iDMA 1D with parameter: dir=0, axi_addr=0x620800, obi_addr=0x720800, len=768
+# [mhartid 11] iDMA 1D with parameter: dir=0, axi_addr=0xa20800, obi_addr=0xb20800, len=768
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 1086410ns
+# [mhartid 15] iDMA 1D with parameter: dir=0, axi_addr=0xe20800, obi_addr=0xf20800, len=768
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 1086650ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 1086940ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 1092900ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 11235ns (2247 clock cycles)
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 1097650ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 11235ns (2247 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 1097890ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 11235ns (2247 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 1098180ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 11235ns (2247 clock cycles)
+# [mhartid 3] RedMulE with parameter: x=0x320000, w=0x320300, y=0x320800, m=24, n=16, k=16
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 1139495ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 1141015ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 7] RedMulE with parameter: x=0x720000, w=0x720300, y=0x720800, m=24, n=16, k=16
+# [mhartid 11] RedMulE with parameter: x=0xb20000, w=0xb20300, y=0xb20800, m=24, n=16, k=16
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 1144245ns
+# [mhartid 15] RedMulE with parameter: x=0xf20000, w=0xf20300, y=0xf20800, m=24, n=16, k=16
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 1144560ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 1144850ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 1145765ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 1146080ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 1146370ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 1515ns (303 clock cycles)
+# [mhartid 3] iDMA 2D with parameter: dir=1, axi_addr=0xcc015060, obi_addr=0x320800, len=32, std=128, reps=24
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start instruction in WB stage at time 1191945ns
+# [mhartid 7] iDMA 2D with parameter: dir=1, axi_addr=0xcc015c60, obi_addr=0x720800, len=32, std=128, reps=24
+# [mhartid 11] iDMA 2D with parameter: dir=1, axi_addr=0xcc016860, obi_addr=0xb20800, len=32, std=128, reps=24
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start instruction in WB stage at time 1196735ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel end instruction in WB stage at time 1196830ns
+# [TB][mhartid 3 - Tile (0, 3)] Detected sentinel start-end pair with latency 4880ns (976 clock cycles)
+# [mhartid 15] iDMA 2D with parameter: dir=1, axi_addr=0xcc017460, obi_addr=0xf20800, len=32, std=128, reps=24
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start instruction in WB stage at time 1197035ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start instruction in WB stage at time 1197325ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel end instruction in WB stage at time 1201620ns
+# [TB][mhartid 7 - Tile (1, 3)] Detected sentinel start-end pair with latency 4880ns (976 clock cycles)
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel end instruction in WB stage at time 1201920ns
+# [TB][mhartid 11 - Tile (2, 3)] Detected sentinel start-end pair with latency 4880ns (976 clock cycles)
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel end instruction in WB stage at time 1202210ns
+# [TB][mhartid 15 - Tile (3, 3)] Detected sentinel start-end pair with latency 4880ns (976 clock cycles)
+# [mhartid 0] Tile 0 returned.
+# [mhartid 1] Tile 1 returned.
+# [mhartid 2] Tile 2 returned.
+# [mhartid 4] Tile 4 returned.
+# [mhartid 8] Tile 8 returned.
+# [mhartid 5] Tile 5 returned.
+# [mhartid 9] Tile 9 returned.
+# [mhartid 12] Tile 12 returned.
+# [mhartid 6] Tile 6 returned.
+# [mhartid 13] Tile 13 returned.
+# [mhartid 10] Tile 10 returned.
+# [mhartid 14] Tile 14 returned.
+# [mhartid 3] Number of errors: 0
+# [mhartid 7] Number of errors: 0
+# [mhartid 11] Number of errors: 0
+# [mhartid 15] Number of errors: 0
+# [mhartid 3] Tile 3 returned.
+# [mhartid 7] Tile 7 returned.
+# [mhartid 11] Tile 11 returned.
+# [mhartid 15] Tile 15 returned.
+# SIMULATION FINISHED WITH EXIT CODE: 800080008000800080008000800080008000800080008000800080008000800
+# 
+# ** Note: $finish    : /scratch/visachi/magia_sdk/profiling/MAGIA/target/sim/src/mesh/magia_tb.sv(51)
+#    Time: 1742030 ns  Iteration: 0  Instance: /magia_tb
+# End time: 14:55:06 on Sep 16,2025, Elapsed time: 0:20:16
+# Errors: 0, Warnings: 16
+make[1]: Leaving directory `/scratch/visachi/magia_sdk/profiling/MAGIA'
