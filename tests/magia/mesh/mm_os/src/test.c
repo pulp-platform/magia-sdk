@@ -84,8 +84,10 @@ int main(void){
      * Weight data-tile: (t_size x tile_w) * data_dim
      * Output data-tile: ((tile_h x tile_w) * data_dim)
      */
-    uint8_t timeslots = 2;
+    uint8_t timeslots = 1;
     uint8_t t_size = N_SIZE / timeslots;
+
+    printf("timeslots: %0d\n", timeslots);
 
     /**
      * 2. Use IDMA to transfer static output data-tile
@@ -128,6 +130,8 @@ int main(void){
      * Synchronization is not required.
      */
     for(uint8_t i = 0; i < timeslots; i++){
+        if (i == timeslots-1) printf("LAST TIMESLOT\n");
+        
         /**
          * 3a. IDMA to load the input and weight data-tile for current timeslot
          */
