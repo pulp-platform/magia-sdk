@@ -10,6 +10,7 @@
 #include "tile.h"
 #include "idma.h"
 #include "redmule.h"
+#include "fsync.h"
 
 /**
  * This test aims to verify the functionality of MAGIA as a systolic array for matrix multiplications,
@@ -18,7 +19,7 @@
 int main(void){
     /** 
      * 0. Get the mesh-tile's hartid, mesh-tile coordinates and define its L1 base, 
-     * also initialize the controllers for the idma and redmule.
+     * also initialize the controllers for the idma, redmule and fsync.
      */
     uint32_t hartid = get_hartid();
 
@@ -28,6 +29,7 @@ int main(void){
         .cfg = &idma_cfg,
         .api = &idma_api,
     };
+    idma_init(&idma_ctrl);
 
     redmule_config_t redmule_cfg = {.hartid = hartid};
     redmule_controller_t redmule_ctrl = {
@@ -35,9 +37,15 @@ int main(void){
         .cfg = &redmule_cfg,
         .api = &redmule_api,
     };
-
-    idma_init(&idma_ctrl);
     redmule_init(&redmule_ctrl);
+
+    fsync_config_t          fsync_cfg = {.hartid = hartid};
+    fsync_controller_t      fsync_ctrl = {
+        .base = NULL,
+        .cfg = &fsync_cfg,
+        .api = &fsync_api,
+    };
+    fsync_init(&fsync_ctrl);
 
     uint32_t y_id = GET_Y_ID(hartid);
     uint32_t x_id = GET_X_ID(hartid);
@@ -78,12 +86,10 @@ int main(void){
 
     /**
      * 1a. Set the t_size, how many timeslots we want to divide the temporal dimension into.
-     * The final L1 memory requirement will be:
-     * Input data-tile: (tile_h x t_size) * data_dim
-     * Weight data-tile: (t_size x tile_w) * data_dim
-     * Output data-tile: ((tile_h x tile_w) * data_dim)
+     * As for how the CEMM is implemented (for now), the number of timeslots is equal to the mesh dimension.
+     * TODO: Implement leftover, N_SIZE must be a multiple of the mesh size to work now. 
      */
-    uint8_t timeslots = 2;
+    uint8_t timeslots = MESH_X_TILES;
     uint8_t t_size = N_SIZE / timeslots;
 
     /**
@@ -95,27 +101,51 @@ int main(void){
     uint32_t obi_addr_y = (l1_tile_base);
     uint32_t axi_addr_y = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
     
-    //printf("Doing idma memcpy y\n");
+    //printf("Doing initial output L2 idma memcpy\n");
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
     idma_wait();
     
     /**
-     * 2a. Initalize the IDMA transfer variables for input data-tile transfers.
+     * 2a. Initalize and run IDMA transfer variables for initial L2 input data-tile transfers.
      */
+    // This index calculates the initial contribution for the current tile
+    int32_t index = x_id - y_id;
+    if(index < 0)
+        index = index + MESH_X_TILES;
+    //printf("Index: %d\n", index);
+
+    uint32_t obi_addr_x_0 = obi_addr_y + (tile_h * tile_w * 2);
+    uint32_t obi_addr_x_1 = obi_addr_x_0 + (tile_h * t_size * 2);
+
     uint32_t len_x = (uint32_t) (t_size * 2);
     uint32_t std_x = (uint32_t) (N_SIZE * 2);
     uint32_t reps_x = (uint32_t) tile_h;
-    uint32_t obi_addr_x = obi_addr_y + (tile_h * tile_w * 2);
-    uint32_t axi_addr_x = (uint32_t) x_inp + (y_id * N_SIZE * tile_h_max * 2);
-    
+    uint32_t axi_addr_x = (uint32_t) x_inp + (y_id * N_SIZE * tile_h_max * 2) + (index * t_size * 2);
+    //printf("Doing initial input L2 idma memcpy\n");
+    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x_0, len_x, std_x, reps_x);
+    idma_wait();
+
     /**
-     * 2b. Initalize the IDMA transfer variables for weight data-tile transfers.
+     * 2b. Initalize and run IDMA transfer variables for initial L2 weight data-tile transfers.
      */
+    uint32_t obi_addr_w_0 = obi_addr_x_1 + (tile_h * t_size * 2);
+    uint32_t obi_addr_w_1 = obi_addr_w_0 + (tile_w * t_size * 2);
+
     uint32_t len_w = (uint32_t) (tile_w * 2);
     uint32_t std_w = (uint32_t) (K_SIZE * 2);
     uint32_t reps_w = (uint32_t) t_size;
-    uint32_t obi_addr_w = obi_addr_x + (t_size * tile_h * 2);
-    uint32_t axi_addr_w = (uint32_t) w_inp + (x_id * tile_w_max * 2);
+    uint32_t axi_addr_w = (uint32_t) w_inp + (x_id * tile_w_max * 2) + (index * t_size * K_SIZE * 2);
+    //printf("Doing initial weight L2 idma memcpy\n");
+    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w, obi_addr_w_0, len_w, std_w, reps_w);
+    idma_wait();
+
+    uint32_t input_pt;
+    uint32_t weight_pt;
+    uint32_t input_pt_next;
+    uint32_t weight_pt_next;
+
+    uint32_t left_id = ((x_id == 0) ? GET_ID(y_id, MESH_X_TILES - 1) : hartid - 1);
+    uint32_t down_id = ((y_id == MESH_Y_TILES - 1) ? GET_ID(0, x_id) : GET_ID(y_id + 1, x_id));
 
     //printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
 
@@ -128,21 +158,41 @@ int main(void){
      */
     for(uint8_t i = 0; i < timeslots; i++){
         /**
-         * 3a. IDMA to load the input and weight data-tile for current timeslot
+         * 3a. Choose which of the 2 buffers use (double buffering is in effect)
          */
-        //printf("Doing idma memcpy x\n");
-        idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_x + (t_size * i * 2)), obi_addr_x, len_x, std_x, reps_x);
-        idma_wait();
-        //printf("Doing idma memcpy w\n");
-        idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_w + (t_size * K_SIZE * i * 2)), obi_addr_w, len_w, std_w, reps_w);
-        idma_wait();
+        if(!(i % 2)){
+            input_pt = obi_addr_x_0;
+            weight_pt = obi_addr_w_0;
+            input_pt_next = obi_addr_x_1;
+            weight_pt_next = obi_addr_w_1;
+        }
+        else{
+            input_pt = obi_addr_x_1;
+            weight_pt = obi_addr_w_1;
+            input_pt_next = obi_addr_x_0;
+            weight_pt_next = obi_addr_w_0;
+        }
+
+        /**
+         * 3b. IDMA to load the input and weight data-tile for next timeslot (if there is one)
+         */
+        if(i != (timeslots - 1)){
+            //printf("Syncing\n");
+            fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+            //printf("Loading next input tile\n");
+            idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(left_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 2 * (i % 2)), input_pt_next, tile_h * t_size * 2);
+            idma_wait();
+            //printf("Loading next weight tile\n");
+            idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(down_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 4) + (tile_w * t_size * 2 * (i % 2)), weight_pt_next, tile_w * t_size * 2);
+            idma_wait();
+        }
         
         /**
-         * 3b. Evoke the RED MULE 
+         * 3c. Evoke the RED MULE 
          * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
          */
         //printf("Doing redmule\n");
-        redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
+        redmule_gemm(&redmule_ctrl, input_pt, weight_pt, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
         redmule_wait();
     }
 
@@ -163,8 +213,8 @@ int main(void){
             expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
             diff = (computed > expected) ? (computed - expected) : (expected - computed);
             if(diff > 0x0011){
-                //if(y_id == 0)
-                    //printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                if(y_id == 0)
+                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
                 errors++;
             }       
         }
