@@ -27,6 +27,7 @@ BIN 			?= $(BUILD_DIR)/verif
 build_mode		?= profile
 fsync_mode		?= stall
 mesh_dv			?= 1
+fast_sim		?= 0
 
 target_platform ?= magia
 compiler 		?= GCC_MULTILIB
@@ -41,6 +42,10 @@ tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
 clean:
 	rm -rf build/
+
+rtl-clean:
+	cd $(MAGIA_DIR) 		&& \
+	make hw-clean-all
 
 build:
 	sed -i -E 's/^#define MESH_([XY])_TILES[[:space:]]*[0-9]+/#define MESH_\1_TILES $(tiles)/' ./targets/magia/include/addr_map/tile_addr_map.h
@@ -122,7 +127,7 @@ ifneq (,$(filter $(build_mode), update synth profile))
 	make bender															&& \
 	make $(build_mode)-ips > $(build_mode)-ips.log mesh_dv=$(mesh_dv)	&& \
 	make floonoc-patch || true											&& \
-	make build-hw > build-hw.log mesh_dv=$(mesh_dv)
+	make build-hw > build-hw.log mesh_dv=$(mesh_dv) fast_sim=$(fast_sim)
 else
 	$(error unrecognized mode (acceptable build modes: update|profile|synth).)
 endif

@@ -24,6 +24,8 @@ The following *optional* parameters can be specified when running the make comma
 
 `gui`: **0**|**1** (**Default**: 0). Activates the graphic user interface on the simulator (rtl only).
 
+`fast_sim`: **0**|**1** (**Default**: 0). Deactivates signal tracking for faster simulation (rtl only).
+
 0. In case you are using this SDK as non-submodule: Clone the [MAGIA](https://github.com/pulp-platform/MAGIA/tree/main) repository:
 
     `git clone git@github.com:pulp-platform/MAGIA.git`
