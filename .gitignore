@@ -1,6 +1,6 @@
 next_steps.*
 build/
-output.*
+output*
 list/
 transcript
 .vscode/

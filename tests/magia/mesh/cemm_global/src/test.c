@@ -150,6 +150,7 @@ int main(void){
 
     //printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
 
+    redmule_mcnfig((uint16_t) tile_w, (uint16_t) tile_h, (uint16_t) t_size);
     /**
      * 3. Cycle over the timeslots.
      * For each timeslot, the mesh-tile will:
@@ -196,19 +197,25 @@ int main(void){
             //idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(down_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 4) + (tile_w * t_size * 2 * (!(i % 2))), weight_pt, tile_w * t_size * 2);
             idma_start_out();
             idma_start_in();
+            redmule_marith(obi_addr_y, weight_pt, input_pt);
             idma_wait();
             idma_wait();
+            redmule_wait();
         //     printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(weight_pt), *(volatile uint16_t*)(weight_pt + 2));
         //     printf("Received this data: %x, %x\n", *(volatile uint16_t*)(weight_pt_next), *(volatile uint16_t*)(weight_pt_next + 2));
         }
+        else{
+            redmule_marith(obi_addr_y, weight_pt, input_pt);
+            redmule_wait();
+        }
         
-        /**
-         * 3c. Evoke the RED MULE 
-         * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
-         */
-        //printf("Doing redmule\n");
-        redmule_gemm(&redmule_ctrl, input_pt, weight_pt, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
-        redmule_wait();
+        // /**
+        //  * 3c. Evoke the RED MULE 
+        //  * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
+        //  */
+        // //printf("Doing redmule\n");
+        // redmule_gemm(&redmule_ctrl, input_pt, weight_pt, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
+        // redmule_wait();
     }
 
     /**
