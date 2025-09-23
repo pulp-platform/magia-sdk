@@ -53,8 +53,8 @@
 #define SYNC_BASE   (RESERVED_START + SYNC_OFFSET)
 #define SYNC_EN     (SYNC_BASE + 0x4)
 
-#define GET_X_ID(mhartid)  (mhartid%MESH_Y_TILES)
-#define GET_Y_ID(mhartid)  (mhartid/MESH_Y_TILES)
-#define GET_ID(y_id, x_id) ((y_id*MESH_Y_TILES)+x_id)
+#define GET_X_ID(mhartid)  ((mhartid)%MESH_Y_TILES)
+#define GET_Y_ID(mhartid)  ((mhartid)/MESH_Y_TILES)
+#define GET_ID(y_id, x_id) (((y_id)*MESH_Y_TILES)+(x_id))
 
 #endif // _TILE_ADDR_MAP_INCLUDE_GUARD_

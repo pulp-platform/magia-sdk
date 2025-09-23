@@ -144,9 +144,9 @@ int main(void){
     uint32_t input_pt_next;
     uint32_t weight_pt_next;
 
-    uint32_t left_id = ((x_id == 0) ? GET_ID(y_id, MESH_X_TILES - 1) : hartid - 1);
-    uint32_t up_id = ((y_id == 0) ? GET_ID(MESH_Y_TILES - 1, x_id) : GET_ID(y_id - 1, x_id));
-    // printf("UP ID IS: %d\n", up_id);
+    uint32_t left_id = ((x_id == 0) ? GET_ID(y_id, (MESH_X_TILES - 1)) : hartid - 1);
+    uint32_t up_id = ((y_id == 0) ? GET_ID((MESH_Y_TILES - 1), x_id) : GET_ID((y_id - 1), x_id));
+    //printf("LEFT ID IS: %d\n", left_id);
 
     //printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
 
@@ -201,8 +201,10 @@ int main(void){
             idma_wait();
             idma_wait();
             redmule_wait();
-        //     printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(weight_pt), *(volatile uint16_t*)(weight_pt + 2));
-        //     printf("Received this data: %x, %x\n", *(volatile uint16_t*)(weight_pt_next), *(volatile uint16_t*)(weight_pt_next + 2));
+            // if(y_id < 3){
+            //     printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(input_pt), *(volatile uint16_t*)(input_pt + 2));
+            //     printf("Received this data: %x, %x\n", *(volatile uint16_t*)(input_pt_next), *(volatile uint16_t*)(input_pt_next + 2));
+            // }
         }
         else{
             redmule_marith(obi_addr_y, weight_pt, input_pt);
