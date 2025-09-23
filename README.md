@@ -38,13 +38,10 @@ The following *optional* parameters can be specified when running the make comma
 
     It is also required to have a cmake version >= 3.13.
 
-1. Make sure the GVSoC submodule is set up correctly:
+1. Initialize the GVSoC submodule:
 
-        git submodule update --init --recursive
-        cd gvsoc
-        git checkout magia
-        git submodule update --init --recursive
-
+    `make gvsoc_init`
+    
 2. Build the Magia architecture (*this command may take time and return an error, please be patient.*):
         
     `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode>`

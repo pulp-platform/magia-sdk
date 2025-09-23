@@ -143,3 +143,17 @@ endif
 	git submodule update --init --recursive && \
 	make build TARGETS=magia-base DEBUG=1
 
+gvsoc_init:
+	git submodule update --init --recursive
+	cd $(GVSOC_DIR) && \
+	rm -rf pulp/ && \
+	rm -rf core/ && \
+	git clone https://github.com/TheSSDGuy/gvsoc-core.git core/ && \
+	git clone https://github.com/TheSSDGuy/gvsoc-pulp.git pulp/ && \
+	cd core && \
+	git checkout magia-core-v3 && \
+	cd ../pulp && \
+	git checkout magia-pulp-v3
+
+
+
