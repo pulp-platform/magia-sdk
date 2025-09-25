@@ -48,6 +48,9 @@ rtl-clean:
 	make hw-clean-all
 
 build:
+ifeq ($(tiles), )
+	$(error tiles is empty!)
+endif
 	sed -i -E 's/^#define MESH_([XY])_TILES[[:space:]]*[0-9]+/#define MESH_\1_TILES $(tiles)/' ./targets/magia/include/addr_map/tile_addr_map.h
 	sed -i -E 's/^(#define MAX_SYNC_LVL[[:space:]]*)[0-9]+/\1$(tiles_log)/' ./targets/magia/include/addr_map/tile_addr_map.h
 	sed -i -E 's/^(#define MESH_2_POWER[[:space:]]*)[0-9]+/\1$(tiles_log_real)/' ./targets/magia/include/addr_map/tile_addr_map.h
@@ -140,7 +143,6 @@ else
 	$(error unrecognized platform (acceptable platform: magia).)
 endif
 	cd $(GVSOC_DIR)	&& \
-	git submodule update --init --recursive && \
 	make build TARGETS=magia-base DEBUG=1
 
 gvsoc_init:
