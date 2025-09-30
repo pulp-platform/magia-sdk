@@ -137,9 +137,12 @@ int main(void){
     /**
      * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
      */
-    for(int z = 0; z < N_ITERATIONS; z++){
+    for(uint8_t z = 0; z < N_ITERATIONS; z++){
+        sentinel_start();
+        
         // TIMESLOT t = -1
         // Initial static input load
+        stnl_cmi_s();
         idma_conf_in();
         idma_set_addr_len_in(obi_addr_x, axi_addr_x, len_x);
         idma_set_std2_rep2_in(len_x, std_x, reps_x);
@@ -147,8 +150,10 @@ int main(void){
 
         idma_start_in();
         idma_wait();
+        stnl_cmi_f();
 
         // First weight load
+        stnl_cmi_s();
         idma_conf_in();
         idma_set_addr_len_in(obi_addr_w_0, axi_addr_w, len_w);
         idma_set_std2_rep2_in(len_w, std_w, reps_w);
@@ -156,7 +161,11 @@ int main(void){
 
         idma_start_in();
         idma_wait();
+        stnl_cmi_f();
+
+        stnl_snc_s();
         fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+        stnl_snc_f();
 
         /**
          * 3. Cycle over the timeslots.
@@ -167,7 +176,9 @@ int main(void){
              * 3a. Skip the timeslot if outside the range
              */
             if(t < t_start || t > t_end){
+                stnl_snc_s();
                 fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+                stnl_snc_f();
                 continue;
             }
 
@@ -202,6 +213,7 @@ int main(void){
              * 3c. Load L2 output of current timeslot (if leftmost tile)
              */
             if(x_id == 0 && t < (t_end)){
+                stnl_cmi_s();
                 idma_conf_in();
                 idma_set_addr_len_in(output_pt, axi_addr_y + (pt * t_size * 2), len_y);
                 idma_set_std2_rep2_in(len_y, std_y, reps_y);
@@ -209,6 +221,7 @@ int main(void){
 
                 idma_start_in();
                 idma_wait();
+                stnl_cmi_f();
                 // printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
             }
 
@@ -228,12 +241,14 @@ int main(void){
              *      - Set REDMULE to execute current timeslot output
              */
             if(pt < timeslots - 1){
+                stnl_cmi_s();
                 idma_conf_in();
                 idma_set_addr_len_in(weight_pt_next, axi_addr_w + (t_size * (pt + 1) * 2), len_w);
                 idma_set_std2_rep2_in(len_w, std_w, reps_w);
                 idma_set_std3_rep3_in(0, 0, 1);
             }
             if(pt > 0){
+                stnl_cmo_s();
                 if(x_id == (MESH_X_TILES-1)){
                     idma_conf_out();
                     idma_set_addr_len_out(axi_addr_y_out + ((pt - 1) * t_size * 2), output_pt_prev, len_y);
@@ -268,18 +283,24 @@ int main(void){
             if(t == t_start){
                 //printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
                 idma_start_in();
+                stnl_cmp_s();
                 redmule_marith(output_pt, weight_pt, obi_addr_x);
                 idma_wait();
                 redmule_wait();
+                stnl_cmi_f();
+                stnl_cmp_f();
                 // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
 
             }
             else if(t == (t_end - 1)){
                 //printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
+                stnl_cmp_s();
                 redmule_marith(output_pt, weight_pt, obi_addr_x);
                 idma_start_out();
                 idma_wait();
                 redmule_wait();
+                stnl_cmo_f();
+                stnl_cmp_f();
                 // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
 
                 //printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(output_pt_prev), *(volatile uint16_t*)(output_pt_prev + 2));
@@ -287,16 +308,22 @@ int main(void){
             else if(t == t_end){
                 idma_start_out();
                 idma_wait();
+                stnl_cmo_f();
                 // printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(output_pt_prev), *(volatile uint16_t*)(output_pt_prev + 2));
             }
             else{
                 //printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
+                idma_start_in();
+                stnl_cmp_s();
                 redmule_marith(output_pt, weight_pt, obi_addr_x);
                 idma_start_in();
                 idma_start_out();
                 idma_wait();
                 idma_wait();
                 redmule_wait();
+                stnl_cmi_f();
+                stnl_cmo_f();
+                stnl_cmp_f();
                 // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
 
                 // printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(output_pt_prev), *(volatile uint16_t*)(output_pt_prev + 2));
@@ -306,8 +333,21 @@ int main(void){
              * 3f. Sync before next timeslot
              */
             pt++;
+            stnl_snc_s();
             fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+            stnl_snc_f();
         }
+    }
+
+    sentinel_end();
+
+    stnl_cmi_r();
+    stnl_cmo_r();
+    stnl_cmp_r();
+    
+    if (get_hartid() == 0){
+      stnl_snc_r();
+      stnl_r();
     }
 
     /**
