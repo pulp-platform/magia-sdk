@@ -20,10 +20,10 @@
 
 SHELL 			:= /bin/bash
 
-BUILD_DIR 		?= ../work/sw/tests/$(test).c
+BUILD_DIR 		?= ../sw/tests/$(test)
 MAGIA_DIR 		?= ../
 GVSOC_DIR 		?= ./gvsoc
-BIN 			?= $(BUILD_DIR)/verif
+BIN 			?= $(BUILD_DIR)/build/verif
 build_mode		?= profile
 fsync_mode		?= stall
 mesh_dv			?= 1
@@ -89,14 +89,14 @@ endif
 ifeq ($(platform), gvsoc)
 	$(GVSOC_DIR)/install/bin/gvsoc --target=magia-base --binary=./build/bin/$(test) --trace-level=trace run
 else ifeq ($(platform), rtl)
-	mkdir -p $(BUILD_DIR)
-	cp ./build/bin/$(test) $(BUILD_DIR)/verif
+	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
+	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
 	objcopy --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
 	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
-	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/stim_instr.txt $(BUILD_DIR)/stim_data.txt
+	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/build/stim_instr.txt $(BUILD_DIR)/build/stim_data.txt	
 	cd $(BUILD_DIR)													&& \
-	cp -sf ../../../../modelsim.ini modelsim.ini    				&& \
-	ln -sfn ../../../../work work         			
+	cp -sf ../../../sim/modelsim.ini modelsim.ini    				&& \
+	ln -sfn ../../../sim/work work         			
 	riscv32-unknown-elf-objdump -d -S $(BIN) > $(BIN).dump
 	riscv32-unknown-elf-objdump -d -l -s $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb

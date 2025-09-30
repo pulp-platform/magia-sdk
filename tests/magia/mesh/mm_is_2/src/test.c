@@ -93,7 +93,7 @@ int main(void){
     uint8_t t_start = x_id * 2;
     uint8_t t_end = t_start + timeslots;
     uint8_t total_timeslots = (MESH_X_TILES - 1) * 2 + timeslots + 1;
-    printf("timeslots=%d, t_start=%d, t_end=%d\n", timeslots, t_start, t_end);
+    //printf("timeslots=%d, t_start=%d, t_end=%d\n", timeslots, t_start, t_end);
 
     /**
      * 2. Initalize the IDMA transfer variables for input data-tile transfers.
@@ -128,11 +128,11 @@ int main(void){
     uint32_t axi_addr_y_out = (uint32_t) y_out + (y_id * K_SIZE * tile_h_max * 2);
 
     uint8_t pt = 0;
-    uint32_t output_pt;
-    uint32_t weight_pt;
-    uint32_t output_pt_prev;
-    uint32_t weight_pt_next;
-    redmule_mcnfig(t_size, tile_h, tile_w);
+    volatile uint32_t output_pt;
+    volatile uint32_t weight_pt;
+    volatile uint32_t output_pt_prev;
+    volatile uint32_t weight_pt_next;
+    redmule_mcnfig((uint16_t) t_size, (uint16_t) tile_h, (uint16_t) tile_w);
 
     /**
      * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
@@ -156,6 +156,7 @@ int main(void){
 
         idma_start_in();
         idma_wait();
+        fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
 
         /**
          * 3. Cycle over the timeslots.
@@ -208,6 +209,7 @@ int main(void){
 
                 idma_start_in();
                 idma_wait();
+                // printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
             }
 
             /**
@@ -244,12 +246,15 @@ int main(void){
                     switch (pt % 3){
                         case 0:
                             idma_set_addr_len_out(get_l1_base(hartid + 1) + (tile_h * tile_w * 2) + (tile_w * t_size * 6) + (tile_h * t_size * 4), output_pt_prev, tile_h * t_size * 2);
+                            // printf("IDMA out len: %d\n", tile_h * t_size * 2);
                             break;
                         case 1:
                             idma_set_addr_len_out(get_l1_base(hartid + 1) + (tile_h * tile_w * 2) + (tile_w * t_size * 6), output_pt_prev, tile_h * t_size * 2);
+                            // printf("IDMA out len: %d\n", tile_h * t_size * 2);
                             break;
                         case 2:
                             idma_set_addr_len_out(get_l1_base(hartid + 1) + (tile_h * tile_w * 2) + (tile_w * t_size * 6) + (tile_h * t_size * 2), output_pt_prev, tile_h * t_size * 2);
+                            // printf("IDMA out len: %d\n", tile_h * t_size * 2);
                             break;
                     }
                     idma_set_std2_rep2_out(0, 0, 1);
@@ -261,34 +266,40 @@ int main(void){
              * 3e. Activate IDMA and Redmule
              */
             if(t == t_start){
-                printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
+                //printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
                 idma_start_in();
                 redmule_marith(output_pt, weight_pt, obi_addr_x);
                 idma_wait();
                 redmule_wait();
+                // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
+
             }
             else if(t == (t_end - 1)){
-                printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
-                idma_start_out();
+                //printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
                 redmule_marith(output_pt, weight_pt, obi_addr_x);
+                idma_start_out();
                 idma_wait();
                 redmule_wait();
-                printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(output_pt_prev), *(volatile uint16_t*)(output_pt_prev + 2));
+                // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
+
+                //printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(output_pt_prev), *(volatile uint16_t*)(output_pt_prev + 2));
             }
             else if(t == t_end){
                 idma_start_out();
                 idma_wait();
-                printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(output_pt_prev), *(volatile uint16_t*)(output_pt_prev + 2));
+                // printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(output_pt_prev), *(volatile uint16_t*)(output_pt_prev + 2));
             }
             else{
-                printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
+                //printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
                 idma_start_in();
-                idma_start_out();
                 redmule_marith(output_pt, weight_pt, obi_addr_x);
+                idma_start_out();
                 idma_wait();
                 idma_wait();
                 redmule_wait();
-                printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(output_pt_prev), *(volatile uint16_t*)(output_pt_prev + 2));
+                // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
+
+                // printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(output_pt_prev), *(volatile uint16_t*)(output_pt_prev + 2));
             }
 
             /**

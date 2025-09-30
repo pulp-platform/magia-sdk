@@ -64,15 +64,15 @@ int main(void){
     int32_t tile_h;
     int32_t tile_w;
 
-    if(((tile_h_max * y_id) + tile_h_max) > M_SIZE){
-        tile_h = M_SIZE - (tile_h_max * y_id);    
+    if(((tile_h_max * y_id) + tile_h_max) > N_SIZE){
+        tile_h = N_SIZE - (tile_h_max * y_id);    
     }    
     else{
         tile_h = tile_h_max;
     }
 
-    if(((tile_w_max * x_id) + tile_w_max) > N_SIZE){
-        tile_w = N_SIZE - (tile_w_max * x_id);
+    if(((tile_w_max * x_id) + tile_w_max) > K_SIZE){
+        tile_w = K_SIZE - (tile_w_max * x_id);
     }    
     else{
         tile_w = tile_w_max;
