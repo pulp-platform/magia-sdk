@@ -139,10 +139,10 @@ int main(void){
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w, obi_addr_w_0, len_w, std_w, reps_w);
     idma_wait();
 
-    uint32_t input_pt;
-    uint32_t weight_pt;
-    uint32_t input_pt_next;
-    uint32_t weight_pt_next;
+    volatile uint32_t input_pt;
+    volatile uint32_t weight_pt;
+    volatile uint32_t input_pt_next;
+    volatile uint32_t weight_pt_next;
 
     uint32_t left_id = ((x_id == 0) ? GET_ID(y_id, (MESH_X_TILES - 1)) : hartid - 1);
     uint32_t up_id = ((y_id == 0) ? GET_ID((MESH_Y_TILES - 1), x_id) : GET_ID((y_id - 1), x_id));
@@ -195,9 +195,9 @@ int main(void){
             //idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(left_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 2 * (i % 2)), input_pt_next, tile_h * t_size * 2);
             //printf("Loading next weight tile\n");
             //idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(down_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 4) + (tile_w * t_size * 2 * (!(i % 2))), weight_pt, tile_w * t_size * 2);
-            idma_start_out();
             idma_start_in();
             redmule_marith(obi_addr_y, weight_pt, input_pt);
+            idma_start_out();
             idma_wait();
             idma_wait();
             redmule_wait();
@@ -237,8 +237,8 @@ int main(void){
             expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
             diff = (computed > expected) ? (computed - expected) : (expected - computed);
             if(diff > 0x0011){
-                //if(y_id == 0)
-                    //printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                if(y_id == 0)
+                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
                 errors++;
             }       
         }
