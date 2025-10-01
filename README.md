@@ -10,7 +10,7 @@ The following *optional* parameters can be specified when running the make comma
 
 `target_platform`: **magia** (**Default**: magia). Selects the target platform to build and run tests on. At the moment, only MAGIA is supported by the SDK.
 
-`build_mode`: **update**|**profile**|**synth** (**Default**: update). Selects the mode that the MAGIA architecture is built.
+`build_mode`: **update**|**profile**|**synth** (**Default**: profile). Selects the mode that the MAGIA architecture is built.
 
 `fsync_mode`: **stall**|**interrupt** (**Default** stall). Selects the Fractal Sync module synchronization behaviour.
 
