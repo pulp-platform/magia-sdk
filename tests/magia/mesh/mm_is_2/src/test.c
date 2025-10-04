@@ -4,8 +4,26 @@
 //
 // Alberto Dequino <alberto.dequino@unibo.it>
 
+// #define SIZE_48x32x32
+#define SIZE_96x64x64
+// #define SIZE_192x128x128
+// #define SIZE_384x256x256
+// #define SIZE_768x512x512
+
 #include <stdint.h>
-#include "test.h"
+
+// #include "test.h"
+#if defined(SIZE_48x32x32)
+#include "mat_48x32x32.h"
+#elif defined(SIZE_96x64x64)
+#include "mat_96x64x64.h"
+#elif defined(SIZE_192x128x128)
+#include "mat_192x128x128.h"
+#elif defined(SIZE_384x256x256)
+#include "mat_384x256x256.h"
+#elif defined(SIZE_768x512x512)
+#include "mat_768x512x512.h"
+#endif
 
 #include "tile.h"
 #include "fsync.h"
@@ -88,7 +106,18 @@ int main(void){
      * t_start is the first timeslot in which it is possible to elaborate the output.
      * t_end is the last timeslot.
      */
+    // uint8_t timeslots = 2;
+#if defined(SIZE_48x32x32)
+    uint8_t timeslots = 2;
+#elif defined(SIZE_96x64x64)
+    uint8_t timeslots = 1;
+#elif defined(SIZE_192x128x128)
+    uint8_t timeslots = 8;
+#elif defined(SIZE_384x256x256)
     uint8_t timeslots = 16;
+#elif defined(SIZE_768x512x512)
+    uint8_t timeslots = 32;
+#endif
     uint8_t t_size = K_SIZE / timeslots;
     uint8_t t_start = x_id * 2;
     uint8_t t_end = t_start + timeslots;
@@ -102,7 +131,18 @@ int main(void){
     uint32_t std_x = N_SIZE * 2;
     uint32_t reps_x = (uint32_t) tile_h;
     uint32_t obi_addr_x = (l1_tile_base);
-    uint32_t axi_addr_x = (uint32_t) x_inp + (y_id * N_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2);
+    // uint32_t axi_addr_x = (uint32_t) x_inp + (y_id * N_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2);
+#if defined(SIZE_48x32x32)
+    uint32_t axi_addr_x = (uint32_t) x_in_48x32 + (y_id * N_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2);
+#elif defined(SIZE_96x64x64)
+    uint32_t axi_addr_x = (uint32_t) x_in_96x64 + (y_id * N_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2);
+#elif defined(SIZE_192x128x128)
+    uint32_t axi_addr_x = (uint32_t) x_in_192x128 + (y_id * N_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2);
+#elif defined(SIZE_384x256x256)
+    uint32_t axi_addr_x = (uint32_t) x_in_384x256 + (y_id * N_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2);
+#elif defined(SIZE_768x512x512)
+    uint32_t axi_addr_x = (uint32_t) x_in_768x512 + (y_id * N_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2);
+#endif
 
     /**
      * 2a. Initalize the IDMA transfer variables for weight data-tile transfers.
@@ -113,7 +153,18 @@ int main(void){
     uint32_t obi_addr_w_0 = obi_addr_x + (tile_h * tile_w * 2);
     uint32_t obi_addr_w_1 = obi_addr_w_0 + (tile_w * t_size * 2);
     uint32_t obi_addr_w_2 = obi_addr_w_1 + (tile_w * t_size * 2);
-    uint32_t axi_addr_w = (uint32_t) w_inp + (x_id * K_SIZE * tile_w_max * 2);
+    // uint32_t axi_addr_w = (uint32_t) w_inp + (x_id * K_SIZE * tile_w_max * 2);
+#if defined(SIZE_48x32x32)
+    uint32_t axi_addr_w = (uint32_t) w_in_32x32 + (x_id * K_SIZE * tile_w_max * 2);
+#elif defined(SIZE_96x64x64)
+    uint32_t axi_addr_w = (uint32_t) w_in_64x64 + (x_id * K_SIZE * tile_w_max * 2);
+#elif defined(SIZE_192x128x128)
+    uint32_t axi_addr_w = (uint32_t) w_in_128x128 + (x_id * K_SIZE * tile_w_max * 2);
+#elif defined(SIZE_384x256x256)
+    uint32_t axi_addr_w = (uint32_t) w_in_256x256 + (x_id * K_SIZE * tile_w_max * 2);
+#elif defined(SIZE_768x512x512)
+    uint32_t axi_addr_w = (uint32_t) w_in_512x512 + (x_id * K_SIZE * tile_w_max * 2);
+#endif
 
     /**
      * 2b. Initalize the IDMA transfer variables for output data-tile transfers.
@@ -124,8 +175,24 @@ int main(void){
     uint32_t obi_addr_y_0 = obi_addr_w_2 + (tile_w * t_size * 2);
     uint32_t obi_addr_y_1 = obi_addr_y_0 + (tile_h * t_size * 2);
     uint32_t obi_addr_y_2 = obi_addr_y_1 + (tile_h * t_size * 2);
-    uint32_t axi_addr_y = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2);
-    uint32_t axi_addr_y_out = (uint32_t) y_out + (y_id * K_SIZE * tile_h_max * 2);
+    // uint32_t axi_addr_y = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2);
+    // uint32_t axi_addr_y_out = (uint32_t) y_out + (y_id * K_SIZE * tile_h_max * 2);
+#if defined(SIZE_48x32x32)
+    uint32_t axi_addr_y = (uint32_t) y_in_48x32 + (y_id * K_SIZE * tile_h_max * 2);
+    uint32_t axi_addr_y_out = (uint32_t) y_out_48x32 + (y_id * K_SIZE * tile_h_max * 2);
+#elif defined(SIZE_96x64x64)
+    uint32_t axi_addr_y = (uint32_t) y_in_96x64 + (y_id * K_SIZE * tile_h_max * 2);
+    uint32_t axi_addr_y_out = (uint32_t) y_out_96x64 + (y_id * K_SIZE * tile_h_max * 2);
+#elif defined(SIZE_192x128x128)
+    uint32_t axi_addr_y = (uint32_t) y_in_192x128 + (y_id * K_SIZE * tile_h_max * 2);
+    uint32_t axi_addr_y_out = (uint32_t) y_out_192x128 + (y_id * K_SIZE * tile_h_max * 2);
+#elif defined(SIZE_384x256x256)
+    uint32_t axi_addr_y = (uint32_t) y_in_384x256 + (y_id * K_SIZE * tile_h_max * 2);
+    uint32_t axi_addr_y_out = (uint32_t) y_out_384x256 + (y_id * K_SIZE * tile_h_max * 2);
+#elif defined(SIZE_768x512x512)
+    uint32_t axi_addr_y = (uint32_t) y_in_768x512 + (y_id * K_SIZE * tile_h_max * 2);
+    uint32_t axi_addr_y_out = (uint32_t) y_out_768x512 + (y_id * K_SIZE * tile_h_max * 2);
+#endif
 
     uint8_t pt = 0;
     volatile uint32_t output_pt;
@@ -134,12 +201,13 @@ int main(void){
     volatile uint32_t weight_pt_next;
     redmule_mcnfig((uint16_t) t_size, (uint16_t) tile_h, (uint16_t) tile_w);
 
+    // if (hartid == 0) printf("TEST PARAMETERS:\n \ttimeslots: %0d\n \tt_size: %0d\n \ttile_h: %0d\n \ttile_w: %0d\n", timeslots, t_size, tile_h, tile_w);
+
+    sentinel_start();
     /**
      * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
      */
     for(uint8_t z = 0; z < N_ITERATIONS; z++){
-        sentinel_start();
-        
         // TIMESLOT t = -1
         // Initial static input load
         stnl_cmi_s();
@@ -357,14 +425,42 @@ int main(void){
     fsync_sync_row(&fsync_ctrl);
     if(x_id == MESH_X_TILES - 1){
         uint16_t computed, expected, diff = 0;
-        for(int i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
-            for(int j = 0; j < K_SIZE; j++){
-                computed = *(volatile uint16_t*)(y_out + (i * K_SIZE + j));
-                expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
+        for(uint8_t i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
+            for(uint8_t j = 0; j < K_SIZE; j++){
+                // computed = *(volatile uint16_t*)(y_out + (i * K_SIZE + j));
+                // expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
+#if defined(SIZE_48x32x32)
+                computed = *(volatile uint16_t*)(y_out_48x32 + (i * K_SIZE + j));
+                expected = *(volatile uint16_t*)(z_out_48x32 + (i * K_SIZE + j));
+#elif defined(SIZE_96x64x64)
+                computed = *(volatile uint16_t*)(y_out_96x64 + (i * K_SIZE + j));
+                expected = *(volatile uint16_t*)(z_out_96x64 + (i * K_SIZE + j));
+#elif defined(SIZE_192x128x128)
+                computed = *(volatile uint16_t*)(y_out_192x128 + (i * K_SIZE + j));
+                expected = *(volatile uint16_t*)(z_out_192x128 + (i * K_SIZE + j));
+#elif defined(SIZE_384x256x256)
+                computed = *(volatile uint16_t*)(y_out_384x256 + (i * K_SIZE + j));
+                expected = *(volatile uint16_t*)(z_out_384x256 + (i * K_SIZE + j));
+#elif defined(SIZE_768x512x512)
+                computed = *(volatile uint16_t*)(y_out_768x512 + (i * K_SIZE + j));
+                expected = *(volatile uint16_t*)(z_out_768x512 + (i * K_SIZE + j));
+#endif
                 diff = (computed > expected) ? (computed - expected) : (expected - computed);
                 if(diff > 0x0011){
-                    if(y_id == 0)
-                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_out+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                    if(y_id == 0){
+                        // printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_out+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+#if defined(SIZE_48x32x32)
+                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_out_48x32+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out_48x32 + (i * K_SIZE + j)));
+#elif defined(SIZE_96x64x64)
+                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_out_96x64+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out_96x64 + (i * K_SIZE + j)));
+#elif defined(SIZE_192x128x128)
+                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_out_192x128+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out_192x128 + (i * K_SIZE + j)));
+#elif defined(SIZE_384x256x256)
+                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_out_384x256+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out_384x256 + (i * K_SIZE + j)));
+#elif defined(SIZE_768x512x512)
+                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_out_768x512+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out_768x512 + (i * K_SIZE + j)));
+#endif
+                    }
                     errors++;
                 }       
             }
