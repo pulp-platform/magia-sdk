@@ -4,8 +4,8 @@
 //
 // Alberto Dequino <alberto.dequino@unibo.it>
 
-// #define SIZE_48x32x32
-#define SIZE_96x64x64
+#define SIZE_48x32x32
+// #define SIZE_96x64x64
 // #define SIZE_192x128x128
 // #define SIZE_384x256x256
 // #define SIZE_768x512x512
@@ -110,7 +110,7 @@ int main(void){
 #if defined(SIZE_48x32x32)
     uint8_t timeslots = 2;
 #elif defined(SIZE_96x64x64)
-    uint8_t timeslots = 1;
+    uint8_t timeslots = 4;
 #elif defined(SIZE_192x128x128)
     uint8_t timeslots = 8;
 #elif defined(SIZE_384x256x256)
