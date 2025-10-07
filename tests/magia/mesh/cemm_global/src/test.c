@@ -78,6 +78,7 @@ int main(void){
     }
 
     if(tile_h < 1 || tile_w < 1){
+        printf("Giuda faus\n");
         return 0;
     }
     else{
@@ -148,7 +149,7 @@ int main(void){
     uint32_t up_id = ((y_id == 0) ? GET_ID((MESH_Y_TILES - 1), x_id) : GET_ID((y_id - 1), x_id));
     //printf("LEFT ID IS: %d\n", left_id);
 
-    //printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
+    printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
 
     redmule_mcnfig((uint16_t) tile_w, (uint16_t) tile_h, (uint16_t) t_size);
     /**
@@ -158,7 +159,7 @@ int main(void){
      * b - Multiply and add
      * Synchronization is not required.
      */
-    for(uint8_t i = 0; i < timeslots; i++){
+    for(int i = 0; i < timeslots; i++){
         /**
          * 3a. Choose which of the 2 buffers use (double buffering is in effect)
          */
@@ -207,8 +208,10 @@ int main(void){
             // }
         }
         else{
+            sentinel_start();
             redmule_marith(obi_addr_y, weight_pt, input_pt);
             redmule_wait();
+            sentinel_end();
         }
         
         // /**
@@ -226,13 +229,14 @@ int main(void){
     idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
     idma_wait();
 
+    
     /**
      * 5. Check results
      */
     uint32_t errors=0;
     uint16_t computed, expected, diff = 0;
-    for(uint8_t i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
-        for(uint8_t j = (x_id * tile_w_max); j < (x_id * tile_w_max) + tile_w; j++){
+    for(int i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
+        for(int j = (x_id * tile_w_max); j < (x_id * tile_w_max) + tile_w; j++){
             computed = *(volatile uint16_t*)(y_inp + (i * K_SIZE + j));
             expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
             diff = (computed > expected) ? (computed - expected) : (expected - computed);
@@ -243,8 +247,9 @@ int main(void){
             }       
         }
     }
+    
     printf("Number of errors: %d\n", errors);
 
-    magia_return(hartid, errors);
+    
     return errors;  
 }

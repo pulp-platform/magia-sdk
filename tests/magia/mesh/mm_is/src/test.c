@@ -92,7 +92,7 @@ int main(void){
      * Weight data-tile: (tile_w x t_size) * data_dim
      * Output data-tile: ((tile_h x t_size) * data_dim) * 2 (Double buffering)
      */
-    uint8_t timeslots = 16;
+    uint8_t timeslots = 1;
     uint8_t t_size = K_SIZE / timeslots;
 
     /**
@@ -230,8 +230,8 @@ int main(void){
                 expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
                 diff = (computed > expected) ? (computed - expected) : (expected - computed);
                 if(diff > 0x0011){
-                    //if(y_id == 0)
-                        //printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                    if(y_id == 0)
+                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
                     errors++;
                 }       
             }
@@ -239,6 +239,5 @@ int main(void){
         printf("Number of errors: %d\n", errors);
     }
 
-    magia_return(hartid, errors);
     return errors;  
 }

@@ -68,6 +68,5 @@ int main(void){
         printf("Correct value!\n");
     }
 
-    magia_return(hartid, 0);
     return 0;
 }

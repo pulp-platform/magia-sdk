@@ -137,7 +137,7 @@ int main(void){
     /**
      * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
      */
-    for(uint8_t z = 0; z < N_ITERATIONS; z++){
+    for(int z = 0; z < N_ITERATIONS; z++){
         // TIMESLOT t = -1
         // Initial static input load
         idma_conf_in();
@@ -161,7 +161,7 @@ int main(void){
         /**
          * 3. Cycle over the timeslots.
          */
-        for(uint8_t t = 0; t < total_timeslots; t++){
+        for(int t = 0; t < total_timeslots; t++){
             //printf("TIMESLOT N: %d\n", t);
             /**
              * 3a. Skip the timeslot if outside the range
@@ -291,8 +291,8 @@ int main(void){
             }
             else{
                 //printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
-                idma_start_in();
                 redmule_marith(output_pt, weight_pt, obi_addr_x);
+                idma_start_in();
                 idma_start_out();
                 idma_wait();
                 idma_wait();
@@ -317,8 +317,8 @@ int main(void){
     fsync_sync_row(&fsync_ctrl);
     if(x_id == MESH_X_TILES - 1){
         uint16_t computed, expected, diff = 0;
-        for(uint8_t i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
-            for(uint8_t j = 0; j < K_SIZE; j++){
+        for(int i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
+            for(int j = 0; j < K_SIZE; j++){
                 computed = *(volatile uint16_t*)(y_out + (i * K_SIZE + j));
                 expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
                 diff = (computed > expected) ? (computed - expected) : (expected - computed);
@@ -332,6 +332,5 @@ int main(void){
         printf("Number of errors: %d\n", errors);
     }
 
-    magia_return(hartid, errors);
     return errors;  
 }

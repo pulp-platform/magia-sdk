@@ -130,10 +130,10 @@ int main(void){
         /**
          * 3a. IDMA to load the input and weight data-tile for current timeslot
          */
-        //printf("Doing idma memcpy x\n");
+        // printf("Doing idma memcpy x\n");
         idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_x + (t_size * i * 2)), obi_addr_x, len_x, std_x, reps_x);
         idma_wait();
-        //printf("Doing idma memcpy w\n");
+        // printf("Doing idma memcpy w\n");
         idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_w + (t_size * K_SIZE * i * 2)), obi_addr_w, len_w, std_w, reps_w);
         idma_wait();
         
@@ -141,7 +141,7 @@ int main(void){
          * 3b. Evoke the RED MULE 
          * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
          */
-        //printf("Doing redmule\n");
+        // printf("Doing redmule\n");
         redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
         redmule_wait();
     }
@@ -171,6 +171,5 @@ int main(void){
     }
     printf("Number of errors: %d\n", errors);
 
-    magia_return(hartid, errors);
     return errors;  
 }

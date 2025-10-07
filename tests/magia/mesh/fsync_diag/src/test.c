@@ -75,6 +75,5 @@ int main(void){
         }        
     }
 
-    magia_return(hartid, 0);
     return 0; 
 }

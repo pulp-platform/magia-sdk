@@ -353,6 +353,5 @@ int main(void){
         fsync_sync_row(&fsync_ctrl);
     }
 
-    magia_return(hartid, PASS_EXIT_CODE);
     return 0;  
 }

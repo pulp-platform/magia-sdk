@@ -108,12 +108,10 @@ int main(void){
 
     if(!flag){
         printf("No errors detected for all synchronization levels! (MAX LEVEL: %d)\n", (MAX_SYNC_LVL-1));
-        magia_return(hartid, 0);
         return 0;
     }
     else{
         printf("Errors detected when synchronizing some of the levels!\n");
-        magia_return(hartid, 1);
         return 1;
     }
 }

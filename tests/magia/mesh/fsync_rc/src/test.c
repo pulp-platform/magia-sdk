@@ -104,10 +104,8 @@ int main(void){
     }
     else{
         printf("Errors detected in column synch!\n");
-        magia_return(hartid, 1);
         return 1;
     }
-    
-    magia_return(hartid, 0);
+
     return 0;
 }

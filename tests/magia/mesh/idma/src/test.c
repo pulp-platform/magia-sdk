@@ -124,7 +124,5 @@ int main(void){
         printf("Number of errors: %d\n", errors);
     }
     
-
-    magia_return(hartid, errors);
     return errors;  
 }

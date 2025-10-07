@@ -77,7 +77,6 @@ int main(void){
              */
             if(fsync_sync(&fsync_ctrl, ids, N_TILES, 0, 0)){
                 printf("Error in synchronization.\n");
-                magia_return(hartid, 1);
                 return 1;
             }
                 
@@ -92,6 +91,5 @@ int main(void){
         }
     }
 
-    magia_return(hartid, 0);
     return 0;
 }

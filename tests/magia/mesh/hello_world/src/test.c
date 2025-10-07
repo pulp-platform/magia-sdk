@@ -17,6 +17,5 @@ int main(void){
     
     printf("Hello world! %d\n", test_int);
 
-    magia_return(hartid, 0);
     return 0;
 }
