@@ -171,7 +171,7 @@ int main(void){
          * We parallelize the IDMA with Redmule.
          */
         for(uint8_t i = 0; i < timeslots; i++){
-            printf("TIMESLOT %d\n", i);
+            //printf("TIMESLOT %d\n", i);
             /**
              * 4a. Select the correct pointer for the current timeslot
              */

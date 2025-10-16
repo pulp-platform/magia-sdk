@@ -133,6 +133,7 @@ int main(void){
     volatile uint32_t output_pt_prev;
     volatile uint32_t weight_pt_next;
     redmule_mcnfig((uint16_t) t_size, (uint16_t) tile_h, (uint16_t) tile_w);
+    
 
     /**
      * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.

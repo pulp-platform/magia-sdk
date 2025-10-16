@@ -32,7 +32,7 @@ target_include_directories(runtime
 
 target_compile_options(runtime
   PUBLIC
-  -O2
+  -O3
 )
 
 target_compile_options(runtime

@@ -6,7 +6,7 @@
 # Philip Wiese <wiesep@iis.ee.ethz.ch>
 # Alberto Dequino <alberto.dequino@unibo.it>
 
-set(TEST_NAME test_mm_os_2)
+set(TEST_NAME test_brah)
 
 file(GLOB_RECURSE TEST_SRCS
   "src/*.c"
@@ -17,7 +17,7 @@ target_include_directories(${TEST_NAME} PUBLIC include)
 
 target_compile_options(${TEST_NAME}
   PRIVATE
-  -O3
+  -O2
 )
 target_link_libraries(${TEST_NAME} PUBLIC runtime hal)
 
