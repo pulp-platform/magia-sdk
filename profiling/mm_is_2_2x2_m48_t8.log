@@ -1,0 +1,1281 @@
+Magia is available at https://github.com/pulp-platform/MAGIA.git
+please run "source setup_env.sh" in the magia folder before running this script
+and make sure the risc-v objdump binary is visible on path using "which riscv32-unknown-elf-objdump".
+mkdir -p ../sw/tests/test_mm_is_2 && cd ../sw/tests/test_mm_is_2 && mkdir -p build
+cp ./build/bin/test_mm_is_2 ../sw/tests/test_mm_is_2/build/verif
+objcopy --srec-len 1 --output-target=srec ../sw/tests/test_mm_is_2/build/verif ../sw/tests/test_mm_is_2/build/verif.s19
+scripts/parse_s19.pl ../sw/tests/test_mm_is_2/build/verif.s19 > ../sw/tests/test_mm_is_2/build/verif.txt
+python3 scripts/s19tomem.py ../sw/tests/test_mm_is_2/build/verif.txt ../sw/tests/test_mm_is_2/build/stim_instr.txt ../sw/tests/test_mm_is_2/build/stim_data.txt	
+cd ../sw/tests/test_mm_is_2													&& \
+cp -sf ../../../sim/modelsim.ini modelsim.ini    				&& \
+ln -sfn ../../../sim/work work         			
+riscv32-unknown-elf-objdump -d -S ../sw/tests/test_mm_is_2/build/verif > ../sw/tests/test_mm_is_2/build/verif.dump
+riscv32-unknown-elf-objdump -d -l -s ../sw/tests/test_mm_is_2/build/verif > ../sw/tests/test_mm_is_2/build/verif.objdump
+python3 scripts/objdump2itb.py ../sw/tests/test_mm_is_2/build/verif.objdump > ../sw/tests/test_mm_is_2/build/verif.itb
+cd /scratch/visachi/magia_sdk/profiling/MAGIA 												&& \
+make run test=test_mm_is_2 gui=0 mesh_dv=1
+make[1]: Entering directory `/scratch/visachi/magia_sdk/profiling/MAGIA'
+cd sw/tests/test_mm_is_2;                                                                		 \
+questa-2025.1 vsim -c vopt_tb -t 1ns -suppress 3009 -l transcript -do "run -a"                 \
++INST_HEX=build/stim_instr.txt                                                                    \
++DATA_HEX=build/stim_data.txt                                                                    \
++INST_ENTRY=0xCC000000                                                                    \
++DATA_ENTRY=0xCC010000                                                                    \
++BOOT_ADDR=0xCC000080                                                                      \
+ +log_file_0=./core_0_traces.log   +log_file_1=./core_1_traces.log   +log_file_2=./core_2_traces.log   +log_file_3=./core_3_traces.log                                                                                             \
++itb_file=build/verif.itb
+Reading pref.tcl
+
+# 2025.1_2
+
+# vsim -c vopt_tb -t 1ns -suppress 3009 -l transcript -do "run -a" "+INST_HEX=build/stim_instr.txt" "+DATA_HEX=build/stim_data.txt" "+INST_ENTRY=0xCC000000" "+DATA_ENTRY=0xCC010000" "+BOOT_ADDR=0xCC000080" "+log_file_0=./core_0_traces.log" "+log_file_1=./core_1_traces.log" "+log_file_2=./core_2_traces.log" "+log_file_3=./core_3_traces.log" "+itb_file=build/verif.itb" 
+# Start time: 16:44:40 on Oct 08,2025
+# //  Questa Sim-64
+# //  Version 2025.1_2 linux_x86_64 Apr  7 2025
+# //
+# // Unpublished work. Copyright 2025 Siemens
+# //
+# // This material contains trade secrets or otherwise confidential information
+# // owned by Siemens Industry Software Inc. or its affiliates (collectively,
+# // "SISW"), or its licensors. Access to and use of this information is strictly
+# // limited as set forth in the Customer's applicable agreements with SISW.
+# //
+# // This material may not be copied, distributed, or otherwise disclosed outside
+# // of the Customer's facilities without the express written permission of SISW,
+# // and may not be used in any way not expressly authorized by SISW.
+# //
+# Loading sv_std.std
+# Loading work.axi_pkg(fast)
+# Loading work.magia_pkg(fast)
+# Loading work.magia_tb_pkg(fast)
+# Loading work.magia_tb(fast)
+# Loading work.floo_pkg(fast)
+# Loading work.floo_axi_mesh_32x32_noc_pkg(fast)
+# Loading work.floo_axi_mesh_16x16_noc_pkg(fast)
+# Loading work.floo_axi_mesh_8x8_noc_pkg(fast)
+# Loading work.floo_axi_mesh_4x4_noc_pkg(fast)
+# Loading work.floo_axi_mesh_2x2_noc_pkg(fast)
+# Loading work.idma_pkg(fast)
+# Loading work.cf_math_pkg(fast)
+# Loading work.obi_pkg(fast)
+# Loading work.fpnew_pkg(fast)
+# Loading work.hwpe_stream_package(fast)
+# Loading work.hci_package(fast)
+# Loading work.magia_tile_pkg(fast)
+# Loading work.magia_noc_pkg(fast)
+# Loading work.magia_tile_tb_pkg(fast)
+# Loading work.magia_fixture(fast)
+# Loading work.magia(fast)
+# Loading work.snitch_icache_pkg(fast)
+# Loading work.fpu_ss_pkg(fast)
+# Loading work.cv32e40x_pkg(fast)
+# Loading work.redmule_pkg(fast)
+# Loading work.magia_tile(fast)
+# Loading work.data2obi_req(fast)
+# Loading work.obi2data_rsp(fast)
+# Loading work.obi2hci_req(fast)
+# Loading work.hci2obi_rsp(fast)
+# Loading work.obi_to_axi(fast)
+# Loading work.fifo_v3(fast)
+# Loading work.fifo_v3(fast__1)
+# Loading work.instr2cache_req(fast)
+# Loading work.cache2instr_rsp(fast)
+# Loading work.obi2hci_req(fast__1)
+# Loading work.hci2obi_rsp(fast__1)
+# Loading work.axi_to_obi(fast)
+# Loading work.axi_demux_simple(fast)
+# Loading work.counter(fast)
+# Loading work.delta_counter(fast)
+# Loading work.rr_arb_tree(fast)
+# Loading work.lzc(fast)
+# Loading work.axi_to_detailed_mem_user(fast)
+# Loading work.stream_mux(fast)
+# Loading work.stream_fork(fast)
+# Loading work.stream_fifo(fast)
+# Loading work.fifo_v3(fast__2)
+# Loading work.stream_fifo(fast__1)
+# Loading work.fifo_v3(fast__3)
+# Loading work.stream_to_mem(fast)
+# Loading work.stream_fifo(fast__2)
+# Loading work.fifo_v3(fast__4)
+# Loading work.mem_to_banks_detailed(fast)
+# Loading work.stream_fifo(fast__3)
+# Loading work.fifo_v3(fast__5)
+# Loading work.fifo_v3(fast__6)
+# Loading work.stream_fifo(fast__4)
+# Loading work.fifo_v3(fast__7)
+# Loading work.stream_join(fast)
+# Loading work.stream_join_dynamic(fast)
+# Loading work.stream_fork_dynamic(fast)
+# Loading work.stream_fork(fast__1)
+# Loading work.axi_to_detailed_mem_user(fast__1)
+# Loading work.stream_mux(fast__1)
+# Loading work.stream_fifo(fast__5)
+# Loading work.fifo_v3(fast__8)
+# Loading work.stream_to_mem(fast__1)
+# Loading work.stream_fifo(fast__6)
+# Loading work.fifo_v3(fast__9)
+# Loading work.mem_to_banks_detailed(fast__1)
+# Loading work.stream_fifo(fast__7)
+# Loading work.fifo_v3(fast__10)
+# Loading work.obi_mux(fast)
+# Loading work.rr_arb_tree(fast__1)
+# Loading work.fifo_v3(fast__11)
+# Loading work.tc_clk_gating(fast)
+# Loading work.cv32e40x_if_xif(fast__1)
+# Loading work.cv32e40x_if_xif(fast__2)
+# Loading work.cv32e40x_if_xif(fast__3)
+# Loading work.hwpe_ctrl_package(fast)
+# Loading work.redmule_top(fast)
+# Loading work.hwpe_ctrl_intf_periph(fast__2)
+# Loading work.redmule_inst_decoder(fast)
+# Loading work.tc_clk_gating(fast__1)
+# Loading work.hwpe_stream_intf_stream(fast__1)
+# Loading work.hwpe_stream_intf_stream(fast__2)
+# Loading work.hwpe_stream_intf_stream(fast__3)
+# Loading work.redmule_streamer(fast)
+# Loading work.hci_core_intf(fast__6)
+# Loading work.hci_core_intf(fast__7)
+# Loading work.hci_core_mux_ooo(fast)
+# Loading work.hci_core_r_id_filter(fast)
+# Loading work.hci_core_mux_ooo(fast__1)
+# Loading work.hci_core_r_id_filter(fast__1)
+# Loading work.hci_core_r_valid_filter(fast)
+# Loading work.hci_core_sink(fast)
+# Loading work.hwpe_stream_intf_stream(fast__4)
+# Loading work.hwpe_stream_intf_stream(fast__5)
+# Loading work.hci_core_intf(fast__9)
+# Loading work.hwpe_stream_addressgen_v3_sv_unit(fast)
+# Loading work.hwpe_stream_addressgen_v3(fast)
+# Loading work.hwpe_stream_fifo_sv_unit(fast)
+# Loading work.hwpe_stream_fifo(fast)
+# Loading work.hci_core_assign(fast)
+# Loading work.redmule_castout_sv_unit(fast)
+# Loading work.redmule_castout(fast)
+# Loading work.fpnew_cast_multi(fast)
+# Loading work.fpnew_classifier(fast)
+# Loading work.fpnew_classifier(fast__1)
+# Loading work.fpnew_classifier(fast__2)
+# Loading work.lzc(fast__1)
+# Loading work.fpnew_rounding(fast)
+# Loading work.hci_core_fifo(fast)
+# Loading work.hwpe_stream_intf_stream(fast__6)
+# Loading work.hwpe_stream_intf_stream(fast__7)
+# Loading work.hwpe_stream_intf_stream(fast__8)
+# Loading work.hwpe_stream_intf_stream(fast__9)
+# Loading work.hwpe_stream_fifo(fast__1)
+# Loading work.hwpe_stream_fifo(fast__2)
+# Loading work.hci_core_assign(fast__1)
+# Loading work.hci_core_fifo(fast__1)
+# Loading work.hwpe_stream_fifo(fast__3)
+# Loading work.hwpe_stream_fifo(fast__4)
+# Loading work.redmule_castin_sv_unit(fast)
+# Loading work.redmule_castin(fast)
+# Loading work.hci_core_source(fast)
+# Loading work.hwpe_stream_intf_stream(fast__10)
+# Loading work.hwpe_stream_intf_stream(fast__11)
+# Loading work.hwpe_stream_addressgen_v3(fast__1)
+# Loading work.hwpe_stream_fifo(fast__5)
+# Loading work.hwpe_stream_intf_stream(fast__12)
+# Loading work.hwpe_stream_intf_stream(fast__13)
+# Loading work.hwpe_stream_fifo(fast__6)
+# Loading work.hwpe_stream_assign_sv_unit(fast)
+# Loading work.hwpe_stream_assign(fast)
+# Loading work.hwpe_stream_fifo(fast__7)
+# Loading work.hwpe_stream_fifo(fast__8)
+# Loading work.redmule_x_buffer(fast)
+# Loading work.redmule_x_pad_scm(fast)
+# Loading work.redmule_x_buffer_scm(fast)
+# Loading work.redmule_w_buffer(fast)
+# Loading work.redmule_w_buffer_scm(fast)
+# Loading work.redmule_z_buffer(fast)
+# Loading work.redmule_z_buffer_scm(fast)
+# Loading work.redmule_engine(fast)
+# Loading work.redmule_row(fast)
+# Loading work.redmule_ce(fast)
+# Loading work.cluster_clock_gating(fast)
+# Loading work.tc_clk_gating(fast__2)
+# Loading work.redmule_noncomp(fast)
+# Loading work.fpnew_classifier(fast__3)
+# Loading work.redmule_fma(fast)
+# Loading work.fpnew_classifier(fast__4)
+# Loading work.lzc(fast__2)
+# Loading work.fpnew_rounding(fast__1)
+# Loading work.redmule_noncomp(fast__1)
+# Loading work.redmule_memory_scheduler(fast)
+# Loading work.redmule_ctrl_sv_unit(fast)
+# Loading work.redmule_ctrl(fast)
+# Loading work.hwpe_ctrl_intf_periph(fast__3)
+# Loading work.hwpe_ctrl_slave(fast)
+# Loading work.hwpe_ctrl_regfile(fast)
+# Loading work.hwpe_ctrl_regfile_latch_test_wrap(fast)
+# Loading work.hwpe_ctrl_regfile_ff(fast)
+# Loading work.redmule_tiler(fast)
+# Loading work.hwpe_ctrl_seq_mult(fast)
+# Loading work.hwpe_ctrl_seq_mult(fast__1)
+# Loading work.redmule_scheduler(fast)
+# Loading work.cv32e40x_wrapper(fast)
+# Loading work.cv32e40x_core_log(fast)
+# Loading work.cv32e40x_rvfi_pkg(fast)
+# Loading work.cv32e40x_rvfi(fast)
+# Loading work.cv32e40x_rvfi_instr_obi(fast)
+# Loading work.cv32e40x_rvfi_data_obi(fast)
+# Loading work.cv32e40x_rvfi_sim_trace(fast)
+# Loading work.cv32e40x_core(fast)
+# Loading work.cv32e40x_if_c_obi(fast__1)
+# Loading work.cv32e40x_if_c_obi(fast__2)
+# Loading work.cv32e40x_sleep_unit(fast)
+# Loading work.cv32e40x_clock_gate(fast)
+# Loading work.cv32e40x_if_stage(fast)
+# Loading work.cv32e40x_prefetch_unit(fast)
+# Loading work.cv32e40x_prefetcher(fast)
+# Loading work.cv32e40x_alignment_buffer(fast)
+# Loading work.cv32e40x_mpu(fast)
+# Loading work.cv32e40x_pma(fast)
+# Loading work.cv32e40x_instr_obi_interface(fast)
+# Loading work.cv32e40x_compressed_decoder(fast)
+# Loading work.cv32e40x_sequencer(fast)
+# Loading work.cv32e40x_id_stage(fast)
+# Loading work.cv32e40x_pc_target(fast)
+# Loading work.cv32e40x_decoder(fast)
+# Loading work.cv32e40x_i_decoder(fast)
+# Loading work.cv32e40x_a_decoder(fast)
+# Loading work.cv32e40x_b_decoder(fast)
+# Loading work.cv32e40x_m_decoder(fast)
+# Loading work.cv32e40x_ex_stage(fast)
+# Loading work.cv32e40x_alu(fast)
+# Loading work.cv32e40x_ff_one(fast)
+# Loading work.cv32e40x_alu_b_cpop(fast)
+# Loading work.cv32e40x_div(fast)
+# Loading work.cv32e40x_mult(fast)
+# Loading work.cv32e40x_load_store_unit(fast)
+# Loading work.cv32e40x_wpt(fast)
+# Loading work.cv32e40x_mpu(fast__1)
+# Loading work.cv32e40x_pma(fast__1)
+# Loading work.cv32e40x_align_check(fast)
+# Loading work.cv32e40x_lsu_response_filter(fast)
+# Loading work.cv32e40x_write_buffer(fast)
+# Loading work.cv32e40x_data_obi_interface(fast)
+# Loading work.cv32e40x_wb_stage(fast)
+# Loading work.cv32e40x_cs_registers(fast)
+# Loading work.cv32e40x_csr(fast)
+# Loading work.cv32e40x_csr(fast__1)
+# Loading work.cv32e40x_csr(fast__2)
+# Loading work.cv32e40x_csr(fast__3)
+# Loading work.cv32e40x_csr(fast__4)
+# Loading work.cv32e40x_csr(fast__5)
+# Loading work.cv32e40x_csr(fast__6)
+# Loading work.cv32e40x_csr(fast__7)
+# Loading work.cv32e40x_debug_triggers(fast)
+# Loading work.cv32e40x_csr(fast__8)
+# Loading work.cv32e40x_controller(fast)
+# Loading work.cv32e40x_controller_fsm(fast)
+# Loading work.cv32e40x_controller_bypass(fast)
+# Loading work.cv32e40x_int_controller(fast)
+# Loading work.cv32e40x_register_file_wrapper(fast)
+# Loading work.cv32e40x_register_file(fast)
+# Loading work.obi_atop_resolver(fast)
+# Loading work.lzc(fast__3)
+# Loading work.spill_register(fast)
+# Loading work.spill_register_flushable(fast)
+# Loading work.fifo_v3(fast__12)
+# Loading work.obi_cut(fast)
+# Loading work.spill_register(fast__1)
+# Loading work.spill_register_flushable(fast__1)
+# Loading work.spill_register(fast__2)
+# Loading work.spill_register_flushable(fast__2)
+# Loading work.obi_xbar(fast)
+# Loading work.addr_decode(fast)
+# Loading work.addr_decode_dync(fast)
+# Loading work.obi_demux(fast)
+# Loading work.hci_interconnect(fast)
+# Loading work.hci_core_intf(fast__14)
+# Loading work.tcdm_interconnect_pkg(fast)
+# Loading work.hci_log_interconnect(fast)
+# Loading work.tcdm_interconnect(fast)
+# Loading work.xbar(fast)
+# Loading work.addr_dec_resp_mux(fast)
+# Loading work.rr_arb_tree(fast__2)
+# Loading work.lzc(fast__4)
+# Loading work.hci_router(fast)
+# Loading work.hci_core_assign(fast__2)
+# Loading work.hci_router_reorder(fast)
+# Loading work.addr_dec_resp_mux(fast__1)
+# Loading work.hci_arbiter_tree(fast)
+# Loading work.hci_core_assign(fast__3)
+# Loading work.hci_core_assign(fast__4)
+# Loading work.hci_arbiter(fast)
+# Loading work.hci_core_assign(fast__5)
+# Loading work.hci_core_assign(fast__6)
+# Loading work.l1_spm(fast)
+# Loading work.tc_sram(fast)
+# Loading work.xif_inst_dispatcher(fast)
+# Loading work.idma_ctrl(fast)
+# Loading work.cv32e40x_if_xif(fast__5)
+# Loading work.idma_reg32_3d_reg_pkg(fast)
+# Loading work.idma_xif_inst_decoder(fast)
+# Loading work.idma_axi_obi_transfer_ch(fast)
+# Loading work.idma_reg32_3d(fast)
+# Loading work.idma_reg32_3d_reg_top(fast)
+# Loading work.prim_subreg(fast)
+# Loading work.prim_subreg_arb(fast)
+# Loading work.prim_subreg(fast__1)
+# Loading work.prim_subreg_arb(fast__1)
+# Loading work.prim_subreg(fast__2)
+# Loading work.prim_subreg_arb(fast__2)
+# Loading work.prim_subreg_ext(fast)
+# Loading work.prim_subreg_ext(fast__1)
+# Loading work.prim_subreg(fast__3)
+# Loading work.prim_subreg_arb(fast__3)
+# Loading work.rr_arb_tree(fast__3)
+# Loading work.idma_transfer_id_gen(fast)
+# Loading work.stream_fifo_optimal_wrap(fast)
+# Loading work.spill_register_flushable(fast__3)
+# Loading work.idma_nd_midend(fast)
+# Loading work.idma_nd_counter(fast)
+# Loading work.popcount(fast)
+# Loading work.idma_backend_r_axi_w_obi(fast)
+# Loading work.idma_legalizer_r_axi_w_obi(fast)
+# Loading work.idma_legalizer_page_splitter(fast)
+# Loading work.stream_fifo_optimal_wrap(fast__1)
+# Loading work.spill_register_flushable(fast__4)
+# Loading work.stream_fifo_optimal_wrap(fast__2)
+# Loading work.spill_register_flushable(fast__5)
+# Loading work.fall_through_register(fast)
+# Loading work.fifo_v3(fast__13)
+# Loading work.stream_fifo_optimal_wrap(fast__3)
+# Loading work.stream_fifo(fast__8)
+# Loading work.fifo_v3(fast__14)
+# Loading work.idma_transport_layer_r_axi_w_obi(fast)
+# Loading work.idma_axi_read(fast)
+# Loading work.idma_dataflow_element(fast)
+# Loading work.passthrough_stream_fifo(fast)
+# Loading work.idma_obi_write(fast)
+# Loading work.stream_fifo_optimal_wrap(fast__4)
+# Loading work.spill_register_flushable(fast__6)
+# Loading work.idma_axi_obi_transfer_ch(fast__1)
+# Loading work.idma_backend_r_obi_w_axi(fast)
+# Loading work.idma_legalizer_r_obi_w_axi(fast)
+# Loading work.stream_fifo_optimal_wrap(fast__5)
+# Loading work.spill_register_flushable(fast__7)
+# Loading work.stream_fifo_optimal_wrap(fast__6)
+# Loading work.spill_register_flushable(fast__8)
+# Loading work.idma_transport_layer_r_obi_w_axi(fast)
+# Loading work.idma_obi_read(fast)
+# Loading work.idma_axi_write(fast)
+# Loading work.fall_through_register(fast__1)
+# Loading work.fifo_v3(fast__15)
+# Loading work.axi_rw_join(fast)
+# Loading work.pulp_icache_wrap(fast)
+# Loading work.spill_register(fast__3)
+# Loading work.spill_register_flushable(fast__9)
+# Loading work.snitch_icache(fast)
+# Loading work.riscv_instr_branch(fast)
+# Loading work.snitch_icache_l0(fast)
+# Loading work.tc_clk_inverter(fast)
+# Loading work.plru_tree(fast)
+# Loading work.isochronous_spill_register(fast)
+# Loading work.isochronous_spill_register(fast__1)
+# Loading work.l0_to_bypass(fast)
+# Loading work.stream_arbiter(fast)
+# Loading work.stream_arbiter_flushable(fast)
+# Loading work.rr_arb_tree(fast__4)
+# Loading work.fifo_v3(fast__16)
+# Loading work.onehot_to_bin(fast)
+# Loading work.stream_demux(fast)
+# Loading work.isochronous_spill_register(fast__2)
+# Loading work.isochronous_spill_register(fast__3)
+# Loading work.multi_accept_rr_arb(fast)
+# Loading work.rr_arb_tree(fast__5)
+# Loading work.snitch_icache_lookup_serial(fast)
+# Loading work.register_file_1r_1w(fast)
+# Loading work.lzc(fast__5)
+# Loading work.tc_sram_impl(fast)
+# Loading work.tc_sram(fast__1)
+# Loading work.snitch_icache_handler(fast)
+# Loading work.onehot_to_bin(fast__1)
+# Loading work.stream_arbiter(fast__1)
+# Loading work.stream_arbiter_flushable(fast__1)
+# Loading work.rr_arb_tree(fast__6)
+# Loading work.stream_demux(fast__1)
+# Loading work.snitch_icache_refill(fast)
+# Loading work.fifo_v3(fast__17)
+# Loading work.axi_xbar(fast)
+# Loading work.axi_xbar_unmuxed(fast)
+# Loading work.addr_decode(fast__1)
+# Loading work.addr_decode_dync(fast__1)
+# Loading work.axi_demux(fast)
+# Loading work.spill_register(fast__4)
+# Loading work.spill_register_flushable(fast__10)
+# Loading work.spill_register(fast__5)
+# Loading work.spill_register_flushable(fast__11)
+# Loading work.spill_register(fast__6)
+# Loading work.spill_register_flushable(fast__12)
+# Loading work.spill_register(fast__7)
+# Loading work.spill_register_flushable(fast__13)
+# Loading work.spill_register(fast__8)
+# Loading work.spill_register_flushable(fast__14)
+# Loading work.spill_register(fast__9)
+# Loading work.spill_register_flushable(fast__15)
+# Loading work.axi_demux_simple(fast__1)
+# Loading work.axi_demux_id_counters(fast)
+# Loading work.delta_counter(fast__1)
+# Loading work.counter(fast__1)
+# Loading work.rr_arb_tree(fast__7)
+# Loading work.axi_err_slv(fast)
+# Loading work.axi_atop_filter(fast)
+# Loading work.stream_register(fast)
+# Loading work.fifo_v3(fast__18)
+# Loading work.fifo_v3(fast__19)
+# Loading work.fifo_v3(fast__20)
+# Loading work.counter(fast__2)
+# Loading work.delta_counter(fast__2)
+# Loading work.axi_multicut(fast)
+# Loading work.axi_mux(fast)
+# Loading work.axi_id_prepend(fast)
+# Loading work.rr_arb_tree(fast__8)
+# Loading work.fifo_v3(fast__21)
+# Loading work.spill_register(fast__10)
+# Loading work.spill_register_flushable(fast__16)
+# Loading work.spill_register(fast__11)
+# Loading work.spill_register_flushable(fast__17)
+# Loading work.rr_arb_tree(fast__9)
+# Loading work.spill_register(fast__12)
+# Loading work.spill_register_flushable(fast__18)
+# Loading work.spill_register(fast__13)
+# Loading work.spill_register_flushable(fast__19)
+# Loading work.floo_axi_chimney(fast)
+# Loading work.floo_rob_wrapper(fast)
+# Loading work.axi_demux_id_counters(fast__1)
+# Loading work.delta_counter(fast__3)
+# Loading work.floo_rob_wrapper(fast__1)
+# Loading work.floo_route_comp(fast)
+# Loading work.addr_decode(fast__2)
+# Loading work.addr_decode_dync(fast__2)
+# Loading work.floo_wormhole_arbiter(fast)
+# Loading work.floo_wormhole_arbiter(fast__1)
+# Loading work.floo_meta_buffer(fast)
+# Loading work.fifo_v3(fast__22)
+# Loading work.lzc(fast__6)
+# Loading work.floo_axi_router(fast)
+# Loading work.floo_router(fast)
+# Loading work.stream_fifo_optimal_wrap(fast__7)
+# Loading work.spill_register_flushable(fast__20)
+# Loading work.floo_route_select(fast)
+# Loading work.floo_wormhole_arbiter(fast__2)
+# Loading work.rr_arb_tree(fast__10)
+# Loading work.floo_vc_arbiter(fast)
+# Loading work.floo_router(fast__1)
+# Loading work.stream_fifo_optimal_wrap(fast__8)
+# Loading work.spill_register_flushable(fast__21)
+# Loading work.floo_route_select(fast__1)
+# Loading work.floo_wormhole_arbiter(fast__3)
+# Loading work.floo_vc_arbiter(fast__1)
+# Loading work.fractal_sync_xif_inst_decoder(fast)
+# Loading work.fpu_ss_prd_f_pkg(fast)
+# Loading work.fpu_ss(fast)
+# Loading work.fpu_ss_instr_pkg(fast)
+# Loading work.fpu_ss_compressed_predecoder(fast)
+# Loading work.fpu_ss_predecoder(fast)
+# Loading work.stream_fifo(fast__9)
+# Loading work.fifo_v3(fast__23)
+# Loading work.fpu_ss_decoder(fast)
+# Loading work.stream_fifo(fast__10)
+# Loading work.fifo_v3(fast__24)
+# Loading work.fpu_ss_csr(fast)
+# Loading work.fpu_ss_controller(fast)
+# Loading work.fpu_ss_regfile(fast)
+# Loading work.fpnew_top(fast)
+# Loading work.fpnew_opgroup_block(fast)
+# Loading work.fpnew_opgroup_fmt_slice(fast)
+# Loading work.fpnew_fma(fast)
+# Loading work.fpnew_classifier(fast__5)
+# Loading work.lzc(fast__7)
+# Loading work.fpnew_rounding(fast__2)
+# Loading work.rr_arb_tree(fast__11)
+# Loading work.lzc(fast__8)
+# Loading work.fpnew_opgroup_block(fast__1)
+# Loading work.fpnew_opgroup_multifmt_slice(fast)
+# Loading work.fpnew_divsqrt_th_32(fast)
+# Loading work.pa_fdsu_top(fast)
+# Loading work.pa_fdsu_special(fast)
+# Loading work.pa_fdsu_prepare(fast)
+# Loading work.pa_fdsu_ff1(fast)
+# Loading work.pa_fdsu_srt_single(fast)
+# Loading work.gated_clk_cell(fast)
+# Loading work.pa_fdsu_round_single(fast)
+# Loading work.pa_fdsu_pack_single(fast)
+# Loading work.pa_fdsu_ctrl(fast)
+# Loading work.pa_fpu_dp(fast)
+# Loading work.pa_fpu_src_type(fast)
+# Loading work.pa_fpu_frbus(fast)
+# Loading work.rr_arb_tree(fast__12)
+# Loading work.fpnew_opgroup_block(fast__2)
+# Loading work.fpnew_opgroup_fmt_slice(fast__1)
+# Loading work.fpnew_noncomp(fast)
+# Loading work.fpnew_classifier(fast__6)
+# Loading work.rr_arb_tree(fast__13)
+# Loading work.fpnew_opgroup_block(fast__3)
+# Loading work.fpnew_opgroup_multifmt_slice(fast__1)
+# Loading work.fpnew_cast_multi(fast__1)
+# Loading work.fpnew_classifier(fast__7)
+# Loading work.lzc(fast__9)
+# Loading work.fpnew_rounding(fast__3)
+# Loading work.rr_arb_tree(fast__14)
+# Loading work.fpnew_opgroup_block(fast__4)
+# Loading work.rr_arb_tree(fast__15)
+# Loading work.rr_arb_tree(fast__16)
+# Loading work.lzc(fast__10)
+# Loading work.xif_if2struct(fast)
+# Loading work.fractal_sync_pkg(fast)
+# Loading work.fractal_sync_2x2_pkg(fast)
+# Loading work.fractal_sync_2x2(fast)
+# Loading work.fractal_sync_2x2_core(fast)
+# Loading work.fractal_sync_pipeline(fast)
+# Loading work.fractal_sync_1d(fast)
+# Loading work.fractal_sync_rx(fast)
+# Loading work.fractal_sync_fifo(fast)
+# Loading work.fractal_sync_arbiter(fast)
+# Loading work.fractal_sync_arbiter_fa(fast)
+# Loading work.fractal_sync_tx(fast)
+# Loading work.fractal_sync_fifo(fast__1)
+# Loading work.fractal_sync_arbiter(fast__1)
+# Loading work.fractal_sync_arbiter_fa(fast__1)
+# Loading work.fractal_sync_cc(fast)
+# Loading work.fractal_sync_1d_rf(fast)
+# Loading work.fractal_sync_1d_local_rf(fast)
+# Loading work.fractal_sync_mp_rf(fast)
+# Loading work.fractal_sync_1d_remote_rf(fast)
+# Loading work.fractal_sync_mp_cam_br(fast)
+# Loading work.fractal_sync_mp_cam_line(fast)
+# Loading work.fractal_sync_1d(fast__1)
+# Loading work.fractal_sync_cc(fast__1)
+# Loading work.fractal_sync_pipeline(fast__1)
+# Loading work.fractal_sync_2d(fast)
+# Loading work.fractal_sync_rx(fast__1)
+# Loading work.fractal_sync_fifo(fast__2)
+# Loading work.fractal_sync_arbiter(fast__2)
+# Loading work.fractal_sync_arbiter_fa(fast__2)
+# Loading work.fractal_sync_cc(fast__2)
+# Loading work.fractal_sync_2d_rf(fast)
+# Loading work.fractal_sync_2d_local_rf(fast)
+# Loading work.fractal_sync_2d_remote_rf(fast)
+# Loading work.magia_vip(fast)
+# Loading work.clk_rst_gen(fast)
+# Loading work.magia_l2_mem_wrapper(fast)
+# Loading work.floo_axi_chimney(fast__1)
+# Loading work.axi_err_slv(fast__1)
+# Loading work.axi_atop_filter(fast__1)
+# Loading work.stream_register(fast__2)
+# Loading work.fifo_v3(fast__25)
+# Loading work.fifo_v3(fast__26)
+# Loading work.fifo_v3(fast__27)
+# Loading work.counter(fast__3)
+# Loading work.delta_counter(fast__4)
+# Loading work.floo_rob_wrapper(fast__2)
+# Loading work.axi_demux_id_counters(fast__2)
+# Loading work.delta_counter(fast__5)
+# Loading work.floo_rob_wrapper(fast__3)
+# Loading work.floo_route_comp(fast__1)
+# Loading work.floo_wormhole_arbiter(fast__4)
+# Loading work.rr_arb_tree(fast__17)
+# Loading work.floo_wormhole_arbiter(fast__5)
+# Loading work.floo_meta_buffer(fast__1)
+# Loading work.fifo_v3(fast__28)
+# Loading work.axi_sim_mem(fast)
+# Loading work.fractal_sync_if(fast__1)
+# Loading work.fractal_sync_if(fast__2)
+# Loading work.stream_register(fast__3)
+# Loading work.hwpe_ctrl_intf_periph(fast__1)
+# Loading work.hci_core_intf(fast__4)
+# Loading work.hci_core_intf(fast__5)
+# Loading work.stream_register(fast__1)
+# Loading work.hci_core_intf(fast__10)
+# Loading work.hci_core_intf(fast__11)
+# Loading work.hci_core_intf(fast__12)
+# Loading work.hci_core_intf(fast__13)
+# Loading work.hci_core_intf(fast__17)
+# Loading work.hci_core_intf(fast__15)
+# Loading work.hci_core_intf(fast__16)
+# Loading work.hci_core_intf(fast__8)
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[0]/gen_x_tile[0]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[0]/gen_x_tile[1]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[1]/gen_x_tile[0]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[1]/gen_x_tile[1]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch/visachi/magia_sdk/profiling/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# run -a
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_0
+# RISC-V Trace: Writing log to: ./core_0_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file build/verif.itb
+# RISC-V Trace: Loaded        2953 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_1
+# RISC-V Trace: Writing log to: ./core_1_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file build/verif.itb
+# RISC-V Trace: Loaded        2953 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_2
+# RISC-V Trace: Writing log to: ./core_2_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file build/verif.itb
+# RISC-V Trace: Loaded        2953 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_3
+# RISC-V Trace: Writing log to: ./core_3_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file build/verif.itb
+# RISC-V Trace: Loaded        2953 instructions.
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 74060ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 74060ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 74530ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 74530ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 79875ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 5340ns (1068 clock cycles) and accumulated latency 5340ns (1068 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 79875ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 5340ns (1068 clock cycles) and accumulated latency 5340ns (1068 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 80295ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 80295ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 81215ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 915ns (183 clock cycles) and accumulated latency 6255ns (1251 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 81215ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 915ns (183 clock cycles) and accumulated latency 6255ns (1251 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel start instruction in WB stage at time 81220ns (81220ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel start instruction in WB stage at time 81220ns (81220ns)
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 91795ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 91795ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 92360ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 92360ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 99625ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected input communication sentinel accumulator start-end pair with latency 7260ns (1452 clock cycles) and accumulated latency 7260ns (1452 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 99625ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected input communication sentinel accumulator start-end pair with latency 7260ns (1452 clock cycles) and accumulated latency 7260ns (1452 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 100110ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 100110ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 101350ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected input communication sentinel accumulator start-end pair with latency 1235ns (247 clock cycles) and accumulated latency 8495ns (1699 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 101350ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected input communication sentinel accumulator start-end pair with latency 1235ns (247 clock cycles) and accumulated latency 8495ns (1699 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel start instruction in WB stage at time 101355ns (101355ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel start instruction in WB stage at time 101355ns (101355ns)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel end instruction in WB stage at time 101845ns (101845ns)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel end instruction in WB stage at time 101845ns (101845ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel end instruction in WB stage at time 101845ns (101845ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel end instruction in WB stage at time 101845ns (101845ns)
+# [TB][SYNC PERF][GLOBAL] detected completed synchronization in EX stage. Synchronization time 485ns (97 clock cycles)
+# [TB][SYNC PERF][ROW] detected completed synchronization in EX stage. Synchronization time 485ns (97 clock cycles)
+# [TB][SYNC PERF][COLUMN] detected completed synchronization in EX stage. Synchronization time 20620ns (4124 clock cycles)
+# [TB][SYNC PERF][HNBR] detected completed synchronization in EX stage. Synchronization time 485ns (97 clock cycles)
+# [TB][SYNC PERF][VNBR] detected completed synchronization in EX stage. Synchronization time 20620ns (4124 clock cycles)
+# [TB][SYNC PERF][HRING] detected completed synchronization in EX stage. Synchronization time 485ns (97 clock cycles)
+# [TB][SYNC PERF][VRING] detected completed synchronization in EX stage. Synchronization time 20620ns (4124 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel start instruction in WB stage at time 102555ns (102555ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel start instruction in WB stage at time 102555ns (102555ns)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 103430ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 103430ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 104865ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1430ns (286 clock cycles) and accumulated latency 7685ns (1537 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 104865ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1430ns (286 clock cycles) and accumulated latency 7685ns (1537 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 105780ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 105780ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 105965ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 105965ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 106910ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected computation sentinel accumulator start-end pair with latency 1125ns (225 clock cycles) and accumulated latency 1125ns (225 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 106910ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected computation sentinel accumulator start-end pair with latency 1125ns (225 clock cycles) and accumulated latency 1125ns (225 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 106985ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1015ns (203 clock cycles) and accumulated latency 8700ns (1740 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 106985ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1015ns (203 clock cycles) and accumulated latency 8700ns (1740 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel start instruction in WB stage at time 107080ns (107080ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel start instruction in WB stage at time 107080ns (107080ns)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel end instruction in WB stage at time 107310ns (107310ns)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel end instruction in WB stage at time 107310ns (107310ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel end instruction in WB stage at time 107310ns (107310ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel end instruction in WB stage at time 107310ns (107310ns)
+# [TB][SYNC PERF][GLOBAL] detected completed synchronization in EX stage. Synchronization time 225ns (45 clock cycles)
+# [TB][SYNC PERF][ROW] detected completed synchronization in EX stage. Synchronization time 225ns (45 clock cycles)
+# [TB][SYNC PERF][COLUMN] detected completed synchronization in EX stage. Synchronization time 4750ns (950 clock cycles)
+# [TB][SYNC PERF][HNBR] detected completed synchronization in EX stage. Synchronization time 225ns (45 clock cycles)
+# [TB][SYNC PERF][VNBR] detected completed synchronization in EX stage. Synchronization time 4750ns (950 clock cycles)
+# [TB][SYNC PERF][HRING] detected completed synchronization in EX stage. Synchronization time 225ns (45 clock cycles)
+# [TB][SYNC PERF][VRING] detected completed synchronization in EX stage. Synchronization time 4750ns (950 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel start instruction in WB stage at time 107455ns (107455ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel start instruction in WB stage at time 107455ns (107455ns)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 108015ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 108015ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 109375ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1355ns (271 clock cycles) and accumulated latency 10055ns (2011 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 109375ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1355ns (271 clock cycles) and accumulated latency 10055ns (2011 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 110155ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 110155ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 110240ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 110240ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 110250ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 110250ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 111160ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 11055ns (2211 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 111160ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 11055ns (2211 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 111465ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1220ns (244 clock cycles) and accumulated latency 1220ns (244 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 111465ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1220ns (244 clock cycles) and accumulated latency 1220ns (244 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 111800ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected computation sentinel accumulator start-end pair with latency 1545ns (309 clock cycles) and accumulated latency 2670ns (534 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 111800ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected computation sentinel accumulator start-end pair with latency 1545ns (309 clock cycles) and accumulated latency 2670ns (534 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel start instruction in WB stage at time 111810ns (111810ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel start instruction in WB stage at time 111810ns (111810ns)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel end instruction in WB stage at time 111965ns (111965ns)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel end instruction in WB stage at time 111965ns (111965ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel end instruction in WB stage at time 111965ns (111965ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel end instruction in WB stage at time 111965ns (111965ns)
+# [TB][SYNC PERF][GLOBAL] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][ROW] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][COLUMN] detected completed synchronization in EX stage. Synchronization time 4505ns (901 clock cycles)
+# [TB][SYNC PERF][HNBR] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][VNBR] detected completed synchronization in EX stage. Synchronization time 4505ns (901 clock cycles)
+# [TB][SYNC PERF][HRING] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][VRING] detected completed synchronization in EX stage. Synchronization time 4505ns (901 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 112565ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 112565ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 113950ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1380ns (276 clock cycles) and accumulated latency 12435ns (2487 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 113950ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1380ns (276 clock cycles) and accumulated latency 12435ns (2487 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 114030ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 114030ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 114255ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 114255ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 114495ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 114495ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 114520ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 114520ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 114530ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 114530ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 115275ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected computation sentinel accumulator start-end pair with latency 1240ns (248 clock cycles) and accumulated latency 1240ns (248 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 115275ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected computation sentinel accumulator start-end pair with latency 1240ns (248 clock cycles) and accumulated latency 1240ns (248 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 115500ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 13435ns (2687 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 115500ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 13435ns (2687 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 115520ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected input communication sentinel accumulator start-end pair with latency 1260ns (252 clock cycles) and accumulated latency 9755ns (1951 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 115520ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected input communication sentinel accumulator start-end pair with latency 1260ns (252 clock cycles) and accumulated latency 9755ns (1951 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel start instruction in WB stage at time 115555ns (115555ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel start instruction in WB stage at time 115555ns (115555ns)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 115620ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1095ns (219 clock cycles) and accumulated latency 2315ns (463 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 115620ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1095ns (219 clock cycles) and accumulated latency 2315ns (463 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 116080ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected computation sentinel accumulator start-end pair with latency 1545ns (309 clock cycles) and accumulated latency 4215ns (843 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 116080ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected computation sentinel accumulator start-end pair with latency 1545ns (309 clock cycles) and accumulated latency 4215ns (843 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel start instruction in WB stage at time 116090ns (116090ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel start instruction in WB stage at time 116090ns (116090ns)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel end instruction in WB stage at time 116245ns (116245ns)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel end instruction in WB stage at time 116245ns (116245ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel end instruction in WB stage at time 116245ns (116245ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel end instruction in WB stage at time 116245ns (116245ns)
+# [TB][SYNC PERF][GLOBAL] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][ROW] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][COLUMN] detected completed synchronization in EX stage. Synchronization time 685ns (137 clock cycles)
+# [TB][SYNC PERF][HNBR] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][VNBR] detected completed synchronization in EX stage. Synchronization time 685ns (137 clock cycles)
+# [TB][SYNC PERF][HRING] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][VRING] detected completed synchronization in EX stage. Synchronization time 685ns (137 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 116880ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 116880ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 117490ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 117490ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 117595ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 117595ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 117605ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 117605ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 118470ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1585ns (317 clock cycles) and accumulated latency 15020ns (3004 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 118470ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1585ns (317 clock cycles) and accumulated latency 15020ns (3004 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 118480ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected input communication sentinel accumulator start-end pair with latency 985ns (197 clock cycles) and accumulated latency 10740ns (2148 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 118480ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected input communication sentinel accumulator start-end pair with latency 985ns (197 clock cycles) and accumulated latency 10740ns (2148 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 118840ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1240ns (248 clock cycles) and accumulated latency 1240ns (248 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 118840ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1240ns (248 clock cycles) and accumulated latency 1240ns (248 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 118870ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected computation sentinel accumulator start-end pair with latency 1260ns (252 clock cycles) and accumulated latency 2500ns (500 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 118870ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected computation sentinel accumulator start-end pair with latency 1260ns (252 clock cycles) and accumulated latency 2500ns (500 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel start instruction in WB stage at time 118880ns (118880ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel start instruction in WB stage at time 118880ns (118880ns)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 119080ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 119080ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 119105ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 119105ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 119115ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 119115ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 120085ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 16020ns (3204 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 120085ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 16020ns (3204 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 120200ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1090ns (218 clock cycles) and accumulated latency 3405ns (681 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 120200ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1090ns (218 clock cycles) and accumulated latency 3405ns (681 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 120665ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected computation sentinel accumulator start-end pair with latency 1545ns (309 clock cycles) and accumulated latency 5760ns (1152 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 120665ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected computation sentinel accumulator start-end pair with latency 1545ns (309 clock cycles) and accumulated latency 5760ns (1152 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel start instruction in WB stage at time 120675ns (120675ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel start instruction in WB stage at time 120675ns (120675ns)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel end instruction in WB stage at time 120830ns (120830ns)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel end instruction in WB stage at time 120830ns (120830ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel end instruction in WB stage at time 120830ns (120830ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel end instruction in WB stage at time 120830ns (120830ns)
+# [TB][SYNC PERF][GLOBAL] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][ROW] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][COLUMN] detected completed synchronization in EX stage. Synchronization time 1945ns (389 clock cycles)
+# [TB][SYNC PERF][HNBR] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][VNBR] detected completed synchronization in EX stage. Synchronization time 1945ns (389 clock cycles)
+# [TB][SYNC PERF][HRING] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][VRING] detected completed synchronization in EX stage. Synchronization time 1945ns (389 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 121455ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 121455ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 121625ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 121625ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 121635ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 121635ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 121645ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 121645ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 122500ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected input communication sentinel accumulator start-end pair with latency 870ns (174 clock cycles) and accumulated latency 11610ns (2322 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 122500ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected input communication sentinel accumulator start-end pair with latency 870ns (174 clock cycles) and accumulated latency 11610ns (2322 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 122765ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1125ns (225 clock cycles) and accumulated latency 2365ns (473 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 122765ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1125ns (225 clock cycles) and accumulated latency 2365ns (473 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 122920ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected computation sentinel accumulator start-end pair with latency 1270ns (254 clock cycles) and accumulated latency 3770ns (754 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 122920ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected computation sentinel accumulator start-end pair with latency 1270ns (254 clock cycles) and accumulated latency 3770ns (754 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel start instruction in WB stage at time 122930ns (122930ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel start instruction in WB stage at time 122930ns (122930ns)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 123040ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1580ns (316 clock cycles) and accumulated latency 17600ns (3520 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 123040ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1580ns (316 clock cycles) and accumulated latency 17600ns (3520 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 123610ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 123610ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 123635ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 123635ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 123645ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 123645ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 124615ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 18600ns (3720 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 124615ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 18600ns (3720 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 124775ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1135ns (227 clock cycles) and accumulated latency 4540ns (908 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 124775ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1135ns (227 clock cycles) and accumulated latency 4540ns (908 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 125195ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected computation sentinel accumulator start-end pair with latency 1545ns (309 clock cycles) and accumulated latency 7305ns (1461 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 125195ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected computation sentinel accumulator start-end pair with latency 1545ns (309 clock cycles) and accumulated latency 7305ns (1461 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel start instruction in WB stage at time 125205ns (125205ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel start instruction in WB stage at time 125205ns (125205ns)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel end instruction in WB stage at time 125360ns (125360ns)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel end instruction in WB stage at time 125360ns (125360ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel end instruction in WB stage at time 125360ns (125360ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel end instruction in WB stage at time 125360ns (125360ns)
+# [TB][SYNC PERF][GLOBAL] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][ROW] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][COLUMN] detected completed synchronization in EX stage. Synchronization time 2425ns (485 clock cycles)
+# [TB][SYNC PERF][HNBR] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][VNBR] detected completed synchronization in EX stage. Synchronization time 2425ns (485 clock cycles)
+# [TB][SYNC PERF][HRING] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][VRING] detected completed synchronization in EX stage. Synchronization time 2425ns (485 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 125960ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 125960ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 126175ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 126175ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 126185ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 126185ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 126195ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 126195ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 127045ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected input communication sentinel accumulator start-end pair with latency 865ns (173 clock cycles) and accumulated latency 12475ns (2495 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 127045ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected input communication sentinel accumulator start-end pair with latency 865ns (173 clock cycles) and accumulated latency 12475ns (2495 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 127310ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1120ns (224 clock cycles) and accumulated latency 3485ns (697 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 127310ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1120ns (224 clock cycles) and accumulated latency 3485ns (697 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 127465ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected computation sentinel accumulator start-end pair with latency 1265ns (253 clock cycles) and accumulated latency 5035ns (1007 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 127465ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected computation sentinel accumulator start-end pair with latency 1265ns (253 clock cycles) and accumulated latency 5035ns (1007 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel start instruction in WB stage at time 127475ns (127475ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel start instruction in WB stage at time 127475ns (127475ns)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 127585ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1620ns (324 clock cycles) and accumulated latency 20220ns (4044 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 127585ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1620ns (324 clock cycles) and accumulated latency 20220ns (4044 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 128145ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 128145ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 128170ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 128170ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 128180ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 128180ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 129150ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 21220ns (4244 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 129150ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 21220ns (4244 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 129270ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1095ns (219 clock cycles) and accumulated latency 5635ns (1127 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 129270ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1095ns (219 clock cycles) and accumulated latency 5635ns (1127 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 129730ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected computation sentinel accumulator start-end pair with latency 1545ns (309 clock cycles) and accumulated latency 8850ns (1770 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 129730ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected computation sentinel accumulator start-end pair with latency 1545ns (309 clock cycles) and accumulated latency 8850ns (1770 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel start instruction in WB stage at time 129740ns (129740ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel start instruction in WB stage at time 129740ns (129740ns)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel end instruction in WB stage at time 129895ns (129895ns)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel end instruction in WB stage at time 129895ns (129895ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel end instruction in WB stage at time 129895ns (129895ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel end instruction in WB stage at time 129895ns (129895ns)
+# [TB][SYNC PERF][GLOBAL] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][ROW] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][COLUMN] detected completed synchronization in EX stage. Synchronization time 2415ns (483 clock cycles)
+# [TB][SYNC PERF][HNBR] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][VNBR] detected completed synchronization in EX stage. Synchronization time 2415ns (483 clock cycles)
+# [TB][SYNC PERF][HRING] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][VRING] detected completed synchronization in EX stage. Synchronization time 2415ns (483 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 130525ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 130525ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 130705ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 130705ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 130715ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 130715ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 130725ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 130725ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 131575ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected input communication sentinel accumulator start-end pair with latency 865ns (173 clock cycles) and accumulated latency 13340ns (2668 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 131575ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected input communication sentinel accumulator start-end pair with latency 865ns (173 clock cycles) and accumulated latency 13340ns (2668 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 131820ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1100ns (220 clock cycles) and accumulated latency 4585ns (917 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 131820ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1100ns (220 clock cycles) and accumulated latency 4585ns (917 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 131995ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected computation sentinel accumulator start-end pair with latency 1265ns (253 clock cycles) and accumulated latency 6300ns (1260 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 131995ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected computation sentinel accumulator start-end pair with latency 1265ns (253 clock cycles) and accumulated latency 6300ns (1260 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel start instruction in WB stage at time 132005ns (132005ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel start instruction in WB stage at time 132005ns (132005ns)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 132115ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1585ns (317 clock cycles) and accumulated latency 22805ns (4561 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 132115ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1585ns (317 clock cycles) and accumulated latency 22805ns (4561 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 132675ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 132675ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 132700ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 132700ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 132710ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 132710ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 133680ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 23805ns (4761 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 133680ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 23805ns (4761 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 133795ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1090ns (218 clock cycles) and accumulated latency 6725ns (1345 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 133795ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1090ns (218 clock cycles) and accumulated latency 6725ns (1345 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 134260ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected computation sentinel accumulator start-end pair with latency 1545ns (309 clock cycles) and accumulated latency 10395ns (2079 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 134260ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected computation sentinel accumulator start-end pair with latency 1545ns (309 clock cycles) and accumulated latency 10395ns (2079 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel start instruction in WB stage at time 134270ns (134270ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel start instruction in WB stage at time 134270ns (134270ns)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel end instruction in WB stage at time 134425ns (134425ns)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel end instruction in WB stage at time 134425ns (134425ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel end instruction in WB stage at time 134425ns (134425ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel end instruction in WB stage at time 134425ns (134425ns)
+# [TB][SYNC PERF][GLOBAL] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][ROW] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][COLUMN] detected completed synchronization in EX stage. Synchronization time 2415ns (483 clock cycles)
+# [TB][SYNC PERF][HNBR] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][VNBR] detected completed synchronization in EX stage. Synchronization time 2415ns (483 clock cycles)
+# [TB][SYNC PERF][HRING] detected completed synchronization in EX stage. Synchronization time 150ns (30 clock cycles)
+# [TB][SYNC PERF][VRING] detected completed synchronization in EX stage. Synchronization time 2415ns (483 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 135050ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start input communication sentinel accumulator instruction in WB stage at time 135050ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 135220ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 135220ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 135230ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 135230ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 135240ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 135240ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 136095ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected input communication sentinel accumulator start-end pair with latency 870ns (174 clock cycles) and accumulated latency 14210ns (2842 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 136095ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected input communication sentinel accumulator start-end pair with latency 870ns (174 clock cycles) and accumulated latency 14210ns (2842 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 136360ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1125ns (225 clock cycles) and accumulated latency 5710ns (1142 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 136360ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1125ns (225 clock cycles) and accumulated latency 5710ns (1142 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 136515ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected computation sentinel accumulator start-end pair with latency 1270ns (254 clock cycles) and accumulated latency 7570ns (1514 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 136515ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected computation sentinel accumulator start-end pair with latency 1270ns (254 clock cycles) and accumulated latency 7570ns (1514 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel start instruction in WB stage at time 136525ns (136525ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel start instruction in WB stage at time 136525ns (136525ns)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 136635ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected input communication sentinel accumulator start-end pair with latency 1580ns (316 clock cycles) and accumulated latency 25385ns (5077 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 136635ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected input communication sentinel accumulator start-end pair with latency 1580ns (316 clock cycles) and accumulated latency 25385ns (5077 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 136915ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start computation sentinel accumulator instruction in WB stage at time 136915ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 137100ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 137100ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 138075ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected computation sentinel accumulator start-end pair with latency 1155ns (231 clock cycles) and accumulated latency 11550ns (2310 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 138075ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected computation sentinel accumulator start-end pair with latency 1155ns (231 clock cycles) and accumulated latency 11550ns (2310 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 138660ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1555ns (311 clock cycles) and accumulated latency 8280ns (1656 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 138660ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1555ns (311 clock cycles) and accumulated latency 8280ns (1656 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel start instruction in WB stage at time 138695ns (138695ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel start instruction in WB stage at time 138695ns (138695ns)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel end instruction in WB stage at time 138805ns (138805ns)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel end instruction in WB stage at time 138805ns (138805ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel end instruction in WB stage at time 138805ns (138805ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel end instruction in WB stage at time 138805ns (138805ns)
+# [TB][SYNC PERF][GLOBAL] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][ROW] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][COLUMN] detected completed synchronization in EX stage. Synchronization time 2275ns (455 clock cycles)
+# [TB][SYNC PERF][HNBR] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][VNBR] detected completed synchronization in EX stage. Synchronization time 2275ns (455 clock cycles)
+# [TB][SYNC PERF][HRING] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][VRING] detected completed synchronization in EX stage. Synchronization time 2275ns (455 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 139460ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 139460ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 139645ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start input communication sentinel accumulator instruction in WB stage at time 139645ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 139655ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 139655ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 139665ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 139665ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 140505ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected input communication sentinel accumulator start-end pair with latency 855ns (171 clock cycles) and accumulated latency 15065ns (3013 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 140505ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected input communication sentinel accumulator start-end pair with latency 855ns (171 clock cycles) and accumulated latency 15065ns (3013 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 140820ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1160ns (232 clock cycles) and accumulated latency 6870ns (1374 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 140820ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1160ns (232 clock cycles) and accumulated latency 6870ns (1374 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 140915ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected computation sentinel accumulator start-end pair with latency 1245ns (249 clock cycles) and accumulated latency 8815ns (1763 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 140915ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected computation sentinel accumulator start-end pair with latency 1245ns (249 clock cycles) and accumulated latency 8815ns (1763 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel start instruction in WB stage at time 140925ns (140925ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel start instruction in WB stage at time 140925ns (140925ns)
+# [TB][mhartid 0 - Tile (0, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 141055ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1590ns (318 clock cycles) and accumulated latency 9870ns (1974 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 141055ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected output (result) communication sentinel accumulator start-end pair with latency 1590ns (318 clock cycles) and accumulated latency 9870ns (1974 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel start instruction in WB stage at time 141075ns (141075ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel start instruction in WB stage at time 141075ns (141075ns)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel end instruction in WB stage at time 141185ns (141185ns)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel end instruction in WB stage at time 141185ns (141185ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel end instruction in WB stage at time 141185ns (141185ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel end instruction in WB stage at time 141185ns (141185ns)
+# [TB][SYNC PERF][GLOBAL] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][ROW] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][COLUMN] detected completed synchronization in EX stage. Synchronization time 255ns (51 clock cycles)
+# [TB][SYNC PERF][HNBR] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][VNBR] detected completed synchronization in EX stage. Synchronization time 255ns (51 clock cycles)
+# [TB][SYNC PERF][HRING] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][VRING] detected completed synchronization in EX stage. Synchronization time 255ns (51 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel start instruction in WB stage at time 141230ns (141230ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel start instruction in WB stage at time 141230ns (141230ns)
+# [TB][mhartid 1 - Tile (0, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 141805ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start computation sentinel accumulator instruction in WB stage at time 141805ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 142030ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 142030ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 142890ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected computation sentinel accumulator start-end pair with latency 1080ns (216 clock cycles) and accumulated latency 9895ns (1979 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 142890ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected computation sentinel accumulator start-end pair with latency 1080ns (216 clock cycles) and accumulated latency 9895ns (1979 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 143035ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 7870ns (1574 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 143035ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 1000ns (200 clock cycles) and accumulated latency 7870ns (1574 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel start instruction in WB stage at time 143055ns (143055ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel start instruction in WB stage at time 143055ns (143055ns)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel end instruction in WB stage at time 143165ns (143165ns)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel end instruction in WB stage at time 143165ns (143165ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel end instruction in WB stage at time 143165ns (143165ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel end instruction in WB stage at time 143165ns (143165ns)
+# [TB][SYNC PERF][GLOBAL] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][ROW] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][COLUMN] detected completed synchronization in EX stage. Synchronization time 1930ns (386 clock cycles)
+# [TB][SYNC PERF][HNBR] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][VNBR] detected completed synchronization in EX stage. Synchronization time 1930ns (386 clock cycles)
+# [TB][SYNC PERF][HRING] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][VRING] detected completed synchronization in EX stage. Synchronization time 1930ns (386 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel start instruction in WB stage at time 143210ns (143210ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel start instruction in WB stage at time 143210ns (143210ns)
+# [TB][mhartid 1 - Tile (0, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 143775ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected start output (result) communication sentinel accumulator instruction in WB stage at time 143775ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 144635ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 855ns (171 clock cycles) and accumulated latency 8725ns (1745 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected finish (record) output (result) communication sentinel accumulator instruction in WB stage at time 144635ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected output (result) communication sentinel accumulator start-end pair with latency 855ns (171 clock cycles) and accumulated latency 8725ns (1745 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel start instruction in WB stage at time 144655ns (144655ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel start instruction in WB stage at time 144655ns (144655ns)
+# [TB][mhartid 0 - Tile (0, 0)] detected sync sentinel end instruction in WB stage at time 144765ns (144765ns)
+# [TB][mhartid 1 - Tile (0, 1)] detected sync sentinel end instruction in WB stage at time 144765ns (144765ns)
+# [TB][mhartid 2 - Tile (1, 0)] detected sync sentinel end instruction in WB stage at time 144765ns (144765ns)
+# [TB][mhartid 3 - Tile (1, 1)] detected sync sentinel end instruction in WB stage at time 144765ns (144765ns)
+# [TB][SYNC PERF][GLOBAL] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][ROW] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][COLUMN] detected completed synchronization in EX stage. Synchronization time 1550ns (310 clock cycles)
+# [TB][SYNC PERF][HNBR] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][VNBR] detected completed synchronization in EX stage. Synchronization time 1550ns (310 clock cycles)
+# [TB][SYNC PERF][HRING] detected completed synchronization in EX stage. Synchronization time 105ns (21 clock cycles)
+# [TB][SYNC PERF][VRING] detected completed synchronization in EX stage. Synchronization time 1550ns (310 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 144780ns
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start-end pair with latency 70715ns (14143 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 144780ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start-end pair with latency 52980ns (10596 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 144780ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected sentinel start-end pair with latency 70715ns (14143 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 144780ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected sentinel start-end pair with latency 52980ns (10596 clock cycles)
+# [TB][PERF][mhartid 0 - Tile (0, 0)] Input communication sentinel accumulator state: 25385ns (5077 clock cycles)
+# [TB][PERF][mhartid 1 - Tile (0, 1)] Input communication sentinel accumulator state: 15065ns (3013 clock cycles)
+# [TB][PERF][mhartid 2 - Tile (1, 0)] Input communication sentinel accumulator state: 25385ns (5077 clock cycles)
+# [TB][PERF][mhartid 3 - Tile (1, 1)] Input communication sentinel accumulator state: 15065ns (3013 clock cycles)
+# [TB][PERF][mhartid 0 - Tile (0, 0)] Output (result) communication sentinel accumulator state: 9870ns (1974 clock cycles)
+# [TB][PERF][mhartid 1 - Tile (0, 1)] Output (result) communication sentinel accumulator state: 8725ns (1745 clock cycles)
+# [TB][PERF][mhartid 2 - Tile (1, 0)] Output (result) communication sentinel accumulator state: 9870ns (1974 clock cycles)
+# [TB][PERF][mhartid 3 - Tile (1, 1)] Output (result) communication sentinel accumulator state: 8725ns (1745 clock cycles)
+# [TB][PERF][mhartid 0 - Tile (0, 0)] Computation sentinel accumulator state: 11550ns (2310 clock cycles)
+# [TB][PERF][mhartid 1 - Tile (0, 1)] Computation sentinel accumulator state: 9895ns (1979 clock cycles)
+# [TB][PERF][mhartid 2 - Tile (1, 0)] Computation sentinel accumulator state: 11550ns (2310 clock cycles)
+# [TB][PERF][mhartid 3 - Tile (1, 1)] Computation sentinel accumulator state: 9895ns (1979 clock cycles)
+# [TB][SYNC PERF][mhartid 0 - Tile (0, 0)] Synchronization pattern sentinel accumulator states after 12 iterations:
+#           	GLOBAL: 2030ns (406 clock cycles)
+#           	ROW:    2030ns (406 clock cycles)
+#           	COLUMN: 45770ns (9154 clock cycles)
+#           	HNBR:   2030ns (406 clock cycles)
+#           	VNBR:   45770ns (9154 clock cycles)
+#           	HRING:  2030ns (406 clock cycles)
+#           	VRING:  45770ns (9154 clock cycles)
+# [TB][PERF][mhartid 0 - Tile (0, 0)] Global maximul performance overheads:
+#           	Input communication:          25385ns (5077 clock cycles)
+#           	Outpu (result) communication: 9870ns (1974 clock cycles)
+#           	Computation:                  11550ns (2310 clock cycles)
+#           	Total (CMI+CMO+CMP):          46805ns (9361 clock cycles)
+# [mhartid 3] Number of errors: 0
+# [mhartid 1] Number of errors: 0
+# SIMULATION FINISHED WITH EXIT CODE: 0
+# 
+# End time: 16:45:26 on Oct 08,2025, Elapsed time: 0:00:46
+# Errors: 0, Warnings: 4
+make[1]: Leaving directory `/scratch/visachi/magia_sdk/profiling/MAGIA'
