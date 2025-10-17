@@ -110,13 +110,13 @@ int main(void){
 #if defined(SIZE_48x32x32)
     uint8_t timeslots = 2;
 #elif defined(SIZE_96x64x64)
-    uint8_t timeslots = 4;
+    uint8_t timeslots = 2;
 #elif defined(SIZE_192x128x128)
-    uint8_t timeslots = 8;
+    uint8_t timeslots = 2;
 #elif defined(SIZE_384x256x256)
-    uint8_t timeslots = 16;
+    uint8_t timeslots = 2;
 #elif defined(SIZE_768x512x512)
-    uint8_t timeslots = 32;
+    uint8_t timeslots = 2;
 #endif
     uint8_t t_size = K_SIZE / timeslots;
     uint8_t t_start = x_id * 2;
@@ -210,23 +210,23 @@ int main(void){
     for(uint8_t z = 0; z < N_ITERATIONS; z++){
         // TIMESLOT t = -1
         // Initial static input load
-        stnl_cmi_s();
         idma_conf_in();
         idma_set_addr_len_in(obi_addr_x, axi_addr_x, len_x);
         idma_set_std2_rep2_in(len_x, std_x, reps_x);
         idma_set_std3_rep3_in(0, 0, 1);
 
+        stnl_cmi_s();
         idma_start_in();
         idma_wait();
         stnl_cmi_f();
 
         // First weight load
-        stnl_cmi_s();
         idma_conf_in();
         idma_set_addr_len_in(obi_addr_w_0, axi_addr_w, len_w);
         idma_set_std2_rep2_in(len_w, std_w, reps_w);
         idma_set_std3_rep3_in(0, 0, 1);
 
+        stnl_cmi_s();
         idma_start_in();
         idma_wait();
         stnl_cmi_f();
@@ -281,12 +281,12 @@ int main(void){
              * 3c. Load L2 output of current timeslot (if leftmost tile)
              */
             if(x_id == 0 && t < (t_end)){
-                stnl_cmi_s();
                 idma_conf_in();
                 idma_set_addr_len_in(output_pt, axi_addr_y + (pt * t_size * 2), len_y);
                 idma_set_std2_rep2_in(len_y, std_y, reps_y);
                 idma_set_std3_rep3_in(0, 0, 1);
 
+                stnl_cmi_s();
                 idma_start_in();
                 idma_wait();
                 stnl_cmi_f();
@@ -309,14 +309,12 @@ int main(void){
              *      - Set REDMULE to execute current timeslot output
              */
             if(pt < timeslots - 1){
-                stnl_cmi_s();
                 idma_conf_in();
                 idma_set_addr_len_in(weight_pt_next, axi_addr_w + (t_size * (pt + 1) * 2), len_w);
                 idma_set_std2_rep2_in(len_w, std_w, reps_w);
                 idma_set_std3_rep3_in(0, 0, 1);
             }
             if(pt > 0){
-                stnl_cmo_s();
                 if(x_id == (MESH_X_TILES-1)){
                     idma_conf_out();
                     idma_set_addr_len_out(axi_addr_y_out + ((pt - 1) * t_size * 2), output_pt_prev, len_y);
@@ -350,13 +348,14 @@ int main(void){
              */
             if(t == t_start){
                 //printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
-                idma_start_in();
                 stnl_cmp_s();
                 redmule_marith(output_pt, weight_pt, obi_addr_x);
-                idma_wait();
+                stnl_cmi_s();
+                idma_start_in();
                 redmule_wait();
-                stnl_cmi_f();
                 stnl_cmp_f();
+                idma_wait();
+                stnl_cmi_f();
                 // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
 
             }
@@ -364,16 +363,18 @@ int main(void){
                 //printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
                 stnl_cmp_s();
                 redmule_marith(output_pt, weight_pt, obi_addr_x);
+                stnl_cmo_s();
                 idma_start_out();
-                idma_wait();
                 redmule_wait();
-                stnl_cmo_f();
                 stnl_cmp_f();
+                idma_wait();
+                stnl_cmo_f();
                 // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
 
                 //printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(output_pt_prev), *(volatile uint16_t*)(output_pt_prev + 2));
             }
             else if(t == t_end){
+                stnl_cmo_s();
                 idma_start_out();
                 idma_wait();
                 stnl_cmo_f();
@@ -381,16 +382,17 @@ int main(void){
             }
             else{
                 //printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
+                stnl_cmi_s();
                 idma_start_in();
+                stnl_cmo_s();
+                idma_start_out();
                 stnl_cmp_s();
                 redmule_marith(output_pt, weight_pt, obi_addr_x);
-                idma_start_in();
-                idma_start_out();
                 idma_wait();
-                idma_wait();
-                redmule_wait();
                 stnl_cmi_f();
+                idma_wait();
                 stnl_cmo_f();
+                redmule_wait();
                 stnl_cmp_f();
                 // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
 
