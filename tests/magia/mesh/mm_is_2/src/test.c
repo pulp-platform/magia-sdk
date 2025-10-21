@@ -4,8 +4,8 @@
 //
 // Alberto Dequino <alberto.dequino@unibo.it>
 
-#define SIZE_48x32x32
-// #define SIZE_96x64x64
+// #define SIZE_48x32x32
+#define SIZE_96x64x64
 // #define SIZE_192x128x128
 // #define SIZE_384x256x256
 // #define SIZE_768x512x512
@@ -382,18 +382,18 @@ int main(void){
             }
             else{
                 //printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
-                stnl_cmi_s();
-                idma_start_in();
-                stnl_cmo_s();
-                idma_start_out();
                 stnl_cmp_s();
                 redmule_marith(output_pt, weight_pt, obi_addr_x);
-                idma_wait();
-                stnl_cmi_f();
-                idma_wait();
-                stnl_cmo_f();
+                stnl_cmo_s();
+                idma_start_out();
+                stnl_cmi_s();
+                idma_start_in();
                 redmule_wait();
                 stnl_cmp_f();
+                idma_wait();
+                stnl_cmo_f();
+                idma_wait();
+                stnl_cmi_f();
                 // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2));
 
                 // printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(output_pt_prev), *(volatile uint16_t*)(output_pt_prev + 2));
