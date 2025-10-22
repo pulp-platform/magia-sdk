@@ -70,7 +70,7 @@ The following *optional* parameters can be specified when running the make comma
 
 4. To compile and build the test binaries for a desired architecture run:
 
-    `make clean build <target_platform> <tiles> <compiler>`
+    `make clean build <target_platform> <tiles> <compiler> <eval>`
 
     To run one of the tests:
 
