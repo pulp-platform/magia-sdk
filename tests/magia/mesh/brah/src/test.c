@@ -92,7 +92,9 @@ int main(void) {
         uint8_t computed  = *(volatile uint8_t*)(src_buf + (i));
         uint8_t expected = *(volatile uint8_t*)(dst_buf + (i));
         if(computed!=expected){
+            #if EVAL == 1
             printf("Giuda faus t %d %d\n", expected, computed);
+            #endif
         }
         counter++;
         if(counter == 10)

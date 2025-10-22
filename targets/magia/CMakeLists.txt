@@ -33,6 +33,7 @@ target_include_directories(runtime
 target_compile_options(runtime
   PUBLIC
   -O3
+  -DEVAL=${EVAL}
 )
 
 target_compile_options(runtime

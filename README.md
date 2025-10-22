@@ -22,6 +22,8 @@ The following *optional* parameters can be specified when running the make comma
 
 `test_name`: Name of the test binary to be run.
 
+`eval`: **0**|**1** (**Default**: 0). Activates printing of error values in the testsuite.
+
 `gui`: **0**|**1** (**Default**: 0). Activates the graphic user interface on the simulator (rtl only).
 
 `fast_sim`: **0**|**1** (**Default**: 0). Deactivates signal tracking for faster simulation (rtl only).
