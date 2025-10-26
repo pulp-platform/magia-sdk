@@ -80,6 +80,7 @@ int main(void){
     stnl_snc_f();
 
     sentinel_start();   // Execution time after wakeup
+    asm volatile("nop" ::); // Needed to detect same instruction consecutively
     sentinel_start();   // Initial step overhead
 
     /**
