@@ -3,11 +3,30 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Alberto Dequino <alberto.dequino@unibo.it>
+// Victor Isachi <victor.isachi@unibo.it>
+
+#define SIZE_64x64x64
+// #define SIZE_128x128x128
+// #define SIZE_256x256x256
+// #define SIZE_512x512x512
+// #define SIZE_1024x1024x1024
 
 #include <stdint.h>
-#include "test.h"
+
+#if defined(SIZE_64x64x64)
+#include "mat_64x64x64.h"
+#elif defined(SIZE_128x128x128)
+#include "mat_128x128x128.h"
+#elif defined(SIZE_256x256x256)
+#include "mat_256x256x256.h"
+#elif defined(SIZE_512x512x512)
+#include "mat_512x512x512.h"
+#elif defined(SIZE_1024x1024x1024)
+#include "mat_1024x1024x1024.h"
+#endif
 
 #include "tile.h"
+#include "fsync.h"
 #include "idma.h"
 #include "redmule.h"
 
@@ -18,6 +37,8 @@
  * following the output-static mechanism. 
  */
 int main(void){
+    sentinel_start();   // Total execution
+
     /** 
      * 0. Get the mesh-tile's hartid, mesh-tile coordinates and define its L1 base, 
      * also initialize the controllers for the idma and redmule.
@@ -38,12 +59,27 @@ int main(void){
         .api = &redmule_api,
     };
 
+    fsync_config_t fsync_cfg = {.hartid = hartid};
+    fsync_controller_t fsync_ctrl = {
+        .base = NULL,
+        .cfg = &fsync_cfg,
+        .api = &fsync_api,
+    };
+
+    fsync_init(&fsync_ctrl);
     idma_init(&idma_ctrl);
     redmule_init(&redmule_ctrl);
 
     uint32_t y_id           = GET_Y_ID(hartid);
     uint32_t x_id           = GET_X_ID(hartid);
     uint32_t l1_tile_base   = get_l1_base(hartid);
+
+    // Wait for all tiles to be awake and ready to start the kernel
+    stnl_snc_s();
+    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    stnl_snc_f();
+
+    sentinel_start();   // Execution time after wakeup
 
     /**
      * 1. Calculate the static output data-tile dimensions.
@@ -85,7 +121,17 @@ int main(void){
      * Weight data-tile: (t_size x tile_w) * data_dim
      * Output data-tile: ((tile_h x tile_w) * data_dim)
      */
-    uint8_t timeslots   = 2;
+#if defined(SIZE_64x64x64)
+    uint8_t timeslots = 2;
+#elif defined(SIZE_128x128x128)
+    uint8_t timeslots = 4;
+#elif defined(SIZE_256x256x256)
+    uint8_t timeslots = 8;
+#elif defined(SIZE_512x512x512)
+    uint8_t timeslots = 16;
+#elif defined(SIZE_1024x1024x1024)
+    uint8_t timeslots = 32;
+#endif
     uint8_t t_size      = N_SIZE / timeslots;
 
     /**
@@ -95,7 +141,7 @@ int main(void){
     uint32_t std_y          = K_SIZE * 2;
     uint32_t reps_y         = (uint32_t) tile_h;
     uint32_t obi_addr_y     = (l1_tile_base);
-    uint32_t axi_addr_y     = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
+    uint32_t axi_addr_y     = (uint32_t) y_in + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
     uint32_t axi_addr_y_out = (uint32_t) y_out + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
     
     /**
@@ -106,7 +152,7 @@ int main(void){
     uint32_t reps_x         = (uint32_t) tile_h;
     uint32_t obi_addr_x_0   = obi_addr_y + (tile_h * tile_w * 2);
     uint32_t obi_addr_x_1   = obi_addr_x_0 + (t_size * tile_h * 2);
-    uint32_t axi_addr_x     = (uint32_t) x_inp + (y_id * N_SIZE * tile_h_max * 2);
+    uint32_t axi_addr_x     = (uint32_t) x_in + (y_id * N_SIZE * tile_h_max * 2);
     
     /**
      * 2b. Initalize the IDMA transfer variables for weight data-tile transfers.
@@ -116,7 +162,7 @@ int main(void){
     uint32_t reps_w         = (uint32_t) t_size;
     uint32_t obi_addr_w_0   = obi_addr_x_1 + (t_size * tile_h * 2);
     uint32_t obi_addr_w_1   = obi_addr_w_0 + (t_size * tile_w * 2);
-    uint32_t axi_addr_w     = (uint32_t) w_inp + (x_id * tile_w_max * 2);
+    uint32_t axi_addr_w     = (uint32_t) w_in + (x_id * tile_w_max * 2);
 
     //printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
 
@@ -124,6 +170,7 @@ int main(void){
     volatile uint32_t weight_pt;
     volatile uint32_t input_pt_next;
     volatile uint32_t weight_pt_next;
+    redmule_mcnfig((uint16_t) tile_w, (uint16_t) tile_h, (uint16_t) t_size);
 
     /**
      * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
@@ -138,29 +185,32 @@ int main(void){
         idma_set_std2_rep2_in(len_y, std_y, reps_y);
         idma_set_std3_rep3_in(0, 0, 1);
 
+        stnl_cmi_s();
         idma_start_in();
         idma_wait();
+        stnl_par_f();
 
         //printf("Recieved this data: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2));
-            
 
         idma_conf_in();
         idma_set_addr_len_in(obi_addr_x_0, axi_addr_x, len_x);
         idma_set_std2_rep2_in(len_x, std_x, reps_x);
         idma_set_std3_rep3_in(0, 0, 1);
 
+        stnl_cmi_s();
         idma_start_in();
         idma_wait();
+        stnl_par_f();
 
         idma_conf_in();
         idma_set_addr_len_in(obi_addr_w_0, axi_addr_w, len_w);
         idma_set_std2_rep2_in(len_w, std_w, reps_w);
         idma_set_std3_rep3_in(0, 0, 1);
 
+        stnl_cmi_s();
         idma_start_in();
         idma_wait();
-
-        redmule_mcnfig((uint16_t) tile_w, (uint16_t) tile_h, (uint16_t) t_size);
+        stnl_par_f();
 
         /**
          * 4. Cycle over the timeslots.
@@ -171,7 +221,7 @@ int main(void){
          * We parallelize the IDMA with Redmule.
          */
         for(uint8_t i = 0; i < timeslots; i++){
-            printf("TIMESLOT %d\n", i);
+            // printf("TIMESLOT %d\n", i);
             /**
              * 4a. Select the correct pointer for the current timeslot
              */
@@ -197,25 +247,32 @@ int main(void){
                 idma_set_std2_rep2_in(len_x, std_x, reps_x);
                 idma_set_std3_rep3_in(0, 0, 1);
 
+                stnl_cmi_s();
                 idma_start_in();
                 idma_wait();
+                stnl_par_f();
 
                 idma_conf_in();
                 idma_set_addr_len_in(weight_pt_next, axi_addr_w + (t_size * K_SIZE * (i + 1) * 2), len_w);
                 idma_set_std2_rep2_in(len_w, std_w, reps_w);
                 idma_set_std3_rep3_in(0, 0, 1);
 
-                idma_start_in();
+                stnl_cmp_s();
                 redmule_marith(obi_addr_y, weight_pt, input_pt);
-                idma_wait();
+                stnl_cmi_s();
+                idma_start_in();
                 redmule_wait();
+                stnl_par_f();
+                idma_wait();
+                stnl_par_f();
 
                 //printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2));
-
             }
             else{
+                stnl_cmp_s();
                 redmule_marith(obi_addr_y, weight_pt, input_pt);
                 redmule_wait();
+                stnl_par_f();
                 //printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2));
             }
         }
@@ -223,8 +280,29 @@ int main(void){
         /**
          * 5. Store the output data-tile back to L2
          */
-        idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y_out, obi_addr_y, len_y, std_y, reps_y);
+        stnl_cmo_s();
+        idma_conf_out();
+        idma_set_addr_len_out(axi_addr_y_out, obi_addr_y, len_y);
+        idma_set_std2_rep2_out(std_y, len_y, reps_y);
+        idma_set_std3_rep3_out(0, 0, 1);
+        idma_start_out();
         idma_wait();
+        stnl_par_f();
+
+    }
+
+    sentinel_end(); // Execution time after wakeup
+    asm volatile("nop" ::); // Needed to detect same instruction consecutively
+    sentinel_end(); // Total execution
+
+    stnl_cmi_r();
+    stnl_cmo_r();
+    stnl_cmp_r();
+    stnl_snc_r();
+    
+    if (get_hartid() == 0){
+      stnl_r();
+      stnl_ts_r();
     }
 
     /**
@@ -232,6 +310,7 @@ int main(void){
      */
     uint32_t errors=0;
     uint16_t computed, expected, diff = 0;
+    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     for(int i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
         for(int j = (x_id * tile_w_max); j < (x_id * tile_w_max) + tile_w; j++){
             computed = *(volatile uint16_t*)(y_out + (i * K_SIZE + j));

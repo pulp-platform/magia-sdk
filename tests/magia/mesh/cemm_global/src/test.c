@@ -3,9 +3,27 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Alberto Dequino <alberto.dequino@unibo.it>
+// Victor Isachi <victor.isachi@unibo.it>
+
+#define SIZE_64x64x64
+// #define SIZE_128x128x128
+// #define SIZE_256x256x256
+// #define SIZE_512x512x512
+// #define SIZE_1024x1024x1024
 
 #include <stdint.h>
-#include "test.h"
+
+#if defined(SIZE_64x64x64)
+#include "mat_64x64x64.h"
+#elif defined(SIZE_128x128x128)
+#include "mat_128x128x128.h"
+#elif defined(SIZE_256x256x256)
+#include "mat_256x256x256.h"
+#elif defined(SIZE_512x512x512)
+#include "mat_512x512x512.h"
+#elif defined(SIZE_1024x1024x1024)
+#include "mat_1024x1024x1024.h"
+#endif
 
 #include "tile.h"
 #include "idma.h"
@@ -17,6 +35,8 @@
  * following the output-static mechanism. 
  */
 int main(void){
+    sentinel_start();   // Total execution
+
     /** 
      * 0. Get the mesh-tile's hartid, mesh-tile coordinates and define its L1 base, 
      * also initialize the controllers for the idma, redmule and fsync.
@@ -51,6 +71,14 @@ int main(void){
     uint32_t x_id = GET_X_ID(hartid);
     uint32_t l1_tile_base = get_l1_base(hartid);
 
+    // Wait for all tiles to be awake and ready to start the kernel
+    stnl_snc_s();
+    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    stnl_snc_f();
+
+    sentinel_start();   // Execution time after wakeup
+    stnl_ts_s();        // Initial timeslot
+
     /**
      * 1. Calculate the static output data-tile dimensions.
      * If M and K are perfect multiples of the number of mesh-tiles in their respective axis, 
@@ -78,7 +106,7 @@ int main(void){
     }
 
     if(tile_h < 1 || tile_w < 1){
-        printf("Giuda faus\n");
+        // printf("Giuda faus\n");
         return 0;
     }
     else{
@@ -90,7 +118,17 @@ int main(void){
      * As for how the CEMM is implemented (for now), the number of timeslots is equal to the mesh dimension.
      * TODO: Implement leftover, N_SIZE must be a multiple of the mesh size to work now. 
      */
-    uint8_t timeslots = MESH_X_TILES;
+#if defined(SIZE_64x64x64)
+    uint8_t timeslots = 2;
+#elif defined(SIZE_128x128x128)
+    uint8_t timeslots = 4;
+#elif defined(SIZE_256x256x256)
+    uint8_t timeslots = 8;
+#elif defined(SIZE_512x512x512)
+    uint8_t timeslots = 16;
+#elif defined(SIZE_1024x1024x1024)
+    uint8_t timeslots = 32;
+#endif
     uint8_t t_size = N_SIZE / timeslots;
 
     /**
@@ -100,11 +138,17 @@ int main(void){
     uint32_t std_y = K_SIZE * 2;
     uint32_t reps_y = (uint32_t) tile_h;
     uint32_t obi_addr_y = (l1_tile_base);
-    uint32_t axi_addr_y = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
+    uint32_t axi_addr_y = (uint32_t) y_in + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
     
     //printf("Doing initial output L2 idma memcpy\n");
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
+    stnl_cmi_s();
+    idma_conf_in();
+    idma_set_addr_len_in(obi_addr_y, axi_addr_y, len_y);
+    idma_set_std2_rep2_in(len_y, std_y, reps_y);
+    idma_set_std3_rep3_in(0, 0, 1);
+    idma_start_in();
     idma_wait();
+    stnl_par_f();
     
     /**
      * 2a. Initalize and run IDMA transfer variables for initial L2 input data-tile transfers.
@@ -121,10 +165,16 @@ int main(void){
     uint32_t len_x = (uint32_t) (t_size * 2);
     uint32_t std_x = (uint32_t) (N_SIZE * 2);
     uint32_t reps_x = (uint32_t) tile_h;
-    uint32_t axi_addr_x = (uint32_t) x_inp + (y_id * N_SIZE * tile_h_max * 2) + (index * t_size * 2);
+    uint32_t axi_addr_x = (uint32_t) x_in + (y_id * N_SIZE * tile_h_max * 2) + (index * t_size * 2);
     //printf("Doing initial input L2 idma memcpy\n");
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x_0, len_x, std_x, reps_x);
+    stnl_cmi_s();
+    idma_conf_in();
+    idma_set_addr_len_in(obi_addr_x_0, axi_addr_x, len_x);
+    idma_set_std2_rep2_in(len_x, std_x, reps_x);
+    idma_set_std3_rep3_in(0, 0, 1);
+    idma_start_in();
     idma_wait();
+    stnl_par_f();
 
     /**
      * 2b. Initalize and run IDMA transfer variables for initial L2 weight data-tile transfers.
@@ -135,10 +185,16 @@ int main(void){
     uint32_t len_w = (uint32_t) (tile_w * 2);
     uint32_t std_w = (uint32_t) (K_SIZE * 2);
     uint32_t reps_w = (uint32_t) t_size;
-    uint32_t axi_addr_w = (uint32_t) w_inp + (x_id * tile_w_max * 2) + (index * t_size * K_SIZE * 2);
+    uint32_t axi_addr_w = (uint32_t) w_in + (x_id * tile_w_max * 2) + (index * t_size * K_SIZE * 2);
     //printf("Doing initial weight L2 idma memcpy\n");
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w, obi_addr_w_0, len_w, std_w, reps_w);
+    stnl_cmi_s();
+    idma_conf_in();
+    idma_set_addr_len_in(obi_addr_w_0, axi_addr_w, len_w);
+    idma_set_std2_rep2_in(len_w, std_w, reps_w);
+    idma_set_std3_rep3_in(0, 0, 1);
+    idma_start_in();
     idma_wait();
+    stnl_par_f();
 
     volatile uint32_t input_pt;
     volatile uint32_t weight_pt;
@@ -149,9 +205,12 @@ int main(void){
     uint32_t up_id = ((y_id == 0) ? GET_ID((MESH_Y_TILES - 1), x_id) : GET_ID((y_id - 1), x_id));
     //printf("LEFT ID IS: %d\n", left_id);
 
-    printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
+    // printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
 
     redmule_mcnfig((uint16_t) tile_w, (uint16_t) tile_h, (uint16_t) t_size);
+
+    stnl_ts_f();    // Initial timeslot
+
     /**
      * 3. Cycle over the timeslots.
      * For each timeslot, the mesh-tile will:
@@ -160,6 +219,18 @@ int main(void){
      * Synchronization is not required.
      */
     for(int i = 0; i < timeslots; i++){
+        if (i > 0){
+            stnl_ts_f();
+        }
+        if (i < (timeslots - 1)){
+            //printf("Syncing\n");
+            // if(hartid == 0)
+            //     printf("TIMESLOT NUMBER %d\n", i);
+            fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+
+            stnl_ts_s();
+        }
+        
         /**
          * 3a. Choose which of the 2 buffers use (double buffering is in effect)
          */
@@ -180,10 +251,6 @@ int main(void){
          * 3b. IDMA to load the input and weight data-tile for next timeslot (if there is one)
          */
         if(i != (timeslots - 1)){
-            //printf("Syncing\n");
-            // if(hartid == 0)
-            //     printf("TIMESLOT NUMBER %d\n", i);
-            fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
             //printf("Loading next input tile\n");
             idma_conf_out();
             idma_set_addr_len_out(get_l1_base(up_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 4) + (tile_w * t_size * 2 * (((i + 1) % 2))), weight_pt, tile_w * t_size * 2);
@@ -196,22 +263,30 @@ int main(void){
             //idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(left_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 2 * (i % 2)), input_pt_next, tile_h * t_size * 2);
             //printf("Loading next weight tile\n");
             //idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(down_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 4) + (tile_w * t_size * 2 * (!(i % 2))), weight_pt, tile_w * t_size * 2);
-            idma_start_in();
+            stnl_cmp_s();
             redmule_marith(obi_addr_y, weight_pt, input_pt);
+            stnl_cmi_s();
+            idma_start_in();
+            stnl_cmo_s();
             idma_start_out();
-            idma_wait();
-            idma_wait();
             redmule_wait();
+            stnl_par_f();
+            idma_wait();
+            stnl_par_f();
+            idma_wait();
+            stnl_par_f();
             // if(y_id < 3){
             //     printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(input_pt), *(volatile uint16_t*)(input_pt + 2));
             //     printf("Received this data: %x, %x\n", *(volatile uint16_t*)(input_pt_next), *(volatile uint16_t*)(input_pt_next + 2));
             // }
         }
         else{
-            sentinel_start();
+            sentinel_start();   // Last matmul overhead
+            stnl_cmp_s();
             redmule_marith(obi_addr_y, weight_pt, input_pt);
             redmule_wait();
-            sentinel_end();
+            stnl_par_f();
+            sentinel_end(); // Last matmul overhead
         }
         
         // /**
@@ -226,23 +301,45 @@ int main(void){
     /**
      * 4. Store the output data-tile back to L2
      */
-    idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
+    sentinel_start();   // Last CMO overhead
+    stnl_cmo_s();
+    idma_conf_out();
+    idma_set_addr_len_out(axi_addr_y, obi_addr_y, len_y);
+    idma_set_std2_rep2_out(std_y, len_y, reps_y);
+    idma_set_std3_rep3_out(0, 0, 1);
+    idma_start_out();
     idma_wait();
+    stnl_par_f();
+    sentinel_end(); // Last CMO overhead
 
+    sentinel_end(); // Execution time after wakeup
+    asm volatile("nop" ::); // Needed to detect same instruction consecutively
+    sentinel_end(); // Total execution
+
+    stnl_cmi_r();
+    stnl_cmo_r();
+    stnl_cmp_r();
+    stnl_snc_r();
     
+    if (get_hartid() == 0){
+      stnl_r();
+      stnl_ts_r();
+    }
+
     /**
      * 5. Check results
      */
     uint32_t errors=0;
     uint16_t computed, expected, diff = 0;
+    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     for(int i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
         for(int j = (x_id * tile_w_max); j < (x_id * tile_w_max) + tile_w; j++){
-            computed = *(volatile uint16_t*)(y_inp + (i * K_SIZE + j));
+            computed = *(volatile uint16_t*)(y_in + (i * K_SIZE + j));
             expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
             diff = (computed > expected) ? (computed - expected) : (expected - computed);
             if(diff > 0x0011){
                 if(y_id == 0)
-                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_in+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
                 errors++;
             }       
         }
@@ -250,6 +347,5 @@ int main(void){
     
     printf("Number of errors: %d\n", errors);
 
-    
     return errors;  
 }
