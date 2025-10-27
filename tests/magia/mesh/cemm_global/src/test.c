@@ -311,6 +311,7 @@ int main(void){
     idma_wait();
     stnl_par_f();
     sentinel_end(); // Last CMO overhead
+    asm volatile("nop" ::); // Needed to detect same instruction consecutively
 
     sentinel_end(); // Execution time after wakeup
     asm volatile("nop" ::); // Needed to detect same instruction consecutively
