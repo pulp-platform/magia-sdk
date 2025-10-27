@@ -140,9 +140,9 @@ int main(void){
     uint32_t len_y          = tile_w * 2;
     uint32_t std_y          = K_SIZE * 2;
     uint32_t reps_y         = (uint32_t) tile_h;
-    uint32_t obi_addr_y     = (l1_tile_base);
-    uint32_t axi_addr_y     = (uint32_t) y_in + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
-    uint32_t axi_addr_y_out = (uint32_t) y_out + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
+    volatile uint32_t obi_addr_y     = (l1_tile_base);
+    volatile uint32_t axi_addr_y     = (uint32_t) y_in + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
+    volatile uint32_t axi_addr_y_out = (uint32_t) y_out + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
     
     /**
      * 2a. Initalize the IDMA transfer variables for input data-tile transfers.
@@ -150,9 +150,9 @@ int main(void){
     uint32_t len_x          = (uint32_t) (t_size * 2);
     uint32_t std_x          = (uint32_t) (N_SIZE * 2);
     uint32_t reps_x         = (uint32_t) tile_h;
-    uint32_t obi_addr_x_0   = obi_addr_y + (tile_h * tile_w * 2);
-    uint32_t obi_addr_x_1   = obi_addr_x_0 + (t_size * tile_h * 2);
-    uint32_t axi_addr_x     = (uint32_t) x_in + (y_id * N_SIZE * tile_h_max * 2);
+    volatile uint32_t obi_addr_x_0   = obi_addr_y + (tile_h * tile_w * 2);
+    volatile uint32_t obi_addr_x_1   = obi_addr_x_0 + (t_size * tile_h * 2);
+    volatile uint32_t axi_addr_x     = (uint32_t) x_in + (y_id * N_SIZE * tile_h_max * 2);
     
     /**
      * 2b. Initalize the IDMA transfer variables for weight data-tile transfers.
@@ -160,9 +160,9 @@ int main(void){
     uint32_t len_w          = (uint32_t) (tile_w * 2);
     uint32_t std_w          = (uint32_t) (K_SIZE * 2);
     uint32_t reps_w         = (uint32_t) t_size;
-    uint32_t obi_addr_w_0   = obi_addr_x_1 + (t_size * tile_h * 2);
-    uint32_t obi_addr_w_1   = obi_addr_w_0 + (t_size * tile_w * 2);
-    uint32_t axi_addr_w     = (uint32_t) w_in + (x_id * tile_w_max * 2);
+    volatile uint32_t obi_addr_w_0   = obi_addr_x_1 + (t_size * tile_h * 2);
+    volatile uint32_t obi_addr_w_1   = obi_addr_w_0 + (t_size * tile_w * 2);
+    volatile uint32_t axi_addr_w     = (uint32_t) w_in + (x_id * tile_w_max * 2);
 
     //printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
 
