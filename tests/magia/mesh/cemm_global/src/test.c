@@ -137,8 +137,8 @@ int main(void){
     uint32_t len_y = tile_w * 2;
     uint32_t std_y = K_SIZE * 2;
     uint32_t reps_y = (uint32_t) tile_h;
-    volatile uint32_t obi_addr_y = (l1_tile_base);
-    volatile uint32_t axi_addr_y = (uint32_t) y_in + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
+    uint32_t obi_addr_y = (l1_tile_base);
+    uint32_t axi_addr_y = (uint32_t) y_in + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
     
     //printf("Doing initial output L2 idma memcpy\n");
     stnl_cmi_s();
@@ -159,13 +159,13 @@ int main(void){
         index = index + MESH_X_TILES;
     //printf("Index: %d\n", index);
 
-    volatile uint32_t obi_addr_x_0 = obi_addr_y + (tile_h * tile_w * 2);
-    volatile uint32_t obi_addr_x_1 = obi_addr_x_0 + (tile_h * t_size * 2);
+    uint32_t obi_addr_x_0 = obi_addr_y + (tile_h * tile_w * 2);
+    uint32_t obi_addr_x_1 = obi_addr_x_0 + (tile_h * t_size * 2);
 
     uint32_t len_x = (uint32_t) (t_size * 2);
     uint32_t std_x = (uint32_t) (N_SIZE * 2);
     uint32_t reps_x = (uint32_t) tile_h;
-    volatile uint32_t axi_addr_x = (uint32_t) x_in + (y_id * N_SIZE * tile_h_max * 2) + (index * t_size * 2);
+    uint32_t axi_addr_x = (uint32_t) x_in + (y_id * N_SIZE * tile_h_max * 2) + (index * t_size * 2);
     //printf("Doing initial input L2 idma memcpy\n");
     stnl_cmi_s();
     idma_conf_in();
@@ -179,13 +179,13 @@ int main(void){
     /**
      * 2b. Initalize and run IDMA transfer variables for initial L2 weight data-tile transfers.
      */
-    volatile uint32_t obi_addr_w_0 = obi_addr_x_1 + (tile_h * t_size * 2);
-    volatile uint32_t obi_addr_w_1 = obi_addr_w_0 + (tile_w * t_size * 2);
+    uint32_t obi_addr_w_0 = obi_addr_x_1 + (tile_h * t_size * 2);
+    uint32_t obi_addr_w_1 = obi_addr_w_0 + (tile_w * t_size * 2);
 
     uint32_t len_w = (uint32_t) (tile_w * 2);
     uint32_t std_w = (uint32_t) (K_SIZE * 2);
     uint32_t reps_w = (uint32_t) t_size;
-    volatile uint32_t axi_addr_w = (uint32_t) w_in + (x_id * tile_w_max * 2) + (index * t_size * K_SIZE * 2);
+    uint32_t axi_addr_w = (uint32_t) w_in + (x_id * tile_w_max * 2) + (index * t_size * K_SIZE * 2);
     //printf("Doing initial weight L2 idma memcpy\n");
     stnl_cmi_s();
     idma_conf_in();
