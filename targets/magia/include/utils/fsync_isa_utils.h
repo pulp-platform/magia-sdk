@@ -24,7 +24,7 @@
 #define FSYNC_ISA_UTILS_H
 
 #define _FS_GLOBAL_AGGR (0xFFFFFFFF >> (1+__builtin_clz(NUM_HARTS)))
-#define _FS_GLOBAL_ID   (-1)
+#define _FS_GLOBAL_ID   ((NUM_HARTS/2)-1)
 #define _FS_HNBR_AGGR   (0x1)
 #define _FS_HNBR_ID     (0)
 #define _FS_VNBR_AGGR   (0x1)
@@ -53,14 +53,6 @@ inline void fsync_legacy(volatile uint32_t level){
               (0b1011011 <<  0)   \n");
 }
 
-/* synch instruction */
-  // asm volatile(
-  //      ".word (0x0       << 25) | \     /* Reserved - 0x0 */
-  //             (0b00110   << 20) | \     /* R2 - t1 */
-  //             (0b00101   << 15) | \     /* R1 - t0 */
-  //             (0b010     << 12) | \     /* FUNC3 */
-  //             (0x0       <<  7) | \     /* Reserved - 0x0 */
-  //             (0b1011011 <<  0)   \n"); /* OPCODE */
 /**
  * This ISA instruction is the bread and butter for synchronizing the current tile with an arbitrary subset of 
  * other tiles in the MAGIA mesh. The functionality of this instruction is NOT easy to understand or correctly 
@@ -128,16 +120,27 @@ inline void fsync_legacy(volatile uint32_t level){
  * 
  * Good luck!
  */
-inline void fsync(volatile uint32_t id, volatile uint32_t aggregate){
-  asm volatile("addi t1, %0, 0" ::"r"(id));
-  asm volatile("addi t0, %0, 0" ::"r"(aggregate));
-  asm volatile(
-       ".word (0x0       << 25) | \
-              (0b00110   << 20) | \
-              (0b00101   << 15) | \
-              (0b010     << 12) | \
-              (0x0       <<  7) | \
-              (0b1011011 <<  0)   \n");
+
+/* synch instruction */
+  // asm volatile(
+  //      ".word (0x0       << 25) | \     /* Reserved - 0x0 */
+  //             (0b00110   << 20) | \     /* R2 - t1 */
+  //             (0b00101   << 15) | \     /* R1 - t0 */
+  //             (0b010     << 12) | \     /* FUNC3 */
+  //             (0x0       <<  7) | \     /* Reserved - 0x0 */
+  //             (0b1011011 <<  0)   \n"); /* OPCODE */
+static inline void fsync(volatile uint32_t id, volatile uint32_t aggregate){
+  asm volatile("addi t1, %0, 0\n\t"
+               "addi t0, %1, 0\n\t"
+        ".word (0x0       << 25) | \
+               (0b00110   << 20) | \
+               (0b00101   << 15) | \
+               (0b010     << 12) | \
+               (0x0       <<  7) | \
+               (0b1011011 <<  0)   \n\t"
+               :
+               :"r"(id), "r"(aggregate)
+               :"t1", "t0");
 }
 
 #endif /*FSYNC_ISA_UTILS_H*/
