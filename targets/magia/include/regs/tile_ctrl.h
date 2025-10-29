@@ -23,9 +23,9 @@
 #ifndef _TILE_REG_DEFS_
 #define _TILE_REG_DEFS_
 
-#define DEFAULT_EXIT_CODE (0xDEFC)
-#define PASS_EXIT_CODE    (0xAAAA)
-#define FAIL_EXIT_CODE    (0xFFFF)
+#define DEFAULT_EXIT_CODE (0x0)
+#define PASS_EXIT_CODE    (0x0)
+#define FAIL_EXIT_CODE    (0x1)
 
 #define IRQ_REDMULE_EVT_0 (31)
 #define IRQ_REDMULE_EVT_1 (30)

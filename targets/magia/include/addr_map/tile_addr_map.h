@@ -38,7 +38,7 @@
 #define L1_TILE_OFFSET (0x00100000)
 #define MHARTID_OFFSET (0x00100000)
 #define L2_BASE        (0xCC000000)
-#define TEST_END_ADDR  (0xCC030000)
+#define TEST_END_ADDR  (0xCCFF0000)
 #define PRINT_ADDR     (0xFFFF0004)
 
 #define MESH_X_TILES 2
