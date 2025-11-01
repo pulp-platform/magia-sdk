@@ -20,6 +20,7 @@
 
 SHELL 			:= /bin/bash
 
+CMAKE_BUILDDIR  	?= build
 BUILD_DIR 		?= ../sw/tests/$(test)
 MAGIA_DIR 		?= ../
 GVSOC_DIR 		?= ./gvsoc
@@ -39,7 +40,7 @@ tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
-.PHONY: gvsoc
+.PHONY: gvsoc build
 
 clean:
 	rm -rf build/
@@ -66,8 +67,8 @@ ifeq ($(compiler), GCC_MULTILIB)
 	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/magia/include/tile.h
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DCOMPILER=$(compiler) -B build --trace-expand
-	cmake --build build --verbose
+	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DCOMPILER=$(compiler) -B $(CMAKE_BUILDDIR) --trace-expand
+	cmake --build $(CMAKE_BUILDDIR) --verbose
 
 set_mesh:
 ifeq ($(tiles), 1)
