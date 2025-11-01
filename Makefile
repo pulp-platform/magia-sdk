@@ -1,7 +1,7 @@
 # Copyright (C) 2025 ETH Zurich and University of Bologna
 #
-# Licensed under the Solderpad Hardware License, Version 0.51 
-# (the "License"); you may not use this file except in compliance 
+# Licensed under the Solderpad Hardware License, Version 0.51
+# (the "License"); you may not use this file except in compliance
 # with the License. You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
@@ -15,17 +15,18 @@
 #
 # Authors: Victor Isachi <victor.isachi@unibo.it>
 # Alberto Dequino <alberto.dequino@unibo.it>
-# 
+#
 # Magia-sdk Makefile
 
 SHELL 			:= /bin/bash
 
+CMAKE_BUILDDIR  	?= build
 BUILD_DIR 		?= ../sw/tests/$(test)
 MAGIA_DIR 		?= ../
 GVSOC_DIR 		?= ./gvsoc
 CURR_DIR		?= $(shell pwd)
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
-BIN_ABS_PATH	?= $(CURR_DIR)/build/bin
+BIN_ABS_PATH	?= $(CURR_DIR)/$(CMAKE_BUILDDIR)/bin
 BIN 			?= $(BUILD_DIR)/build/verif
 build_mode		?= update
 fsync_mode		?= stall
@@ -51,7 +52,10 @@ tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
-.PHONY: gvsoc
+GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
+GVRUN_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles)
+
+.PHONY: gvsoc build
 
 clean:
 	rm -rf build/
@@ -79,13 +83,13 @@ ifeq ($(compiler), GCC_MULTILIB)
 	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/$(target_platform)/include/tile.h
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -B build --trace-expand
-	cmake --build build --verbose
+	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -B $(CMAKE_BUILDDIR) --trace-expand
+	cmake --build $(CMAKE_BUILDDIR) --verbose
 
 set_mesh:
 ifeq ($(tiles), 1)
 	$(eval mesh_dv=0)
-endif 
+endif
 
 run: set_mesh
 	@echo 'Magia is available at https://github.com/pulp-platform/MAGIA.git'
@@ -94,23 +98,23 @@ run: set_mesh
 ifndef test
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
-ifeq (,$(wildcard ./build/bin/$(test)))
+ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
 	$(error No test found with name: $(test))
 endif
 ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles)
+	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) run $(GVRUN_ARGS)
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
 	objcopy --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
 	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
-	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/build/stim_instr.txt $(BUILD_DIR)/build/stim_data.txt	
+	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/build/stim_instr.txt $(BUILD_DIR)/build/stim_data.txt
 	cd $(BUILD_DIR)													&& \
 	cp -sf ../../../sim/modelsim.ini modelsim.ini    				&& \
-	ln -sfn ../../../sim/work work         			
+	ln -sfn ../../../sim/work work
 	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
@@ -175,5 +179,3 @@ gvsoc_init:
 	git checkout lz/magia-v2-core && \
 	cd ../pulp && \
 	git checkout lz/magia-v2-pulp
-
-
