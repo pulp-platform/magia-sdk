@@ -29,6 +29,8 @@ fsync_mode		?= stall
 mesh_dv			?= 1
 fast_sim		?= 0
 eval			?= 0
+stalling		?= 1
+fsync_mm		?= 1
 
 target_platform ?= magia
 compiler 		?= GCC_MULTILIB
@@ -66,7 +68,7 @@ ifeq ($(compiler), GCC_MULTILIB)
 	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/magia/include/tile.h
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DCOMPILER=$(compiler) -B build --trace-expand
+	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DCOMPILER=$(compiler) -B build --trace-expand
 	cmake --build build --verbose
 
 set_mesh:

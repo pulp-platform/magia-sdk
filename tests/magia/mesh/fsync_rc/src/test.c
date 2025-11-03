@@ -9,6 +9,8 @@
 #include "test.h"
 #include "tile.h"
 #include "fsync.h"
+//#include "eventunit.h"
+
 
 /**
  * Compares the value written in L1 memory with the value written in L1 memory of the tile_0 of the same synched row or column.
@@ -58,6 +60,12 @@ int main(void){
 
     fsync_init(&fsync_ctrl);
 
+    #if STALLING == 0
+    eu_init();
+    eu_clear_events(0xFFFFFFFF);
+    eu_fsync_init();
+    #endif
+
     uint32_t l1_tile_base = get_l1_base(hartid);
     uint8_t x_id = (uint8_t) GET_X_ID(hartid);
     uint8_t y_id = (uint8_t) GET_Y_ID(hartid);
@@ -74,14 +82,20 @@ int main(void){
     //wait_nop(100 * hartid);
     mmio8(l1_tile_base) = y_id;
     fsync_sync_row(&fsync_ctrl);
+    #if STALLING == 0
+    eu_fsync_wait();
+    #endif
     flag = check_values(y_id, hartid);
     fsync_sync_row(&fsync_ctrl);
+    #if STALLING == 0
+    eu_fsync_wait();
+    #endif
     if(!flag){
         printf("No errors detected in row synch!\n");
     }
     else{
         printf("Errors detected in row synch!\n");
-        magia_return(hartid, 1);
+        
         return 1;
     }
     
@@ -97,8 +111,14 @@ int main(void){
     uint8_t val = x_id + (uint8_t) MESH_X_TILES;
     mmio8(l1_tile_base) = val;
     fsync_sync_col(&fsync_ctrl);
+    #if STALLING == 0
+    eu_fsync_wait();
+    #endif
     flag = check_values(val, hartid);
     fsync_sync_col(&fsync_ctrl);
+    #if STALLING == 0
+    eu_fsync_wait();
+    #endif
     if(!flag){
         printf("No errors detected in column synch!\n");
     }

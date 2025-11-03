@@ -34,6 +34,8 @@ target_compile_options(runtime
   PUBLIC
   -O3
   -DEVAL=${EVAL}
+  -DFSYNC_MM=${FSYNC_MM}
+  -DSTALLING=${STALLING}
 )
 
 target_compile_options(runtime

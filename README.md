@@ -24,6 +24,10 @@ The following *optional* parameters can be specified when running the make comma
 
 `eval`: **0**|**1** (**Default**: 0). Activates printing of error values in the testsuite.
 
+`stalling`: **0**|**1** (**Default**: 1). Activates stalling behavior for Fsync.
+
+`fsync_mm`: **0**|**1** (**Default**: 1). Activates memory mapped instructions for Fsync.
+
 `gui`: **0**|**1** (**Default**: 0). Activates the graphic user interface on the simulator (rtl only).
 
 `fast_sim`: **0**|**1** (**Default**: 0). Deactivates signal tracking for faster simulation (rtl only).

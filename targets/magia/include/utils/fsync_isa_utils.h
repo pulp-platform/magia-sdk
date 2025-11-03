@@ -23,6 +23,9 @@
 #ifndef FSYNC_ISA_UTILS_H
 #define FSYNC_ISA_UTILS_H
 
+#include "utils/tinyprintf.h"
+#include "addr_map/tile_addr_map.h"
+
 #define _FS_GLOBAL_AGGR (0xFFFFFFFF >> (1+__builtin_clz(NUM_HARTS)))
 #define _FS_GLOBAL_ID   (-1)
 #define _FS_HNBR_AGGR   (0x1)
@@ -35,6 +38,16 @@
 #define _FS_VRING_ID    (3)
 #define _FS_RC_LVL      (0x1 << (29-__builtin_clz(NUM_HARTS)))
 #define _FS_RC_AGGR     (0x155 >> (__builtin_clz(NUM_HARTS)-21))
+
+#ifdef FSYNC_MM
+#define FSYNC_MM_AGGR_REG_OFFSET    (0x00)
+#define FSYNC_MM_ID_REG_OFFSET      (0x04)
+#define FSYNC_MM_CONTROL_REG_OFFSET (0x08)
+#define FSYNC_MM_STATUS_REG_OFFSET  (0x0C)
+
+/* Status register bits */
+#define FSYNC_MM_STATUS_BUSY_MASK   (1 << 2)
+#endif
 
 /* synch instruction */
   // asm volatile(
@@ -129,6 +142,7 @@ inline void fsync_legacy(volatile uint32_t level){
  * Good luck!
  */
 inline void fsync(volatile uint32_t id, volatile uint32_t aggregate){
+  #if FSYNC_MM == 0
   asm volatile("addi t1, %0, 0" ::"r"(id));
   asm volatile("addi t0, %0, 0" ::"r"(aggregate));
   asm volatile(
@@ -138,6 +152,22 @@ inline void fsync(volatile uint32_t id, volatile uint32_t aggregate){
               (0b010     << 12) | \
               (0x0       <<  7) | \
               (0b1011011 <<  0)   \n");
+  #else
+  volatile char *fsync_base = (volatile char *)(FSYNC_BASE);
+  
+  *(volatile uint32_t *)(fsync_base + FSYNC_MM_AGGR_REG_OFFSET) = aggregate;
+  *(volatile uint32_t *)(fsync_base + FSYNC_MM_ID_REG_OFFSET) = id;
+  *(volatile uint32_t *)(fsync_base + FSYNC_MM_CONTROL_REG_OFFSET) = 1;
+  
+  #if STALLING == 1
+  // Polling mode - wait for completion
+  volatile uint32_t status;
+  do {
+    status = *(volatile uint32_t *)(fsync_base + FSYNC_MM_STATUS_REG_OFFSET);
+  } while (status & FSYNC_MM_STATUS_BUSY_MASK);
+  #endif
+  #endif
 }
+  
 
 #endif /*FSYNC_ISA_UTILS_H*/
