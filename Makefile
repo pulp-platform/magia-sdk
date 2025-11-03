@@ -40,6 +40,8 @@ tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
+GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
+
 .PHONY: gvsoc build
 
 clean:
@@ -82,14 +84,14 @@ run: set_mesh
 ifndef test
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
-ifeq (,$(wildcard ./build/bin/$(test)))
+ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
 	$(error No test found with name: $(test))
 endif
 ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVSOC_DIR)/install/bin/gvsoc --target=magia --binary=./build/bin/$(test) --trace-level=trace run
+	$(GVRUN) --target=magia --param binary=$(CMAKE_BUILDDIR)/bin/$(test) $(GVRUN_ARGS) run
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
