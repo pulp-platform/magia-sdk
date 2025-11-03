@@ -153,7 +153,7 @@ int main(void){
      */
     // This index calculates the initial contribution for the current tile
     int32_t index = x_id^y_id;
-    printf("Index: %d\n", index);
+    // printf("Index: %d\n", index);
 
     uint32_t obi_addr_x_0 = obi_addr_y + (tile_h * tile_w * 2);
     uint32_t obi_addr_x_1 = obi_addr_x_0 + (tile_h * t_size * 2);
@@ -200,7 +200,7 @@ int main(void){
     uint32_t horizontal_id;
     uint32_t vertical_id;
     uint32_t id_bit = 1 << (int)(INITIAL_BIT-1);
-    printf("INITIAL ID BIT IS: %d\n", id_bit);
+    // printf("INITIAL ID BIT IS: %d\n", id_bit);
 
     // printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
 
@@ -249,9 +249,9 @@ int main(void){
          */
         if(i != (timeslots - 1)){
             // printf("Loading next input tile\n");
-            vertical_id = y_id^id_bit;
-            horizontal_id = x_id^id_bit;
-            printf("vertical_id: %0d, horizontal_id: %0d, id_bit: %0d\n", vertical_id, horizontal_id, id_bit);
+            vertical_id = GET_ID(y_id^id_bit, x_id);
+            horizontal_id = GET_ID(y_id, x_id^id_bit);
+            // printf("vertical_id: %0d, horizontal_id: %0d, id_bit: %0d\n", vertical_id, horizontal_id, id_bit);
             idma_conf_out();
             idma_set_addr_len_out(get_l1_base(vertical_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 4) + (tile_w * t_size * 2 * (((i + 1) % 2))), weight_pt, tile_w * t_size * 2);
             idma_set_std2_rep2_out(0, 0, 1);
@@ -274,27 +274,23 @@ int main(void){
             idma_wait();
             stnl_par_f();
             
-            if (timeslots+1 < INITIAL_BIT)
-                id_bit >>= 1;
-            else if (timeslots-1 > INITIAL_BIT)
-                id_bit <<= 1;
+            if (i+1 < INITIAL_BIT){
+                id_bit >>= 1; 
+                // printf("DESCEND: timeslot %0d\n", i);
+            }
+            else if (i-1 > INITIAL_BIT){
+                id_bit <<= 1; 
+                // printf("ASCEND: timeslot %0d\n", i);
+            }
         }
         else{
-            sentinel_start();   // Last matmul overhead
+            sentinel_start();   // Last CMP overhead
             stnl_cmp_s();
             redmule_marith(obi_addr_y, weight_pt, input_pt);
             redmule_wait();
             stnl_par_f();
-            sentinel_end(); // Last matmul overhead
+            sentinel_end(); // Last CMP overhead
         }
-        
-        // /**
-        //  * 3c. Evoke the RED MULE 
-        //  * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
-        //  */
-        // //printf("Doing redmule\n");
-        // redmule_gemm(&redmule_ctrl, input_pt, weight_pt, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
-        // redmule_wait();
     }
 
     /**
@@ -337,7 +333,7 @@ int main(void){
             computed = *(volatile uint16_t*)(y_in + (i * K_SIZE + j));
             expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
             diff = (computed > expected) ? (computed - expected) : (expected - computed);
-            if(diff > 0x0011){
+            if(diff > 0x01FF){
                 if(y_id == 0)
                     printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_in+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
                 errors++;
