@@ -35,12 +35,10 @@ int amo_add_immediate(uint32_t addr, uint32_t immediate){
 }
 
 /**
- * Atomically increase the value in addr by 1
+ * Atomically increase the value in addr by amnt
  */
-inline void amo_increment(volatile uint32_t addr){
-    asm volatile("addi t0, %0, 0" ::"r"(addr));
-    asm volatile("li t1, 1" ::);
-    asm volatile("amoadd.w t2, t1, (t0)" ::);
+static inline void amo_increment(volatile uint32_t addr, volatile uint32_t amnt){
+    asm volatile("amoadd.w x0, %1, (%0)" ::"r"(addr), "r"(amnt):"memory");
 }
 
 #endif //AMO_UTILS_H
