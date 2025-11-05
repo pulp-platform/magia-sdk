@@ -20,6 +20,7 @@ target_sources(eu_lib
 
 target_include_directories(eu_lib
   PUBLIC
+    ${CMAKE_SOURCE_DIR}/hal/include
     ${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include
     "include/"
 )

@@ -15,6 +15,7 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Authors: Luca Balboni <luca.balboni10@studio.unibo.it>
+ * Alberto Dequino <alberto.dequino@unibo.it>
  *
  * MAGIA Event Unit - Generic utilities for all accelerators
  * Supports RedMulE, FSync, iDMA and custom events
@@ -27,40 +28,8 @@
 #include "magia_tile_utils.h"
 
 //=============================================================================
-// Event Type Definitions
-//=============================================================================
-
-typedef enum {
-    EU_EVENT_TYPE_DMA = 0,        // iDMA events
-    EU_EVENT_TYPE_TIMER,          // Timer events
-    EU_EVENT_TYPE_ACCELERATOR,    // Accelerator events (RedMulE, etc.)
-    EU_EVENT_TYPE_FSYNC,          // FSync events
-    EU_EVENT_TYPE_SOFTWARE,       // Software events
-    EU_EVENT_TYPE_BARRIER,        // Barrier events
-    EU_EVENT_TYPE_CUSTOM          // Custom cluster events
-} eu_event_type_t;
-
-typedef enum {
-    POLLING = 0,                  // Busy wait polling
-    WFE,                          // Wait For Event (RISC-V)
-    IRQ                           // Interrupt-based waiting
-} eu_wait_mode_t;
-
-//=============================================================================
 // Basic Event Unit Control Functions
 //=============================================================================
-
-/**
- * @brief Initialize Event Unit with default configuration
- */
-static inline void eu_init(void) {
-    // Clear all pending events
-    mmio32(EU_CORE_BUFFER_CLEAR) = 0xFFFFFFFF;
-    
-    // Reset masks to default (disabled)
-    mmio32(EU_CORE_MASK) = 0x00000000;
-    mmio32(EU_CORE_IRQ_MASK) = 0x00000000;
-}
 
 /**
  * @brief Enable specific event types in Event Unit mask
@@ -152,6 +121,7 @@ static inline uint32_t eu_wait_events_polling(uint32_t event_mask, uint32_t time
     do {
         detected_events = eu_check_events(event_mask);
         if (detected_events) {
+            eu_clear_events(event_mask);
             return detected_events;
         }
         
@@ -170,35 +140,17 @@ static inline uint32_t eu_wait_events_polling(uint32_t event_mask, uint32_t time
  */
 static inline uint32_t eu_wait_events_wfe(uint32_t event_mask) {
     uint32_t detected_events;
-    
-    // First check if events are already present
-    detected_events = eu_check_events(event_mask);
-    if (detected_events) {
-        return detected_events;
-    }
-    
+
     // Enable IRQ for these events (required for WFE wake-up)
     eu_enable_irq(event_mask);
-    
-    // Execute WFE instruction (CV32E40X specific: 0x8C000073)
-    __asm__ volatile (".word 0x8C000073" ::: "memory");
-    
-    // After wake-up, check for events
-    detected_events = eu_check_events(event_mask);
-    return detected_events;
-}
 
-/**
- * @brief Wait for events using Event Unit built-in wait
- * @param clear_after_wait If true, clear events after waiting
- * @return Current event buffer value
- */
-static inline uint32_t eu_wait_events_builtin(uint32_t clear_after_wait) {
-    if (clear_after_wait) {
-        return mmio32(EU_CORE_EVENT_WAIT_CLEAR);
-    } else {
-        return mmio32(EU_CORE_EVENT_WAIT);
+    while(eu_check_events(event_mask) == 0){
+        // Execute WFE instruction (CV32E40X specific: 0x8C000073)
+        __asm__ volatile (".word 0x8C000073" ::: "memory");
     }
+
+    eu_clear_events(event_mask);
+    return 1;
 }
 
 /**
@@ -208,18 +160,17 @@ static inline uint32_t eu_wait_events_builtin(uint32_t clear_after_wait) {
  * @param timeout_cycles Timeout in cycles (polling mode only, 0 = infinite)
  * @return Non-zero if events detected, 0 if timeout
  */
-static inline uint32_t eu_wait_events(uint32_t event_mask, eu_wait_mode_t mode, uint32_t timeout_cycles) {
+static inline uint32_t eu_wait_events(uint32_t event_mask, int mode, uint32_t timeout_cycles) {
     switch (mode) {
-        case POLLING:
-            return eu_wait_events_polling(event_mask, timeout_cycles);
+        case 0:
+            if(eu_wait_events_polling(event_mask, timeout_cycles) == 0){
+                printf("ERROR: TIMEOUT ON POLLING EVENT!\n");
+                return 0;
+            }
+            return 1;
             
-        case WFE:
+        case 1:
             return eu_wait_events_wfe(event_mask);
-            
-        case IRQ:
-            // For IRQ mode, just enable IRQ and use built-in wait
-            eu_enable_irq(event_mask);
-            return eu_wait_events_builtin(1); // Clear after wait
             
         default:
             return eu_wait_events_polling(event_mask, timeout_cycles);

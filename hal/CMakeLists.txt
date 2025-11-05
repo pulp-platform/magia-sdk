@@ -22,4 +22,5 @@ target_link_libraries(hal
     "idma_lib"
     "redmule_lib"
     "fsync_lib"
+    "eu_lib"
 )
