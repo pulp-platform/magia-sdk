@@ -16,6 +16,8 @@
 #define GEMM_MIN(x, y) (((int)(x) < (int)(y)) ? (x) : (y))
 #define GEMM_GTH(x, y, t) (((int)(x) >= (int)(t)) ? (x) : (y))
 #define GEMM_LTH(x, y, t) (((int)(x) <= (int)(t)) ? (x) : (y))
+#define SYNC_REQ (SYNC_BASE + 0x0)
+#define SYNC_RSP (SYNC_BASE + 0x4)
 
 #include <stdint.h>
 
@@ -38,24 +40,24 @@
 
 static inline void pair_sync_req(uint32_t id, uint32_t dst_id){
     // Send synchronization request to DST
-    amo_increment(SYNC_BASE + dst_id*L1_TILE_OFFSET, 1);
+    amo_increment(SYNC_REQ + dst_id*L1_TILE_OFFSET, 1);
 
     // Wait for DST synchronization response
-    while (mmio32(SYNC_BASE + id*L1_TILE_OFFSET) < 1);
+    while (mmio32(SYNC_RSP + id*L1_TILE_OFFSET) < 1);
 
     // Reset barrier counter
-    mmio32(SYNC_BASE + id*L1_TILE_OFFSET) = 0;
+    mmio32(SYNC_RSP + id*L1_TILE_OFFSET) = 0;
 }
 
 static inline void pair_sync_rsp(uint32_t id, uint32_t src_id){
     // Wait for SRC to request synchronization
-    while (mmio32(SYNC_BASE + id*L1_TILE_OFFSET) < 1);
+    while (mmio32(SYNC_REQ + id*L1_TILE_OFFSET) < 1);
 
     // Reset barrier counter
-    mmio32(SYNC_BASE + id*L1_TILE_OFFSET) = 0;
+    mmio32(SYNC_REQ + id*L1_TILE_OFFSET) = 0;
 
     // Send synchronization response to SRC
-    amo_increment(SYNC_BASE + src_id*L1_TILE_OFFSET, 1);
+    amo_increment(SYNC_RSP + src_id*L1_TILE_OFFSET, 1);
 }
 
 /**
