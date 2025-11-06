@@ -35,6 +35,7 @@ target_compile_options(runtime
   -O3
   -DEVAL=${EVAL}
   -DFSYNC_MM=${FSYNC_MM}
+  -DIDMA_MM=${IDMA_MM}
   -DSTALLING=${STALLING}
 )
 

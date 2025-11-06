@@ -36,6 +36,7 @@ int idma32_init(idma_controller_t *ctrl) {
  * @param len Byte length of memory block to transfer.
  */
 int idma32_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len){
+    #if IDMA_MM == 0
     if(dir){ // OBI to AXI (L1 to L2)
         idma_conf_out();
         idma_set_addr_len_out(axi_addr, obi_addr, len);
@@ -53,6 +54,18 @@ int idma32_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
         //printf("IDMA_memcpy_1d: Detected IRQ...\n");
     }
     return 0;
+    #else
+    idma_mm_conf(dir);
+    if(dir){
+        idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
+    }
+    else{
+        idma_mm_set_addr_len(dir, obi_addr, axi_addr, len);
+    }
+    idma_mm_set_std2_rep2(dir, 0, 0, 1);
+    idma_mm_set_std3_rep3(dir, 0, 0, 1);
+    idma_mm_start(dir);
+    #endif
 }
 
 /**
@@ -67,7 +80,7 @@ int idma32_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
  */
 int idma32_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps){
     //printf("IDMA Transfer! Direction: %d\n", dir);
-    
+    #if IDMA_MM == 0
     if(dir){ // OBI to AXI (L1 to L2)
         idma_conf_out();
         idma_set_addr_len_out(axi_addr, obi_addr, len);
@@ -85,6 +98,19 @@ int idma32_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
         //printf("IDMA_memcpy_2d: Detected IRQ...\n");  
     }
     return 0;
+    #else
+    idma_mm_conf(dir);
+    if(dir){
+        idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
+        idma_mm_set_std2_rep2(dir, std, len, reps);
+    }
+    else{
+        idma_mm_set_addr_len(dir, obi_addr, axi_addr, len);
+        idma_mm_set_std2_rep2(dir, len, std, reps);
+    }
+    idma_mm_set_std3_rep3(dir, 0, 0, 1);
+    idma_mm_start(dir);
+    #endif
 }
 
 extern int idma_init(idma_controller_t *ctrl)

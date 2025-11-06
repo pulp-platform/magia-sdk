@@ -120,5 +120,40 @@
 #define EU_DISPATCH_EVT_MASK         (0x00000002)                // bit 1
 
 
+//=============================================================================
+// IDMA Register Addresses
+//=============================================================================
+
+#define IDMA_CONF_OFFSET          (0x00)
+#define IDMA_STATUS_OFFSET        (0x04)  
+#define IDMA_NEXT_ID_OFFSET       (0x44)  
+#define IDMA_DONE_ID_OFFSET       (0x84)  
+#define IDMA_DST_ADDR_LOW_OFFSET  (0xD0)
+#define IDMA_SRC_ADDR_LOW_OFFSET  (0xD8)
+#define IDMA_LENGTH_LOW_OFFSET    (0xE0)
+#define IDMA_DST_STRIDE_2_LOW_OFFSET (0xE8)
+#define IDMA_SRC_STRIDE_2_LOW_OFFSET (0xF0)
+#define IDMA_REPS_2_LOW_OFFSET    (0xF8)
+#define IDMA_DST_STRIDE_3_LOW_OFFSET (0x100)
+#define IDMA_SRC_STRIDE_3_LOW_OFFSET (0x108)
+#define IDMA_REPS_3_LOW_OFFSET    (0x110)
+
+// Register Addresses - now direction-aware
+#define IDMA_CONF_ADDR(is_l1_to_l2)          ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_CONF_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_CONF_OFFSET))
+#define IDMA_STATUS_ADDR(is_l1_to_l2, id)    ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_STATUS_OFFSET + ((id) * 4)) : (IDMA_BASE_AXI2OBI + IDMA_STATUS_OFFSET + ((id) * 4)))
+#define IDMA_NEXT_ID_ADDR(is_l1_to_l2, id)   ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_NEXT_ID_OFFSET + ((id) * 4)) : (IDMA_BASE_AXI2OBI + IDMA_NEXT_ID_OFFSET + ((id) * 4)))
+#define IDMA_DONE_ID_ADDR(is_l1_to_l2, id)   ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_DONE_ID_OFFSET + ((id) * 4)) : (IDMA_BASE_AXI2OBI + IDMA_DONE_ID_OFFSET + ((id) * 4)))
+#define IDMA_DST_ADDR_LOW_ADDR(is_l1_to_l2)  ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_DST_ADDR_LOW_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_DST_ADDR_LOW_OFFSET))
+#define IDMA_SRC_ADDR_LOW_ADDR(is_l1_to_l2)  ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_SRC_ADDR_LOW_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_SRC_ADDR_LOW_OFFSET))
+#define IDMA_LENGTH_LOW_ADDR(is_l1_to_l2)    ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_LENGTH_LOW_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_LENGTH_LOW_OFFSET))
+#define IDMA_DST_STRIDE_2_LOW_ADDR(is_l1_to_l2) ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_DST_STRIDE_2_LOW_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_DST_STRIDE_2_LOW_OFFSET))
+#define IDMA_SRC_STRIDE_2_LOW_ADDR(is_l1_to_l2) ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_SRC_STRIDE_2_LOW_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_SRC_STRIDE_2_LOW_OFFSET))
+#define IDMA_REPS_2_LOW_ADDR(is_l1_to_l2)    ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_REPS_2_LOW_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_REPS_2_LOW_OFFSET))
+#define IDMA_DST_STRIDE_3_LOW_ADDR(is_l1_to_l2) ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_DST_STRIDE_3_LOW_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_DST_STRIDE_3_LOW_OFFSET))
+#define IDMA_SRC_STRIDE_3_LOW_ADDR(is_l1_to_l2) ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_SRC_STRIDE_3_LOW_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_SRC_STRIDE_3_LOW_OFFSET))
+#define IDMA_REPS_3_LOW_ADDR(is_l1_to_l2)    ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_REPS_3_LOW_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_REPS_3_LOW_OFFSET))
+
+
+
 
 #endif  // _TILE_REG_DEFS_

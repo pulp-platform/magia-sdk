@@ -22,6 +22,10 @@
 #ifndef IDMA_ISA_UTILS_H
 #define IDMA_ISA_UTILS_H
 
+#include "addr_map/tile_addr_map.h"
+#include "regs/tile_ctrl.h"
+#include "magia_tile_utils.h"
+
 #define idma_wait() __asm__ __volatile__("wfi" ::: "memory")
 
 /* conf instruction */
@@ -268,6 +272,38 @@ inline void idma_start_out(){
               (0b111     << 12) | \
               (0x0       <<  7) | \
               (0b1111011 <<  0)   \n");
+}
+
+//=============================================================================
+// Memory Mapped IDMA ISAs
+//=============================================================================
+
+inline void idma_mm_conf(uint32_t dir){
+  mmio32(IDMA_CONF_ADDR(dir)) = 0x3 << 10;
+  return;
+}
+
+inline void idma_mm_set_addr_len(uint32_t dir, uint32_t dst, uint32_t src, uint32_t len){
+  mmio32(IDMA_DST_ADDR_LOW_ADDR(dir)) = dst;
+  mmio32(IDMA_SRC_ADDR_LOW_ADDR(dir)) = src;
+  mmio32(IDMA_LENGTH_LOW_ADDR(dir)) = len;
+}
+
+inline void idma_mm_set_std2_rep2(uint32_t dir, uint32_t dst_stride_2, uint32_t src_stride_2, uint32_t reps_2){
+  mmio32(IDMA_DST_STRIDE_2_LOW_ADDR(dir)) = dst_stride_2;
+  mmio32(IDMA_SRC_STRIDE_2_LOW_ADDR(dir)) = src_stride_2;
+  mmio32(IDMA_REPS_2_LOW_ADDR(dir)) = reps_2;
+}
+
+inline void idma_mm_set_std3_rep3(uint32_t dir, uint32_t dst_stride_3, uint32_t src_stride_3, uint32_t reps_3){
+  mmio32(IDMA_DST_STRIDE_3_LOW_ADDR(dir)) = dst_stride_3;
+  mmio32(IDMA_SRC_STRIDE_3_LOW_ADDR(dir)) = src_stride_3;
+  mmio32(IDMA_REPS_3_LOW_ADDR(dir)) = reps_3;
+}
+
+inline uint32_t idma_mm_start(uint32_t dir){
+  uint32_t transfer_id = mmio32(IDMA_NEXT_ID_ADDR(dir, 0));
+  return transfer_id;
 }
 
 #endif /*IDMA_ISA_UTILS_H*/

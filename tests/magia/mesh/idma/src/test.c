@@ -10,6 +10,7 @@
 #include "tile.h"
 #include "idma.h"
 #include "fsync.h"
+#include "eventunit.h"
 
 /**
  * This test aims to verify the functionality of MAGIA as a systolic array for matrix multiplications,
@@ -43,6 +44,18 @@ int main(void){
     uint32_t y_id = GET_Y_ID(hartid);
     uint32_t x_id = GET_X_ID(hartid);
     uint32_t l1_tile_base = get_l1_base(hartid);
+
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+
+    eu_init(&eu_ctrl);
+    eu_clear_events(0xFFFFFFFF);
+    eu_fsync_init(&eu_ctrl, 0);
+    eu_idma_init(&eu_ctrl, 0);
 
     /**
      * 1. Calculate the static output data-tile dimensions.
@@ -89,18 +102,19 @@ int main(void){
 
 
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_z, obi_addr, len, std, reps);
-    idma_wait();
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     /**
      * 3. Use IDMA to write the L1 data in the input vector in L2.
      */
     idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr, len, std, reps);
-    idma_wait();
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     /**
      * 4. Wait that all the tiles have finished
      */
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(&eu_ctrl, WFE);
 
 
     /**

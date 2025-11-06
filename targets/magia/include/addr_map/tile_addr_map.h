@@ -51,6 +51,9 @@
 #define PRINT_ADDR     (0xFFFF0004)
 #define MHARTID_OFFSET (0x00100000)
 
+#define IDMA_BASE_AXI2OBI (IDMA_BASE)           // direction=0, L2 to L1
+#define IDMA_BASE_OBI2AXI (IDMA_BASE + 0x200)   // direction=1, L1 to L2
+
 #define MESH_X_TILES 2
 #define MESH_Y_TILES 2
 #define NUM_HARTS    (MESH_X_TILES*MESH_Y_TILES)
