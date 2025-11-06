@@ -22,6 +22,12 @@
 #ifndef REDMULE_ISA_UTILS_H
 #define REDMULE_ISA_UTILS_H
 
+#include "addr_map/tile_addr_map.h"
+#include "regs/tile_ctrl.h"
+
+#define HWPE_WRITE(value, offset) *(volatile uint32_t*)(REDMULE_BASE + offset) = value
+#define HWPE_READ(offset) *(volatile uint32_t*)(REDMULE_BASE + offset)
+
 #define redmule_wait() __asm__ __volatile__("wfi" ::: "memory")
 
 /* mcnfig instruction */
@@ -69,6 +75,22 @@ inline void redmule_marith(volatile uint32_t y_base, volatile uint32_t w_base, v
               (0b001     << 10) | \
               (0b001     <<  7) | \
               (0b0101011 <<  0)   \n");
+}
+
+inline void redmule_mm_mcnfig(volatile uint16_t k_size, volatile uint16_t m_size, volatile uint16_t n_size){
+  uint32_t mcfg_reg0 = (k_size << 16) | (m_size << 0);
+  uint32_t mcfg_reg1 = n_size << 0;
+  HWPE_WRITE(mcfg_reg0, REDMULE_REG_OFFS + REDMULE_MCFG0_PTR);
+  HWPE_WRITE(mcfg_reg1, REDMULE_REG_OFFS + REDMULE_MCFG1_PTR);
+}
+
+inline void redmule_mm_marith(volatile uint32_t y_base, volatile uint32_t w_base, volatile uint32_t x_base){
+  uint32_t arith_reg = (0b001 << 10) | (0b001 << 7);
+  HWPE_WRITE(x_base, REDMULE_REG_OFFS + REDMULE_REG_X_PTR);
+  HWPE_WRITE(w_base, REDMULE_REG_OFFS + REDMULE_REG_W_PTR);
+  HWPE_WRITE(y_base, REDMULE_REG_OFFS + REDMULE_REG_Z_PTR);
+  HWPE_WRITE(arith_reg, REDMULE_REG_OFFS + REDMULE_ARITH_PTR);
+  HWPE_WRITE(0, REDMULE_TRIGGER); 
 }
 
 #endif /*REDMULE_ISA_UTILS_H*/

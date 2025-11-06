@@ -36,6 +36,7 @@ target_compile_options(runtime
   -DEVAL=${EVAL}
   -DFSYNC_MM=${FSYNC_MM}
   -DIDMA_MM=${IDMA_MM}
+  -DREDMULE_MM=${REDMULE_MM}
   -DSTALLING=${STALLING}
 )
 
