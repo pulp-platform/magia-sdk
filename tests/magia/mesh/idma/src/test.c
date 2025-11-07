@@ -45,6 +45,7 @@ int main(void){
     uint32_t x_id = GET_X_ID(hartid);
     uint32_t l1_tile_base = get_l1_base(hartid);
 
+    #if STALLING == 0
     eu_config_t eu_cfg = {.hartid = hartid};
     eu_controller_t eu_ctrl = {
         .base = NULL,
@@ -56,6 +57,7 @@ int main(void){
     eu_clear_events(0xFFFFFFFF);
     eu_fsync_init(&eu_ctrl, 0);
     eu_idma_init(&eu_ctrl, 0);
+    #endif
 
     /**
      * 1. Calculate the static output data-tile dimensions.
@@ -102,19 +104,25 @@ int main(void){
 
 
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_z, obi_addr, len, std, reps);
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    #if STALLING == 0
+    eu_idma_wait_a2o(&eu_ctrl, POLLING);
+    #endif
 
     /**
      * 3. Use IDMA to write the L1 data in the input vector in L2.
      */
     idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr, len, std, reps);
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    #if STALLING == 0
+    eu_idma_wait_o2a(&eu_ctrl, POLLING);
+    #endif
 
     /**
      * 4. Wait that all the tiles have finished
      */
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WFE);
+    #if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, POLLING);
+    #endif
 
 
     /**

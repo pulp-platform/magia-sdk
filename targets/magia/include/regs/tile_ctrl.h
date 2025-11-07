@@ -153,6 +153,8 @@
 #define IDMA_SRC_STRIDE_3_LOW_ADDR(is_l1_to_l2) ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_SRC_STRIDE_3_LOW_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_SRC_STRIDE_3_LOW_OFFSET))
 #define IDMA_REPS_3_LOW_ADDR(is_l1_to_l2)    ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_REPS_3_LOW_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_REPS_3_LOW_OFFSET))
 
+// Status Register Bit Fields
+#define IDMA_STATUS_BUSY_MASK        (0x3FF) // bits 9:0
 
 //=============================================================================
 // RedMule Register Addresses

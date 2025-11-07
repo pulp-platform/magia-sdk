@@ -303,6 +303,20 @@ inline void idma_mm_set_std3_rep3(uint32_t dir, uint32_t dst_stride_3, uint32_t 
 
 inline uint32_t idma_mm_start(uint32_t dir){
   uint32_t transfer_id = mmio32(IDMA_NEXT_ID_ADDR(dir, 0));
+  #if STALLING == 1
+    // Polling mode - wait for completion
+  volatile uint32_t status;
+  if(dir){
+    do {
+      status = *(volatile uint32_t *)(IDMA_BASE_OBI2AXI + IDMA_STATUS_OFFSET);
+    } while (status & IDMA_STATUS_BUSY_MASK);
+  }
+  else{
+    do {
+      status = *(volatile uint32_t *)(IDMA_BASE_AXI2OBI + IDMA_STATUS_OFFSET);
+    } while (status & IDMA_STATUS_BUSY_MASK);
+  }
+  #endif
   return transfer_id;
 }
 

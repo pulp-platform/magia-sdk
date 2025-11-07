@@ -173,7 +173,8 @@ static inline uint32_t eu_wait_events(uint32_t event_mask, int mode, uint32_t ti
             return eu_wait_events_wfe(event_mask);
             
         default:
-            return eu_wait_events_polling(event_mask, timeout_cycles);
+            printf("ERROR: Unrecognized wait mode.\n");
+            return 0;
     }
 }
 
