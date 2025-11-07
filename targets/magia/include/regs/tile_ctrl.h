@@ -177,5 +177,7 @@
 #define REDMULE_MCFG1_PTR    0x50
 #define REDMULE_ARITH_PTR    0x54
 
+#define REDMULE_STATUS_BUSY_MASK     (0x1)
+
 
 #endif  // _TILE_REG_DEFS_

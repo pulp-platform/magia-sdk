@@ -91,6 +91,12 @@ inline void redmule_mm_marith(volatile uint32_t y_base, volatile uint32_t w_base
   HWPE_WRITE(y_base, REDMULE_REG_OFFS + REDMULE_REG_Z_PTR);
   HWPE_WRITE(arith_reg, REDMULE_REG_OFFS + REDMULE_ARITH_PTR);
   HWPE_WRITE(0, REDMULE_TRIGGER); 
+  #if STALLING == 1
+  volatile uint32_t status;
+  do {
+    status = *(volatile uint32_t *)(REDMULE_BASE + REDMULE_STATUS);
+  } while (status & REDMULE_STATUS_BUSY_MASK);
+  #endif
 }
 
 #endif /*REDMULE_ISA_UTILS_H*/
