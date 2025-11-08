@@ -97,8 +97,8 @@ int idma32_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
         idma_start_in();
         //printf("IDMA_memcpy_2d: Detected IRQ...\n");  
     }
-    return 0;
     #else
+    //printf("IDMA Transfer! Direction: %d\n", dir);
     idma_mm_conf(dir);
     if(dir){
         idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
@@ -111,6 +111,7 @@ int idma32_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
     idma_mm_set_std3_rep3(dir, 0, 0, 1);
     idma_mm_start(dir);
     #endif
+    return 0;
 }
 
 extern int idma_init(idma_controller_t *ctrl)

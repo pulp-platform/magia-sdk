@@ -77,15 +77,16 @@ inline void redmule_marith(volatile uint32_t y_base, volatile uint32_t w_base, v
               (0b0101011 <<  0)   \n");
 }
 
-inline void redmule_mm_mcnfig(volatile uint16_t k_size, volatile uint16_t m_size, volatile uint16_t n_size){
-  uint32_t mcfg_reg0 = (k_size << 16) | (m_size << 0);
-  uint32_t mcfg_reg1 = n_size << 0;
+inline int redmule_mm_mcnfig(volatile uint16_t k_size, volatile uint16_t m_size, volatile uint16_t n_size){
+  volatile uint32_t mcfg_reg0 = (k_size << 16) | (m_size << 0);
+  volatile uint32_t mcfg_reg1 = n_size << 0;
   HWPE_WRITE(mcfg_reg0, REDMULE_REG_OFFS + REDMULE_MCFG0_PTR);
   HWPE_WRITE(mcfg_reg1, REDMULE_REG_OFFS + REDMULE_MCFG1_PTR);
+  return 0;
 }
 
-inline void redmule_mm_marith(volatile uint32_t y_base, volatile uint32_t w_base, volatile uint32_t x_base){
-  uint32_t arith_reg = (0b001 << 10) | (0b001 << 7);
+inline int redmule_mm_marith(volatile uint32_t y_base, volatile uint32_t w_base, volatile uint32_t x_base){
+  volatile uint32_t arith_reg = (0b001 << 10) | (0b001 << 7);
   HWPE_WRITE(x_base, REDMULE_REG_OFFS + REDMULE_REG_X_PTR);
   HWPE_WRITE(w_base, REDMULE_REG_OFFS + REDMULE_REG_W_PTR);
   HWPE_WRITE(y_base, REDMULE_REG_OFFS + REDMULE_REG_Z_PTR);
@@ -97,6 +98,7 @@ inline void redmule_mm_marith(volatile uint32_t y_base, volatile uint32_t w_base
     status = *(volatile uint32_t *)(REDMULE_BASE + REDMULE_STATUS);
   } while (status & REDMULE_STATUS_BUSY_MASK);
   #endif
+  return 0;
 }
 
 #endif /*REDMULE_ISA_UTILS_H*/

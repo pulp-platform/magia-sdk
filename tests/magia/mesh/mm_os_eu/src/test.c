@@ -40,19 +40,20 @@ int main(void){
         .api = &redmule_api,
     };
 
+    idma_init(&idma_ctrl);
+    redmule_init(&redmule_ctrl);
+   
+    #if STALLING == 0
     eu_config_t eu_cfg = {.hartid = hartid};
     eu_controller_t eu_ctrl = {
         .base = NULL,
         .cfg = &eu_cfg,
         .api = &eu_api,
     };
-
-    idma_init(&idma_ctrl);
-    redmule_init(&redmule_ctrl);
     eu_init(&eu_ctrl);
-
     eu_redmule_init(&eu_ctrl, 0);
     eu_idma_init(&eu_ctrl, 0);
+    #endif
 
     uint32_t y_id           = GET_Y_ID(hartid);
     uint32_t x_id           = GET_X_ID(hartid);
@@ -147,15 +148,21 @@ int main(void){
          * And then the t0 weight and input tiles
          */
         idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
+        #if STALLING == 0
         eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        #endif
 
         //printf("Recieved this data: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2));
 
         idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x_0, len_x, std_x, reps_x);
+        #if STALLING == 0
         eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        #endif
 
         idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w, obi_addr_w_0, len_w, std_w, reps_w);
+        #if STALLING == 0
         eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        #endif
 
         /**
          * 4. Cycle over the timeslots.
@@ -188,18 +195,24 @@ int main(void){
              */
             if(i < (timeslots - 1)){
                 idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x + (t_size * (i + 1) * 2), input_pt_next, len_x, std_x, reps_x);
+                #if STALLING == 0
                 eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                #endif
 
                 idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w + (t_size * K_SIZE * (i + 1) * 2), weight_pt_next, len_w, std_w, reps_w);
                 redmule_gemm(&redmule_ctrl, input_pt, weight_pt, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
+                #if STALLING == 0
                 eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
                 eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                #endif
 
                 //printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2));
             }
             else{
                 redmule_gemm(&redmule_ctrl, input_pt, weight_pt, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
+                #if STALLING == 0
                 eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                #endif
                 //printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2));
             }
         }
@@ -208,7 +221,9 @@ int main(void){
          * 5. Store the output data-tile back to L2
          */
         idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y_out, obi_addr_y, len_y, std_y, reps_y);
+        #if STALLING == 0
         eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        #endif
     }
 
     /**

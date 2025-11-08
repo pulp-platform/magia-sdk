@@ -6,7 +6,7 @@
 # Philip Wiese <wiesep@iis.ee.ethz.ch>
 # Alberto Dequino <alberto.dequino@unibo.it>
 
-set(TEST_NAME test_idma)
+set(TEST_NAME test_idma_2d)
 
 file(GLOB_RECURSE TEST_SRCS
   "src/*.c"
