@@ -16,8 +16,8 @@
 #define GEMM_MIN(x, y) (((int)(x) < (int)(y)) ? (x) : (y))
 #define GEMM_GTH(x, y, t) (((int)(x) >= (int)(t)) ? (x) : (y))
 #define GEMM_LTH(x, y, t) (((int)(x) <= (int)(t)) ? (x) : (y))
-#define SYNC_REQ (SYNC_BASE + 0x0)
-#define SYNC_RSP (SYNC_BASE + 0x4)
+#define SYNC_H (SYNC_BASE + 0x0)
+#define SYNC_V (SYNC_BASE + 0x4)
 
 #include <stdint.h>
 
@@ -38,26 +38,24 @@
 #include "redmule.h"
 #include "fsync.h"
 
-static inline void pair_sync_req(uint32_t id, uint32_t dst_id){
-    // Send synchronization request to DST
-    amo_increment(SYNC_REQ + dst_id*L1_TILE_OFFSET, 1);
-
-    // Wait for DST synchronization response
-    while (mmio32(SYNC_RSP + id*L1_TILE_OFFSET) < 1);
-
-    // Reset barrier counter
-    mmio32(SYNC_RSP + id*L1_TILE_OFFSET) = 0;
+static inline void h_pair_sync_wait(uint32_t id){
+    // Wait for horizontal data to be ready
+    csem_wait(SYNC_H + id*L1_TILE_OFFSET);
 }
 
-static inline void pair_sync_rsp(uint32_t id, uint32_t src_id){
-    // Wait for SRC to request synchronization
-    while (mmio32(SYNC_REQ + id*L1_TILE_OFFSET) < 1);
+static inline void h_pair_sync_signal(uint32_t id){
+    // Signal that horizontal data is ready
+    csem_signal(SYNC_H + id*L1_TILE_OFFSET);
+}
 
-    // Reset barrier counter
-    mmio32(SYNC_REQ + id*L1_TILE_OFFSET) = 0;
+static inline void v_pair_sync_wait(uint32_t id){
+    // Wait for vertical data to be ready
+    csem_wait(SYNC_V + id*L1_TILE_OFFSET);
+}
 
-    // Send synchronization response to SRC
-    amo_increment(SYNC_RSP + src_id*L1_TILE_OFFSET, 1);
+static inline void v_pair_sync_signal(uint32_t id){
+    // Signal that vertical data is ready
+    csem_signal(SYNC_V + id*L1_TILE_OFFSET);
 }
 
 /**
@@ -262,28 +260,14 @@ int main(void){
             //     printf("Timeslot %d\n", i);
 
             stnl_snc_s();
-            if ((x_id%4 == 0)  || (x_id%4 == 3)) {
-                // printf("Sending Sync REQ to %d\n", horizontal_dst_id);
-                pair_sync_req(hartid, horizontal_dst_id);
-                // printf("Sending Sync RSP to %d\n", horizontal_src_id);
-                pair_sync_rsp(hartid, horizontal_src_id);
-            } else {
-                // printf("Sending Sync RSP to %d\n", horizontal_src_id);
-                pair_sync_rsp(hartid, horizontal_src_id);
-                // printf("Sending Sync REQ to %d\n", horizontal_dst_id);
-                pair_sync_req(hartid, horizontal_dst_id);
-            }
-            if ((y_id%4 == 0)  || (y_id%4 == 3)) {
-                // printf("Sending Sync REQ to %d\n", vertical_dst_id);
-                pair_sync_req(hartid, vertical_dst_id);
-                // printf("Sending Sync RSP to %d\n", vertical_src_id);
-                pair_sync_rsp(hartid, vertical_src_id);
-            } else {
-                // printf("Sending Sync RSP to %d\n", vertical_src_id);
-                pair_sync_rsp(hartid, vertical_src_id);
-                // printf("Sending Sync REQ to %d\n", vertical_dst_id);
-                pair_sync_req(hartid, vertical_dst_id);
-            }
+            // printf("Signal Horizontal Sync Semaphore %d at iteration %d\n", horizontal_dst_id, i);
+            h_pair_sync_signal(horizontal_dst_id);
+            // printf("Signal Vertical Sync Semaphore %d at iteration %d\n", vertical_src_id, i);
+            v_pair_sync_signal(vertical_src_id);
+            // printf("Wait Horizontal Sync Semaphore %d at iteration %d\n", hartid, i);
+            h_pair_sync_wait(hartid);
+            // printf("Wait Vertical Sync Semaphore %d at iteration %d\n", hartid, i);
+            v_pair_sync_wait(hartid);
             stnl_snc_f();
 
             stnl_ts_s();

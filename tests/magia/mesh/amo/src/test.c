@@ -43,6 +43,30 @@ int main(void){
     // Synch all the tiles
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
 
+    if (hartid == 0) {
+        printf("Releasing binary semaphores...\n");
+        for (int i = 1; i < NUM_HARTS; i++){
+            bsem_signal(SYNC_BASE + i*L1_TILE_OFFSET);
+        }
+        printf("Binary semaphores released...\n");
+    } else {
+        printf("Acquiring binary semaphore...\n");
+        bsem_wait(SYNC_BASE + hartid*L1_TILE_OFFSET);
+        printf("Binary semaphore acquired...\n");
+    }
+
+    if (hartid == 0) {
+        printf("Acquiring counting semaphore...\n");
+        for (int i = 1; i < NUM_HARTS; i++){
+            csem_wait(SYNC_BASE + hartid*L1_TILE_OFFSET);
+        }
+        printf("Counting emaphore acquired...\n");
+    } else {
+        printf("Releasing counting semaphore...\n");
+        csem_signal(SYNC_BASE + 0*L1_TILE_OFFSET);
+        printf("Counting semaphore released...\n");
+    }
+
     /**
      * 2. Main loop.
      * Iterate N_ITERS times over the L1 counters of all the mesh tiles, increasing them by 1.
