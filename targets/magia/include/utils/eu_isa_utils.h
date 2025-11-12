@@ -133,6 +133,24 @@ static inline uint32_t eu_wait_events_polling(uint32_t event_mask, uint32_t time
     return 0; // Timeout
 }
 
+//=============================================================================
+// LOW-LEVEL HAL (PULP-compatible evt_read32)
+//=============================================================================
+
+// evt_read32: blocking read with p.elw instruction
+static inline unsigned int evt_read32(unsigned int addr) {
+    unsigned int value;
+    // Direct p.elw inline assembly for PULP cores (RI5CY, CV32E40P)
+    __asm__ __volatile__ (
+        "p.elw %0, 0(%1)"
+        : "=r" (value)
+        : "r" (addr)
+        : "memory"
+    );
+    return value;
+}
+
+
 /**
  * @brief Wait for events using RISC-V WFE instruction
  * @param event_mask Bitmask of events to wait for
@@ -141,12 +159,8 @@ static inline uint32_t eu_wait_events_polling(uint32_t event_mask, uint32_t time
 static inline uint32_t eu_wait_events_wfe(uint32_t event_mask) {
     uint32_t detected_events;
 
-    // Enable IRQ for these events (required for WFE wake-up)
-    eu_enable_irq(event_mask);
-
     while(eu_check_events(event_mask) == 0){
-        // Execute WFE instruction (CV32E40X specific: 0x8C000073)
-        __asm__ volatile (".word 0x8C000073" ::: "memory");
+        evt_read32(EU_CORE_EVENT_WAIT);
     }
 
     eu_clear_events(event_mask);

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Alberto Dequino <alberto.dequino@unibo.it>
-# add_subdirectory(hello_world)
+add_subdirectory(hello_world)
 # add_subdirectory(fsync_levels)
 add_subdirectory(fsync_rc)
 # add_subdirectory(fsync_diag)

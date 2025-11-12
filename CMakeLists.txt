@@ -42,9 +42,9 @@ project(magia-sdk LANGUAGES C ASM)
 
 set(ABI ilp32)
 if (COMPILER STREQUAL "GCC_PULP")
-    set(ISA rv32imaf)
+    set(ISA rv32imfcxpulpv2)
 elseif (COMPILER STREQUAL "GCC_MULTILIB")
-    set(ISA rv32imac_zfinx_zhinx)
+    set(ISA rv32imfcxpulpv2)
 endif ()
 
 

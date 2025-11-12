@@ -12,6 +12,8 @@
 #include "fsync.h"
 #include "eventunit.h"
 
+#define WAIT_MODE WFE
+
 /**
  * This test aims to verify the functionality of MAGIA as a systolic array for matrix multiplications,
  * following the output-static mechanism. 
@@ -105,7 +107,7 @@ int main(void){
 
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_z, obi_addr, len, std, reps);
     #if STALLING == 0
-    eu_idma_wait_a2o(&eu_ctrl, POLLING);
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
     #endif
 
     /**
@@ -113,7 +115,7 @@ int main(void){
      */
     idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr, len, std, reps);
     #if STALLING == 0
-    eu_idma_wait_o2a(&eu_ctrl, POLLING);
+    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
     #endif
 
     /**
@@ -121,7 +123,7 @@ int main(void){
      */
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, POLLING);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     #endif
 
 

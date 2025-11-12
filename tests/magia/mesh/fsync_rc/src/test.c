@@ -11,6 +11,8 @@
 #include "fsync.h"
 #include "eventunit.h"
 
+#define WAIT_MODE WFE
+
 
 /**
  * Compares the value written in L1 memory with the value written in L1 memory of the tile_0 of the same synched row or column.
@@ -93,12 +95,12 @@ int main(void){
     mmio8(l1_tile_base) = y_id;
     fsync_sync_row(&fsync_ctrl);
     #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WFE);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     #endif
     flag = check_values(y_id, hartid);
     fsync_sync_row(&fsync_ctrl);
     #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WFE);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     #endif
     if(!flag){
         printf("No errors detected in row synch!\n");
@@ -125,12 +127,12 @@ int main(void){
     mmio8(l1_tile_base) = val;
     fsync_sync_col(&fsync_ctrl);
     #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WFE);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     #endif
     flag = check_values(val, hartid);
     fsync_sync_col(&fsync_ctrl);
     #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WFE);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     #endif
     if(!flag){
         printf("No errors detected in column synch!\n");
