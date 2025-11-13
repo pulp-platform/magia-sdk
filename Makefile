@@ -20,6 +20,7 @@
 
 SHELL 			:= /bin/bash
 
+CMAKE_BUILDDIR  	?= build
 BUILD_DIR 		?= ../sw/tests/$(test)
 MAGIA_DIR 		?= ../
 GVSOC_DIR 		?= ./gvsoc
@@ -39,7 +40,9 @@ tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
-.PHONY: gvsoc
+GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
+
+.PHONY: gvsoc build
 
 clean:
 	rm -rf build/
@@ -66,8 +69,8 @@ ifeq ($(compiler), GCC_MULTILIB)
 	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/magia/include/tile.h
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DCOMPILER=$(compiler) -B build --trace-expand
-	cmake --build build --verbose
+	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DCOMPILER=$(compiler) -B $(CMAKE_BUILDDIR) --trace-expand
+	cmake --build $(CMAKE_BUILDDIR) --verbose
 
 set_mesh:
 ifeq ($(tiles), 1)
@@ -81,14 +84,14 @@ run: set_mesh
 ifndef test
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
-ifeq (,$(wildcard ./build/bin/$(test)))
+ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
 	$(error No test found with name: $(test))
 endif
 ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVSOC_DIR)/install/bin/gvsoc --target=magia --binary=./build/bin/$(test) --trace-level=trace run
+	$(GVRUN) --target=magia --param binary=$(CMAKE_BUILDDIR)/bin/$(test) $(GVRUN_ARGS) run
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
