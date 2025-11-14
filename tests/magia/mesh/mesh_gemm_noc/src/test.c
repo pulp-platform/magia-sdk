@@ -16,8 +16,10 @@
 #define GEMM_MIN(x, y) (((int)(x) < (int)(y)) ? (x) : (y))
 #define GEMM_GTH(x, y, t) (((int)(x) >= (int)(t)) ? (x) : (y))
 #define GEMM_LTH(x, y, t) (((int)(x) <= (int)(t)) ? (x) : (y))
-#define SYNC_H (SYNC_BASE + 0x0)
-#define SYNC_V (SYNC_BASE + 0x4)
+#define SYNC_SRC_H (SYNC_BASE + 0x0)
+#define SYNC_DST_H (SYNC_BASE + 0x4)
+#define SYNC_SRC_V (SYNC_BASE + 0x8)
+#define SYNC_DST_V (SYNC_BASE + 0xC)
 
 #include <stdint.h>
 
@@ -38,24 +40,28 @@
 #include "redmule.h"
 #include "fsync.h"
 
-static inline void h_pair_sync_wait(uint32_t id){
+static inline void h_pair_sync_wait(volatile uint32_t id){
     // Wait for horizontal data to be ready
-    csem_wait(SYNC_H + id*L1_TILE_OFFSET);
+    csem_wait(SYNC_SRC_H + id*L1_TILE_OFFSET);
+    csem_wait(SYNC_DST_H + id*L1_TILE_OFFSET);
 }
 
-static inline void h_pair_sync_signal(uint32_t id){
+static inline void h_pair_sync_signal(volatile uint32_t src_id, volatile uint32_t dst_id){
     // Signal that horizontal data is ready
-    csem_signal(SYNC_H + id*L1_TILE_OFFSET);
+    csem_signal(SYNC_SRC_H + src_id*L1_TILE_OFFSET);
+    csem_signal(SYNC_DST_H + dst_id*L1_TILE_OFFSET);
 }
 
-static inline void v_pair_sync_wait(uint32_t id){
+static inline void v_pair_sync_wait(volatile uint32_t id){
     // Wait for vertical data to be ready
-    csem_wait(SYNC_V + id*L1_TILE_OFFSET);
+    csem_wait(SYNC_SRC_V + id*L1_TILE_OFFSET);
+    csem_wait(SYNC_DST_V + id*L1_TILE_OFFSET);
 }
 
-static inline void v_pair_sync_signal(uint32_t id){
+static inline void v_pair_sync_signal(volatile uint32_t src_id, volatile uint32_t dst_id){
     // Signal that vertical data is ready
-    csem_signal(SYNC_V + id*L1_TILE_OFFSET);
+    csem_signal(SYNC_SRC_V + src_id*L1_TILE_OFFSET);
+    csem_signal(SYNC_DST_V + dst_id*L1_TILE_OFFSET);
 }
 
 /**
@@ -260,10 +266,10 @@ int main(void){
             //     printf("Timeslot %d\n", i);
 
             stnl_snc_s();
-            // printf("Signal Horizontal Sync Semaphore %d at iteration %d\n", horizontal_dst_id, i);
-            h_pair_sync_signal(horizontal_dst_id);
-            // printf("Signal Vertical Sync Semaphore %d at iteration %d\n", vertical_src_id, i);
-            v_pair_sync_signal(vertical_src_id);
+            // printf("Signal Horizontal Sync Semaphore (%d, %d) at iteration %d\n", horizontal_src_id, horizontal_dst_id, i);
+            h_pair_sync_signal(horizontal_src_id, horizontal_dst_id);
+            // printf("Signal Vertical Sync Semaphore (%d, %d) at iteration %d\n", vertical_src_id, vertical_dst_id, i);
+            v_pair_sync_signal(vertical_src_id, vertical_dst_id);
             // printf("Wait Horizontal Sync Semaphore %d at iteration %d\n", hartid, i);
             h_pair_sync_wait(hartid);
             // printf("Wait Vertical Sync Semaphore %d at iteration %d\n", hartid, i);
