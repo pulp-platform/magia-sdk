@@ -110,7 +110,7 @@ int main(void){
     uint32_t reps_y         = (uint32_t) tile_h;
     uint32_t obi_addr_y     = (l1_tile_base);
     uint32_t axi_addr_y     = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
-    uint32_t axi_addr_y_out = (uint32_t) y_out + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
+    //uint32_t axi_addr_y_out = (uint32_t) y_out + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
     
     /**
      * 2a. Initalize the IDMA transfer variables for input data-tile transfers.
@@ -175,7 +175,7 @@ int main(void){
         /**
          * 5. Store the output data-tile back to L2
          */
-        idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y_out, obi_addr_y, len_y, std_y, reps_y);
+        idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
         #if STALLING == 0
         eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
         #endif
@@ -186,18 +186,19 @@ int main(void){
      */
     uint32_t errors=0;
     uint16_t computed, expected, diff = 0;
+    uint32_t idx = 0;
     for(int i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
         for(int j = (x_id * tile_w_max); j < (x_id * tile_w_max) + tile_w; j++){
-            computed = *(volatile uint16_t*)(y_out + (i * K_SIZE + j));
+            computed = *(volatile uint16_t*)(y_inp + (i * K_SIZE + j));
             expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
             diff = (computed > expected) ? (computed - expected) : (expected - computed);
             if(diff > 0x0011){
                 #if EVAL == 1
-                if(hartid == 0)
-                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_out + (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                    printf("Error detected at coordinates[%d][%d]: Y_L1=%x Y_L2=%x Z=%x (Address L2: %x)\n", i, j, *(volatile uint16_t*)(obi_addr_y + (idx * 2)), *(volatile uint16_t*)(y_inp + (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)), (y_inp + (i * K_SIZE + j)));
                 #endif    
                 errors++;
-            }       
+            }
+            idx++;       
         }
     }
     printf("Number of errors: %d\n", errors);

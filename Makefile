@@ -35,7 +35,7 @@ idma_mm			?= 1
 redmule_mm		?= 1
 
 target_platform ?= magia
-compiler 		?= GCC_MULTILIB
+compiler 		?= GCC_PULP
 gui 			?= 0
 tiles 			?= 2
 

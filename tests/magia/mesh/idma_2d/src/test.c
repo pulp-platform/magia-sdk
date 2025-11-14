@@ -104,12 +104,13 @@ int main(void){
     uint32_t axi_addr_z = (uint32_t) z_out + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
     uint32_t axi_addr_y = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
 
-
+    // printf("Copying data from L2\n");
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_z, obi_addr, len, std, reps);
     #if STALLING == 0
     eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
     #endif
 
+    // printf("Copying data to L2\n");
     /**
      * 3. Use IDMA to write the L1 data in the input vector in L2.
      */
@@ -118,10 +119,11 @@ int main(void){
     eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
     #endif
 
+
     /**
      * 4. Wait that all the tiles have finished
      */
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global(&fsync_ctrl);
     #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     #endif
@@ -130,25 +132,24 @@ int main(void){
     /**
      * 5. Check results
      */
-    uint32_t errors=0;
-    if(hartid==0){
-        uint16_t computed, expected, diff = 0;
-        for(uint8_t i = 0; i < M_SIZE; i++){
-            for(uint8_t j = 0; j < K_SIZE; j++){
-                computed = *(volatile uint16_t*)(y_inp + (i * K_SIZE + j));
-                expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
-                diff = (computed > expected) ? (computed - expected) : (expected - computed);
-                if(diff > 0x0011){
-                    #if EVAL == 1
-                    if(y_id == 0)
-                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
-                    #endif    
-                    errors++;
-                }       
-            }
+    // printf("Check start\n");
+    volatile uint32_t errors=0;
+    volatile uint16_t computed, expected, diff = 0;
+    for(uint8_t i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
+        for(uint8_t j = (x_id * tile_w_max); j < (x_id * tile_w_max + tile_w); j++){
+            computed = *(volatile uint16_t*)(y_inp + (i * K_SIZE + j));
+            expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
+            diff = (computed > expected) ? (computed - expected) : (expected - computed);
+            if(diff > 0x0011){
+                #if EVAL == 1
+                if(y_id == 0)
+                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                #endif    
+                errors++;
+            }       
         }
-        printf("Number of errors: %d\n", errors);
     }
+    printf("Number of errors: %d\n", errors);
     
     return errors;  
 }

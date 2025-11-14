@@ -211,6 +211,15 @@ int fsync32_sync_down(fsync_controller_t *ctrl){
     return 0; 
 }
 
+
+/**
+ * Synchronizes the entire mesh.
+ */
+int fsync32_sync_global(fsync_controller_t *ctrl){
+    fsync(0, (uint32_t) (0xFFFFFFFF >> (32 - MAX_SYNC_LVL)));
+    return 0;
+}
+
 void fsync32_hnbr(fsync_controller_t *ctrl){
   fsync(_FS_HNBR_ID, _FS_HNBR_AGGR);
 }
@@ -265,6 +274,8 @@ extern int fsync_sync_up(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_sync_up"), used, visibility("default")));
 extern int fsync_sync_down(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_sync_down"), used, visibility("default")));
+extern int fsync_sync_global(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_sync_global"), used, visibility("default")));
 extern void fsync_hnbr(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_hnbr"), used, visibility("default")));
 extern void fsync_vnbr(fsync_controller_t *ctrl)
