@@ -95,10 +95,6 @@ int main(void){
     uint32_t obi_addr_y = (l1_tile_base);
     uint32_t axi_addr_y = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
     
-    //printf("Doing idma memcpy y\n");
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
-    idma_wait();
-    
     /**
      * 2a. Initalize the IDMA transfer variables for input data-tile transfers.
      */
@@ -118,6 +114,11 @@ int main(void){
     uint32_t axi_addr_w = (uint32_t) w_inp + (x_id * tile_w_max * 2);
 
     //printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
+
+    //sentinel_start();
+    //printf("Doing idma memcpy y\n");
+    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
+    idma_wait();
 
     /**
      * 3. Cycle over the timeslots.
@@ -151,6 +152,8 @@ int main(void){
      */
     idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
     idma_wait();
+
+    //sentinel_end();
 
     /**
      * 5. Check results

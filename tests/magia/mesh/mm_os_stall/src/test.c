@@ -139,6 +139,7 @@ int main(void){
         /** 3. Timestlot t-1 
          * Load the static output tile
          */
+        //sentinel_start();
         idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
         #if STALLING == 0
         eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
@@ -179,6 +180,7 @@ int main(void){
         #if STALLING == 0
         eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
         #endif
+        //sentinel_end();
     }
 
     /**
