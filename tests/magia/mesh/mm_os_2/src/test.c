@@ -10,8 +10,10 @@
 #include "tile.h"
 #include "idma.h"
 #include "redmule.h"
+#include "eventunit.h"
 
 #define N_ITERATIONS 1
+#define WAIT_MODE WFE
 
 /**
  * This test aims to verify the functionality of MAGIA as a systolic array for matrix multiplications,
@@ -40,6 +42,18 @@ int main(void){
 
     idma_init(&idma_ctrl);
     redmule_init(&redmule_ctrl);
+   
+    #if STALLING == 0
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+    eu_init(&eu_ctrl);
+    eu_redmule_init(&eu_ctrl, 0);
+    eu_idma_init(&eu_ctrl, 0);
+    #endif
 
     uint32_t y_id           = GET_Y_ID(hartid);
     uint32_t x_id           = GET_X_ID(hartid);
@@ -96,7 +110,7 @@ int main(void){
     uint32_t reps_y         = (uint32_t) tile_h;
     uint32_t obi_addr_y     = (l1_tile_base);
     uint32_t axi_addr_y     = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
-    uint32_t axi_addr_y_out = (uint32_t) y_out + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
+    //uint32_t axi_addr_y_out = (uint32_t) y_out + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2); 
     
     /**
      * 2a. Initalize the IDMA transfer variables for input data-tile transfers.
@@ -133,34 +147,22 @@ int main(void){
          * Load the static output tile
          * And then the t0 weight and input tiles
          */
-        idma_conf_in();
-        idma_set_addr_len_in(obi_addr_y, axi_addr_y, len_y);
-        idma_set_std2_rep2_in(len_y, std_y, reps_y);
-        idma_set_std3_rep3_in(0, 0, 1);
-
-        idma_start_in();
-        idma_wait();
+        idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
+        #if STALLING == 0
+        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        #endif
 
         //printf("Recieved this data: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2));
-            
 
-        idma_conf_in();
-        idma_set_addr_len_in(obi_addr_x_0, axi_addr_x, len_x);
-        idma_set_std2_rep2_in(len_x, std_x, reps_x);
-        idma_set_std3_rep3_in(0, 0, 1);
+        idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x_0, len_x, std_x, reps_x);
+        #if STALLING == 0
+        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        #endif
 
-        idma_start_in();
-        idma_wait();
-
-        idma_conf_in();
-        idma_set_addr_len_in(obi_addr_w_0, axi_addr_w, len_w);
-        idma_set_std2_rep2_in(len_w, std_w, reps_w);
-        idma_set_std3_rep3_in(0, 0, 1);
-
-        idma_start_in();
-        idma_wait();
-
-        redmule_mcnfig((uint16_t) tile_w, (uint16_t) tile_h, (uint16_t) t_size);
+        idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w, obi_addr_w_0, len_w, std_w, reps_w);
+        #if STALLING == 0
+        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        #endif
 
         /**
          * 4. Cycle over the timeslots.
@@ -192,30 +194,25 @@ int main(void){
              * Call redmule while loading the weight of the next timeslot.
              */
             if(i < (timeslots - 1)){
-                idma_conf_in();
-                idma_set_addr_len_in(input_pt_next, axi_addr_x + (t_size * (i + 1) * 2), len_x);
-                idma_set_std2_rep2_in(len_x, std_x, reps_x);
-                idma_set_std3_rep3_in(0, 0, 1);
+                idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x + (t_size * (i + 1) * 2), input_pt_next, len_x, std_x, reps_x);
+                #if STALLING == 0
+                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                #endif
 
-                idma_start_in();
-                idma_wait();
-
-                idma_conf_in();
-                idma_set_addr_len_in(weight_pt_next, axi_addr_w + (t_size * K_SIZE * (i + 1) * 2), len_w);
-                idma_set_std2_rep2_in(len_w, std_w, reps_w);
-                idma_set_std3_rep3_in(0, 0, 1);
-
-                idma_start_in();
-                redmule_marith(obi_addr_y, weight_pt, input_pt);
-                idma_wait();
-                redmule_wait();
+                idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w + (t_size * K_SIZE * (i + 1) * 2), weight_pt_next, len_w, std_w, reps_w);
+                redmule_gemm(&redmule_ctrl, input_pt, weight_pt, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
+                #if STALLING == 0
+                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                #endif
 
                 //printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2));
-
             }
             else{
-                redmule_marith(obi_addr_y, weight_pt, input_pt);
-                redmule_wait();
+                redmule_gemm(&redmule_ctrl, input_pt, weight_pt, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
+                #if STALLING == 0
+                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                #endif
                 //printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2));
             }
         }
@@ -223,8 +220,10 @@ int main(void){
         /**
          * 5. Store the output data-tile back to L2
          */
-        idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y_out, obi_addr_y, len_y, std_y, reps_y);
-        idma_wait();
+        idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
+        #if STALLING == 0
+        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        #endif
     }
 
     /**
@@ -234,13 +233,12 @@ int main(void){
     uint16_t computed, expected, diff = 0;
     for(int i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
         for(int j = (x_id * tile_w_max); j < (x_id * tile_w_max) + tile_w; j++){
-            computed = *(volatile uint16_t*)(y_out + (i * K_SIZE + j));
+            computed = *(volatile uint16_t*)(y_inp + (i * K_SIZE + j));
             expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
             diff = (computed > expected) ? (computed - expected) : (expected - computed);
             if(diff > 0x0011){
                 #if EVAL == 1
-                if(hartid == 0)
-                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_out + (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_inp + (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
                 #endif    
                 errors++;
             }       
