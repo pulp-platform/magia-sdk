@@ -248,7 +248,7 @@ int main(void){
                 for (int j = 0; j < reduce_degree-1; j++){
                     if ((x_id+1+j) > (MESH_X_TILES-1)) break; // Non full-degree node
                     uint32_t partial_gemv_addr = obi_addr_x + (j*len_y);
-                    printf("Summing partial GeMV: y_addr 0x%0x, x_addr 0x%0x\n", obi_addr_y, partial_gemv_addr);
+                    // printf("Summing partial GeMV: y_addr 0x%0x, x_addr 0x%0x\n", obi_addr_y, partial_gemv_addr);
                     stnl_cmp_s();
                     redmule_marith(obi_addr_y, obi_addr_id, partial_gemv_addr);
                     redmule_wait();
@@ -259,7 +259,7 @@ int main(void){
                 * 4a. Scatter partial GeMV.
                 */
                 uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, reduce_degree*(x_id/reduce_degree))) + 2*(tile_w*tile_h*2) + (tile_w*2) + (((x_id%reduce_degree)-1)*len_y);
-                printf("Transfering partial GeMV to neighbor: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, partial_gemv_addr, len_y);
+                // printf("Transfering partial GeMV to neighbor: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, partial_gemv_addr, len_y);
                 stnl_cmo_s();
                 idma_conf_out();
                 idma_set_addr_len_out(partial_gemv_addr, obi_addr_y, len_y);
@@ -285,7 +285,7 @@ int main(void){
                 for (int j = 0; j < reduce_degree-1; j++){
                     if ((x_id+1+j) > (MESH_X_TILES-1)) break; // Non full-degree node
                     uint32_t partial_gemv_addr = obi_addr_x + (j*len_y);
-                    printf("Summing partial GeMV: y_addr 0x%0x, x_addr 0x%0x\n", obi_addr_y, partial_gemv_addr);
+                    // printf("Summing partial GeMV: y_addr 0x%0x, x_addr 0x%0x\n", obi_addr_y, partial_gemv_addr);
                     stnl_cmp_s();
                     redmule_marith(obi_addr_y, obi_addr_id, partial_gemv_addr);
                     redmule_wait();
@@ -296,7 +296,7 @@ int main(void){
                 * 4a. Scatter partial GeMV.
                 */
                 uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, 0)) + 2*(tile_w*tile_h*2) + (tile_w*2) + (((x_id/reduce_degree)-1)*len_y);
-                printf("Transfering partial GeMV to neighbor: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, partial_gemv_addr, len_y);
+                // printf("Transfering partial GeMV to neighbor: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, partial_gemv_addr, len_y);
                 stnl_cmo_s();
                 idma_conf_out();
                 idma_set_addr_len_out(partial_gemv_addr, obi_addr_y, len_y);
@@ -324,7 +324,7 @@ int main(void){
                 * 5. Store result in memory.
                 */
                 axi_addr_y = (uint32_t) y_out + (y_id*tile_w*2);
-                printf("Transfering result: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, axi_addr_y, len_y);
+                // printf("Transfering result: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, axi_addr_y, len_y);
                 stnl_cmo_s();
                 idma_conf_out();
                 idma_set_addr_len_out(axi_addr_y, obi_addr_y, len_y);
