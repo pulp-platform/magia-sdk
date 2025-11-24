@@ -13,7 +13,7 @@
 #include "redmule.h"
 #include "eventunit.h"
 
-#define WAIT_MODE POLLING
+#define WAIT_MODE WFE
 
 /**
  * This test aims to verify the functionality of MAGIA as a systolic array for matrix multiplications,

@@ -9,6 +9,9 @@
 #include "test.h"
 #include "tile.h"
 #include "fsync.h"
+#include "eventunit.h"
+
+#define WAIT_MODE WFE
 
 /**
  * Writes the group ID increased by an offset to the L1 memory address to be used to verify correct horizzontal synchronization.
@@ -68,6 +71,17 @@ int main(void){
 
     fsync_init(&fsync_ctrl);
 
+    #if STALLING == 0
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+    eu_init(&eu_ctrl);
+    eu_fsync_init(&eu_ctrl, 0);
+    #endif
+
     uint32_t l1_tile_base = get_l1_base(hartid);
     uint8_t groupid;
     uint8_t flag = 0;
@@ -93,6 +107,10 @@ int main(void){
         * 1_c. Synchronize on the current horizzontal level.
         */
         fsync_sync_level(&fsync_ctrl, (uint32_t) i, dir);
+        #if STALLING == 0
+        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        #endif
+
 
         /**
         * 1_d. Check if the other tiles have written the correct value.
@@ -104,6 +122,9 @@ int main(void){
         * 1_e. Synchronize again before next cycle write.
         */
         fsync_sync_level(&fsync_ctrl, (uint32_t) i, dir);
+        #if STALLING == 0
+        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        #endif
     }
 
     if(!flag){
