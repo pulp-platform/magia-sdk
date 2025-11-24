@@ -12,9 +12,12 @@
 #include "tile.h"
 #include "idma.h"
 #include "fsync.h"
+#include "eventunit.h"
+
+#define WAIT_MODE WFE
 
 #define BUF_SIZE   (16 * 1024)   // 16KB buffer
-#define REPEATS    1            // reduced from 64 to avoid counter issues
+#define REPEATS    1             // reduced from 64 to avoid counter issues
 #define DMA_CHUNK_SIZE 0x4000    // 16 KB per DMA chunk (safe)
 
 #define L2_SRC_BASE     0xCC040000
@@ -41,6 +44,18 @@ int main(void) {
     };
     fsync_init(&fsync_ctrl);
 
+    #if STALLING == 0
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+    eu_init(&eu_ctrl);
+    eu_idma_init(&eu_ctrl, 0);
+    eu_fsync_init(&eu_ctrl, 0);
+    #endif
+
     uint8_t* src_buf; 
     uint8_t* dst_buf;
 
@@ -54,7 +69,10 @@ int main(void) {
     }
 
     // Sync all tiles before measurement
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global(&fsync_ctrl);
+    #if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
 
     // Array to store cycles for each repetition
     uint32_t cycles_array[REPEATS];
@@ -71,13 +89,17 @@ int main(void) {
         uint32_t dst_addr = (uint32_t)l1_tile_base;
 
         idma_memcpy_1d(&idma_ctrl, 0, src_addr, dst_addr, (uint32_t) BUF_SIZE);
-        idma_wait();
+        #if STALLING == 0
+        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        #endif
 
 
         src_addr = (uint32_t)l1_tile_base;
         dst_addr = (uint32_t)dst_buf;
         idma_memcpy_1d(&idma_ctrl, 1, dst_addr, src_addr, (uint32_t) BUF_SIZE);
-        idma_wait();
+        #if STALLING == 0
+        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        #endif
 
         sentinel_end();
 
