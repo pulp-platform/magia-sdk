@@ -1,0 +1,388 @@
+Magia is available at https://github.com/pulp-platform/MAGIA.git
+please run "source setup_env.sh" in the magia folder before running this script
+and make sure the risc-v objdump binary is visible on path using "which riscv32-unknown-elf-objdump".
+mkdir -p ../sw/tests/test_mesh_gemv_fs && cd ../sw/tests/test_mesh_gemv_fs && mkdir -p build
+cp ./build/bin/test_mesh_gemv_fs ../sw/tests/test_mesh_gemv_fs/build/verif
+objcopy --srec-len 1 --output-target=srec ../sw/tests/test_mesh_gemv_fs/build/verif ../sw/tests/test_mesh_gemv_fs/build/verif.s19
+scripts/parse_s19.pl ../sw/tests/test_mesh_gemv_fs/build/verif.s19 > ../sw/tests/test_mesh_gemv_fs/build/verif.txt
+python3 scripts/s19tomem.py ../sw/tests/test_mesh_gemv_fs/build/verif.txt ../sw/tests/test_mesh_gemv_fs/build/stim_instr.txt ../sw/tests/test_mesh_gemv_fs/build/stim_data.txt	
+cd ../sw/tests/test_mesh_gemv_fs													&& \
+cp -sf ../../../sim/modelsim.ini modelsim.ini    				&& \
+ln -sfn ../../../sim/work work         			
+riscv32-unknown-elf-objdump -d -S ../sw/tests/test_mesh_gemv_fs/build/verif > ../sw/tests/test_mesh_gemv_fs/build/verif.dump
+riscv32-unknown-elf-objdump -d -l -s ../sw/tests/test_mesh_gemv_fs/build/verif > ../sw/tests/test_mesh_gemv_fs/build/verif.objdump
+python3 scripts/objdump2itb.py ../sw/tests/test_mesh_gemv_fs/build/verif.objdump > ../sw/tests/test_mesh_gemv_fs/build/verif.itb
+cd /scratch2/visachi/magia_profiling/d2_m64_2x2/MAGIA 												&& \
+make run test=test_mesh_gemv_fs gui=0 mesh_dv=1
+make[1]: Entering directory '/scratch2/visachi/magia_profiling/d2_m64_2x2/MAGIA'
+cd sw/tests &&							\
+mkdir -p test_mesh_gemv_fs &&							\
+cd test_mesh_gemv_fs &&								\
+mkdir -p build								
+riscv32-unknown-elf-gcc -march=rv32imafc -mabi=ilp32f -D__riscv__ -O3 -g -Wextra -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wundef -fdata-sections -ffunction-sections -MMD -MP -c sw/kernel/crt0.S -o sw/tests/test_mesh_gemv_fs/build/crt0.o
+cd sw/tests/test_mesh_gemv_fs;                                                                		 \
+questa-2025.1 vsim -c vopt_tb -t 1ns -suppress 3009 -l transcript -do "run -a"                 \
++INST_HEX=build/stim_instr.txt                                                                    \
++DATA_HEX=build/stim_data.txt                                                                    \
++INST_ENTRY=0xCC000000                                                                    \
++DATA_ENTRY=0xCC100000                                                                    \
++BOOT_ADDR=0xCC000080                                                                      \
+ +log_file_0=./core_0_traces.log   +log_file_1=./core_1_traces.log   +log_file_2=./core_2_traces.log   +log_file_3=./core_3_traces.log                                                                                             \
++itb_file=build/verif.itb
+Reading pref.tcl
+
+# 2025.1_2
+
+# vsim -c vopt_tb -t 1ns -suppress 3009 -l transcript -do "run -a" "+INST_HEX=build/stim_instr.txt" "+DATA_HEX=build/stim_data.txt" "+INST_ENTRY=0xCC000000" "+DATA_ENTRY=0xCC100000" "+BOOT_ADDR=0xCC000080" "+log_file_0=./core_0_traces.log" "+log_file_1=./core_1_traces.log" "+log_file_2=./core_2_traces.log" "+log_file_3=./core_3_traces.log" "+itb_file=build/verif.itb" 
+# Start time: 11:20:19 on Nov 21,2025
+# //  Questa Sim-64
+# //  Version 2025.1_2 linux_x86_64 Apr  7 2025
+# //
+# // Unpublished work. Copyright 2025 Siemens
+# //
+# // This material contains trade secrets or otherwise confidential information
+# // owned by Siemens Industry Software Inc. or its affiliates (collectively,
+# // "SISW"), or its licensors. Access to and use of this information is strictly
+# // limited as set forth in the Customer's applicable agreements with SISW.
+# //
+# // This material may not be copied, distributed, or otherwise disclosed outside
+# // of the Customer's facilities without the express written permission of SISW,
+# // and may not be used in any way not expressly authorized by SISW.
+# //
+# Loading sv_std.std
+# Loading work.axi_pkg(fast)
+# Loading work.floo_pkg(fast)
+# Loading work.floo_axi_nw_mesh_32x32_noc_pkg(fast)
+# Loading work.floo_axi_nw_mesh_16x16_noc_pkg(fast)
+# Loading work.floo_axi_nw_mesh_8x8_noc_pkg(fast)
+# Loading work.floo_axi_nw_mesh_4x4_noc_pkg(fast)
+# Loading work.floo_axi_nw_mesh_2x2_noc_pkg(fast)
+# Loading work.idma_pkg(fast)
+# Loading work.cf_math_pkg(fast)
+# Loading work.obi_pkg(fast)
+# Loading work.hwpe_stream_package(fast)
+# Loading work.hci_package(fast)
+# Loading work.fpnew_pkg(fast)
+# Loading work.magia_pkg(fast)
+# Loading work.magia_tile_pkg(fast)
+# Loading work.magia_noc_pkg(fast)
+# Loading work.magia_tile_tb_pkg(fast)
+# Loading work.magia_tb_pkg(fast)
+# Loading work.magia_tb(fast)
+# Loading work.fpu_ss_instr_pkg(fast)
+# Loading work.fpu_ss_pkg(fast)
+# Loading work.fpu_ss_prd_f_pkg(fast)
+# Loading work.hwpe_ctrl_package(fast)
+# Loading work.snitch_icache_pkg(fast)
+# Loading work.cv32e40x_pkg(fast)
+# Loading work.redmule_pkg(fast)
+# Loading work.magia_tile(fast)
+# Loading work.rr_arb_tree(fast)
+# Loading work.rr_arb_tree(fast__1)
+# Loading work.rr_arb_tree(fast__2)
+# Loading work.redmule_ctrl_sv_unit(fast)
+# Loading work.hwpe_stream_assign_sv_unit(fast)
+# Loading work.redmule_castin_sv_unit(fast)
+# Loading work.redmule_castout_sv_unit(fast)
+# Loading work.hwpe_stream_fifo_sv_unit(fast)
+# Loading work.hwpe_stream_addressgen_v3_sv_unit(fast)
+# Loading work.redmule_top(fast)
+# Loading work.redmule_mux(fast)
+# Loading work.fpnew_cast_multi(fast)
+# Loading work.redmule_row(fast)
+# Loading work.cv32e40x_rvfi_pkg(fast)
+# Loading work.cv32e40x_rvfi(fast)
+# Loading work.spill_register(fast)
+# Loading work.obi_demux(fast)
+# Loading work.local_interconnect(fast)
+# Loading work.hci_router(fast)
+# Loading work.hci_router_reorder(fast)
+# Loading work.hci_arbiter_tree(fast)
+# Loading work.hci_router(fast__1)
+# Loading work.hci_router_reorder(fast__1)
+# Loading work.hci_arbiter_tree(fast__1)
+# Loading work.hci_arbiter(fast)
+# Loading work.hci_arbiter(fast__1)
+# Loading work.hci_arbiter(fast__2)
+# Loading work.hci_router(fast__2)
+# Loading work.hci_router_reorder(fast__2)
+# Loading work.hci_arbiter(fast__3)
+# Loading work.l1_spm(fast)
+# Loading work.xif_inst_dispatcher(fast)
+# Loading work.idma_reg32_3d_reg_pkg(fast)
+# Loading work.idma_ctrl(fast)
+# Loading work.rr_arb_tree(fast__3)
+# Loading work.idma_legalizer_page_splitter(fast)
+# Loading work.riscv_instr_branch(fast)
+# Loading work.pulp_icache_wrap(fast)
+# Loading work.rr_arb_tree(fast__4)
+# Loading work.rr_arb_tree(fast__5)
+# Loading work.tc_sram_impl(fast)
+# Loading work.rr_arb_tree(fast__6)
+# Loading work.axi_xbar(fast)
+# Loading work.spill_register(fast__5)
+# Loading work.spill_register(fast__7)
+# Loading work.spill_register(fast__8)
+# Loading work.rr_arb_tree(fast__7)
+# Loading work.rr_arb_tree(fast__8)
+# Loading work.rr_arb_tree(fast__9)
+# Loading work.floo_nw_router(fast)
+# Loading work.rr_arb_tree(fast__10)
+# Loading work.floo_nw_chimney(fast)
+# Loading work.addr_decode(fast__2)
+# Loading work.fractal_sync_xif_inst_decoder(fast)
+# Loading work.fpnew_top(fast)
+# Loading work.rr_arb_tree(fast__11)
+# Loading work.rr_arb_tree(fast__12)
+# Loading work.rr_arb_tree(fast__13)
+# Loading work.rr_arb_tree(fast__14)
+# Loading work.rr_arb_tree(fast__15)
+# Loading work.rr_arb_tree(fast__16)
+# Loading work.xif_if2struct(fast)
+# Loading work.fractal_sync_pkg(fast)
+# Loading work.fractal_sync_2x2_pkg(fast)
+# Loading work.fractal_sync_2x2(fast)
+# Loading work.fractal_sync_mp_rf(fast)
+# Loading work.rr_arb_tree(fast__17)
+# Loading work.rr_arb_tree(fast__18)
+# Loading work.rr_arb_tree(fast__19)
+# Loading work.spill_register(fast__17)
+# Loading work.spill_register(fast__19)
+# Loading work.spill_register(fast__20)
+# Loading work.rr_arb_tree(fast__20)
+# Loading work.floo_nw_chimney(fast__1)
+# Loading work.rr_arb_tree(fast__21)
+# Loading work.rr_arb_tree(fast__22)
+# Loading work.hci_core_intf(fast__10)
+# Loading work.hci_core_intf(fast__11)
+# Loading work.hci_core_intf(fast__12)
+# Loading work.hci_core_intf(fast__1)
+# Loading work.hci_core_intf(fast__8)
+# Loading work.hci_core_intf(fast__13)
+# Loading work.hci_core_intf(fast__14)
+# Loading work.hci_core_intf(fast__17)
+# Loading work.hci_core_intf(fast__18)
+# Loading work.hci_core_intf(fast__19)
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch2/visachi/magia_profiling/d2_m64_2x2/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[0]/gen_x_tile[0]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch2/visachi/magia_profiling/d2_m64_2x2/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch2/visachi/magia_profiling/d2_m64_2x2/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[0]/gen_x_tile[1]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch2/visachi/magia_profiling/d2_m64_2x2/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch2/visachi/magia_profiling/d2_m64_2x2/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[1]/gen_x_tile[0]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch2/visachi/magia_profiling/d2_m64_2x2/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# ** Warning: (vsim-3015) [PCDPC] - Port size (2) does not match connection size (3) for port 'rf_re_id_i'. The port definition is at: /scratch2/visachi/magia_profiling/d2_m64_2x2/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_rvfi.sv(58).
+#    Time: 0 ns  Iteration: 0  Instance: /magia_tb/fixture/i_magia/gen_y_tile[1]/gen_x_tile[1]/i_magia_tile/i_cv32e40x_core/rvfi_i File: /scratch2/visachi/magia_profiling/d2_m64_2x2/MAGIA/.bender/git/checkouts/cv32e40x-ba9ec2421894e746/bhv/cv32e40x_wrapper.sv Line: 565
+# run -a
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_0
+# RISC-V Trace: Writing log to: ./core_0_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file build/verif.itb
+# RISC-V Trace: Loaded        2750 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_1
+# RISC-V Trace: Writing log to: ./core_1_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file build/verif.itb
+# RISC-V Trace: Loaded        2750 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_2
+# RISC-V Trace: Writing log to: ./core_2_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file build/verif.itb
+# RISC-V Trace: Loaded        2750 instructions.
+# [cv32e40x_core]: RV32                       = RV32I
+# [cv32e40x_core]: A_EXT                      = A
+# [cv32e40x_core]: B_EXT                      = ZBA_ZBB_ZBC_ZBS
+# [cv32e40x_core]: M_EXT                      = M
+# [cv32e40x_core]: DEBUG                      = 1
+# [cv32e40x_core]: DM_REGION_START            = 0xf0000000
+# [cv32e40x_core]: DM_REGION_END              = 0xf0003fff
+# [cv32e40x_core]: DBG_NUM_TRIGGERS           = 1
+# [cv32e40x_core]: PMA_NUM_REGIONS            = 0 
+# [cv32e40x_core]: CLIC                       = 0
+# [cv32e40x_core]: CLIC_ID_WIDTH              = 1 
+# [cv32e40x_core]: X_EXT                      = 1
+# [cv32e40x_core]: X_NUM_RS                   = 3
+# [cv32e40x_core]: X_ID_WIDTH                 = 4 
+# [cv32e40x_core]: X_MEM_WIDTH                = 32 
+# [cv32e40x_core]: X_RFR_WIDTH                = 32
+# [cv32e40x_core]: X_RFW_WIDTH                = 32
+# [cv32e40x_core]: X_MISA                     = 0x00000020
+# [cv32e40x_core]: X_ECS_XS                   = 0
+# [cv32e40x_core]: NUM_MHPMCOUNTERS           = 1 
+# RISC-V Trace: Using log file path defined by plusarg: log_file_3
+# RISC-V Trace: Writing log to: ./core_3_traces.log
+# RISC-V Trace: Using itb path defined by plusarg: itb_file
+# RISC-V Trace: Loading instruction table file build/verif.itb
+# RISC-V Trace: Loaded        2750 instructions.
+# [TB][mhartid 0 - Tile (0, 0)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 7040ns
+# [TB][mhartid 2 - Tile (1, 0)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 7040ns
+# [TB][mhartid 1 - Tile (0, 1)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 8100ns
+# [TB][mhartid 3 - Tile (1, 1)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 8100ns
+# [TB][mhartid 0 - Tile (0, 0)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 8990ns: start-end pair with latency 1945ns (389 clock cycles) and accumulated latency 1945ns (389 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 8990ns: start-end pair with latency 1945ns (389 clock cycles) and accumulated latency 1945ns (389 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)][SYNC_START] Detected start synchronization sentinel accumulator instruction in WB stage at time 8995ns
+# [TB][mhartid 2 - Tile (1, 0)][SYNC_START] Detected start synchronization sentinel accumulator instruction in WB stage at time 8995ns
+# [TB][mhartid 1 - Tile (0, 1)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 10730ns: start-end pair with latency 2625ns (525 clock cycles) and accumulated latency 2625ns (525 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 10730ns: start-end pair with latency 2625ns (525 clock cycles) and accumulated latency 2625ns (525 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)][SYNC_START] Detected start synchronization sentinel accumulator instruction in WB stage at time 10735ns
+# [TB][mhartid 3 - Tile (1, 1)][SYNC_START] Detected start synchronization sentinel accumulator instruction in WB stage at time 10735ns
+# [TB][mhartid 0 - Tile (0, 0)][SYNC_FINISH] Detected finish (record) synchronization sentinel accumulator instruction in WB stage at time 11265ns: start-end pair with latency 2265ns (453 clock cycles) and accumulated latency 2265ns (453 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)][SYNC_FINISH] Detected finish (record) synchronization sentinel accumulator instruction in WB stage at time 11265ns: start-end pair with latency 2265ns (453 clock cycles) and accumulated latency 2265ns (453 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel start instruction in WB stage at time 11270ns
+# [TB][mhartid 2 - Tile (1, 0)] Detected sentinel start instruction in WB stage at time 11270ns
+# [TB][mhartid 0 - Tile (0, 0)][TIMESLOT_START] Detected timeslot sentinel start instruction in WB stage at time 11275ns
+# [TB][mhartid 2 - Tile (1, 0)][TIMESLOT_START] Detected timeslot sentinel start instruction in WB stage at time 11275ns
+# [TB][mhartid 1 - Tile (0, 1)][SYNC_FINISH] Detected finish (record) synchronization sentinel accumulator instruction in WB stage at time 11345ns: start-end pair with latency 605ns (121 clock cycles) and accumulated latency 605ns (121 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)][SYNC_FINISH] Detected finish (record) synchronization sentinel accumulator instruction in WB stage at time 11345ns: start-end pair with latency 605ns (121 clock cycles) and accumulated latency 605ns (121 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel start instruction in WB stage at time 11350ns
+# [TB][mhartid 3 - Tile (1, 1)] Detected sentinel start instruction in WB stage at time 11350ns
+# [TB][mhartid 1 - Tile (0, 1)][TIMESLOT_START] Detected timeslot sentinel start instruction in WB stage at time 11355ns
+# [TB][mhartid 3 - Tile (1, 1)][TIMESLOT_START] Detected timeslot sentinel start instruction in WB stage at time 11355ns
+# [TB][mhartid 0 - Tile (0, 0)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 11615ns
+# [TB][mhartid 2 - Tile (1, 0)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 11615ns
+# [TB][mhartid 1 - Tile (0, 1)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 11945ns
+# [TB][mhartid 3 - Tile (1, 1)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 11945ns
+# [TB][mhartid 0 - Tile (0, 0)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 12245ns: start-end pair with latency 625ns (125 clock cycles) and accumulated latency 2570ns (514 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 12245ns: start-end pair with latency 625ns (125 clock cycles) and accumulated latency 2570ns (514 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 12485ns
+# [TB][mhartid 2 - Tile (1, 0)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 12485ns
+# [TB][mhartid 1 - Tile (0, 1)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 12595ns: start-end pair with latency 645ns (129 clock cycles) and accumulated latency 3270ns (654 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 12595ns: start-end pair with latency 645ns (129 clock cycles) and accumulated latency 3270ns (654 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 12885ns
+# [TB][mhartid 3 - Tile (1, 1)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 12885ns
+# [TB][mhartid 2 - Tile (1, 0)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 14390ns: start-end pair with latency 1900ns (380 clock cycles) and accumulated latency 4470ns (894 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 14405ns: start-end pair with latency 1915ns (383 clock cycles) and accumulated latency 4485ns (897 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 14510ns
+# [TB][mhartid 0 - Tile (0, 0)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 14530ns
+# [TB][mhartid 2 - Tile (1, 0)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 15040ns: start-end pair with latency 525ns (105 clock cycles) and accumulated latency 4995ns (999 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 15060ns: start-end pair with latency 525ns (105 clock cycles) and accumulated latency 5010ns (1002 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)][CMP_START] Detected start computation sentinel accumulator instruction in WB stage at time 15155ns
+# [TB][mhartid 0 - Tile (0, 0)][CMP_START] Detected start computation sentinel accumulator instruction in WB stage at time 15180ns
+# [TB][mhartid 1 - Tile (0, 1)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 15485ns: start-end pair with latency 2595ns (519 clock cycles) and accumulated latency 5865ns (1173 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 15505ns: start-end pair with latency 2615ns (523 clock cycles) and accumulated latency 5885ns (1177 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 15625ns
+# [TB][mhartid 3 - Tile (1, 1)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 15645ns
+# [TB][mhartid 2 - Tile (1, 0)][CMP_FINISH] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 16240ns: start-end pair with latency 1080ns (216 clock cycles) and accumulated latency 1080ns (216 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)][TIMESLOT_FINISH] Detected timeslot sentinel finish instruction in WB stage at time 16245ns
+# [TB][mhartid 2 - Tile (1, 0)][SYNC_START] Detected start synchronization sentinel accumulator instruction in WB stage at time 16250ns
+# [TB][mhartid 1 - Tile (0, 1)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 16255ns: start-end pair with latency 625ns (125 clock cycles) and accumulated latency 6490ns (1298 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)][CMP_FINISH] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 16265ns: start-end pair with latency 1080ns (216 clock cycles) and accumulated latency 1080ns (216 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)][TIMESLOT_FINISH] Detected timeslot sentinel finish instruction in WB stage at time 16270ns
+# [TB][mhartid 0 - Tile (0, 0)][SYNC_START] Detected start synchronization sentinel accumulator instruction in WB stage at time 16275ns
+# [TB][mhartid 3 - Tile (1, 1)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 16275ns: start-end pair with latency 625ns (125 clock cycles) and accumulated latency 6510ns (1302 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)][CMP_START] Detected start computation sentinel accumulator instruction in WB stage at time 16390ns
+# [TB][mhartid 3 - Tile (1, 1)][CMP_START] Detected start computation sentinel accumulator instruction in WB stage at time 16410ns
+# [TB][mhartid 1 - Tile (0, 1)][CMP_FINISH] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 17495ns: start-end pair with latency 1100ns (220 clock cycles) and accumulated latency 1100ns (220 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)][TIMESLOT_FINISH] Detected timeslot sentinel finish instruction in WB stage at time 17500ns
+# [TB][mhartid 1 - Tile (0, 1)][SYNC_START] Detected start synchronization sentinel accumulator instruction in WB stage at time 17505ns
+# [TB][mhartid 3 - Tile (1, 1)][CMP_FINISH] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 17515ns: start-end pair with latency 1100ns (220 clock cycles) and accumulated latency 1100ns (220 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)][TIMESLOT_FINISH] Detected timeslot sentinel finish instruction in WB stage at time 17520ns
+# [TB][mhartid 3 - Tile (1, 1)][SYNC_START] Detected start synchronization sentinel accumulator instruction in WB stage at time 17525ns
+# [TB][mhartid 0 - Tile (0, 0)][SYNC_FINISH] Detected finish (record) synchronization sentinel accumulator instruction in WB stage at time 17915ns: start-end pair with latency 1635ns (327 clock cycles) and accumulated latency 3900ns (780 clock cycles)
+# [TB][mhartid 1 - Tile (0, 1)][SYNC_FINISH] Detected finish (record) synchronization sentinel accumulator instruction in WB stage at time 17915ns: start-end pair with latency 405ns (81 clock cycles) and accumulated latency 1010ns (202 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)][TIMESLOT_START] Detected timeslot sentinel start instruction in WB stage at time 17920ns
+# [TB][mhartid 1 - Tile (0, 1)][TIMESLOT_START] Detected timeslot sentinel start instruction in WB stage at time 17920ns
+# [TB][mhartid 2 - Tile (1, 0)][SYNC_FINISH] Detected finish (record) synchronization sentinel accumulator instruction in WB stage at time 17935ns: start-end pair with latency 1680ns (336 clock cycles) and accumulated latency 3945ns (789 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)][SYNC_FINISH] Detected finish (record) synchronization sentinel accumulator instruction in WB stage at time 17935ns: start-end pair with latency 405ns (81 clock cycles) and accumulated latency 1010ns (202 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)][TIMESLOT_START] Detected timeslot sentinel start instruction in WB stage at time 17940ns
+# [TB][mhartid 3 - Tile (1, 1)][TIMESLOT_START] Detected timeslot sentinel start instruction in WB stage at time 17940ns
+# [TB][mhartid 0 - Tile (0, 0)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 18035ns
+# [TB][mhartid 2 - Tile (1, 0)][CMI_START] Detected start input communication sentinel accumulator instruction in WB stage at time 18055ns
+# [TB][mhartid 1 - Tile (0, 1)][TIMESLOT_FINISH] Detected timeslot sentinel finish instruction in WB stage at time 18175ns
+# [TB][mhartid 3 - Tile (1, 1)][TIMESLOT_FINISH] Detected timeslot sentinel finish instruction in WB stage at time 18195ns
+# [TB][mhartid 1 - Tile (0, 1)] Detected sentinel end instruction in WB stage at time 18405ns: start-end pair with latency 7050ns (1410 clock cycles)
+# [TB][mhartid 3 - Tile (1, 1)] Detected sentinel end instruction in WB stage at time 18425ns: start-end pair with latency 7070ns (1414 clock cycles)
+# [TB][PERF][mhartid 1 - Tile (0, 1)][CMI_PERF] Input communication sentinel accumulator state: 6490ns (1298 clock cycles)
+# [TB][PERF][mhartid 1 - Tile (0, 1)][CMO_PERF] Output communication sentinel accumulator state: 0ns (0 clock cycles)
+# [TB][PERF][mhartid 1 - Tile (0, 1)][CMP_PERF] Computation sentinel accumulator state: 1100ns (220 clock cycles)
+# [TB][PERF][mhartid 1 - Tile (0, 1)][SYNC_PERF] Synchronization sentinel accumulator state: 1010ns (202 clock cycles)
+# [TB][PERF][mhartid 3 - Tile (1, 1)][CMI_PERF] Input communication sentinel accumulator state: 6510ns (1302 clock cycles)
+# [TB][PERF][mhartid 3 - Tile (1, 1)][CMO_PERF] Output communication sentinel accumulator state: 0ns (0 clock cycles)
+# [TB][PERF][mhartid 3 - Tile (1, 1)][CMP_PERF] Computation sentinel accumulator state: 1100ns (220 clock cycles)
+# [TB][PERF][mhartid 3 - Tile (1, 1)][SYNC_PERF] Synchronization sentinel accumulator state: 1010ns (202 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 18565ns: start-end pair with latency 525ns (105 clock cycles) and accumulated latency 5535ns (1107 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)][CMP_START] Detected start computation sentinel accumulator instruction in WB stage at time 18570ns
+# [TB][mhartid 2 - Tile (1, 0)][CMI_FINISH] Detected finish (record) input communication sentinel accumulator instruction in WB stage at time 18585ns: start-end pair with latency 525ns (105 clock cycles) and accumulated latency 5520ns (1104 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)][CMP_START] Detected start computation sentinel accumulator instruction in WB stage at time 18590ns
+# [TB][mhartid 0 - Tile (0, 0)][CMP_FINISH] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 19655ns: start-end pair with latency 1080ns (216 clock cycles) and accumulated latency 2160ns (432 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)][TIMESLOT_FINISH] Detected timeslot sentinel finish instruction in WB stage at time 19660ns
+# [TB][mhartid 2 - Tile (1, 0)][CMP_FINISH] Detected finish (record) computation sentinel accumulator instruction in WB stage at time 19675ns: start-end pair with latency 1080ns (216 clock cycles) and accumulated latency 2160ns (432 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)][TIMESLOT_FINISH] Detected timeslot sentinel finish instruction in WB stage at time 19680ns
+# [TB][mhartid 0 - Tile (0, 0)][CMO_START] Detected start output communication sentinel accumulator instruction in WB stage at time 19770ns
+# [TB][mhartid 2 - Tile (1, 0)][CMO_START] Detected start output communication sentinel accumulator instruction in WB stage at time 19790ns
+# [TB][mhartid 0 - Tile (0, 0)][CMO_FINISH] Detected finish (record) output communication sentinel accumulator instruction in WB stage at time 20315ns: start-end pair with latency 540ns (108 clock cycles) and accumulated latency 540ns (108 clock cycles)
+# [TB][mhartid 0 - Tile (0, 0)] Detected sentinel end instruction in WB stage at time 20320ns: start-end pair with latency 9045ns (1809 clock cycles)
+# [TB][PERF][mhartid 0 - Tile (0, 0)][CMI_PERF] Input communication sentinel accumulator state: 5535ns (1107 clock cycles)
+# [TB][PERF][mhartid 0 - Tile (0, 0)][CMO_PERF] Output communication sentinel accumulator state: 540ns (108 clock cycles)
+# [TB][PERF][mhartid 0 - Tile (0, 0)][CMP_PERF] Computation sentinel accumulator state: 2160ns (432 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)][CMO_FINISH] Detected finish (record) output communication sentinel accumulator instruction in WB stage at time 20335ns: start-end pair with latency 540ns (108 clock cycles) and accumulated latency 540ns (108 clock cycles)
+# [TB][PERF][mhartid 0 - Tile (0, 0)][SYNC_PERF] Synchronization sentinel accumulator state: 3900ns (780 clock cycles)
+# [TB][mhartid 2 - Tile (1, 0)] Detected sentinel end instruction in WB stage at time 20340ns: start-end pair with latency 9065ns (1813 clock cycles)
+# [TB][PERF][mhartid 2 - Tile (1, 0)][CMI_PERF] Input communication sentinel accumulator state: 5520ns (1104 clock cycles)
+# [TB][PERF][mhartid 2 - Tile (1, 0)][CMO_PERF] Output communication sentinel accumulator state: 540ns (108 clock cycles)
+# [TB][PERF][mhartid 2 - Tile (1, 0)][CMP_PERF] Computation sentinel accumulator state: 2160ns (432 clock cycles)
+# [TB][PERF][mhartid 2 - Tile (1, 0)][SYNC_PERF] Synchronization sentinel accumulator state: 3945ns (789 clock cycles)
+# [mhartid 0] Finished test with 0 errors
+# SIMULATION FINISHED WITH EXIT CODE: 0
+# 
+# End time: 11:20:39 on Nov 21,2025, Elapsed time: 0:00:20
+# Errors: 0, Warnings: 4
+make[1]: Leaving directory '/scratch2/visachi/magia_profiling/d2_m64_2x2/MAGIA'
