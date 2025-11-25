@@ -108,7 +108,7 @@ int main(void){
      * Weight data-tile: (tile_w x t_size) * data_dim
      * Output data-tile: ((tile_h x t_size) * data_dim) * 2 (Double buffering)
      */
-    uint8_t timeslots = 1;
+    uint8_t timeslots = 2;
     uint8_t t_size = K_SIZE / timeslots;
 
     /**
