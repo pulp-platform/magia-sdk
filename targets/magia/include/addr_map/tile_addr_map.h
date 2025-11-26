@@ -47,18 +47,18 @@
 #define L1_SIZE        (0x000DFFFF)
 #define L1_TILE_OFFSET (0x00100000)
 #define L2_BASE        (0xCC000000)
-#define TEST_END_ADDR  (0xCC030000)
+#define TEST_END_ADDR  (0xCCFF0000)
 #define PRINT_ADDR     (0xFFFF0004)
 #define MHARTID_OFFSET (0x00100000)
 
 #define IDMA_BASE_AXI2OBI (IDMA_BASE)           // direction=0, L2 to L1
 #define IDMA_BASE_OBI2AXI (IDMA_BASE + 0x200)   // direction=1, L1 to L2
 
-#define MESH_X_TILES 2
-#define MESH_Y_TILES 2
+#define MESH_X_TILES 4
+#define MESH_Y_TILES 4
 #define NUM_HARTS    (MESH_X_TILES*MESH_Y_TILES)
-#define MAX_SYNC_LVL 2
-#define MESH_2_POWER 1
+#define MAX_SYNC_LVL 4
+#define MESH_2_POWER 2
 
 #define STR_OFFSET  (0x00000000)
 #define STR_BASE    (RESERVED_START + STR_OFFSET)

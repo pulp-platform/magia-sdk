@@ -90,7 +90,7 @@ int main(void){
      */
     //wait_nop(100 * hartid);
     if(hartid == 1){
-        wait_nop(1000);
+    wait_nop(1000);
     }
     mmio8(l1_tile_base) = y_id;
     fsync_sync_row(&fsync_ctrl);
@@ -120,9 +120,9 @@ int main(void){
      * 2d - Wait for the read before proceding to the next test.
      */
     //wait_nop(100 * hartid);
-    if(hartid == 1){
-        wait_nop(1000);
-    }
+    // if(hartid == 1){
+    //     wait_nop(1000);
+    // }
     uint8_t val = x_id + (uint8_t) MESH_X_TILES;
     mmio8(l1_tile_base) = val;
     fsync_sync_col(&fsync_ctrl);

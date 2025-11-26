@@ -149,7 +149,6 @@ int main(void){
     volatile uint32_t weight_pt_next;
     //redmule_mcnfig((uint16_t) t_size, (uint16_t) tile_h, (uint16_t) tile_w);
     
-
     /**
      * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
      */
@@ -277,21 +276,23 @@ int main(void){
              * 3f. Sync before next timeslot
              */
             pt++;
-            fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+            fsync_sync_global(&fsync_ctrl);
             #if STALLING == 0
             eu_fsync_wait(&eu_ctrl, WAIT_MODE);
             #endif
         }
     }
-
+    
+    
     /**
      * 5. Check results
      */
-    uint32_t errors=0;
+    volatile uint32_t errors=0;
     fsync_sync_row(&fsync_ctrl);
     #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     #endif
+    
     if(x_id == MESH_X_TILES - 1){
         uint16_t computed, expected, diff = 0;
         for(int i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
