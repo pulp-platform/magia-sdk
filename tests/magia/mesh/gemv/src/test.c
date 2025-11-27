@@ -7,8 +7,8 @@
 
 #include <stdint.h>
 
-#define BASELINE_K2
-// #define K_LOGN
+//#define BASELINE_K2
+#define K_LOGN
 
 #include "tile.h"
 #include "idma.h"
@@ -134,10 +134,6 @@ int main(void){
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_id, obi_addr_id, len_id, std_id, reps_id);
     eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
-    // Wait for all tiles to be awake and ready to start the kernel
-    fsync_sync_global(&fsync_ctrl);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-
     /**
      * 2a. Use iDMA to transfer bias blocks.
      * To avoid accumulating the bias multiple times only one tile per row fetches it, the rest fetch the 0 matrix.
@@ -178,6 +174,11 @@ int main(void){
     redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y, tile_m, tile_h, tile_w);
     eu_redmule_wait(&eu_ctrl, WAIT_MODE);
 
+
+    // Wait for all tiles to be awake and ready to start the kernel
+    fsync_sync_global(&fsync_ctrl);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+
     /**
     * 4. Reduce partial GeMV.
     */
@@ -214,8 +215,6 @@ int main(void){
                 fsync_sync_row(&fsync_ctrl);
                 eu_fsync_wait(&eu_ctrl, WAIT_MODE);
             }
-            fsync_sync_global(&fsync_ctrl);
-            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
         } 
         else {    // Second level of the tree
             if (x_id == 0) {    // Leftmost tile
@@ -249,10 +248,25 @@ int main(void){
                 fsync_sync_row(&fsync_ctrl);
                 eu_fsync_wait(&eu_ctrl, WAIT_MODE);
             }
-            fsync_sync_global(&fsync_ctrl);
-            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
         }
+    #elif defined(K_LOGN)
+        if ((x_id & log_tree_mask) == 0){ // Current phase leader
+            /**
+            * 4a. Calculate the tile from which add the partial gemv
+            */
+            uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, x_id^log_tree_bit)) + (tile_w*tile_h*2);
+            idma_memcpy_1d(&idma_ctrl, 0, partial_gemv_addr, obi_addr_x, len_y);
+            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
+            /**
+            * 4b. Sum partial GeMV.
+            */
+            redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_id, obi_addr_y, tile_m, tile_w, tile_w);
+            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+        }
+        log_tree_mask = (log_tree_mask << 1) | 1;
+        log_tree_bit <<= 1;
+    #endif
         if (i == (reduce_phases-1)){
             if (x_id == 0){
                 /**
@@ -263,61 +277,8 @@ int main(void){
                 eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
             }
         }
-    #elif defined(K_LOGN)
-        stnl_snc_s();
         fsync_sync_row(&fsync_ctrl);
-        stnl_snc_f();
-
-        stnl_ts_s();    // Reduction timeslots
-
-        // printf("Log Tree Mask: 0x%0x, Log Tree Bit: 0x%0x\n", log_tree_mask, log_tree_bit);
-        
-        if ((x_id&log_tree_mask) == 0){
-            /**
-            * 4a. Gather all partial GeMV.
-            */
-            uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, x_id^log_tree_bit)) + (tile_w*tile_h*2);
-            // printf("Transfering partial GeMV from neighbor: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", partial_gemv_addr, obi_addr_x, len_x);
-            stnl_cmi_s();
-            idma_conf_in();
-            idma_set_addr_len_in(obi_addr_x, partial_gemv_addr, len_x);
-            idma_set_std2_rep2_in(0, 0, 1);
-            idma_set_std3_rep3_in(0, 0, 1);
-            idma_start_in();
-            idma_wait();
-            stnl_par_f();
-
-            /**
-            * 4b. Sum partial GeMV.
-            */
-            stnl_cmp_s();
-            redmule_marith(obi_addr_y, obi_addr_id, obi_addr_x);
-            redmule_wait();
-            stnl_par_f();
-        }
-        log_tree_mask = (log_tree_mask << 1) | 1;
-        log_tree_bit <<= 1;
-
-        stnl_ts_f();    // Reduction timeslots
-
-        if (i == (reduce_phases-1)){
-            if (x_id == 0){
-                /**
-                * 5. Store result in memory.
-                */
-                axi_addr_y = (uint32_t) y_out + (y_id*tile_w*2);
-                // printf("Transfering result: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, axi_addr_y, len_y);
-                stnl_cmo_s();
-                idma_conf_out();
-                idma_set_addr_len_out(axi_addr_y, obi_addr_y, len_y);
-                idma_set_std2_rep2_out(0, 0, 1);
-                idma_set_std3_rep3_out(0, 0, 1);
-                idma_start_out();
-                idma_wait();
-                stnl_par_f();
-            }
-        }
-    #endif
+        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     }
 
     //printf("I'm done dog\n");
