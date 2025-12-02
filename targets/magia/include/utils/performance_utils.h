@@ -54,5 +54,84 @@ static inline void sentinel_end(){
     asm volatile("addi x0, x0, 0x5FF" ::);
 }
 
+// Start input communication sentinel accumulator
+static inline void stnl_cmi_s(){
+    asm volatile("addi x0, x0, 0x50B" ::);
+}
+
+// Start output communication sentinel accumulator
+static inline void stnl_cmo_s(){
+    asm volatile("addi x0, x0, 0x51B" ::);
+}
+
+// Start computation sentinel accumulator
+static inline void stnl_cmp_s(){
+    asm volatile("addi x0, x0, 0x52B" ::);
+}
+
+// Start synchronization sentinel accumulator
+static inline void stnl_snc_s(){
+    asm volatile("addi x0, x0, 0x53B" ::);
+}
+
+// Start timeslot sentinel accumulator
+static inline void stnl_ts_s(){
+    asm volatile("addi x0, x0, 0x5FB" ::);
+}
+
+// Finish (record) input communication sentinel accumulator
+static inline void stnl_cmi_f(){
+    asm volatile("addi x0, x0, 0x50C" ::);
+}
+
+// Finish (record) output communication sentinel accumulator
+static inline void stnl_cmo_f(){
+    asm volatile("addi x0, x0, 0x51C" ::);
+}
+
+// Finish (record) computation sentinel accumulator
+static inline void stnl_cmp_f(){
+    asm volatile("addi x0, x0, 0x52C" ::);
+}
+
+// Finish (record) synchronization sentinel accumulator
+static inline void stnl_snc_f(){
+    asm volatile("addi x0, x0, 0x53C" ::);
+}
+
+// Finish (record) timeslot sentinel accumulator
+static inline void stnl_ts_f(){
+    asm volatile("addi x0, x0, 0x5FC" ::);
+}
+
+// Report input communication sentinel accumulator
+static inline void stnl_cmi_r(){
+    asm volatile("addi x0, x0, 0x50D" ::);
+}
+
+// Report output communication sentinel accumulator
+static inline void stnl_cmo_r(){
+    asm volatile("addi x0, x0, 0x51D" ::);
+}
+
+// Report computation sentinel accumulator
+static inline void stnl_cmp_r(){
+    asm volatile("addi x0, x0, 0x52D" ::);
+}
+
+// Report synchronization sentinel accumulator
+static inline void stnl_snc_r(){
+    asm volatile("addi x0, x0, 0x53D" ::);
+}
+
+// Report timeslot sentinel accumulator
+static inline void stnl_ts_r(){
+    asm volatile("addi x0, x0, 0x5FD" ::);
+}
+
+// Report global input communication, output communication and computation overheads
+static inline void stnl_r(){
+    asm volatile("addi x0, x0, 0x5EE" ::);
+}
 
 #endif

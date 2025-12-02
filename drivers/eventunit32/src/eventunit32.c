@@ -15,6 +15,7 @@
 #include "utils/eu_isa_utils.h"
 #include "utils/magia_utils.h"
 #include "utils/tinyprintf.h"
+#include "utils/performance_utils.h"
 
 /**
  * @brief Initialize Event Unit with default configuration
@@ -52,7 +53,11 @@ void eu32_redmule_init(eu_controller_t *ctrl, uint32_t enable_irq) {
  * @return Non-zero if RedMulE completed, 0 if timeout/error
  */
 uint32_t eu32_redmule_wait(eu_controller_t *ctrl, eu_wait_mode_t mode) {
-    return eu_wait_events(EU_REDMULE_DONE_MASK, mode, 1000000); // 1M cycle timeout
+    uint32_t retval = eu_wait_events(EU_REDMULE_DONE_MASK, mode, 1000000);
+    #if PROFILE_CMP == 1
+    stnl_cmp_f();
+    #endif
+    return retval; // 1M cycle timeout
 }
 
 /**
@@ -106,7 +111,16 @@ uint32_t eu32_idma_wait(eu_controller_t *ctrl, eu_wait_mode_t mode) {
  */
 uint32_t eu32_idma_wait_direction(eu_controller_t *ctrl, uint32_t direction, eu_wait_mode_t mode) {
     uint32_t wait_mask = direction ? EU_IDMA_O2A_DONE_MASK : EU_IDMA_A2O_DONE_MASK;
-    return eu_wait_events(wait_mask, mode, 1000000); // 1M cycle timeout
+    uint32_t retval = eu_wait_events(wait_mask, mode, 1000000);
+    #if PROFILE_CMO == 1
+    if(direction == 1)
+        stnl_cmo_f();
+    #endif
+    #if PROFILE_CMI == 1
+    if(direction == 0)
+        stnl_cmi_f();
+    #endif
+    return retval; // 1M cycle timeout
 }
 
 /**
@@ -115,7 +129,11 @@ uint32_t eu32_idma_wait_direction(eu_controller_t *ctrl, uint32_t direction, eu_
  * @return Non-zero if L2->L1 completed, 0 if timeout/error
  */
 uint32_t eu32_idma_wait_a2o(eu_controller_t *ctrl, eu_wait_mode_t mode) {
-    return eu_wait_events(EU_IDMA_A2O_DONE_MASK, mode, 1000000);
+    uint32_t retval = eu_wait_events(EU_IDMA_A2O_DONE_MASK, mode, 1000000);
+    #if PROFILE_CMI == 1
+    stnl_cmi_f();
+    #endif
+    return retval;
 }
 
 /**
@@ -124,7 +142,11 @@ uint32_t eu32_idma_wait_a2o(eu_controller_t *ctrl, eu_wait_mode_t mode) {
  * @return Non-zero if L1->L2 completed, 0 if timeout/error
  */
 uint32_t eu32_idma_wait_o2a(eu_controller_t *ctrl, eu_wait_mode_t mode) {
-    return eu_wait_events(EU_IDMA_O2A_DONE_MASK, mode, 1000000);
+    uint32_t retval = eu_wait_events(EU_IDMA_O2A_DONE_MASK, mode, 1000000);
+    #if PROFILE_CMO == 1
+    stnl_cmo_f();
+    #endif
+    return retval;
 }
 
 /**
@@ -225,7 +247,11 @@ void eu32_fsync_init(eu_controller_t *ctrl, uint32_t enable_irq) {
  * @return Non-zero if FSync completed, 0 if timeout/error
  */
 uint32_t eu32_fsync_wait(eu_controller_t *ctrl, eu_wait_mode_t mode) {
-    return eu_wait_events(EU_FSYNC_DONE_MASK, mode, 1000000); // 1M cycle timeout
+    uint32_t retval = eu_wait_events(EU_FSYNC_DONE_MASK, mode, 1000000);
+    #if PROFILE_SNC == 1
+    stnl_snc_f();
+    #endif
+    return retval; // 1M cycle timeout
 }
 
 /**

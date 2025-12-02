@@ -32,6 +32,12 @@ The following *optional* parameters can be specified when running the make comma
 
 `fast_sim`: **0**|**1** (**Default**: 0). Deactivates signal tracking for faster simulation (rtl only).
 
+`redmule|fsync|idma_mm`: **0**|**1** (**Default**: 1). Uses memory mapped instructions for redmule|fsync|idma.
+
+`stalling`: **0**|**1** (**Default**: 0). Activates stalling mode on tiles instead of using the event unit.
+
+`profile_cmp|cmi|cmo|snc`: **0**|**1** (**Default**: 0). Activates the profiling utilities for computing|comunication(input line)|comunication(output line)|synchronization
+
 0. In case you are using this SDK as non-submodule: Clone the [MAGIA](https://github.com/pulp-platform/MAGIA/tree/main) repository:
 
     `git clone git@github.com:pulp-platform/MAGIA.git`

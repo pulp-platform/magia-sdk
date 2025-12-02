@@ -38,6 +38,10 @@ target_compile_options(runtime
   -DIDMA_MM=${IDMA_MM}
   -DREDMULE_MM=${REDMULE_MM}
   -DSTALLING=${STALLING}
+  -DPROFILE_CMP=${PROFILE_CMP}
+  -DPROFILE_CMI=${PROFILE_CMI}
+  -DPROFILE_CMO=${PROFILE_CMO}
+  -DPROFILE_SNC=${PROFILE_SNC}
 )
 
 target_compile_options(runtime

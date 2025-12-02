@@ -25,6 +25,7 @@
 #include "addr_map/tile_addr_map.h"
 #include "regs/tile_ctrl.h"
 #include "magia_tile_utils.h"
+#include "performance_utils.h"
 
 #define idma_wait() __asm__ __volatile__("wfi" ::: "memory")
 
@@ -247,6 +248,9 @@ inline void idma_set_std3_rep3_out(volatile uint32_t dst_std_3, volatile uint32_
   //             (0x0       <<  7) | \     /* Reserved - 0x0 */
   //             (0b1111011 <<  0)   \n"); /* OPCODE */
 inline void idma_start_in(){
+  #if PROFILE_CMI == 1
+  stnl_cmi_s();
+  #endif
   asm volatile(
        ".word (0x0       << 26) | \
               (0b0       << 25) | \
@@ -265,6 +269,9 @@ inline void idma_start_in(){
   //             (0x0       <<  7) | \     /* Reserved - 0x0 */
   //             (0b1111011 <<  0)   \n"); /* OPCODE */
 inline void idma_start_out(){
+  #if PROFILE_CMO == 1
+  stnl_cmo_s();
+  #endif
   asm volatile(
        ".word (0x0       << 26) | \
               (0b1       << 25) | \
@@ -302,6 +309,14 @@ inline void idma_mm_set_std3_rep3(uint32_t dir, uint32_t dst_stride_3, uint32_t 
 }
 
 inline uint32_t idma_mm_start(uint32_t dir){
+  #if PROFILE_CMI == 1
+  if(dir == 0)
+    stnl_cmi_s();
+  #endif
+  #if PROFILE_CMO == 1
+  if(dir == 1)
+    stnl_cmo_s();
+  #endif
   uint32_t transfer_id = mmio32(IDMA_NEXT_ID_ADDR(dir, 0));
   #if STALLING == 1
     // Polling mode - wait for completion
@@ -310,11 +325,17 @@ inline uint32_t idma_mm_start(uint32_t dir){
     do {
       status = *(volatile uint32_t *)(IDMA_BASE_OBI2AXI + IDMA_STATUS_OFFSET);
     } while (status & IDMA_STATUS_BUSY_MASK);
+    #if PROFILE_CMO == 1
+    stnl_cmo_f();
+    #endif
   }
   else{
     do {
       status = *(volatile uint32_t *)(IDMA_BASE_AXI2OBI + IDMA_STATUS_OFFSET);
     } while (status & IDMA_STATUS_BUSY_MASK);
+    #if PROFILE_CMI == 1
+    stnl_cmi_f();
+    #endif
   }
   #endif
   return transfer_id;

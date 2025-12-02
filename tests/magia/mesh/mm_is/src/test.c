@@ -120,11 +120,6 @@ int main(void){
     uint32_t obi_addr_x = (l1_tile_base);
     uint32_t axi_addr_x = (uint32_t) x_inp + (y_id * N_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2);
     
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x, len_x, std_x, reps_x);
-    #if STALLING == 0
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
-    #endif
-    
     /**
      * 2a. Initalize the IDMA transfer variables for weight data-tile transfers.
      */
@@ -147,6 +142,13 @@ int main(void){
      */
     uint32_t obi_addr_y_0 = obi_addr_w + (tile_w * t_size * 2);
     uint32_t obi_addr_y_1 = obi_addr_y_0 + (tile_h * t_size * 2);
+
+    sentinel_start();
+
+    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x, len_x, std_x, reps_x);
+    #if STALLING == 0
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    #endif
 
     /**
      * 3. Cycle over the timeslots.
@@ -198,14 +200,14 @@ int main(void){
 
             if(i % 2){
                 uint32_t src_addr = get_l1_base(hartid - 1) + (tile_h_max * tile_w_max * 2) + (tile_w_max * t_size * 2) + (tile_h_max * t_size * 2);
-                idma_memcpy_1d(&idma_ctrl, 0, src_addr, obi_addr_y_1, tile_h * t_size * 2);
+                idma_memcpy_2d(&idma_ctrl, 0, src_addr, obi_addr_y_1, tile_h * 2, tile_h * 2, t_size);
                 #if STALLING == 0
                 eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
                 #endif
             }                
             else{
                 uint32_t src_addr = get_l1_base(hartid - 1) + (tile_h_max * tile_w_max * 2) + (tile_w_max * t_size * 2);
-                idma_memcpy_1d(&idma_ctrl, 0, src_addr, obi_addr_y_0, tile_h * t_size * 2);
+                idma_memcpy_2d(&idma_ctrl, 0, src_addr, obi_addr_y_0, tile_h * 2, tile_h * 2, t_size);
                 #if STALLING == 0
                 eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
                 #endif
@@ -256,6 +258,9 @@ int main(void){
             #endif
         }
     }
+
+    sentinel_end();
+    stnl_r();
 
     /**
      * 5. Check results

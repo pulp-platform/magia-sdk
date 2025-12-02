@@ -25,6 +25,7 @@
 
 #include "utils/tinyprintf.h"
 #include "addr_map/tile_addr_map.h"
+#include "performance_utils.h"
 
 #define _FS_GLOBAL_AGGR (0xFFFFFFFF >> (1+__builtin_clz(NUM_HARTS)))
 #define _FS_GLOBAL_ID   (-1)
@@ -145,6 +146,9 @@ inline void fsync(volatile uint32_t id, volatile uint32_t aggregate){
   #if FSYNC_MM == 0
   asm volatile("addi t1, %0, 0" ::"r"(id));
   asm volatile("addi t0, %0, 0" ::"r"(aggregate));
+  #if PROFILE_SNC == 1
+  stnl_snc_s();
+  #endif
   asm volatile(
        ".word (0x0       << 25) | \
               (0b00110   << 20) | \
@@ -157,6 +161,9 @@ inline void fsync(volatile uint32_t id, volatile uint32_t aggregate){
   
   *(volatile uint32_t *)(fsync_base + FSYNC_MM_AGGR_REG_OFFSET) = aggregate;
   *(volatile uint32_t *)(fsync_base + FSYNC_MM_ID_REG_OFFSET) = id;
+  #if PROFILE_SNC == 1
+  stnl_snc_s();
+  #endif
   *(volatile uint32_t *)(fsync_base + FSYNC_MM_CONTROL_REG_OFFSET) = 1;
   
   #if STALLING == 1
@@ -165,6 +172,9 @@ inline void fsync(volatile uint32_t id, volatile uint32_t aggregate){
   do {
     status = *(volatile uint32_t *)(fsync_base + FSYNC_MM_STATUS_REG_OFFSET);
   } while (status & FSYNC_MM_STATUS_BUSY_MASK);
+  #if PROFILE_SNC == 1
+  stnl_snc_f();
+  #endif
   #endif
   #endif
 }

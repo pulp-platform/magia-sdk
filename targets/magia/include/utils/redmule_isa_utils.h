@@ -24,6 +24,7 @@
 
 #include "addr_map/tile_addr_map.h"
 #include "regs/tile_ctrl.h"
+#include "performance_utils.h"
 
 #define HWPE_WRITE(value, offset) *(volatile uint32_t*)(REDMULE_BASE + offset) = value
 #define HWPE_READ(offset) *(volatile uint32_t*)(REDMULE_BASE + offset)
@@ -65,6 +66,9 @@ inline void redmule_marith(volatile uint32_t y_base, volatile uint32_t w_base, v
   asm volatile("addi t2, %0, 0" ::"r"(y_base));
   asm volatile("addi t1, %0, 0" ::"r"(w_base));
   asm volatile("addi t0, %0, 0" ::"r"(x_base));
+  #if PROFILE_CMP == 1
+  stnl_cmp_s();
+  #endif
   asm volatile(
        ".word (0b00111   << 27) | \
               (0b00      << 25) | \
@@ -91,12 +95,18 @@ inline int redmule_mm_marith(volatile uint32_t y_base, volatile uint32_t w_base,
   HWPE_WRITE(w_base, REDMULE_REG_OFFS + REDMULE_REG_W_PTR);
   HWPE_WRITE(y_base, REDMULE_REG_OFFS + REDMULE_REG_Z_PTR);
   HWPE_WRITE(arith_reg, REDMULE_REG_OFFS + REDMULE_ARITH_PTR);
+  #if PROFILE_CMP == 1
+  stnl_cmp_s();
+  #endif
   HWPE_WRITE(0, REDMULE_TRIGGER); 
   #if STALLING == 1
   volatile uint32_t status;
   do {
     status = *(volatile uint32_t *)(REDMULE_BASE + REDMULE_STATUS);
   } while (status & REDMULE_STATUS_BUSY_MASK);
+  #if PROFILE_CMP == 1
+  stnl_cmp_f();
+  #endif
   #endif
   return 0;
 }
