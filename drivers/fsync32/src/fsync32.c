@@ -16,7 +16,8 @@
 #include "regs/tile_ctrl.h"
 #include "addr_map/tile_addr_map.h"
 #include "utils/fsync_isa_utils.h"
-#include "utils/tinyprintf.h"
+//#include "utils/tinyprintf.h"
+#include "utils/printf.h"
 #include "utils/magia_utils.h"
 
 int fsync32_init(fsync_controller_t *ctrl) {

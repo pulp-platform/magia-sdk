@@ -14,7 +14,8 @@
 #include "addr_map/tile_addr_map.h"
 #include "utils/eu_isa_utils.h"
 #include "utils/magia_utils.h"
-#include "utils/tinyprintf.h"
+//#include "utils/tinyprintf.h"
+#include "utils/printf.h"
 #include "utils/performance_utils.h"
 
 /**

@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 #include "eventunit.h"
-#include "utils/tinyprintf.h"
 
 
 __attribute__((weak)) eu_controller_api_t eu_api = {

@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 #include "idma.h"
-#include "utils/tinyprintf.h"
 
 
 /*-----------------------------------------------------------------*/

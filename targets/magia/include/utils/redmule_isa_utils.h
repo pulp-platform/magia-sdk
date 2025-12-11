@@ -79,6 +79,15 @@ inline void redmule_marith(volatile uint32_t y_base, volatile uint32_t w_base, v
               (0b001     << 10) | \
               (0b001     <<  7) | \
               (0b0101011 <<  0)   \n");
+  #if STALLING == 1
+  volatile uint32_t status;
+  do {
+    status = *(volatile uint32_t *)(REDMULE_BASE + REDMULE_STATUS);
+  } while (status & REDMULE_STATUS_BUSY_MASK);
+  #if PROFILE_CMP == 1
+  stnl_cmp_f();
+  #endif
+  #endif
 }
 
 inline int redmule_mm_mcnfig(volatile uint16_t k_size, volatile uint16_t m_size, volatile uint16_t n_size){

@@ -23,7 +23,8 @@
 #ifndef FSYNC_ISA_UTILS_H
 #define FSYNC_ISA_UTILS_H
 
-#include "utils/tinyprintf.h"
+//#include "utils/tinyprintf.h"
+#include "utils/printf.h"
 #include "addr_map/tile_addr_map.h"
 #include "performance_utils.h"
 
@@ -165,7 +166,7 @@ inline void fsync(volatile uint32_t id, volatile uint32_t aggregate){
   stnl_snc_s();
   #endif
   *(volatile uint32_t *)(fsync_base + FSYNC_MM_CONTROL_REG_OFFSET) = 1;
-  
+  #endif
   #if STALLING == 1
   // Polling mode - wait for completion
   volatile uint32_t status;
@@ -174,7 +175,6 @@ inline void fsync(volatile uint32_t id, volatile uint32_t aggregate){
   } while (status & FSYNC_MM_STATUS_BUSY_MASK);
   #if PROFILE_SNC == 1
   stnl_snc_f();
-  #endif
   #endif
   #endif
 }

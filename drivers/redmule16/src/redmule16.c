@@ -15,7 +15,8 @@
 #include "regs/tile_ctrl.h"
 #include "utils/redmule_isa_utils.h"
 #include "utils/magia_utils.h"
-#include "utils/tinyprintf.h"
+//#include "utils/tinyprintf.h"
+#include "utils/printf.h"
 
 int redmule16_init(redmule_controller_t *ctrl) {
     irq_en(1<<IRQ_REDMULE_EVT_0);

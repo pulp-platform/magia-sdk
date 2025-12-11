@@ -258,6 +258,16 @@ inline void idma_start_in(){
               (0b111     << 12) | \
               (0x0       <<  7) | \
               (0b1111011 <<  0)   \n");
+  #if STALLING == 1
+    // Polling mode - wait for completion
+  volatile uint32_t status;
+  do {
+    status = *(volatile uint32_t *)(IDMA_BASE_AXI2OBI + IDMA_STATUS_OFFSET);
+  } while (status & IDMA_STATUS_BUSY_MASK);
+  #if PROFILE_CMI == 1
+  stnl_cmi_f();
+  #endif
+  #endif
 }
 
 /* start instruction */
@@ -279,6 +289,16 @@ inline void idma_start_out(){
               (0b111     << 12) | \
               (0x0       <<  7) | \
               (0b1111011 <<  0)   \n");
+  #if STALLING == 1
+  // Polling mode - wait for completion
+  volatile uint32_t status;
+  do {
+    status = *(volatile uint32_t *)(IDMA_BASE_OBI2AXI + IDMA_STATUS_OFFSET);
+  } while (status & IDMA_STATUS_BUSY_MASK);
+  #if PROFILE_CMO == 1
+  stnl_cmo_f();
+  #endif
+  #endif
 }
 
 //=============================================================================
