@@ -33,6 +33,33 @@ static void pputc(char c)
     *(volatile uint8_t *) (PRINT_ADDR) = (uint8_t)c;
 }
 
+void *memset(void *m, int c, size_t n)
+{
+    char *s = (char *)m;
+    while (n--)
+        *s++ = (char) c;
+
+    return m;
+}
+
+int puts(const char *s)
+{
+    char c;
+    do
+    {
+        c = *s;
+        if (c == 0)
+        {
+            pputc('\n');
+            break;
+        }
+        pputc(c);
+        s++;
+    } while(1);
+
+    return 0;
+}
+
 char *strchr(const char *s, int c)
 {
     char tmp = (char) c;
@@ -50,7 +77,7 @@ static inline int isdigit(int a)
 
 static int atoi(const char **sptr)
 {
-    register char *p;
+    const register char *p;
     register int   i;
 
     i = 0;

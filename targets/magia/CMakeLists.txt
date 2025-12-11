@@ -61,6 +61,7 @@ target_link_options(runtime
   -march=${ISA}
   -mabi=${ABI}
   -nostartfiles
+  -nostdlib
   -ffreestanding
   -Wno-incompatible-pointer-types #ZL-MOD 03072025
   -Wno-int-conversion #ZL-MOD 03072025

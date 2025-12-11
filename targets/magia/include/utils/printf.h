@@ -27,8 +27,6 @@
 #include "prf.h"
 #include "io.h"
 
-
-
 int printf(const char *format, ...)
 {
 	va_list vargs;
@@ -40,5 +38,7 @@ int printf(const char *format, ...)
 
 	return r;
 }
+
+//#define printf tfp_printf
 
 #endif // PRINTF_H
