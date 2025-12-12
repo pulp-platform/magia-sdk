@@ -29,7 +29,7 @@ fsync_mode		?= stall
 mesh_dv			?= 1
 fast_sim		?= 0
 eval			?= 0
-stalling		?= 0
+stalling		?= 1
 fsync_mm		?= 1
 idma_mm			?= 1
 redmule_mm		?= 1
@@ -55,6 +55,7 @@ clean:
 rtl-clean:
 	cd $(MAGIA_DIR) 		&& \
 	make hw-clean-all
+	rm -rf $(MAGIA_DIR)/sw/tests/test_*
 
 build:
 ifeq ($(tiles), )

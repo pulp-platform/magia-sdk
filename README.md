@@ -62,6 +62,10 @@ The following *optional* parameters can be specified when running the make comma
 
     `make gvsoc <tiles>`
 
+    You can clean the MAGIA rtl and all the tests+logs by running:
+
+    `make rtl-clean`
+
 3. Make sure the RISC-V GCC compiler is installed and visible in the `$PATH` environment variable. You can check if and where the compiler is installed by running the following command on your root (`/`) directory:
 
     `find . ! -readable -prune -o -name "riscv64-unknown-elf-gcc" -print`
