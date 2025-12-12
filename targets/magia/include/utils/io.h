@@ -33,16 +33,9 @@ static void pputc(char c)
     *(volatile uint8_t *) (PRINT_ADDR) = (uint8_t)c;
 }
 
-void *memset(void *m, int c, size_t n)
-{
-    char *s = (char *)m;
-    while (n--)
-        *s++ = (char) c;
+void *memset(void *m, int c, size_t n);
 
-    return m;
-}
-
-int puts(const char *s)
+static int puts(const char *s)
 {
     char c;
     do
@@ -60,15 +53,7 @@ int puts(const char *s)
     return 0;
 }
 
-char *strchr(const char *s, int c)
-{
-    char tmp = (char) c;
-
-    while ((*s != tmp) && (*s != '\0'))
-        s++;
-
-    return (*s == tmp) ? (char *) s : NULL;
-}
+char *strchr(const char *s, int c);
 
 static inline int isdigit(int a)
 {
@@ -158,74 +143,9 @@ static void uc(char *buf)
     }
 }
 
-void *memcpy(void *dst0, const void *src0, size_t len0)
-{
-    void *save = dst0;
+void *memcpy(void *dst0, const void *src0, size_t len0);
 
-    char src_aligned = (((size_t) src0) & 3) == 0;
-    char dst_aligned = (((size_t) dst0) & 3) == 0;
-    char copy_full_words = (len0 & 3) == 0;
-
-    if (src_aligned && dst_aligned && copy_full_words)
-    {
-        // all accesses are aligned => can copy full words
-        uint32_t *dst = (uint32_t *) dst0;
-        uint32_t *src = (uint32_t *) src0;
-
-        while (len0)
-        {
-            *dst++ = *src++;
-            len0 -= 4;
-        }
-    }
-    else
-    {
-        // copy bytewise
-        char *dst = (char *) dst0;
-        char *src = (char *) src0;
-
-        while (len0)
-        {
-            *dst++ = *src++;
-            len0--;
-        }
-    }
-
-    return save;
-}
-
-void *memmove(void *d, const void *s, size_t n)
-{
-    char *dest = d;
-    const char *src  = s;
-
-    if ((size_t) (dest - src) < n)
-    {
-        /*
-         * The <src> buffer overlaps with the start of the <dest> buffer.
-         * Copy backwards to prevent the premature corruption of <src>.
-         */
-
-        while (n > 0)
-        {
-            n--;
-            dest[n] = src[n];
-        }
-    }
-    else
-    {
-        /* It is safe to perform a forward-copy */
-        while (n > 0)
-        {
-            *dest = *src;
-            dest++;
-            src++;
-            n--;
-        }
-    }
-
-    return d;
-}
+void *memmove(void *d, const void *s, size_t n);
 
 
 #endif // IO_H

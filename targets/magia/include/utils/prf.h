@@ -322,7 +322,7 @@ static int to_hex(char *buf, uint32_t value,
     return len + (buf - buf0);
 }
 
-int prf(void (*func)(char), const char *format, va_list vargs)
+static int prf(void (*func)(char), const char *format, va_list vargs)
 {
     /*
      * Due the fact that buffer is passed to functions in this file,

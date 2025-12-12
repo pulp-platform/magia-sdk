@@ -27,7 +27,7 @@
 #include "prf.h"
 #include "io.h"
 
-int printf(const char *format, ...)
+static int printf(const char *format, ...)
 {
 	va_list vargs;
 	int     r;
