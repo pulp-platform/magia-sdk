@@ -6,7 +6,6 @@
 // Measures cycles/byte for streaming DMA transfers + memory accesses.
 
 #include <stdint.h>
-#include <stdio.h>
 
 #include "test.h"
 #include "tile.h"
