@@ -8,7 +8,8 @@
 
 # Define mappings for tests
 set(TEST_MAPPINGS
-    magia:magia
+    magia_v1:magia
+    magia_v2:magia
 )
 
 # Call the macro

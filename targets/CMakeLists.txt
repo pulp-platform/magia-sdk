@@ -7,7 +7,8 @@
 # Alberto Dequino <alberto.dequino@unibo.it>
 
 set(AVAILABLE_TARGETS
-  "magia"
+  "magia_v1"
+  "magia_v2"
   CACHE STRING "Available Targets"
 )
 

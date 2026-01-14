@@ -29,7 +29,7 @@ fsync_mode		?= stall
 mesh_dv			?= 1
 fast_sim		?= 0
 eval			?= 0
-stalling		?= 1
+stalling		?= 0
 fsync_mm		?= 1
 idma_mm			?= 1
 redmule_mm		?= 1
@@ -38,7 +38,7 @@ profile_cmi		?= 0
 profile_cmo		?= 0
 profile_snc		?= 0
 
-target_platform ?= magia
+target_platform ?= magia_v2
 compiler 		?= GCC_PULP
 gui 			?= 0
 tiles 			?= 2
@@ -61,19 +61,19 @@ build:
 ifeq ($(tiles), )
 	$(error tiles is empty!)
 endif
-	sed -i -E 's/^#define MESH_([XY])_TILES[[:space:]]*[0-9]+/#define MESH_\1_TILES $(tiles)/' ./targets/magia/include/addr_map/tile_addr_map.h
-	sed -i -E 's/^(#define MAX_SYNC_LVL[[:space:]]*)[0-9]+/\1$(tiles_log)/' ./targets/magia/include/addr_map/tile_addr_map.h
-	sed -i -E 's/^(#define MESH_2_POWER[[:space:]]*)[0-9]+/\1$(tiles_log_real)/' ./targets/magia/include/addr_map/tile_addr_map.h
+	sed -i -E 's/^#define MESH_([XY])_TILES[[:space:]]*[0-9]+/#define MESH_\1_TILES $(tiles)/' ./targets/$(target_platform)/include/addr_map/tile_addr_map.h
+	sed -i -E 's/^(#define MAX_SYNC_LVL[[:space:]]*)[0-9]+/\1$(tiles_log)/' ./targets/$(target_platform)/include/addr_map/tile_addr_map.h
+	sed -i -E 's/^(#define MESH_2_POWER[[:space:]]*)[0-9]+/\1$(tiles_log_real)/' ./targets/$(target_platform)/include/addr_map/tile_addr_map.h
 ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
 endif
 ifeq ($(compiler), GCC_PULP)
 	sed -i -E 's/^add_subdirectory\(flatatt\)/#&/' ./tests/magia/mesh/CMakeLists.txt
-	sed -i -E 's/^#include "utils\/attention_utils.h"/\/\/&/' ./targets/magia/include/tile.h
+	sed -i -E 's/^#include "utils\/attention_utils.h"/\/\/&/' ./targets/$(target_platform)/include/tile.h
 endif
 ifeq ($(compiler), GCC_MULTILIB)
 	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
-	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/magia/include/tile.h
+	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/$(target_platform)/include/tile.h
 endif
 	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -B build --trace-expand
 	cmake --build build --verbose
@@ -117,8 +117,12 @@ else
 endif
 
 MAGIA: set_mesh
-ifeq ($(target_platform), magia)
+ifeq ($(target_platform), magia_v1)
 	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_DIR)/Makefile
+	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40P/\1CV32E40X/' $(MAGIA_DIR)/Makefile
+else ifeq ($(target_platform), magia_v2)
+	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_DIR)/Makefile
+	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40X/\1CV32E40P/' $(MAGIA_DIR)/Makefile
 ifneq ($(tiles), 1)
 	sed -i -E 's/^( *localparam int unsigned N_TILES_[XY][[:space:]]*=[[:space:]]*)[0-9]+;/\1$(tiles);/' $(MAGIA_DIR)/hw/mesh/magia_pkg.sv
 endif

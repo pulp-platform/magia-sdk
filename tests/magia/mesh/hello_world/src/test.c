@@ -13,9 +13,13 @@
 int main(void){
     uint32_t hartid = get_hartid();
 
-    float test_float = -12.0456;
+    int test = NULL;
+
+    float test_float = -12.0456f;
+    //int test_integer = -123;
     
     printf("Hello world! %f\n", test_float);
+    //printf("Hello world! %d\n", test_integer);
 
     return 0;
 }
