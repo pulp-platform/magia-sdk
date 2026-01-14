@@ -30,7 +30,7 @@ The following *optional* parameters can be specified when running the make comma
 
 `redmule|fsync|idma_mm`: **0**|**1** (**Default**: 1). Uses memory mapped instructions for redmule|fsync|idma. **NOT SUPPORTED IN MAGIA_V1**
 
-`stalling`: **0**|**1** (**Default**: 0). Activates stalling mode on tiles instead of using the event unit.
+`stalling`: **0**|**1** (**Default**: 0). Activates stalling mode on tiles instead of using the event unit. **STALLING MUST BE SET ON 1 FOR MAGIA_V1**
 
 `profile_cmp|cmi|cmo|snc`: **0**|**1** (**Default**: 0). Activates the profiling utilities for computing|comunication(input line)|comunication(output line)|synchronization
 
