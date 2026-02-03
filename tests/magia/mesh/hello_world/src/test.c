@@ -13,11 +13,13 @@
 int main(void){
     uint32_t hartid = get_hartid();
 
-    int test_int = -123;
-    
-    printf("Hello world! %d\n", test_int);
+    int test = NULL;
 
-    magia_return(hartid, PASS_EXIT_CODE);
+    float test_float = -12.0456f;
+    //int test_integer = -123;
     
+    printf("Hello world! %f\n", test_float);
+    //printf("Hello world! %d\n", test_integer);
+
     return 0;
 }

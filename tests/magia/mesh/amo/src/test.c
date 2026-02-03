@@ -60,12 +60,15 @@ int main(void){
      * 3. Check if the counter has the correct value.
      */
     if(*(volatile uint32_t*)(l1_tile_base) != (INITIAL_VALUE + N_ITERS * NUM_HARTS)){
+        #if EVAL == 1
         printf("Error: expected %d but got %d\n", (INITIAL_VALUE + N_ITERS * NUM_HARTS), *(volatile uint32_t*)(l1_tile_base));
+        #endif
+        magia_return(hartid, 1);
+        return 1;  
     }
     else{
-        printf("Correct value!");
+        printf("Correct value!\n");
     }
 
-    magia_return(hartid, PASS_EXIT_CODE);
     return 0;
 }

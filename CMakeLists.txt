@@ -41,10 +41,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 project(magia-sdk LANGUAGES C ASM)
 
 set(ABI ilp32)
-if (COMPILER STREQUAL "GCC_PULP")
-    set(ISA rv32imaf)
-elseif (COMPILER STREQUAL "GCC_MULTILIB")
-    set(ISA rv32imac_zfinx_zhinx)
+if (TARGET_PLATFORM STREQUAL "magia_v1")
+    set(ISA rv32imafc)
+elseif (TARGET_PLATFORM STREQUAL "magia_v2")
+    set(ISA rv32imfcxpulpv2)
 endif ()
 
 

@@ -53,6 +53,6 @@
 /*-------------------------------------------*/
 __attribute__((weak)) redmule_controller_api_t redmule_api = {
     .init = redmule_init,
-    .wait = redmule_wait,
+/*     .wait = redmule_wait, */
     .gemm = redmule_gemm,
 };

@@ -9,6 +9,9 @@
 #include "test.h"
 #include "tile.h"
 #include "fsync.h"
+#include "eventunit.h"
+
+#define WAIT_MODE WFE
 
 /**
  * Compares the value written in L1 memory with the value written in L1 memory of the other tiles listed.
@@ -22,7 +25,7 @@ int check_values(uint32_t *ids, uint8_t n_tiles){
             continue;
         val2 = *(volatile uint8_t*)(get_l1_base(ids[i]));
         if(val != val2){
-            printf("Error detected: val=%d val2=%d (id of other tile:%d)", val, val2, ids[i]);
+            printf("Error detected: val=%d val2=%d (id of other tile:%d)\n", val, val2, ids[i]);
             return 1;
         }
     }
@@ -50,6 +53,17 @@ int main(void){
 
     fsync_init(&fsync_ctrl);
 
+    #if STALLING == 0
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+    eu_init(&eu_ctrl);
+    eu_fsync_init(&eu_ctrl, 0);
+    #endif
+
     uint32_t l1_tile_base = get_l1_base(hartid);
     uint8_t groupid;
     uint8_t flag = 0;
@@ -58,8 +72,8 @@ int main(void){
     /**
      * 1. Select which tiles to be synchronized.
      */
-    uint8_t N_TILES = 2;
-    uint32_t ids[] = {27, 28};
+    uint8_t N_TILES = 3;
+    uint32_t ids[] = {0, 2, 3};
 
     /**
      * 2. Cycle over the ids. If the current tile is part of the ids, test the synchronization.
@@ -75,20 +89,21 @@ int main(void){
             /**
              * 2b. Synchronize with the other tiles
              */
-            if(fsync_sync(&fsync_ctrl, ids, N_TILES, 0, 0))
-                printf("Error in synchronization.");
+            fsync_sync(&fsync_ctrl, ids, N_TILES, 0, 0);
+            #if STALLING == 0
+            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+            #endif
+                
 
             /**
              * 2c. Check that all tiles wrote the same value
              */
             if(!check_values(ids, N_TILES))
-                printf("No errors detected for arbitrary sync!");
+                printf("No errors detected for arbitrary sync!\n");
             
             break;
         }
     }
 
-    magia_return(hartid, PASS_EXIT_CODE);
-    
     return 0;
 }

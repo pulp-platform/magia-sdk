@@ -1,6 +1,6 @@
 next_steps.*
 build/
-output.*
+output*
 list/
 transcript
 .vscode/
@@ -8,3 +8,13 @@ gvsoc_config.json
 power_report.csv
 trace_file.txt
 insn.txt
+debug_*
+compile_commands.json
+CMakeCache.txt
+cmake_install.cmake
+CMakeFiles
+/*/Makefile
+/*/*/Makefile
+/*/*/*/Makefile
+/*/*/*/*/Makefile
+log.txt

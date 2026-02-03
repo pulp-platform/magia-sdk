@@ -33,7 +33,7 @@ typedef struct {
 
 extern int redmule_init(redmule_controller_t *ctrl);
 
-extern int redmule_wait(redmule_controller_t *ctrl);
+/* extern void redmule_wait(); */
 
 /**
  * This function prepares and execute an accelerated generic matrix multiplication.
@@ -47,7 +47,7 @@ extern int redmule_gemm(redmule_controller_t *ctrl, uint32_t x, uint32_t w, uint
  */
 struct redmule_controller_api {
     int (*init)(redmule_controller_t *ctrl);
-    int (*wait)(redmule_controller_t *ctrl);
+/*     void (*wait)(); */
     int (*gemm)(redmule_controller_t *ctrl, uint32_t x, uint32_t w, uint32_t y, uint16_t m, uint16_t n, uint16_t k);
 };
 

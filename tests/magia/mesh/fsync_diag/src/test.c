@@ -9,6 +9,9 @@
 #include "test.h"
 #include "tile.h"
 #include "fsync.h"
+#include "eventunit.h"
+
+#define WAIT_MODE WFE
 
 /**
  * Compares the value written in L1 memory with the value written in L1 memory of the tile_0 of the diagonal.
@@ -45,6 +48,17 @@ int main(void){
 
     fsync_init(&fsync_ctrl);
 
+    #if STALLING == 0
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+    eu_init(&eu_ctrl);
+    eu_fsync_init(&eu_ctrl, 0);
+    #endif
+
     uint32_t l1_tile_base = get_l1_base(hartid);
     uint8_t x_id = (uint8_t) GET_X_ID(hartid);
     uint8_t y_id = (uint8_t) GET_Y_ID(hartid);
@@ -61,13 +75,25 @@ int main(void){
         //wait_nop(100 * hartid);
         mmio8(l1_tile_base) = (uint8_t) 123;
         fsync_sync_diag(&fsync_ctrl);
+        #if STALLING == 0
+        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        #endif
         flag = check_values((uint8_t) 123);
         fsync_sync_diag(&fsync_ctrl);
-        if(!flag)
-            printf("No errors detected in diagonal!");
+        #if STALLING == 0
+        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        #endif
+        if(!flag){
+            printf("No errors detected in diagonal!\n");
+            magia_return(hartid, 0);
+            return 0;
+        }
+        else{
+            printf("Errors detected in diagonal!\n");
+            magia_return(hartid, 1);
+            return 1;
+        }        
     }
 
-    magia_return(hartid, PASS_EXIT_CODE);
-
-    return 0;
+    return 0; 
 }

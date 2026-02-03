@@ -11,6 +11,9 @@
 #include "fsync.h"
 #include "idma.h"
 #include "redmule.h"
+#include "eventunit.h"
+
+#define WAIT_MODE WFE
 
 /**
  * This test aims to verify the functionality of MAGIA as a systolic array for matrix multiplications,
@@ -47,6 +50,19 @@ int main(void){
     fsync_init(&fsync_ctrl);
     idma_init(&idma_ctrl);
     redmule_init(&redmule_ctrl);
+
+    #if STALLING == 0
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+    eu_init(&eu_ctrl);
+    eu_fsync_init(&eu_ctrl, 0);
+    eu_redmule_init(&eu_ctrl, 0);
+    eu_idma_init(&eu_ctrl, 0);
+    #endif
 
     uint32_t y_id = GET_Y_ID(hartid);
     uint32_t x_id = GET_X_ID(hartid);
@@ -92,7 +108,7 @@ int main(void){
      * Weight data-tile: (tile_w x t_size) * data_dim
      * Output data-tile: ((tile_h x t_size) * data_dim) * 2 (Double buffering)
      */
-    uint8_t timeslots = 16;
+    uint8_t timeslots = 2;
     uint8_t t_size = K_SIZE / timeslots;
 
     /**
@@ -103,9 +119,6 @@ int main(void){
     uint32_t reps_x = (uint32_t) tile_h;
     uint32_t obi_addr_x = (l1_tile_base);
     uint32_t axi_addr_x = (uint32_t) x_inp + (y_id * N_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2);
-    
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x, len_x, std_x, reps_x);
-    idma_wait(&idma_ctrl);
     
     /**
      * 2a. Initalize the IDMA transfer variables for weight data-tile transfers.
@@ -130,6 +143,13 @@ int main(void){
     uint32_t obi_addr_y_0 = obi_addr_w + (tile_w * t_size * 2);
     uint32_t obi_addr_y_1 = obi_addr_y_0 + (tile_h * t_size * 2);
 
+    sentinel_start();
+
+    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x, len_x, std_x, reps_x);
+    #if STALLING == 0
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    #endif
+
     /**
      * 3. Cycle over the timeslots.
      * For each timeslot, the mesh-tile will:
@@ -147,7 +167,9 @@ int main(void){
          * 3a. IDMA to load the weight data-tile for current timeslot
          */
         idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_w + (t_size * i * 2)), obi_addr_w, len_w, std_w, reps_w);
-        idma_wait(&idma_ctrl);
+        #if STALLING == 0
+        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        #endif
 
         /**
          * 3b. Load the output data-tile
@@ -158,27 +180,37 @@ int main(void){
         if(x_id == 0){
             if(i % 2){
                 idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y + (i * t_size * 2), obi_addr_y_1, len_y, std_y, reps_y);
-                idma_wait(&idma_ctrl);
+                #if STALLING == 0
+                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                #endif
             }
             else{
                 idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y + (i * t_size * 2), obi_addr_y_0, len_y, std_y, reps_y);
-                idma_wait(&idma_ctrl);
+                #if STALLING == 0
+                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                #endif
             }  
             //printf("Loaded data from L2: %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2), *(volatile uint16_t*)(obi_addr_y + 4), *(volatile uint16_t*)(obi_addr_y + 6));
         }
         else{
-            if(fsync_sync_left(&fsync_ctrl))
-                printf("Error when synchronizing with left tile.");
+            fsync_sync_left(&fsync_ctrl);
+            #if STALLING == 0
+            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+            #endif
 
             if(i % 2){
                 uint32_t src_addr = get_l1_base(hartid - 1) + (tile_h_max * tile_w_max * 2) + (tile_w_max * t_size * 2) + (tile_h_max * t_size * 2);
-                idma_memcpy_1d(&idma_ctrl, 0, src_addr, obi_addr_y_1, tile_h * t_size * 2);
-                idma_wait(&idma_ctrl);
+                idma_memcpy_2d(&idma_ctrl, 0, src_addr, obi_addr_y_1, tile_h * 2, tile_h * 2, t_size);
+                #if STALLING == 0
+                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                #endif
             }                
             else{
                 uint32_t src_addr = get_l1_base(hartid - 1) + (tile_h_max * tile_w_max * 2) + (tile_w_max * t_size * 2);
-                idma_memcpy_1d(&idma_ctrl, 0, src_addr, obi_addr_y_0, tile_h * t_size * 2);
-                idma_wait(&idma_ctrl);
+                idma_memcpy_2d(&idma_ctrl, 0, src_addr, obi_addr_y_0, tile_h * 2, tile_h * 2, t_size);
+                #if STALLING == 0
+                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                #endif
             }
             //printf("Received this data: %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2), *(volatile uint16_t*)(obi_addr_y + 4), *(volatile uint16_t*)(obi_addr_y + 6));
         }
@@ -189,11 +221,15 @@ int main(void){
          */
         if(i % 2){
             redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y_1, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
-            redmule_wait(&redmule_ctrl);
+            #if STALLING == 0
+            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            #endif
         }
         else{
             redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y_0, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
-            redmule_wait(&redmule_ctrl);
+            #if STALLING == 0
+            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            #endif
         }
 
         /**
@@ -203,26 +239,38 @@ int main(void){
         if(x_id == (MESH_X_TILES-1)){
             if(i % 2){
                 idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y + (i * t_size * 2), obi_addr_y_1, len_y, std_y, reps_y);
-                idma_wait(&idma_ctrl);
+                #if STALLING == 0
+                eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                #endif
             }
             else{
                 idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y + (i * t_size * 2), obi_addr_y_0, len_y, std_y, reps_y);
-                idma_wait(&idma_ctrl);
+                #if STALLING == 0
+                eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                #endif
             }   
         }
         else{
             //printf("Sending this data: %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y), *(volatile uint16_t*)(obi_addr_y + 2), *(volatile uint16_t*)(obi_addr_y + 4), *(volatile uint16_t*)(obi_addr_y + 6));
-            if(fsync_sync_right(&fsync_ctrl))
-                printf("Error when synchronizing with right tile");
+            fsync_sync_right(&fsync_ctrl);
+            #if STALLING == 0
+            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+            #endif
         }
     }
+
+    sentinel_end();
+    stnl_r();
 
     /**
      * 5. Check results
      */
+    uint32_t errors=0;
     fsync_sync_row(&fsync_ctrl);
+    #if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
     if(x_id == MESH_X_TILES - 1){
-        uint32_t errors=0;
         uint16_t computed, expected, diff = 0;
         for(uint8_t i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
             for(uint8_t j = 0; j < K_SIZE; j++){
@@ -230,15 +278,16 @@ int main(void){
                 expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
                 diff = (computed > expected) ? (computed - expected) : (expected - computed);
                 if(diff > 0x0011){
-                    //if(y_id == 0)
-                        //printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                    #if EVAL == 1
+                    if(y_id == 0)
+                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                    #endif    
                     errors++;
                 }       
             }
         }
-        printf("Number of errors: %d", errors);
+        printf("Number of errors: %d\n", errors);
     }
 
-    magia_return(hartid, PASS_EXIT_CODE);
-    return 0;  
+    return errors;  
 }

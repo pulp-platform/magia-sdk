@@ -16,7 +16,8 @@
 #include "regs/tile_ctrl.h"
 #include "addr_map/tile_addr_map.h"
 #include "utils/fsync_isa_utils.h"
-#include "utils/tinyprintf.h"
+//#include "utils/tinyprintf.h"
+#include "utils/printf.h"
 #include "utils/magia_utils.h"
 
 int fsync32_init(fsync_controller_t *ctrl) {
@@ -211,6 +212,47 @@ int fsync32_sync_down(fsync_controller_t *ctrl){
     return 0; 
 }
 
+
+/**
+ * Synchronizes the entire mesh.
+ */
+int fsync32_sync_global(fsync_controller_t *ctrl){
+    fsync(0, (uint32_t) (0xFFFFFFFF >> (32 - MAX_SYNC_LVL)));
+    return 0;
+}
+
+void fsync32_hnbr(fsync_controller_t *ctrl){
+  fsync(_FS_HNBR_ID, _FS_HNBR_AGGR);
+}
+
+void fsync32_vnbr(fsync_controller_t *ctrl){
+  fsync(_FS_VNBR_ID, _FS_VNBR_AGGR);
+}
+
+void fsync32_hring(fsync_controller_t *ctrl){
+  uint32_t hartid   = get_hartid();
+  uint32_t hartid_x = GET_X_ID(hartid);
+  uint32_t hartid_y = GET_Y_ID(hartid);
+  if ((hartid_x == 0) || (hartid_x == MESH_X_TILES-1)){
+    uint32_t id = row_id_lookup(hartid_y);
+    fsync(id, _FS_RC_LVL);
+  } else {
+    fsync(_FS_HRING_ID, _FS_HRING_AGGR);
+  }
+}
+
+void fsync32_vring(fsync_controller_t *ctrl){
+  uint32_t hartid   = get_hartid();
+  uint32_t hartid_x = GET_X_ID(hartid);
+  uint32_t hartid_y = GET_Y_ID(hartid);
+  if ((hartid_y == 0) || (hartid_y == MESH_Y_TILES-1)){
+    uint32_t id = col_id_lookup(hartid_x);
+    fsync(id, _FS_RC_LVL);
+  } else {
+    fsync(_FS_VRING_ID, _FS_VRING_AGGR);
+  }
+}
+
 extern int fsync_init(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_init"), used, visibility("default")));
 extern int fsync_sync_level(fsync_controller_t *ctrl, uint32_t level, uint8_t dir)
@@ -233,6 +275,16 @@ extern int fsync_sync_up(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_sync_up"), used, visibility("default")));
 extern int fsync_sync_down(fsync_controller_t *ctrl)
     __attribute__((alias("fsync32_sync_down"), used, visibility("default")));
+extern int fsync_sync_global(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_sync_global"), used, visibility("default")));
+extern void fsync_hnbr(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_hnbr"), used, visibility("default")));
+extern void fsync_vnbr(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_vnbr"), used, visibility("default")));
+extern void fsync_hring(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_hring"), used, visibility("default")));
+extern void fsync_vring(fsync_controller_t *ctrl)
+    __attribute__((alias("fsync32_vring"), used, visibility("default")));
 
 /* Export the FSYNC-specific controller API */
 fsync_controller_api_t fsync_api = {
@@ -247,5 +299,9 @@ fsync_controller_api_t fsync_api = {
     .sync_right = fsync32_sync_right,
     .sync_up = fsync32_sync_up,
     .sync_down = fsync32_sync_down,
+    .hnbr = fsync32_hnbr,
+    .vnbr = fsync32_vnbr,
+    .hring = fsync32_hring,
+    .vring = fsync32_vring,
 };
 

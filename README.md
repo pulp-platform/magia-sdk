@@ -8,19 +8,31 @@ Magia and Magia-SDK are developed as part of the [PULP project](https://pulp-pla
 
 The following *optional* parameters can be specified when running the make command:
 
-`target_platform`: **magia** (**Default**: magia). Selects the target platform to build and run tests on. At the moment, only MAGIA is supported by the SDK.
+`target_platform`: **magia_v1**|**magia_v2** (**Default**: magia_v2). Selects the target platform to build and run tests on. Magia V1 is the legacy mode using the CV32E40X core, whereas magia_v2 is the new platform using CV32E40P. No future support for magia_v1 is planned.
 
-`build_mode`: **update**|**profile**|**synth** (**Default**: update). Selects the mode that the MAGIA architecture is built.
+`build_mode`: **update**|**profile**|**synth** (**Default**: profile). Selects the mode that the MAGIA architecture is built.
 
 `fsync_mode`: **stall**|**interrupt** (**Default** stall). Selects the Fractal Sync module synchronization behaviour.
 
-`compiler`: **GCC_MULTILIB**|**GCC_PULP**|**LLVM** (**Default**: GCC_MULTILIB). Selects the compiler to be used. LLVM is currently WIP. PULP is the risc-v 32 bits only toolchain NOT supporting floating point instructions, wheras the MULTILIB toolchain is the nightly risc-v one.
+`compiler`: **GCC_MULTILIB**|**GCC_PULP**|**LLVM** (**Default**: GCC_PULP). Selects the compiler to be used. LLVM is currently WIP. PULP is the risc-v 32 bits only toolchain NOT supporting floating point instructions, wheras the MULTILIB toolchain is the nightly risc-v one.
 
-`platform`: **rtl**|**gvsoc** (**Default**: rtl). Selects the simulation platform. GVSoC is currently WIP, some tests may fail.
+`platform`: **rtl**|**gvsoc**. Selects the simulation platform. GVSoC is currently WIP, some tests may fail.
 
 `tiles`: **2**|**4**|**8**|**16** (**Default**: 2). Selects number of rows and columns for the mesh architecture.
 
 `test_name`: Name of the test binary to be run.
+
+`eval`: **0**|**1** (**Default**: 0). Activates printing of error values in the testsuite.
+
+`gui`: **0**|**1** (**Default**: 0). Activates the graphic user interface on the simulator (rtl only).
+
+`fast_sim`: **0**|**1** (**Default**: 0). Deactivates signal tracking for faster simulation (rtl only).
+
+`redmule|fsync|idma_mm`: **0**|**1** (**Default**: 1). Uses memory mapped instructions for redmule|fsync|idma. **NOT SUPPORTED IN MAGIA_V1**
+
+`stalling`: **0**|**1** (**Default**: 0). Activates stalling mode on tiles instead of using the event unit. **STALLING MUST BE SET ON 1 FOR MAGIA_V1**
+
+`profile_cmp|cmi|cmo|snc`: **0**|**1** (**Default**: 0). Activates the profiling utilities for computing|comunication(input line)|comunication(output line)|synchronization
 
 0. In case you are using this SDK as non-submodule: Clone the [MAGIA](https://github.com/pulp-platform/MAGIA/tree/main) repository:
 
@@ -32,13 +44,12 @@ The following *optional* parameters can be specified when running the make comma
 
         BUILD_DIR ?= $(MAGIA_DIR)//work/sw/tests/$(test).c
 
-1. Make sure the GVSoC submodule is set up correctly:
+    It is also required to have a cmake version >= 3.13.
 
-        git submodule update --init --recursive
-        cd gvsoc
-        git checkout magia
-        git submodule update --init --recursive
+1. Initialize the GVSoC submodule:
 
+    `make gvsoc_init`
+    
 2. Build the Magia architecture (*this command may take time and return an error, please be patient.*):
         
     `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode>`
@@ -46,6 +57,10 @@ The following *optional* parameters can be specified when running the make comma
     And/Or the GVSoC module:
 
     `make gvsoc <tiles>`
+
+    You can clean the MAGIA rtl and all the tests+logs by running:
+
+    `make rtl-clean`
 
 3. Make sure the RISC-V GCC compiler is installed and visible in the `$PATH` environment variable. You can check if and where the compiler is installed by running the following command on your root (`/`) directory:
 
@@ -65,13 +80,19 @@ The following *optional* parameters can be specified when running the make comma
 
 4. To compile and build the test binaries for a desired architecture run:
 
-    `make clean build <target_platform> <tiles> <compiler>`
+    `make clean build <target_platform> <tiles> <compiler> <eval>`
 
     To run one of the tests:
 
     `make run test=<test_name> <platform>`
 
 ***WARNING: YOU HAVE TO REBUILD BOTH RTL/GVSOC AND THE TEST BINARY EACH TIME YOU WANT TO TEST A MAGIA MESH WITH A DIFFERENT NUMBER OF TILES.*** 
+
+To ensure a clean re-build of the RTL, you can run:
+
+`make rtl-clean`
+
+before building the RTL back using the `make MAGIA` command.
 
 ## Adding your own test
 

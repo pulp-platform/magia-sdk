@@ -7,7 +7,8 @@
 
 # Define mappings for devices
 set(DEVICE_MAPPINGS
-    magia:
+    magia_v1:
+    magia_v2:
 )
 
 # Call the macro

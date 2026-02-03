@@ -9,6 +9,9 @@
 #include "test.h"
 #include "tile.h"
 #include "fsync.h"
+#include "eventunit.h"
+
+#define WAIT_MODE WFE
 
 /**
  * Writes the group ID increased by an offset to the L1 memory address to be used to verify correct horizzontal synchronization.
@@ -39,7 +42,7 @@ int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr, uint8_t dir){
     uint8_t val_0 = *(volatile uint8_t*)(get_l1_base(id_0));
     uint8_t flag = 0;
     if(val_0 != val){
-        printf("Error detected at sync level %d - val is: %d but val_0 (id_0:%d) is %d", lvl, val, id_0, val_0);
+        printf("Error detected at sync level %d - val is: %d but val_0 (id_0:%d) is %d\n", lvl, val, id_0, val_0);
         flag = 1;
     }
     //else
@@ -68,6 +71,17 @@ int main(void){
 
     fsync_init(&fsync_ctrl);
 
+    #if STALLING == 0
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+    eu_init(&eu_ctrl);
+    eu_fsync_init(&eu_ctrl, 0);
+    #endif
+
     uint32_t l1_tile_base = get_l1_base(hartid);
     uint8_t groupid;
     uint8_t flag = 0;
@@ -93,6 +107,10 @@ int main(void){
         * 1_c. Synchronize on the current horizzontal level.
         */
         fsync_sync_level(&fsync_ctrl, (uint32_t) i, dir);
+        #if STALLING == 0
+        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        #endif
+
 
         /**
         * 1_d. Check if the other tiles have written the correct value.
@@ -104,13 +122,17 @@ int main(void){
         * 1_e. Synchronize again before next cycle write.
         */
         fsync_sync_level(&fsync_ctrl, (uint32_t) i, dir);
+        #if STALLING == 0
+        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        #endif
     }
 
     if(!flag){
         printf("No errors detected for all synchronization levels! (MAX LEVEL: %d)\n", (MAX_SYNC_LVL-1));
+        return 0;
     }
-
-    magia_return(hartid, PASS_EXIT_CODE);
-    
-    return 0;
+    else{
+        printf("Errors detected when synchronizing some of the levels!\n");
+        return 1;
+    }
 }
