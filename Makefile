@@ -160,8 +160,9 @@ endif
 	make build TARGETS=magia_v2
 
 gvsoc_init:
-	git submodule update --init --recursive
+	git clone https://github.com/FondazioneChipsIT/gvsoc
 	cd $(GVSOC_DIR) && \
+	git submodule update --init --recursive && \
 	cd core && \
 	git checkout lz/magia-v2-core && \
 	cd ../pulp && \
