@@ -61,6 +61,19 @@ SECTIONS
         _endtext = .;
     }  > instrram
 
+    /* Spatz embedded binary - inlined from header file */
+    /* Positioned right after CV32 .text in instrram */
+
+    . = ALIGN(4);
+    _spatz_binary_start = .;
+
+    .spatz_binary : {
+        KEEP(*(.spatz_binary))
+    } > instrram
+
+    _spatz_binary_end = .;
+    _spatz_binary_size = _spatz_binary_end - _spatz_binary_start;
+
     /*--------------------------------------------------------------------*/
     /* Global constructor/destructor segment                              */
     /*--------------------------------------------------------------------*/
