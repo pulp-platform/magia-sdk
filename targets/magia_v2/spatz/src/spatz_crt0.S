@@ -120,7 +120,7 @@ dispatcher_loop:
 /* Trap handler - distinguishes interrupts from exceptions */
 _trap_handler:
     csrr    t0, mcause
-    bltz    t0, _handle_interrupt   // mcause[31]=1 → interrupt
+    bltz    t0, _handle_interrupt   // mcause[31]=1 ? interrupt
 
     /* EXCEPTION: Write error code to RETURN_ADDR, signal DONE, halt */
 _handle_exception:
