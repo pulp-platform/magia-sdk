@@ -67,3 +67,20 @@ target_link_options(runtime
   -Wno-int-conversion #ZL-MOD 03072025
   -Wl,--gc-sections #ZL-MOD 03072025
 )
+
+
+# ==================== SPATZ INTEGRATION ====================
+
+# Include Spatz configuration and helpers if Spatz is available
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/spatz")
+    include(${CMAKE_SOURCE_DIR}/cmake/spatz_config.cmake)
+    include(${CMAKE_SOURCE_DIR}/cmake/spatz_helpers.cmake)
+    include(${CMAKE_SOURCE_DIR}/cmake/bootrom_helpers.cmake)
+
+    # Build bootrom once at target level (shared by all tests)
+    add_spatz_bootrom(${CMAKE_BINARY_DIR}/bin)
+
+    message(STATUS "[MAGIA-SDK] Spatz integration enabled for magia_v2")
+endif()
+
+# =========================================================
