@@ -97,7 +97,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVSOC_DIR)/install/bin/gvsoc --target=magia --binary=./build/bin/$(test) --trace-level=trace run
+	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir /home/gvsoc/Documents/test --param binary=./build/bin/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles)
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
@@ -157,19 +157,15 @@ else
 	$(error unrecognized platform (acceptable platform: magia_v2).)
 endif
 	cd $(GVSOC_DIR)	&& \
-	make build TARGETS=magia_v2 DEBUG=1
+	make build TARGETS=magia_v2
 
 gvsoc_init:
 	git submodule update --init --recursive
 	cd $(GVSOC_DIR) && \
-	rm -rf pulp/ && \
-	rm -rf core/ && \
-	git clone https://github.com/TheSSDGuy/gvsoc-core.git core/ && \
-	git clone https://github.com/TheSSDGuy/gvsoc-pulp.git pulp/ && \
 	cd core && \
-	git checkout magia-core-v3 && \
+	git checkout lz/magia-v2-core && \
 	cd ../pulp && \
-	git checkout magia-pulp-v3
+	git checkout lz/magia-v2-pulp
 
 
 
