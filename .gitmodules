@@ -1,4 +1,4 @@
 [submodule "gvsoc"]
 	path = gvsoc
-	url = https://github.com/gvsoc/gvsoc.git
+	url = https://github.com/FondazioneChipsIT/gvsoc
 	branch = main
