@@ -148,7 +148,7 @@ function(add_cv32_executable_with_spatz)
     target_include_directories(${ARG_TARGET_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/inc
-        ${CMAKE_CURRENT_SOURCE_DIR}/utils
+        ${CMAKE_SOURCE_DIR}/tests/utils
         ${CMAKE_SOURCE_DIR}/hal/include
         ${CMAKE_SOURCE_DIR}/drivers/eventunit32/include
         ${ARG_INCLUDE_DIRS}
