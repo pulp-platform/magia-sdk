@@ -67,6 +67,7 @@ set(SPATZ_COMPILE_FLAGS
     "-g"
     "-Wall"
     "-Wextra"
+    "-Wno-incompatible-function-pointer-types"
     "-fno-common"
     "-ffunction-sections"
     "-fdata-sections"
@@ -90,7 +91,7 @@ set(SPATZ_CFLAGS_DEFINES
 
 # Linker flags [MAGIA/spatz/sw/Makefile]
 set(SPATZ_LINK_FLAGS
-    "-fuse-ld=lld"
+    "-fuse-ld=${SPATZ_LLVM_PATH}/bin/ld.lld"
     "-Wl,-z,norelro"
     "-Wl,--allow-multiple-definition"
 )
