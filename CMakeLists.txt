@@ -17,7 +17,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 set(CMAKE_VERBOSE_MAKEFILE TRUE)
 
 set(CMAKE_EXE_LINKER_FLAGS_INIT "--specs=nosys.specs")
-set(CMAKE_LINK_LIBRARY_USING_WHOLE_ARCHIVE 
+set(CMAKE_LINK_LIBRARY_USING_WHOLE_ARCHIVE
 "-Wl,--whole-archive <LIBRARY> -Wl,--no-whole-archive"
 )
 set(CMAKE_LINK_LIBRARY_USING_WHOLE_ARCHIVE_SUPPORTED True)
@@ -56,6 +56,11 @@ else()
 endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
+
+# Spatz support
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/spatz_config.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/spatz_helpers.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/bootrom_helpers.cmake)
 
 ################################################################################
 # Add subdirectories                                                           #
