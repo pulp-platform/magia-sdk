@@ -7,7 +7,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/spatz_config.cmake)
 function(add_spatz_task)
     set(options)
     set(oneValueArgs TEST_NAME CRT0_SRC LINKER_SCRIPT OUTPUT_DIR OUTPUT_VAR)
-    set(multiValueArgs TASK_SOURCES FIRST_TASK_NAME)
+    set(multiValueArgs TASK_SOURCES FIRST_TASK_NAME INCLUDE_DIRS)
     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(NOT IS_ABSOLUTE "${ARG_CRT0_SRC}")
@@ -22,6 +22,11 @@ function(add_spatz_task)
     set(TASK_BIN "${ARG_OUTPUT_DIR}/${ARG_TEST_NAME}_task.bin")
     set(TASK_HEADER "${ARG_OUTPUT_DIR}/${ARG_TEST_NAME}_task_bin.h")
     set(TASK_DUMP "${ARG_OUTPUT_DIR}/${ARG_TEST_NAME}_task.dump")
+
+    set(INCLUDE_FLAGS "")
+    foreach(INCLUDE_DIR ${ARG_INCLUDE_DIRS})
+        list(APPEND INCLUDE_FLAGS "-I${INCLUDE_DIR}")
+    endforeach()
 
     # Compile crt0.S [MAGIA/spatz/sw/Makefile: $(CRT0_OBJ)]
     add_custom_command(
@@ -41,6 +46,7 @@ function(add_spatz_task)
         COMMAND ${SPATZ_CLANG}
             ${SPATZ_COMPILE_FLAGS}
             ${SPATZ_CFLAGS_DEFINES}
+            ${INCLUDE_FLAGS}
             ${SPATZ_LINK_FLAGS}
             -T${ARG_LINKER_SCRIPT}
             -Wl,--defsym,__first_task=${ARG_FIRST_TASK_NAME}
@@ -93,26 +99,9 @@ function(add_spatz_task)
     add_custom_command(
         OUTPUT ${TASK_HEADER}
         APPEND
-        COMMAND bash -c "
-            GUARD_NAME=\$(echo '${ARG_TEST_NAME}_TASK_BIN' | tr 'a-z' 'A-Z')
-            sed -i \"/#endif.*__\$${GUARD_NAME}_H__/d\" ${TASK_HEADER}
-            echo '' >> ${TASK_HEADER}
-            echo '/* Binary start address - defined by CV32 linker */' >> ${TASK_HEADER}
-            echo 'extern uint32_t _spatz_binary_start;' >> ${TASK_HEADER}
-            echo '#define SPATZ_BINARY_START ((uint32_t)&_spatz_binary_start)' >> ${TASK_HEADER}
-            echo '' >> ${TASK_HEADER}
-            echo '/* Dispatcher loop address - for spatz_run() */' >> ${TASK_HEADER}
-            DISP_ADDR=\$(${SPATZ_OBJDUMP} -t ${TASK_ELF} | grep 'dispatcher_loop\$\$' | awk '{print \$1}')
-            echo \"#define SPATZ_DISPATCHER_LOOP (SPATZ_BINARY_START + 0x\$${DISP_ADDR})\" >> ${TASK_HEADER}
-            echo '' >> ${TASK_HEADER}
-            echo '/* Task function entry points - OFFSETS from SPATZ_BINARY_START */' >> ${TASK_HEADER}
-            ${SPATZ_OBJDUMP} -t ${TASK_ELF} | grep '_task\$\$' | grep -v '__first_task\$\$' | awk '{print \$1, \$NF}' | while read addr name; do
-                TASK_NAME=\$(echo \$name | tr 'a-z' 'A-Z')
-                echo \"#define \$${TASK_NAME} (SPATZ_BINARY_START + 0x\$${addr})\" >> ${TASK_HEADER}
-            done
-            echo '' >> ${TASK_HEADER}
-            echo \"#endif /* __\$${GUARD_NAME}_H__ */\" >> ${TASK_HEADER}
-        "
+        COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/extract_task_symbols.sh
+            ${ARG_TEST_NAME} ${TASK_ELF} ${TASK_HEADER} ${SPATZ_OBJDUMP}
+        DEPENDS ${TASK_ELF}
         COMMENT "[SPATZ] Extracting task symbols..."
         VERBATIM
     )
@@ -198,7 +187,7 @@ function(add_cv32_executable_with_spatz)
 
     if(ARG_SPATZ_HEADER)
         get_filename_component(HEADER_FILENAME "${ARG_SPATZ_HEADER}" NAME)
-        string(REGEX MATCH "^([^_]+_[^_]+_[^_]+)" TEST_NAME "${HEADER_FILENAME}")
+        string(REGEX REPLACE "_task_bin.*$" "" TEST_NAME "${HEADER_FILENAME}")
         add_dependencies(${ARG_TARGET_NAME} ${TEST_NAME}_spatz_header)
     endif()
 
