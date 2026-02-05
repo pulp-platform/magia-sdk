@@ -95,6 +95,11 @@ set(SPATZ_LINK_FLAGS
     "-Wl,--allow-multiple-definition"
 )
 
+set(SPATZ_CRT0_SRC "${CMAKE_SOURCE_DIR}/targets/magia_v2/spatz/src/spatz_crt0.S" CACHE PATH "Spatz CRT0 assembly")
+set(SPATZ_LINK_SCRIPT "${CMAKE_SOURCE_DIR}/targets/magia_v2/spatz/src/spatz_program.ld" CACHE PATH "Spatz linker script")
+set(CV32_CRT0_SRC "${CMAKE_SOURCE_DIR}/targets/magia_v2/src/crt0.S" CACHE PATH "CV32 CRT0 assembly")
+set(CV32_LINK_SCRIPT "${CMAKE_SOURCE_DIR}/targets/magia_v2/link.ld" CACHE PATH "CV32 linker script")
+
 # TODO: check if needed
 # Mesh tile config from root Makefile
 set(TILES 2 CACHE INT "Mesh dimension (e.g. 2 implies 2x2 grid = 4 tiles)")
