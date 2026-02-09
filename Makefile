@@ -24,6 +24,8 @@ BUILD_DIR 		?= ../sw/tests/$(test)
 MAGIA_DIR 		?= ../
 GVSOC_DIR 		?= ./gvsoc
 CURR_DIR		?= $(shell pwd)
+GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
+BIN_ABS_PATH	?= $(CURR_DIR)/build/bin
 BIN 			?= $(BUILD_DIR)/build/verif
 build_mode		?= profile
 fsync_mode		?= stall
@@ -98,7 +100,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(CURR_DIR)/gvsoc/Documents/test --param binary=$(CURR_DIR)/build/bin/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles)
+	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles)
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif

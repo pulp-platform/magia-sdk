@@ -90,6 +90,8 @@ The following *optional* parameters can be specified when running the make comma
 
 ***WARNING: YOU HAVE TO REBUILD BOTH RTL/GVSOC AND THE TEST BINARY EACH TIME YOU WANT TO TEST A MAGIA MESH WITH A DIFFERENT NUMBER OF TILES.*** 
 
+If you want to run gvsoc or a binary from outside the magia-sdk directory you can edit the **GVSOC_ABS_PATH** and **BIN_ABS_PATH** option in Makefile or directly on the *run* command line.
+
 To ensure a clean re-build of the RTL, you can run:
 
 `make rtl-clean`
