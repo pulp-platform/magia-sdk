@@ -58,6 +58,8 @@ The following *optional* parameters can be specified when running the make comma
 
     `make gvsoc <tiles>`
 
+    ***WARNING: PYTHON 3.12 IS MANDATORY***
+
     You can clean the MAGIA rtl and all the tests+logs by running:
 
     `make rtl-clean`

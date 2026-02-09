@@ -23,6 +23,7 @@ SHELL 			:= /bin/bash
 BUILD_DIR 		?= ../sw/tests/$(test)
 MAGIA_DIR 		?= ../
 GVSOC_DIR 		?= ./gvsoc
+CURR_DIR		?= $(shell pwd)
 BIN 			?= $(BUILD_DIR)/build/verif
 build_mode		?= profile
 fsync_mode		?= stall
@@ -97,7 +98,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir /home/gvsoc/Documents/test --param binary=./build/bin/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles)
+	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(CURR_DIR)/gvsoc/Documents/test --param binary=$(CURR_DIR)/build/bin/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles)
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
@@ -151,8 +152,8 @@ endif
 
 gvsoc:
 ifeq ($(target_platform), magia_v2)
-	sed -i -E "s/^[[:space:]]*N_TILES_X[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_X           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia/arch.py
-	sed -i -E "s/^[[:space:]]*N_TILES_Y[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_Y           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia/arch.py
+	sed -i -E "s/^[[:space:]]*N_TILES_X[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_X           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v2/arch.py
+	sed -i -E "s/^[[:space:]]*N_TILES_Y[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_Y           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v2/arch.py
 else
 	$(error unrecognized platform (acceptable platform: magia_v2).)
 endif
