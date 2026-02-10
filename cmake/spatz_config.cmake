@@ -101,14 +101,8 @@ set(SPATZ_LINK_SCRIPT "${CMAKE_SOURCE_DIR}/targets/magia_v2/spatz/src/spatz_prog
 set(CV32_CRT0_SRC "${CMAKE_SOURCE_DIR}/targets/magia_v2/src/crt0.S" CACHE PATH "CV32 CRT0 assembly")
 set(CV32_LINK_SCRIPT "${CMAKE_SOURCE_DIR}/targets/magia_v2/link.ld" CACHE PATH "CV32 linker script")
 
-# TODO: check if needed
-# Mesh tile config from root Makefile
-set(TILES 2 CACHE INT "Mesh dimension (e.g. 2 implies 2x2 grid = 4 tiles)")
-
-
 # Log info
 message(STATUS "Spatz Configuration:")
 message(STATUS "  LLVM Path: ${SPATZ_LLVM_PATH}")
 message(STATUS "  ISA: rv32${SPATZ_XTEN}")
 message(STATUS "  VLEN: ${SPATZ_VLEN} bits")
-message(STATUS "  Mesh: ${TILES}x${TILES} (${TILES_2} tiles)")
