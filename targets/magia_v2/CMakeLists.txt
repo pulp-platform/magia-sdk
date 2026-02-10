@@ -77,10 +77,17 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/spatz")
     include(${CMAKE_SOURCE_DIR}/cmake/spatz_helpers.cmake)
     include(${CMAKE_SOURCE_DIR}/cmake/bootrom_helpers.cmake)
 
-    # Build bootrom once at target level (shared by all tests)
-    add_spatz_bootrom(${CMAKE_BINARY_DIR}/bin)
-
-    message(STATUS "[MAGIA-SDK] Spatz integration enabled for magia_v2")
+    # Build bootrom only if Spatz tests are enabled
+    if(SPATZ_TESTS)
+        add_spatz_bootrom(
+            BOOTROM_SRC ${CMAKE_CURRENT_LIST_DIR}/spatz/bootrom/spatz_init.S
+            LINKER_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/spatz/bootrom/spatz_init.ld
+            OUTPUT_DIR ${CMAKE_BINARY_DIR}/bin/bootrom
+        )
+        message(STATUS "[MAGIA-SDK] Spatz integration enabled for magia_v2 (bootrom will be built)")
+    else()
+        message(STATUS "[MAGIA-SDK] Spatz integration disabled (SPATZ_TESTS=0)")
+    endif()
 endif()
 
 # =========================================================
