@@ -5,6 +5,7 @@ add_spatz_task(
     TASK_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/spatz_task/hello.c
     LINKER_SCRIPT ${SPATZ_LINK_SCRIPT}
     OUTPUT_DIR ${CMAKE_BINARY_DIR}
+    OUTPUT_SPATZ_DIR ${CMAKE_BINARY_DIR}/bin/spatz/hello_spatz
     OUTPUT_VAR HELLO_SPATZ_HEADER
     FIRST_TASK_NAME hello_world_simple_task
     INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/tests/utils
