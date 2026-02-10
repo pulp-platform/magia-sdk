@@ -2,9 +2,9 @@
 
 include(${CMAKE_CURRENT_LIST_DIR}/spatz_config.cmake)
 
-# Function: add_spatz_bootrom_binary
+# Function: add_spatz_bootrom
 # Compiles Spatz bootrom
-function(add_spatz_bootrom_binary)
+function(add_spatz_bootrom)
     set(options)
     set(oneValueArgs BOOTROM_SRC LINKER_SCRIPT OUTPUT_DIR OUTPUT_VAR SV_OUTPUT)
     set(multiValueArgs)
@@ -13,6 +13,9 @@ function(add_spatz_bootrom_binary)
     if(NOT ARG_OUTPUT_DIR)
         set(ARG_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR})
     endif()
+
+    # Create output directory if it doesn't exist
+    file(MAKE_DIRECTORY "${ARG_OUTPUT_DIR}")
 
     if(NOT IS_ABSOLUTE "${ARG_BOOTROM_SRC}")
         set(ARG_BOOTROM_SRC "${CMAKE_CURRENT_SOURCE_DIR}/${ARG_BOOTROM_SRC}")
