@@ -6,7 +6,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/spatz_config.cmake)
 # Compiles Spatz task binary, generates header with binary array + task symbols, and stimuli
 function(add_spatz_task)
     set(options)
-    set(oneValueArgs TEST_NAME CRT0_SRC LINKER_SCRIPT OUTPUT_DIR OUTPUT_VAR)
+    set(oneValueArgs TEST_NAME CRT0_SRC LINKER_SCRIPT OUTPUT_DIR OUTPUT_SPATZ_DIR OUTPUT_VAR)
     set(multiValueArgs TASK_SOURCES FIRST_TASK_NAME INCLUDE_DIRS)
     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -17,11 +17,21 @@ function(add_spatz_task)
         set(ARG_LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/${ARG_LINKER_SCRIPT}")
     endif()
 
-    set(TASK_CRT0_OBJ "${ARG_OUTPUT_DIR}/${ARG_TEST_NAME}_crt0.o")
-    set(TASK_ELF "${ARG_OUTPUT_DIR}/${ARG_TEST_NAME}_task.elf")
-    set(TASK_BIN "${ARG_OUTPUT_DIR}/${ARG_TEST_NAME}_task.bin")
-    set(TASK_HEADER "${ARG_OUTPUT_DIR}/${ARG_TEST_NAME}_task_bin.h")
-    set(TASK_DUMP "${ARG_OUTPUT_DIR}/${ARG_TEST_NAME}_task.dump")
+    # Use OUTPUT_SPATZ_DIR if provided, otherwise use OUTPUT_DIR
+    if(ARG_OUTPUT_SPATZ_DIR)
+        set(SPATZ_OUTPUT_DIR "${ARG_OUTPUT_SPATZ_DIR}")
+    else()
+        set(SPATZ_OUTPUT_DIR "${ARG_OUTPUT_DIR}")
+    endif()
+
+    # Create output directory if it doesn't exist
+    file(MAKE_DIRECTORY "${SPATZ_OUTPUT_DIR}")
+
+    set(TASK_CRT0_OBJ "${SPATZ_OUTPUT_DIR}/${ARG_TEST_NAME}_crt0.o")
+    set(TASK_ELF "${SPATZ_OUTPUT_DIR}/${ARG_TEST_NAME}_task.elf")
+    set(TASK_BIN "${SPATZ_OUTPUT_DIR}/${ARG_TEST_NAME}_task.bin")
+    set(TASK_HEADER "${SPATZ_OUTPUT_DIR}/${ARG_TEST_NAME}_task_bin.h")
+    set(TASK_DUMP "${SPATZ_OUTPUT_DIR}/${ARG_TEST_NAME}_task.dump")
 
     set(INCLUDE_FLAGS "")
     foreach(INCLUDE_DIR ${ARG_INCLUDE_DIRS})
@@ -192,7 +202,7 @@ function(add_cv32_executable_with_spatz)
     endif()
 
     # Post-build: disassembly and stimuli [MAGIA/Makefile: $(STIM_INSTR) $(STIM_DATA)]
-    set(ELF_DUMP "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET_NAME}.dump")
+    set(ELF_DUMP "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${ARG_TARGET_NAME}.s")
     set(ELF_OBJDUMP "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET_NAME}.objdump")
     set(ELF_ITB "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET_NAME}.itb")
     set(ELF_S19 "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET_NAME}.s19")
