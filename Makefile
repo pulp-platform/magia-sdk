@@ -1,7 +1,7 @@
 # Copyright (C) 2025 ETH Zurich and University of Bologna
 #
-# Licensed under the Solderpad Hardware License, Version 0.51 
-# (the "License"); you may not use this file except in compliance 
+# Licensed under the Solderpad Hardware License, Version 0.51
+# (the "License"); you may not use this file except in compliance
 # with the License. You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
@@ -15,7 +15,7 @@
 #
 # Authors: Victor Isachi <victor.isachi@unibo.it>
 # Alberto Dequino <alberto.dequino@unibo.it>
-# 
+#
 # Magia-sdk Makefile
 
 SHELL 			:= /bin/bash
@@ -46,6 +46,7 @@ compiler 		?= GCC_PULP
 ISA				?= rv32imcxgap9
 gui 			?= 0
 tiles 			?= 2
+spatz_tests		?= 1
 
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
@@ -79,13 +80,13 @@ ifeq ($(compiler), GCC_MULTILIB)
 	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/$(target_platform)/include/tile.h
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -B build --trace-expand
+	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz_tests) -B build --trace-expand
 	cmake --build build --verbose
 
 set_mesh:
 ifeq ($(tiles), 1)
 	$(eval mesh_dv=0)
-endif 
+endif
 
 run: set_mesh
 	@echo 'Magia is available at https://github.com/pulp-platform/MAGIA.git'
@@ -107,10 +108,10 @@ else ifeq ($(platform), rtl)
 	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
 	objcopy --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
 	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
-	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/build/stim_instr.txt $(BUILD_DIR)/build/stim_data.txt	
+	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/build/stim_instr.txt $(BUILD_DIR)/build/stim_data.txt
 	cd $(BUILD_DIR)													&& \
 	cp -sf ../../../sim/modelsim.ini modelsim.ini    				&& \
-	ln -sfn ../../../sim/work work         			
+	ln -sfn ../../../sim/work work
 	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
@@ -174,5 +175,3 @@ gvsoc_init:
 	git checkout lz/magia-v2-core && \
 	cd ../pulp && \
 	git checkout lz/magia-v2-pulp
-
-
