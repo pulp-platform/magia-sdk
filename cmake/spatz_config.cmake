@@ -54,7 +54,7 @@ set(CV32_XABI f CACHE STRING "CV32 XABI (32, 32f, 32d)")
 set(CV32_MARCH "-march=${CV32_ARCH}${CV32_XLEN}${CV32_XTEN}")
 set(CV32_MABI "-mabi=${CV32_ABI}${CV32_XLEN}${CV32_XABI}")
 
-# Architecture and Compiler flags [MAGIA/spatz/sw/Makefile]
+# Compiler flags [MAGIA/spatz/sw/Makefile]
 set(SPATZ_COMPILE_FLAGS
     "--target=riscv32"
     ${SPATZ_MARCH}
@@ -76,6 +76,14 @@ set(SPATZ_COMPILE_FLAGS
     "-fno-builtin-memcpy"
     "-mcmodel=medany"
 )
+
+# Architecture flags [MAGIA/spatz/sw/Makefile]
+set(SPATZ_ARCH_FLAGS
+    "--target=riscv32"
+    ${SPATZ_MARCH}
+    ${SPATZ_MABI}
+    "-menable-experimental-extensions"
+    )
 
 # Spatz defines [MAGIA/spatz/sw/Makefile]
 set(SPATZ_CFLAGS_DEFINES
