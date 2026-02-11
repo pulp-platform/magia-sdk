@@ -94,27 +94,20 @@ function(add_spatz_task)
 
     # Generate header with binary array [MAGIA/spatz/sw/Makefile: $(HEADER)]
     add_custom_command(
-        OUTPUT ${TASK_HEADER}
-        COMMAND python3 ${BIN2HEADER_SCRIPT}
+    OUTPUT ${TASK_HEADER}
+    # Python Script
+    COMMAND python3 ${BIN2HEADER_SCRIPT}
             ${TASK_BIN} ${TASK_HEADER}
             --name ${ARG_TEST_NAME}_task_bin
             --section .spatz_binary
             --address "dynamic (_spatz_binary_start)"
-        DEPENDS ${TASK_BIN} ${BIN2HEADER_SCRIPT}
-        COMMENT "[SPATZ] Generating header with binary array..."
-        VERBATIM
-    )
-
-    # Extract task symbols and append to header [MAGIA/spatz/sw/Makefile: $(HEADER)]
-    add_custom_command(
-        OUTPUT ${TASK_HEADER}
-        APPEND
-        COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/extract_task_symbols.sh
+    # Extrac symbols
+    COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/extract_task_symbols.sh
             ${ARG_TEST_NAME} ${TASK_ELF} ${TASK_HEADER} ${SPATZ_OBJDUMP}
-        DEPENDS ${TASK_ELF}
-        COMMENT "[SPATZ] Extracting task symbols..."
-        VERBATIM
-    )
+    DEPENDS ${TASK_BIN} ${TASK_ELF} ${BIN2HEADER_SCRIPT} ${CMAKE_SOURCE_DIR}/scripts/extract_task_symbols.sh
+    COMMENT "[SPATZ] Generating header and extracting task symbols..."
+    VERBATIM
+)
 
     add_custom_target(${ARG_TEST_NAME}_spatz_header ALL
         DEPENDS
