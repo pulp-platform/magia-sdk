@@ -23,6 +23,7 @@ target_link_libraries(hal
     "idma_lib"
     "redmule_lib"
     "fsync_lib"
+    "eu_lib"
 )
 elseif(${TARGET_PLATFORM} STREQUAL "magia_v2")
 target_link_libraries(hal

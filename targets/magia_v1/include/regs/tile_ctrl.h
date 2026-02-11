@@ -180,4 +180,17 @@
 #define REDMULE_STATUS_BUSY_MASK     (0xFFFFFFFF)
 
 
+//=============================================================================
+// FractalSync Register Addresses
+//=============================================================================
+
+#define FSYNC_AGGR_REG_OFFSET    (0x00)
+#define FSYNC_ID_REG_OFFSET      (0x04)
+#define FSYNC_CONTROL_REG_OFFSET (0x08)
+#define FSYNC_STATUS_REG_OFFSET  (0x0C)
+
+/* Status register bits */
+#define FSYNC_STATUS_BUSY_MASK   (1 << 2)
+
+
 #endif  // _TILE_REG_DEFS_

@@ -29,10 +29,8 @@
  */
 static inline void perf_start(void) {
     // enable all counters
-    asm volatile("csrc 0x320, %0" : : "r"(0xffffffff));
-    // arbitrary association of one event to one counter,
-    // just the implemented ones will increase
-    asm volatile("csrw 0x323, %0" : : "r"(1<<2));
+    asm volatile("csrw 0x7E0, %0" :: "r"(0x1));  // Enable PCCR[0]
+    asm volatile("csrw 0x7E1, %0" :: "r"(0x1));  // Enable counting, , no saturation
 }
 
 /**
@@ -46,8 +44,7 @@ static inline void perf_stop(void) {
  * @brief Resets all performance counters to 0 without stopping them
  */
 static inline void perf_reset(void) {
-    asm volatile("csrw 0xB00, %0" : : "r"(0));
-    asm volatile("csrw 0xB02, %0" : : "r"(0));
+    asm volatile("csrw 0x780, %0" : : "r"(0));
 }
 
 /**
@@ -55,7 +52,7 @@ static inline void perf_reset(void) {
  */
 static inline unsigned int perf_get_cycles(){
     unsigned int value = 0;
-    asm volatile ("csrr %0, 0xB00" : "=r" (value));
+    asm volatile("csrr %0, 0x780" : "=r"(value));
     return value;
 }
 

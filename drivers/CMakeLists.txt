@@ -8,7 +8,7 @@
 
 # Define mappings for drivers
 set(DRIVER_MAPPINGS
-    magia_v1:idma32,redmule16,fsync32
+    magia_v1:idma32,redmule16,fsync32,eventunit32
     magia_v2:idma32,redmule16,fsync32,eventunit32
 )
 

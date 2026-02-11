@@ -41,16 +41,6 @@
 #define _FS_RC_LVL      (0x1 << (29-__builtin_clz(NUM_HARTS)))
 #define _FS_RC_AGGR     (0x155 >> (__builtin_clz(NUM_HARTS)-21))
 
-#ifdef FSYNC_MM
-#define FSYNC_MM_AGGR_REG_OFFSET    (0x00)
-#define FSYNC_MM_ID_REG_OFFSET      (0x04)
-#define FSYNC_MM_CONTROL_REG_OFFSET (0x08)
-#define FSYNC_MM_STATUS_REG_OFFSET  (0x0C)
-
-/* Status register bits */
-#define FSYNC_MM_STATUS_BUSY_MASK   (1 << 2)
-#endif
-
 /* synch instruction */
   // asm volatile(
   //      ".word (0x0       << 20) | \     /* Reserved - 0x0 */
@@ -158,21 +148,19 @@ inline void fsync(volatile uint32_t id, volatile uint32_t aggregate){
               (0x0       <<  7) | \
               (0b1011011 <<  0)   \n");
   #else
-  volatile char *fsync_base = (volatile char *)(FSYNC_BASE);
-  
-  *(volatile uint32_t *)(fsync_base + FSYNC_MM_AGGR_REG_OFFSET) = aggregate;
-  *(volatile uint32_t *)(fsync_base + FSYNC_MM_ID_REG_OFFSET) = id;
+  *(volatile uint32_t *)(FSYNC_BASE + FSYNC_AGGR_REG_OFFSET) = aggregate;
+  *(volatile uint32_t *)(FSYNC_BASE + FSYNC_ID_REG_OFFSET) = id;
   #if PROFILE_SNC == 1
   stnl_snc_s();
   #endif
-  *(volatile uint32_t *)(fsync_base + FSYNC_MM_CONTROL_REG_OFFSET) = 1;
+  *(volatile uint32_t *)(FSYNC_BASE + FSYNC_CONTROL_REG_OFFSET) = 1;
   #endif
   #if STALLING == 1
   // Polling mode - wait for completion
   volatile uint32_t status;
   do {
-    status = *(volatile uint32_t *)(fsync_base + FSYNC_MM_STATUS_REG_OFFSET);
-  } while (status & FSYNC_MM_STATUS_BUSY_MASK);
+    status = *(volatile uint32_t *)(FSYNC_BASE + FSYNC_STATUS_REG_OFFSET);
+  } while (status & FSYNC_STATUS_BUSY_MASK);
   #if PROFILE_SNC == 1
   stnl_snc_f();
   #endif
