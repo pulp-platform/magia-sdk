@@ -12,13 +12,12 @@ int main(void) {
     eu_init();
     eu_enable_events(EU_SPATZ_DONE_MASK);
 
-    printf("\n[CV32] Initializing Spatz...\n");
+    printf("[CV32] Initializing Spatz...\n");
     spatz_init(SPATZ_BINARY_START);
 
-    printf("\n[CV32] Launching SPATZ Task\n");
+    printf("[CV32] Launching SPATZ Task\n");
     spatz_run_task(HELLO_TASK);
 
-    printf("\n[CV32] Before eu wait\n");
     eu_wait_spatz_wfe(EU_SPATZ_DONE_MASK);
 
     if(spatz_get_exit_code() != 0) {
