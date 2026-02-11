@@ -42,7 +42,7 @@ function(add_spatz_task)
     add_custom_command(
         OUTPUT ${TASK_CRT0_OBJ}
         COMMAND ${SPATZ_CLANG}
-            ${SPATZ_COMPILE_FLAGS}
+            ${SPATZ_ARCH_FLAGS}
             -c -o ${TASK_CRT0_OBJ}
             ${ARG_CRT0_SRC}
         DEPENDS ${ARG_CRT0_SRC}
@@ -168,8 +168,6 @@ function(add_cv32_executable_with_spatz)
         -ffunction-sections
         -MMD
         -MP
-        -nostartfiles
-        -nostdlib
     )
 
     # Linker flags [MAGIA/Makefile: LD_OPTS]
