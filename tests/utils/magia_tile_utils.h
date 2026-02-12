@@ -63,6 +63,10 @@
 #define mmio16(x) (*(volatile uint16_t *)(x))
 #define mmio8(x)  (*(volatile uint8_t  *)(x))
 
+#define mmio_fp64(x) (*(volatile float64 *)(x))
+#define mmio_fp32(x) (*(volatile float32 *)(x))
+#define mmio_fp16(x) (*(volatile float16 *)(x))
+
 // Spatz Control: Use magia_spatz_utils.h for Spatz programming functions
 
 #define addr64(x) (*(uint64_t *)(&x))
