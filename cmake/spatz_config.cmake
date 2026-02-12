@@ -48,7 +48,7 @@ set(SPATZ_MABI "-mabi=${SPATZ_ABI}${SPATZ_XABI}")
 # CV32 configuration options [MAGIA/Makefile]
 set(CV32_ARCH rv CACHE STRING "CV32 ARCH prefix (e.g. rv)")
 set(CV32_XLEN 32 CACHE STRING "CV32 XLEN (32 or 64)")
-set(CV32_XTEN imfcxpulpv2 CACHE STRING "CV32 XTEN (ISA extensions)")
+set(CV32_XTEN imcxgap9 CACHE STRING "CV32 XTEN (ISA extensions)")
 set(CV32_ABI ilp CACHE STRING "CV32 ABI prefix (e.g. ilp)")
 set(CV32_XABI f CACHE STRING "CV32 XABI (32, 32f, 32d)")
 set(CV32_MARCH "-march=${CV32_ARCH}${CV32_XLEN}${CV32_XTEN}")
