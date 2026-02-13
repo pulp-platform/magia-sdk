@@ -1,7 +1,7 @@
 #include "magia_tile_utils.h"
 #include "magia_spatz_utils.h"
 #include "event_unit_utils.h"
-#include "hello_task_bin.h"
+#include "hello_spatz_task_bin.h"
 
 int main(void) {
 

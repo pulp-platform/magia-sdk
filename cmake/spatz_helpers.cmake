@@ -1,14 +1,60 @@
-# Spatz task compilation and embedding helpers
+# ============================================================================
+# Spatz Task Compilation and Embedding Helpers
+# ============================================================================
+#
+# This module provides two main CMake functions for building Spatz tasks
+# and embedding them in CV32 executables:
+#
+#   1. add_spatz_task()
+#      - Compiles Spatz task binary
+#      - Generates header with embedded binary + task symbols
+#      - Outputs to: build/bin/spatz_on_magia/<TEST_NAME>/spatz_task/
+#
+#   2. add_cv32_executable_with_spatz()
+#      - Builds CV32 executable with embedded Spatz binary
+#      - Generates disassembly and simulation stimuli
+#      - Outputs to: build/bin/<executable>
+#                    build/bin/spatz_on_magia/<TARGET_NAME>/stim/
+# ============================================================================
 
 include(${CMAKE_CURRENT_LIST_DIR}/spatz_config.cmake)
 
 # Function: add_spatz_task
 # Compiles Spatz task binary, generates header with binary array + task symbols, and stimuli
+# Parameters:
+#   TEST_NAME (required): Task identifier used for output file naming
+#   TASK_SOURCES (required): List of source files to compile
+#   CRT0_SRC: Path to CRT0 assembly (default: SPATZ_CRT0_SRC from config)
+#   LINKER_SCRIPT: Path to linker script (default: SPATZ_LINK_SCRIPT from config)
+#   OUTPUT_DIR: Base output directory (default: CMAKE_BINARY_DIR)
+#   OUTPUT_SPATZ_DIR: Spatz task output directory
+#     - If provided: use it directly
+#     - If not provided: use ${OUTPUT_DIR}/bin/spatz_on_magia/${TEST_NAME}/spatz_task
+#   OUTPUT_VAR: CMake variable to store TASK_HEADER path (default: ${TEST_NAME}_SPATZ_HEADER)
+#   FIRST_TASK_NAME: Entry point function name (default: ${TEST_NAME}_task)
+#   INCLUDE_DIRS: Additional include directories
 function(add_spatz_task)
     set(options)
-    set(oneValueArgs TEST_NAME CRT0_SRC LINKER_SCRIPT OUTPUT_DIR OUTPUT_SPATZ_DIR OUTPUT_VAR)
-    set(multiValueArgs TASK_SOURCES FIRST_TASK_NAME INCLUDE_DIRS)
+    set(oneValueArgs TEST_NAME CRT0_SRC LINKER_SCRIPT OUTPUT_DIR OUTPUT_SPATZ_DIR OUTPUT_VAR FIRST_TASK_NAME)
+    set(multiValueArgs TASK_SOURCES INCLUDE_DIRS)
     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    # Apply defaults for optional parameters
+    if(NOT DEFINED ARG_CRT0_SRC)
+        set(ARG_CRT0_SRC ${SPATZ_CRT0_SRC})
+    endif()
+    if(NOT DEFINED ARG_LINKER_SCRIPT)
+        set(ARG_LINKER_SCRIPT ${SPATZ_LINK_SCRIPT})
+    endif()
+    if(NOT DEFINED ARG_OUTPUT_DIR)
+        set(ARG_OUTPUT_DIR ${CMAKE_BINARY_DIR})
+    endif()
+    if(NOT DEFINED ARG_OUTPUT_VAR)
+        set(ARG_OUTPUT_VAR ${ARG_TEST_NAME}_SPATZ_HEADER)
+    endif()
+    if(NOT DEFINED ARG_FIRST_TASK_NAME)
+        set(ARG_FIRST_TASK_NAME ${ARG_TEST_NAME}_task)
+    endif()
 
     if(NOT IS_ABSOLUTE "${ARG_CRT0_SRC}")
         set(ARG_CRT0_SRC "${CMAKE_CURRENT_SOURCE_DIR}/${ARG_CRT0_SRC}")
@@ -17,21 +63,31 @@ function(add_spatz_task)
         set(ARG_LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/${ARG_LINKER_SCRIPT}")
     endif()
 
-    # Use OUTPUT_SPATZ_DIR if provided, otherwise use OUTPUT_DIR
-    if(ARG_OUTPUT_SPATZ_DIR)
-        set(SPATZ_OUTPUT_DIR "${ARG_OUTPUT_SPATZ_DIR}")
-    else()
-        set(SPATZ_OUTPUT_DIR "${ARG_OUTPUT_DIR}")
+    # Compute OUTPUT_SPATZ_DIR default if not provided
+    if(NOT DEFINED ARG_OUTPUT_SPATZ_DIR)
+        set(ARG_OUTPUT_SPATZ_DIR "${ARG_OUTPUT_DIR}/bin/spatz_on_magia/${ARG_TEST_NAME}/spatz_task")
     endif()
+    set(SPATZ_OUTPUT_DIR "${ARG_OUTPUT_SPATZ_DIR}")
 
     # Create output directory if it doesn't exist
     file(MAKE_DIRECTORY "${SPATZ_OUTPUT_DIR}")
 
-    set(TASK_CRT0_OBJ "${SPATZ_OUTPUT_DIR}/${ARG_TEST_NAME}_crt0.o")
-    set(TASK_ELF "${SPATZ_OUTPUT_DIR}/${ARG_TEST_NAME}_task.elf")
-    set(TASK_BIN "${SPATZ_OUTPUT_DIR}/${ARG_TEST_NAME}_task.bin")
-    set(TASK_HEADER "${SPATZ_OUTPUT_DIR}/${ARG_TEST_NAME}_task_bin.h")
-    set(TASK_DUMP "${SPATZ_OUTPUT_DIR}/${ARG_TEST_NAME}_task.dump")
+    # Compute filename prefix: avoid double "_task" if TEST_NAME already ends with "_task"
+    # Logic: if TEST_NAME ends with "_task", use as-is; otherwise append "_task"
+    string(REGEX MATCH "_task$" HAS_TASK_SUFFIX "${ARG_TEST_NAME}")
+    if(HAS_TASK_SUFFIX)
+        # TEST_NAME already ends with "_task" (e.g., "double_task" -> use "double_task" directly)
+        set(FILE_PREFIX "${ARG_TEST_NAME}")
+    else()
+        # TEST_NAME doesn't end with "_task" (e.g., "hello_spatz" -> append "_task")
+        set(FILE_PREFIX "${ARG_TEST_NAME}_task")
+    endif()
+
+    set(TASK_CRT0_OBJ "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}_crt0.o")
+    set(TASK_ELF "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.elf")
+    set(TASK_BIN "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.bin")
+    set(TASK_HEADER "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}_bin.h")
+    set(TASK_DUMP "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.dump")
 
     set(INCLUDE_FLAGS "")
     foreach(INCLUDE_DIR ${ARG_INCLUDE_DIRS})
@@ -116,17 +172,42 @@ function(add_spatz_task)
             ${TASK_DUMP}
     )
 
+    # Export to parent scope
     set(${ARG_OUTPUT_VAR} ${TASK_HEADER} PARENT_SCOPE)
     set(${ARG_TEST_NAME}_TASK_BIN ${TASK_BIN} PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_TASK_HEADER ${TASK_HEADER} PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_SPATZ_OUTPUT_DIR ${SPATZ_OUTPUT_DIR} PARENT_SCOPE)
+    # Also set generic SPATZ_HEADER for convenience when TEST_NAME==TARGET_NAME
+    set(SPATZ_HEADER ${TASK_HEADER} PARENT_SCOPE)
+    set(SPATZ_TASK_NAME ${ARG_TEST_NAME} PARENT_SCOPE)
 endfunction()
 
 # Function: add_cv32_executable_with_spatz
-# Builds CV32 executable with embedded Spatz task binary
+# Builds CV32 executable with embedded Spatz task binary and generates disassembly/stimuli
+# Parameters:
+#   TARGET_NAME (required): Executable name
+#   SPATZ_HEADER (required): Path to Spatz task header file
+#   SOURCES (required): List of source files to compile
+#   CRT0_SRC: Path to CV32 CRT0 assembly (default: CV32_CRT0_SRC from config)
+#   LINK_SCRIPT: Path to CV32 linker script (default: CV32_LINK_SCRIPT from config)
+#   INCLUDE_DIRS: Additional include directories
+# Output locations:
+#   Executable: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}
+#   Disassembly: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}.s
+#   Stimuli files: ${CMAKE_BINARY_DIR}/bin/spatz_on_magia/${TARGET_NAME}/stim/
 function(add_cv32_executable_with_spatz)
     set(options)
     set(oneValueArgs TARGET_NAME SPATZ_HEADER LINK_SCRIPT CRT0_SRC)
     set(multiValueArgs SOURCES INCLUDE_DIRS)
     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    # Apply defaults for optional parameters
+    if(NOT DEFINED ARG_CRT0_SRC)
+        set(ARG_CRT0_SRC ${CV32_CRT0_SRC})
+    endif()
+    if(NOT DEFINED ARG_LINK_SCRIPT)
+        set(ARG_LINK_SCRIPT ${CV32_LINK_SCRIPT})
+    endif()
 
     if(NOT IS_ABSOLUTE "${ARG_CRT0_SRC}")
         set(ARG_CRT0_SRC "${CMAKE_CURRENT_SOURCE_DIR}/${ARG_CRT0_SRC}")
@@ -187,19 +268,27 @@ function(add_cv32_executable_with_spatz)
     endif()
 
     if(ARG_SPATZ_HEADER)
-        get_filename_component(HEADER_FILENAME "${ARG_SPATZ_HEADER}" NAME)
-        string(REGEX REPLACE "_task_bin.*$" "" TEST_NAME "${HEADER_FILENAME}")
-        add_dependencies(${ARG_TARGET_NAME} ${TEST_NAME}_spatz_header)
+        # Use SPATZ_TASK_NAME if available (set by add_spatz_task), otherwise extract from header filename
+        if(DEFINED SPATZ_TASK_NAME)
+            set(EXTRACTED_TEST_NAME ${SPATZ_TASK_NAME})
+        else()
+            # Fallback: extract TEST_NAME from header filename (legacy support)
+            get_filename_component(HEADER_FILENAME "${ARG_SPATZ_HEADER}" NAME)
+            string(REGEX REPLACE "_task_bin.*$" "" EXTRACTED_TEST_NAME "${HEADER_FILENAME}")
+        endif()
+        add_dependencies(${ARG_TARGET_NAME} ${EXTRACTED_TEST_NAME}_spatz_header)
     endif()
 
     # Post-build: disassembly and stimuli [MAGIA/Makefile: $(STIM_INSTR) $(STIM_DATA)]
+    set(STIM_DIR "${CMAKE_BINARY_DIR}/bin/spatz_on_magia/${ARG_TARGET_NAME}/stim/")
     set(ELF_DUMP "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${ARG_TARGET_NAME}.s")
-    set(ELF_OBJDUMP "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET_NAME}.objdump")
-    set(ELF_ITB "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET_NAME}.itb")
-    set(ELF_S19 "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET_NAME}.s19")
-    set(ELF_TXT "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET_NAME}.txt")
-    set(STIM_INSTR "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET_NAME}_stim_instr.txt")
-    set(STIM_DATA "${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET_NAME}_stim_data.txt")
+    set(ELF_OBJDUMP "${STIM_DIR}${ARG_TARGET_NAME}.objdump")
+    set(ELF_ITB "${STIM_DIR}${ARG_TARGET_NAME}.itb")
+    set(ELF_S19 "${STIM_DIR}${ARG_TARGET_NAME}.s19")
+    set(ELF_TXT "${STIM_DIR}${ARG_TARGET_NAME}.txt")
+    set(STIM_INSTR "${STIM_DIR}${ARG_TARGET_NAME}_stim_instr.txt")
+    set(STIM_DATA "${STIM_DIR}${ARG_TARGET_NAME}_stim_data.txt")
+    file(MAKE_DIRECTORY "${STIM_DIR}")
 
     add_custom_command(TARGET ${ARG_TARGET_NAME} POST_BUILD
         COMMAND ${CMAKE_OBJDUMP} -D -S $<TARGET_FILE:${ARG_TARGET_NAME}> > ${ELF_DUMP}
