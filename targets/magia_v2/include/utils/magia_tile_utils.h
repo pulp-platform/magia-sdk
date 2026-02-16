@@ -54,7 +54,7 @@ inline uint32_t irq_st()
 
 inline void wait_nop(uint32_t nops)
 {
-    for (unsigned i = 0; i < nops; i++)
+    for (unsigned int i = 0; i < nops; i++)
         asm volatile("addi x0, x0, 0" ::);
 }
 
@@ -76,6 +76,52 @@ inline void ccount_en()
 inline void ccount_dis()
 {
     asm volatile("csrrsi zero, 0x320, 0x1" ::);
+}
+
+static inline uint32_t get_cyclel()
+{
+    uint32_t cyclel;
+    asm volatile("csrr %0, cycle" : "=r"(cyclel) :);
+    return cyclel;
+}
+
+inline uint32_t get_cycleh()
+{
+    uint32_t cycleh;
+    asm volatile("csrr %0, cycleh" : "=r"(cycleh) :);
+    return cycleh;
+}
+
+static uint32_t get_cycle()
+{
+    uint32_t cyclel = get_cyclel();
+    uint32_t cycleh = get_cycleh();
+    if (cycleh)
+        return 0;
+    return cyclel;
+}
+
+inline uint32_t get_timel()
+{
+    uint32_t timel;
+    asm volatile("csrr %0, time" : "=r"(timel) :);
+    return timel;
+}
+
+inline uint32_t get_timeh()
+{
+    uint32_t timeh;
+    asm volatile("csrr %0, timeh" : "=r"(timeh) :);
+    return timeh;
+}
+
+static uint32_t get_time()
+{
+    uint32_t timel = get_timel();
+    uint32_t timeh = get_timeh();
+    if (timeh)
+        return 0;
+    return timel;
 }
 
 #endif /* MAGIA_TILE_UTILS_H */

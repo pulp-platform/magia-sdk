@@ -25,98 +25,12 @@
 
 #include <stdint.h>
 #include "magia_tile_utils.h"
+#include "addr_map/tile_addr_map.h"
+#include "regs/tile_ctrl.h"
 
 //=============================================================================
 // REGISTER DEFINITIONS AND CONSTANTS
 //=============================================================================
-
-#define EU_BASE                      EVENT_UNIT_BASE
-
-// Control and status registers
-#define EU_CORE_MASK                 (EU_BASE + 0x00)
-#define EU_CORE_MASK_AND             (EU_BASE + 0x04)
-#define EU_CORE_MASK_OR              (EU_BASE + 0x08)
-#define EU_CORE_IRQ_MASK             (EU_BASE + 0x0C)
-#define EU_CORE_IRQ_MASK_AND         (EU_BASE + 0x10)
-#define EU_CORE_IRQ_MASK_OR          (EU_BASE + 0x14)
-#define EU_CORE_STATUS               (EU_BASE + 0x18)
-#define EU_CORE_BUFFER               (EU_BASE + 0x1C)
-#define EU_CORE_BUFFER_MASKED        (EU_BASE + 0x20)
-#define EU_CORE_BUFFER_IRQ_MASKED    (EU_BASE + 0x24)
-#define EU_CORE_BUFFER_CLEAR         (EU_BASE + 0x28)
-
-// Wait registers (blocking with p.elw)
-#define EU_CORE_EVENT_WAIT           (EU_BASE + 0x38)
-#define EU_CORE_EVENT_WAIT_CLEAR     (EU_BASE + 0x3C)
-
-// Hardware mutex registers (0x04 * mutex_id offset)
-#define EU_CORE_HW_MUTEX             (EU_BASE + 0x0C0)         // R/W: HW mutex management
-
-// Hardware barrier registers (0x20 * barr_id offset)
-#define HW_BARR_TRIGGER_MASK         (EU_BASE + 0x400)         // R/W: Barrier trigger mask
-#define HW_BARR_STATUS               (EU_BASE + 0x404)         // R: Barrier status
-#define HW_BARR_TARGET_MASK          (EU_BASE + 0x40C)         // R/W: Barrier target mask
-#define HW_BARR_TRIGGER              (EU_BASE + 0x410)         // W: Manual barrier trigger
-#define HW_BARR_TRIGGER_SELF         (EU_BASE + 0x414)         // R: Automatic trigger
-#define HW_BARR_TRIGGER_WAIT         (EU_BASE + 0x418)         // R: Trigger + sleep
-#define HW_BARR_TRIGGER_WAIT_CLEAR   (EU_BASE + 0x41C)         // R: Trigger + sleep + clear
-
-// Software event trigger registers (0x04 * sw_event_id offset)
-#define EU_CORE_TRIGG_SW_EVENT       (EU_BASE + 0x600)         // W: Generate SW event
-#define EU_CORE_TRIGG_SW_EVENT_WAIT  (EU_BASE + 0x640)         // R: Generate event + sleep
-#define EU_CORE_TRIGG_SW_EVENT_WAIT_CLEAR (EU_BASE + 0x680)    // R: Generate event + sleep + clear
-
-// SoC event FIFO register
-#define EU_CORE_CURRENT_EVENT        (EU_BASE + 0x700)         // R: SoC event FIFO
-
-// Event bit mapping
-#define EU_DMA_EVT_0_BIT             2
-#define EU_DMA_EVT_1_BIT             3
-#define EU_TIMER_EVT_0_BIT           4
-#define EU_TIMER_EVT_1_BIT           5
-
-#define EU_REDMULE_UNUSED_BIT        8
-#define EU_REDMULE_BUSY_BIT          9
-#define EU_REDMULE_DONE_BIT          10
-#define EU_REDMULE_EVT1_BIT          11
-
-// RedMulE event masks
-#define EU_REDMULE_DONE_MASK         (1 << EU_REDMULE_DONE_BIT)
-#define EU_REDMULE_BUSY_MASK         (1 << EU_REDMULE_BUSY_BIT)
-#define EU_REDMULE_ALL_MASK          0x0F00
-
-// iDMA events (DMA events [3:2] + extended [31:26])
-#define EU_IDMA_A2O_DONE_BIT         2
-#define EU_IDMA_O2A_DONE_BIT         3
-#define EU_IDMA_A2O_DONE_MASK        (1 << EU_IDMA_A2O_DONE_BIT)
-#define EU_IDMA_O2A_DONE_MASK        (1 << EU_IDMA_O2A_DONE_BIT)
-#define EU_IDMA_ALL_DONE_MASK        (EU_IDMA_A2O_DONE_MASK | EU_IDMA_O2A_DONE_MASK)
-#define EU_IDMA_A2O_ERROR_BIT        26
-#define EU_IDMA_O2A_ERROR_BIT        27
-#define EU_IDMA_A2O_START_BIT        28
-#define EU_IDMA_O2A_START_BIT        29
-#define EU_IDMA_A2O_BUSY_BIT         30
-#define EU_IDMA_O2A_BUSY_BIT         31
-#define EU_IDMA_A2O_ERROR_MASK       (1 << EU_IDMA_A2O_ERROR_BIT)
-#define EU_IDMA_O2A_ERROR_MASK       (1 << EU_IDMA_O2A_ERROR_BIT)
-#define EU_IDMA_A2O_START_MASK       (1 << EU_IDMA_A2O_START_BIT)
-#define EU_IDMA_O2A_START_MASK       (1 << EU_IDMA_O2A_START_BIT)
-#define EU_IDMA_A2O_BUSY_MASK        (1 << EU_IDMA_A2O_BUSY_BIT)
-#define EU_IDMA_O2A_BUSY_MASK        (1 << EU_IDMA_O2A_BUSY_BIT)
-
-// FSync events (cluster events [25:24])
-#define EU_FSYNC_DONE_BIT            24
-#define EU_FSYNC_ERROR_BIT           25
-#define EU_FSYNC_DONE_MASK           (1 << EU_FSYNC_DONE_BIT)
-#define EU_FSYNC_ERROR_MASK          (1 << EU_FSYNC_ERROR_BIT)
-#define EU_FSYNC_ALL_MASK            (EU_FSYNC_DONE_MASK | EU_FSYNC_ERROR_MASK)
-
-// Spatz events (accelerator events [8] + cluster events [23])
-#define EU_SPATZ_DONE_BIT            8   // acc_events_array[0][0] - Spatz completion
-#define EU_SPATZ_START_BIT           23  // other_events_array[0][23] - Spatz start trigger
-#define EU_SPATZ_DONE_MASK           (1 << EU_SPATZ_DONE_BIT)
-#define EU_SPATZ_START_MASK          (1 << EU_SPATZ_START_BIT)
-#define EU_SPATZ_ALL_MASK            (EU_SPATZ_DONE_MASK | EU_SPATZ_START_MASK)
 
 // Wait modes
 typedef enum {
