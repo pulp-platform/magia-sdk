@@ -15,7 +15,7 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Authors: Alberto Dequino <alberto.dequino@unibo.it>
- * 
+ *
  * MAGIA Atomic Memory Operations Utils
  */
 

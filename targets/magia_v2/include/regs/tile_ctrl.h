@@ -17,7 +17,7 @@
  * Authors: Victor Isachi <victor.isachi@unibo.it>
  * Alberto Dequino <alberto.dequino@unibo.it>
  * Luca Balboni <luca.balboni10@studio.unibo.it>
- * 
+ *
  * MAGIA Tile Control registers and IRQ
  */
 
@@ -50,7 +50,7 @@
 #define EU_DMA_EVT_1_BIT             (3)                         // DMA event 1 (error/status)
 #define EU_DMA_EVT_MASK              (0x0000000C)                // bits 3:2
 
-// Timer Events [5:4] - timer_events_i mapping  
+// Timer Events [5:4] - timer_events_i mapping
 #define EU_TIMER_EVT_0_BIT           (4)                         // Timer event 0
 #define EU_TIMER_EVT_1_BIT           (5)                         // Timer event 1
 #define EU_TIMER_EVT_MASK            (0x00000030)                // bits 5:4
@@ -88,7 +88,7 @@
 
 // iDMA extended status via cluster events [31:26]
 #define EU_IDMA_A2O_ERROR_BIT        (26)                        // iDMA AXI2OBI error
-#define EU_IDMA_O2A_ERROR_BIT        (27)                        // iDMA OBI2AXI error  
+#define EU_IDMA_O2A_ERROR_BIT        (27)                        // iDMA OBI2AXI error
 #define EU_IDMA_A2O_START_BIT        (28)                        // iDMA AXI2OBI start
 #define EU_IDMA_O2A_START_BIT        (29)                        // iDMA OBI2AXI start
 #define EU_IDMA_A2O_BUSY_BIT         (30)                        // iDMA AXI2OBI busy
@@ -119,15 +119,22 @@
 #define EU_SYNC_EVT_MASK             (0x00000001)                // bit 0
 #define EU_DISPATCH_EVT_MASK         (0x00000002)                // bit 1
 
+// Spatz events (accelerator events [8] + cluster events [23])
+#define EU_SPATZ_DONE_BIT            (8)                         // Spatz completion event (acc_events_array[0][0])
+#define EU_SPATZ_START_BIT           (23)                        // Spatz start trigger event (other_events_array[0][23])
+#define EU_SPATZ_DONE_MASK           (1 << EU_SPATZ_DONE_BIT)   // 0x100
+#define EU_SPATZ_START_MASK          (1 << EU_SPATZ_START_BIT)  // 0x800000
+#define EU_SPATZ_ALL_MASK            (EU_SPATZ_DONE_MASK | EU_SPATZ_START_MASK) // 0x800100
+
 
 //=============================================================================
 // IDMA Register Addresses
 //=============================================================================
 
 #define IDMA_CONF_OFFSET                (0x00)
-#define IDMA_STATUS_OFFSET              (0x04)  
-#define IDMA_NEXT_ID_OFFSET             (0x44)  
-#define IDMA_DONE_ID_OFFSET             (0x84)  
+#define IDMA_STATUS_OFFSET              (0x04)
+#define IDMA_NEXT_ID_OFFSET             (0x44)
+#define IDMA_DONE_ID_OFFSET             (0x84)
 #define IDMA_DST_ADDR_LOW_OFFSET        (0xD0)
 #define IDMA_SRC_ADDR_LOW_OFFSET        (0xD8)
 #define IDMA_LENGTH_LOW_OFFSET          (0xE0)
