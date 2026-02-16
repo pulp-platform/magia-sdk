@@ -11,8 +11,7 @@
 #include <stddef.h>
 #include "regs/tile_ctrl.h"
 #include "addr_map/tile_addr_map.h"
-//#include "utils/tinyprintf.h"
-#include "utils/printf.h"
+#include "utils/printf_wrapper.h"
 #include "utils/magia_tile_utils.h"
 #include "utils/magia_utils.h"
 #include "utils/idma_isa_utils.h"
