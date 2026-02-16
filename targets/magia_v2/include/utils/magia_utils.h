@@ -16,7 +16,7 @@
  *
  * Authors: Victor Isachi <victor.isachi@unibo.it>
  * Alberto Dequino <alberto.dequino@unibo.it>
- * 
+ *
  * MAGIA Utils
  */
 
@@ -57,8 +57,8 @@ inline uint32_t get_l1_base(uint32_t hartid){
 
 static char* utoa(unsigned int value, unsigned int base, char* result) {
     if (base < 2 || base > 16){
-        *result = '\0'; 
-        return result; 
+        *result = '\0';
+        return result;
     }
 
     char *ptr0 = result;
@@ -73,7 +73,7 @@ static char* utoa(unsigned int value, unsigned int base, char* result) {
     } while (value);
 
     *ptr0-- = '\0';
-  
+
     // Reverse the string
     while(ptr1 < ptr0) {
         tmp_char = *ptr0;
@@ -144,4 +144,4 @@ static void magia_return(uint32_t hartid, uint32_t exit_code){
     mmio16(TEST_END_ADDR + hartid*2) = (uint16_t) (exit_code - get_hartid());
 }
 
-#endif /*MAGIA_UTILS_H*/
+#endif /* MAGIA_UTILS_H */

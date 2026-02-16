@@ -90,6 +90,12 @@ function(add_spatz_task)
     set(TASK_DUMP "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.dump")
 
     set(INCLUDE_FLAGS "")
+    # Add targets/magia_v2 include paths
+    list(APPEND INCLUDE_FLAGS "-I${CMAKE_SOURCE_DIR}/targets/magia_v2/include")
+    list(APPEND INCLUDE_FLAGS "-I${CMAKE_SOURCE_DIR}/targets/magia_v2/include/utils")
+    list(APPEND INCLUDE_FLAGS "-I${CMAKE_SOURCE_DIR}/targets/magia_v2/include/addr_map")
+    list(APPEND INCLUDE_FLAGS "-I${CMAKE_SOURCE_DIR}/targets/magia_v2/include/regs")
+    # Add user-provided include directories
     foreach(INCLUDE_DIR ${ARG_INCLUDE_DIRS})
         list(APPEND INCLUDE_FLAGS "-I${INCLUDE_DIR}")
     endforeach()
@@ -112,6 +118,7 @@ function(add_spatz_task)
         COMMAND ${SPATZ_CLANG}
             ${SPATZ_COMPILE_FLAGS}
             ${SPATZ_CFLAGS_DEFINES}
+            -DSPATZ_TARGET
             ${INCLUDE_FLAGS}
             ${SPATZ_LINK_FLAGS}
             -T${ARG_LINKER_SCRIPT}
@@ -216,12 +223,17 @@ function(add_cv32_executable_with_spatz)
         set(ARG_LINK_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/${ARG_LINK_SCRIPT}")
     endif()
 
-    add_executable(${ARG_TARGET_NAME} ${ARG_CRT0_SRC} ${ARG_SOURCES})
+    # Add io.c source to provide string functions for printf/prf.h
+    set(IO_SRC "${CMAKE_SOURCE_DIR}/targets/magia_v2/src/io.c")
+    add_executable(${ARG_TARGET_NAME} ${ARG_CRT0_SRC} ${ARG_SOURCES} ${IO_SRC})
 
     target_include_directories(${ARG_TARGET_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/inc
-        ${CMAKE_SOURCE_DIR}/tests/utils
+        ${CMAKE_SOURCE_DIR}/targets/magia_v2/include
+        ${CMAKE_SOURCE_DIR}/targets/magia_v2/include/utils
+        ${CMAKE_SOURCE_DIR}/targets/magia_v2/include/addr_map
+        ${CMAKE_SOURCE_DIR}/targets/magia_v2/include/regs
         ${CMAKE_SOURCE_DIR}/hal/include
         ${CMAKE_SOURCE_DIR}/drivers/eventunit32/include
         ${ARG_INCLUDE_DIRS}

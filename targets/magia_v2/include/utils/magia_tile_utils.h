@@ -16,20 +16,23 @@
  *
  * Authors: Victor Isachi <victor.isachi@unibo.it>
  * Alberto Dequino <alberto.dequino@unibo.it>
- * 
+ *
  * MAGIA Tile Utils
  */
 
 #ifndef MAGIA_TILE_UTILS_H
 #define MAGIA_TILE_UTILS_H
 
-//#include "tinyprintf.h"
-#include "printf.h"
+#include "printf_wrapper.h"
 
 #define mmio64(x) (*(volatile uint64_t *)(x))
 #define mmio32(x) (*(volatile uint32_t *)(x))
 #define mmio16(x) (*(volatile uint16_t *)(x))
 #define mmio8(x)  (*(volatile uint8_t  *)(x))
+
+#define mmio_fp64(x) (*(volatile float64 *)(x))
+#define mmio_fp32(x) (*(volatile float32 *)(x))
+#define mmio_fp16(x) (*(volatile float16 *)(x))
 
 #define addr64(x) (*(uint64_t *)(&x))
 #define addr32(x) (*(uint32_t *)(&x))
@@ -120,6 +123,72 @@ static uint32_t get_time(){
     uint32_t timeh = get_timeh();
     if (timeh) return 0;
     return timel;
+}
+
+static inline uint32_t get_mstatus(){
+    uint32_t mstatus;
+    asm volatile("csrr %0, 0x300" :"=r"(mstatus):); // MSTATUS (0x300)
+    return mstatus;
+}
+
+static inline void set_mstatus(uint32_t value){
+    asm volatile("csrw 0x300, %0" ::"r"(value)); // MSTATUS (0x300)
+}
+
+static inline uint32_t get_mtvec(){
+    uint32_t mtvec;
+    asm volatile("csrr %0, 0x305" :"=r"(mtvec):); // MTVEC (0x305)
+    return mtvec;
+}
+
+static inline void set_mtvec(uint32_t value){
+    asm volatile("csrw 0x305, %0" ::"r"(value)); // MTVEC (0x305)
+}
+
+static inline uint32_t get_mepc(){
+    uint32_t mepc;
+    asm volatile("csrr %0, 0x341" :"=r"(mepc):); // MEPC (0x341)
+    return mepc;
+}
+
+static inline void set_mepc(uint32_t value){
+    asm volatile("csrw 0x341, %0" ::"r"(value)); // MEPC (0x341)
+}
+
+static inline uint32_t get_mcause(){
+    uint32_t mcause;
+    asm volatile("csrr %0, 0x342" :"=r"(mcause):); // MCAUSE (0x342)
+    return mcause;
+}
+
+static inline uint32_t get_privlv(){
+    uint32_t privlv;
+    asm volatile("csrr %0, 0xc10" :"=r"(privlv):); // PRIVLV (0xC10)
+    return privlv;
+}
+
+static inline uint32_t get_uhartid(){
+    uint32_t uhartid;
+    asm volatile("csrr %0, 0x014" :"=r"(uhartid):); // UHARTID (0x014)
+    return uhartid;
+}
+
+// CV32E40P Performance Counter Functions
+static inline void cv32e40p_ccount_enable(){
+    asm volatile("csrw 0x7E0, %0" :: "r"(0x1));  // Enable PCCR[0]
+    asm volatile("csrw 0x7E1, %0" :: "r"(0x1));  // Enable counting, , no saturation
+}
+
+// Read CV32E40P cycle counter
+static inline uint32_t cv32e40p_get_cycles(){
+    uint32_t cycles;
+    asm volatile("csrr %0, 0x780" : "=r"(cycles));  // Read PCCR[0]
+    return cycles;
+}
+
+// Disable CV32E40P cycle counter
+static inline void cv32e40p_ccount_disable(){
+    asm volatile("csrw 0x7E1, %0" :: "r"(0x0));  // Disable counting
 }
 
 #endif /*MAGIA_TILE_UTILS_H*/

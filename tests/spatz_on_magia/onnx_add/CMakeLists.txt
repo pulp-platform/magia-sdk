@@ -6,7 +6,6 @@ add_spatz_task(
     TASK_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/spatz_task/onnx_add_task.c
     FIRST_TASK_NAME onnx_add_task
     INCLUDE_DIRS
-        ${CMAKE_SOURCE_DIR}/tests/utils
         ${CMAKE_CURRENT_SOURCE_DIR}/test_data
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
@@ -17,7 +16,6 @@ add_cv32_executable_with_spatz(
     SPATZ_HEADER ${SPATZ_HEADER}
     SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/main.c
     INCLUDE_DIRS
-        ${CMAKE_SOURCE_DIR}/tests/utils
         ${CMAKE_CURRENT_SOURCE_DIR}/test_data
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )

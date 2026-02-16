@@ -26,29 +26,14 @@
 
 #include <stdint.h>
 #include "magia_tile_utils.h"
+#include "addr_map/tile_addr_map.h"
+#include "regs/tile_ctrl.h"
 
 /* OBI2HWPE Protocol Stamps */
 #define REDMULE_ADDR_BASE REDMULE_BASE
 
 #define HWPE_WRITE(value, offset) *(volatile int *)(REDMULE_ADDR_BASE + offset) = value
 #define HWPE_READ(offset) *(volatile int *)(REDMULE_ADDR_BASE + offset)
-
-/* Register offsets (RedMulE hwpe-ctrl) */
-#define REDMULE_REG_OFFS     0x00
-#define REDMULE_TRIGGER      0x00
-#define REDMULE_ACQUIRE      0x04
-#define REDMULE_EVT_ENABLE   0x08
-#define REDMULE_STATUS       0x0C
-#define REDMULE_RUNNING_JOB  0x10
-#define REDMULE_SOFT_CLEAR   0x14
-
-/* RedMulE configuration registers */
-#define REDMULE_REG_X_PTR    0x40
-#define REDMULE_REG_W_PTR    0x44
-#define REDMULE_REG_Z_PTR    0x48
-#define REDMULE_MCFG0_PTR    0x4C
-#define REDMULE_MCFG1_PTR    0x50
-#define REDMULE_ARITH_PTR    0x54
 
 /* Operations and formats */
 #define gemm_ops    0x1

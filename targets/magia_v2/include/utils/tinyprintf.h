@@ -145,7 +145,16 @@ static void putf(char *null, char c) {
 /* Optional external types dependencies */
 
 #if TINYPRINTF_DEFINE_TFP_SPRINTF
-# include <sys/types.h>  /* size_t */
+/* For standalone SPATZ builds (no libc headers) define size_t locally;
+    for other targets prefer the standard header. */
+# if defined(SPATZ_TARGET)
+ /* size_t is defined as unsigned long for standalone embedded systems */
+#  ifndef size_t
+#   define size_t unsigned long
+#  endif
+# else
+#  include <stddef.h>
+# endif
 #endif
 
 /* Declarations */
@@ -602,7 +611,7 @@ static void tfp_format(void *putp, putcf putf__, const char *fmt, va_list va)
                 break;
             }
         }
-    } 
+    }
  abort:;
 }
 

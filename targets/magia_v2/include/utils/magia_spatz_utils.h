@@ -23,6 +23,7 @@
 
 #include <stdint.h>
 #include "magia_tile_utils.h"
+#include "addr_map/tile_addr_map.h"
 
 #define SPATZ_CLK_EN   (SPATZ_CTRL_BASE + 0x00)
 #define SPATZ_START    (SPATZ_CTRL_BASE + 0x04)
@@ -30,8 +31,6 @@
 #define SPATZ_DATA     (SPATZ_CTRL_BASE + 0x0C)
 #define SPATZ_RETURN   (SPATZ_CTRL_BASE + 0x10)
 #define SPATZ_DONE     (SPATZ_CTRL_BASE + 0x14)
-
-#define mmio32(x) (*(volatile uint32_t *)(x))
 
 static inline void spatz_clk_en(void) {
     mmio32(SPATZ_CLK_EN) = 1;
