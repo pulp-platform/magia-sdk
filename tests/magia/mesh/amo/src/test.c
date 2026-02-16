@@ -9,9 +9,12 @@
 
 #include "tile.h"
 #include "fsync.h"
+#include "eventunit.h"
 
 #define INITIAL_VALUE 1234
 #define N_ITERS 1000
+
+#define WAIT_MODE POLLING
 
 
 int main(void){
@@ -34,6 +37,17 @@ int main(void){
     uint32_t x_id           = GET_X_ID(hartid);
     uint32_t l1_tile_base   = get_l1_base(hartid);
 
+    #if STALLING == 0
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+    eu_init(&eu_ctrl);
+    eu_fsync_init(&eu_ctrl, 0);
+    #endif
+
     /** 
      * 1. Initialize the counter in L1
      */
@@ -41,6 +55,9 @@ int main(void){
 
     // Synch all the tiles
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    #if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
 
     /**
      * 2. Main loop.
@@ -55,6 +72,9 @@ int main(void){
 
     // Synch all the tiles
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    #if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
 
     /**
      * 3. Check if the counter has the correct value.
