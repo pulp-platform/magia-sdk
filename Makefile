@@ -33,9 +33,9 @@ mesh_dv			?= 1
 fast_sim		?= 0
 eval			?= 0
 stalling		?= 0
-fsync_mm		?= 1
-idma_mm			?= 1
-redmule_mm		?= 1
+fsync_mm		?= 0
+idma_mm			?= 0
+redmule_mm		?= 0
 profile_cmp		?= 0
 profile_cmi		?= 0
 profile_cmo		?= 0
@@ -126,16 +126,16 @@ ifeq ($(target_platform), magia_v1)
 else ifeq ($(target_platform), magia_v2)
 	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_DIR)/Makefile
 	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40X/\1CV32E40P/' $(MAGIA_DIR)/Makefile
-ifneq ($(tiles), 1)
-	sed -i -E 's/^( *localparam int unsigned N_TILES_[XY][[:space:]]*=[[:space:]]*)[0-9]+;/\1$(tiles);/' $(MAGIA_DIR)/hw/mesh/magia_pkg.sv
-endif
 else
 	$(error unrecognized platform (acceptable platform: magia).)
 endif
+ifneq ($(tiles), 1)
+	sed -i -E 's/^(  localparam int unsigned N_TILES_[XY][[:space:]]*=[[:space:]]*)[0-9]+;/\1$(tiles);/' $(MAGIA_DIR)/hw/mesh/magia_pkg.sv
+endif
 ifeq ($(fsync_mode), stall)
-	sed -i -E "s/^(parameter bit[[:space:]]+FSYNC_STALL[[:space:]]+= )[01];/\11;/" $(MAGIA_DIR)/hw/tile/magia_tile_pkg.sv
+	sed -i -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\11/' $(MAGIA_DIR)/hw/tile/magia_tile_pkg.sv
 else ifeq ($(fsync_mode), interrupt)
-	sed -i -E "s/^(parameter bit[[:space:]]+FSYNC_STALL[[:space:]]+= )[01];/\10;/" $(MAGIA_DIR)/hw/tile/magia_tile_pkg.sv
+	sed -i -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\10/' $(MAGIA_DIR)/hw/tile/magia_tile_pkg.sv
 else
 	$(error unrecognized fractal sync mode (acceptable modes: stall|interrupt).)
 endif
@@ -170,6 +170,5 @@ gvsoc_init:
 	git checkout lz/magia-v2-core && \
 	cd ../pulp && \
 	git checkout lz/magia-v2-pulp
-
 
 
