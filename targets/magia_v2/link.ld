@@ -22,7 +22,7 @@ MEMORY
 {
     instrram    : ORIGIN = 0xcc000000, LENGTH = 0x8000
     dataram     : ORIGIN = 0xcc100000, LENGTH = 0xF00000
-    stack       : ORIGIN = 0x00010000, LENGTH = 0x10000 /* 64K, maybe it's a bit too much (?) */
+    stack       : ORIGIN = 0x00010000, LENGTH = 0xC000
 }
 
 /* Stack information variables */
