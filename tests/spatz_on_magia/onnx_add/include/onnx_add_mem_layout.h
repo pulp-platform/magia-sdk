@@ -3,15 +3,17 @@
 
 #include "data.h"
 #include "magia_tile_utils.h"
+#include "magia_utils.h"
 #include "onnx_add_params.h"
 
 #define ALIGNMENT   4
 /* Aligns the given address to 4-byte  */
 #define ALIGN_4B(addr)  (((addr) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
-#define VEC_SIZE    (LEN * sizeof(float16))
+#define L1_BASE_TILE    (L1_BASE + (get_hartid() * L1_TILE_OFFSET))
+#define VEC_SIZE        (LEN * sizeof(float16))
 
-#define ONNX_ADD_PARAMS_BASE    L1_BASE
+#define ONNX_ADD_PARAMS_BASE    L1_BASE_TILE
 #define ONNX_ADD_PARAMS_SIZE    ALIGN_4B(sizeof(onnx_add_params_t))
 
 #define SRC_A_BASE  ALIGN_4B(ONNX_ADD_PARAMS_BASE + ONNX_ADD_PARAMS_SIZE)
