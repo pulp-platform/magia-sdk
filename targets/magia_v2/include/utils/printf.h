@@ -17,7 +17,7 @@
  *
  * Authors:
  * Alberto Dequino <alberto.dequino@unibo.it>
- * 
+ *
  * PRINTF
  */
 #ifndef PRINTF_H

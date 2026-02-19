@@ -16,7 +16,7 @@
  *
  * Authors: Victor Isachi <victor.isachi@unibo.it>
  * Alberto Dequino <alberto.dequino@unibo.it>
- * 
+ *
  * MAGIA Utils
  */
 

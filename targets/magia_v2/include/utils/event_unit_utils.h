@@ -1,0 +1,329 @@
+/*
+ * Copyright (C) 2024 ETH Zurich and University of Bologna
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Authors: Luca Balboni <luca.balboni10@studio.unibo.it>
+ *
+ * MAGIA Event Unit Utilities
+ * Two modes: POLLING (non-blocking) and WFE (blocking with p.elw sleep)
+ */
+
+#ifndef EVENT_UNIT_UTILS_H
+#define EVENT_UNIT_UTILS_H
+
+#include <stdint.h>
+#include "magia_tile_utils.h"
+#include "addr_map/tile_addr_map.h"
+#include "regs/tile_ctrl.h"
+
+//=============================================================================
+// REGISTER DEFINITIONS AND CONSTANTS
+//=============================================================================
+
+// Wait modes
+typedef enum {
+    EU_WAIT_MODE_POLLING = 0,
+    EU_WAIT_MODE_WFE = 1
+} eu_wait_mode_t;
+
+//=============================================================================
+// LOW-LEVEL HAL (PULP-compatible evt_read32)
+//=============================================================================
+
+// evt_read32: blocking read with p.elw instruction
+static inline unsigned int evt_read32(unsigned int base, unsigned int offset) {
+    unsigned int value;
+    unsigned int addr = base + offset;
+    // Direct p.elw inline assembly for PULP cores (RI5CY, CV32E40P)
+    __asm__ __volatile__ (
+        "p.elw %0, 0(%1)"
+        : "=r" (value)
+        : "r" (addr)
+        : "memory"
+    );
+    return value;
+}
+
+//=============================================================================
+// BASIC CONTROL FUNCTIONS
+//=============================================================================
+
+static inline void eu_init(void) {
+    mmio32(EU_CORE_BUFFER_CLEAR) = 0xFFFFFFFF;
+    mmio32(EU_CORE_MASK) = 0x00000000;
+    mmio32(EU_CORE_IRQ_MASK) = 0x00000000;
+}
+
+static inline void eu_enable_events(uint32_t event_mask) {
+    mmio32(EU_CORE_MASK_OR) = event_mask;
+}
+
+static inline void eu_disable_events(uint32_t event_mask) {
+    mmio32(EU_CORE_MASK_AND) = event_mask;
+}
+
+static inline void eu_enable_irq(uint32_t irq_mask) {
+    mmio32(EU_CORE_IRQ_MASK_OR) = irq_mask;
+}
+
+static inline void eu_disable_irq(uint32_t irq_mask) {
+    mmio32(EU_CORE_IRQ_MASK_AND) = irq_mask;
+}
+
+static inline void eu_clear_events(uint32_t event_mask) {
+    mmio32(EU_CORE_BUFFER_CLEAR) = event_mask;
+}
+
+//=============================================================================
+// STATUS READ FUNCTIONS (non-blocking)
+//=============================================================================
+
+static inline uint32_t eu_get_events(void) {
+    return mmio32(EU_CORE_BUFFER);
+}
+
+static inline uint32_t eu_get_events_masked(void) {
+    return mmio32(EU_CORE_BUFFER_MASKED);
+}
+
+static inline uint32_t eu_check_events(uint32_t event_mask) {
+    return mmio32(EU_CORE_BUFFER_MASKED) & event_mask;
+}
+
+//=============================================================================
+// WAIT FUNCTIONS (polling and blocking)
+//=============================================================================
+
+// POLLING mode: non-blocking busy-wait
+static inline uint32_t eu_wait_events_polling(uint32_t event_mask, uint32_t timeout_cycles) {
+    uint32_t cycles = 0;
+    uint32_t detected_events;
+    do {
+        detected_events = eu_check_events(event_mask);
+        if (detected_events){
+            eu_clear_events(detected_events);
+            return detected_events;
+        }
+        wait_nop(10);
+        cycles += 10;
+    } while (timeout_cycles == 0 || cycles < timeout_cycles);
+    return 0;
+}
+
+// WFE mode: blocking sleep with p.elw
+static inline uint32_t eu_wait_events_wfe(uint32_t event_mask) {
+    eu_enable_events(event_mask);
+    return evt_read32(EU_BASE, EU_CORE_EVENT_WAIT_CLEAR - EU_BASE);
+}
+
+// Generic wait with mode selection
+static inline uint32_t eu_wait_events(uint32_t event_mask, eu_wait_mode_t mode, uint32_t timeout_cycles) {
+    if (mode == EU_WAIT_MODE_WFE)
+        return eu_wait_events_wfe(event_mask);
+    else
+        return eu_wait_events_polling(event_mask, timeout_cycles);
+}
+
+// PULP HAL compatible functions
+static inline unsigned int eu_evt_wait(void) {
+    return evt_read32(EU_BASE, EU_CORE_EVENT_WAIT - EU_BASE);
+}
+
+static inline unsigned int eu_evt_waitAndClr(void) {
+    return evt_read32(EU_BASE, EU_CORE_EVENT_WAIT_CLEAR - EU_BASE);
+}
+
+static inline unsigned int eu_evt_maskWaitAndClr(unsigned int evtMask) {
+    eu_enable_events(evtMask);
+    unsigned int result = eu_evt_waitAndClr();
+    eu_disable_events(evtMask);
+    return result;
+}
+
+//=============================================================================
+// REDMULE FUNCTIONS
+//=============================================================================
+
+static inline void eu_redmule_init(void) {
+    eu_clear_events(0xFFFFFFFF);
+    eu_enable_events(EU_REDMULE_DONE_MASK);
+}
+
+static inline uint32_t eu_redmule_wait_completion(eu_wait_mode_t mode) {
+    return eu_wait_events(EU_REDMULE_DONE_MASK, mode, 1000000);
+}
+
+static inline uint32_t eu_redmule_is_busy(void) {
+    return eu_check_events(EU_REDMULE_BUSY_MASK);
+}
+
+static inline uint32_t eu_redmule_is_done(void) {
+    return eu_check_events(EU_REDMULE_DONE_MASK);
+}
+
+//=============================================================================
+// IDMA FUNCTIONS
+//=============================================================================
+
+static inline void eu_idma_init(void) {
+    eu_clear_events(0xFFFFFFFF);
+    eu_enable_events(EU_IDMA_ALL_DONE_MASK);
+}
+
+static inline uint32_t eu_idma_wait_completion(eu_wait_mode_t mode) {
+    return eu_wait_events(EU_IDMA_ALL_DONE_MASK, mode, 1000000);
+}
+
+static inline uint32_t eu_idma_wait_direction_completion(uint32_t direction, eu_wait_mode_t mode) {
+    uint32_t wait_mask = direction ? EU_IDMA_O2A_DONE_MASK : EU_IDMA_A2O_DONE_MASK;
+    return eu_wait_events(wait_mask, mode, 1000000);
+}
+
+static inline uint32_t eu_idma_wait_a2o_completion(eu_wait_mode_t mode) {
+    return eu_wait_events(EU_IDMA_A2O_DONE_MASK, mode, 1000000);
+}
+
+static inline uint32_t eu_idma_wait_o2a_completion(eu_wait_mode_t mode) {
+    return eu_wait_events(EU_IDMA_O2A_DONE_MASK, mode, 1000000);
+}
+
+static inline uint32_t eu_idma_is_done(void) {
+    return eu_check_events(EU_IDMA_ALL_DONE_MASK);
+}
+
+static inline uint32_t eu_idma_a2o_is_done(void) {
+    return eu_check_events(EU_IDMA_A2O_DONE_MASK);
+}
+
+static inline uint32_t eu_idma_o2a_is_done(void) {
+    return eu_check_events(EU_IDMA_O2A_DONE_MASK);
+}
+
+static inline uint32_t eu_idma_is_busy(void) {
+    uint32_t events = eu_get_events();
+    return events & (EU_IDMA_A2O_BUSY_MASK | EU_IDMA_O2A_BUSY_MASK);
+}
+
+static inline uint32_t eu_idma_has_error(void) {
+    uint32_t events = eu_get_events();
+    return events & (EU_IDMA_A2O_ERROR_MASK | EU_IDMA_O2A_ERROR_MASK);
+}
+
+//=============================================================================
+// FSYNC FUNCTIONS
+//=============================================================================
+
+static inline void eu_fsync_init(void) {
+    eu_clear_events(0xFFFFFFFF);
+    eu_enable_events(EU_FSYNC_ALL_MASK);
+}
+
+static inline uint32_t eu_fsync_wait_completion(eu_wait_mode_t mode) {
+    return eu_wait_events(EU_FSYNC_DONE_MASK, mode, 1000000);
+}
+
+static inline uint32_t eu_fsync_is_done(void) {
+    return eu_check_events(EU_FSYNC_DONE_MASK);
+}
+
+static inline uint32_t eu_fsync_has_error(void) {
+    return eu_check_events(EU_FSYNC_ERROR_MASK);
+}
+
+//=============================================================================
+// SPATZ FUNCTIONS
+//=============================================================================
+
+static inline void eu_spatz_init(void) {
+    eu_clear_events(0xFFFFFFFF);
+    eu_enable_events(EU_SPATZ_DONE_MASK);
+}
+
+static inline uint32_t eu_spatz_is_done(void) {
+    return eu_check_events(EU_SPATZ_DONE_MASK);
+}
+
+
+static inline void eu_wait_spatz_wfe(uint32_t event_mask) {
+    while (!eu_check_events(event_mask)) {
+        eu_evt_wait();
+    }
+    eu_clear_events(event_mask);
+}
+
+static inline void eu_wait_spatz_polling(uint32_t event_mask) {
+    while (!eu_check_events(event_mask)) {
+        wait_nop(10);
+    }
+    eu_clear_events(event_mask);
+}
+
+//=============================================================================
+// MULTI-ACCELERATOR FUNCTIONS
+//=============================================================================
+
+static inline void eu_multi_init(uint32_t redmule_en, uint32_t idma_a2o_en,
+                                 uint32_t idma_o2a_en, uint32_t fsync_en) {
+    eu_clear_events(0xFFFFFFFF);
+    uint32_t event_mask = 0;
+
+    if (redmule_en) {
+        event_mask |= EU_REDMULE_ALL_MASK;
+    }
+    if (idma_a2o_en) {
+        event_mask |= EU_IDMA_A2O_DONE_MASK;
+    }
+    if (idma_o2a_en) {
+        event_mask |= EU_IDMA_O2A_DONE_MASK;
+    }
+    if (fsync_en) {
+        event_mask |= EU_FSYNC_ALL_MASK;
+    }
+
+    if (event_mask) eu_enable_events(event_mask);
+}
+
+static inline uint32_t eu_multi_wait_all(uint32_t wait_redmule, uint32_t wait_idma_a2o,
+                                         uint32_t wait_idma_o2a, uint32_t wait_fsync,
+                                         eu_wait_mode_t mode) {
+    uint32_t required_mask = 0;
+    if (wait_redmule) required_mask |= EU_REDMULE_DONE_MASK;
+    if (wait_idma_a2o) required_mask |= EU_IDMA_A2O_DONE_MASK;
+    if (wait_idma_o2a) required_mask |= EU_IDMA_O2A_DONE_MASK;
+    if (wait_fsync) required_mask |= EU_FSYNC_DONE_MASK;
+
+    eu_enable_events(required_mask);
+
+    if (mode == EU_WAIT_MODE_WFE) {
+        uint32_t accumulated = 0;
+        while ((accumulated & required_mask) != required_mask) {
+            uint32_t new_events = evt_read32(EU_BASE, EU_CORE_EVENT_WAIT_CLEAR - EU_BASE);
+            accumulated |= new_events;
+        }
+        return accumulated;
+    } else {
+        uint32_t timeout = 1000000;
+        uint32_t cycles = 0;
+        uint32_t accumulated = 0;
+        while (cycles < timeout && (accumulated & required_mask) != required_mask) {
+            accumulated |= eu_check_events(required_mask);
+            wait_nop(10);
+            cycles += 10;
+        }
+        return accumulated;
+    }
+}
+
+#endif /* EVENT_UNIT_UTILS_H */
