@@ -54,7 +54,7 @@ static int run_spatz_task()
 
 static bool check_result()
 {
-    return vector_compare_fp16(params->addr_res, params->addr_exp, params->len);
+    return vector_compare_fp16_bitwise(params->addr_res, params->addr_exp, params->len);
 }
 
 static bool run_test()
