@@ -78,8 +78,8 @@ int main(void){
         /**
          * 2a. Amo lock test, get the lock to enter the protected code area.
          */
-        //amo_lock(tail_a, mynode);
-        amo_lock_naive(tail_a);
+        amo_lock(tail_a, mynode);
+        //amo_lock_naive(tail_a);
 
         /**
          * 2b. Protected code area.
@@ -87,17 +87,17 @@ int main(void){
          * Wait a bit.
          * Check if the value is still the same, and nobody else got inside.  
          */
-        // mmio32(&value + (uint32_t)(4 * y_id)) = hartid;
-        // wait_nop(100);
-        // if(mmio32(&value + (uint32_t)(4 * y_id)) != hartid){
-        //     printf("We fucking loooooost... on core %d\n", hartid);
-        // }
+        mmio32(&value + (uint32_t)(4 * y_id)) = hartid;
+        wait_nop(100);
+        if(mmio32(&value + (uint32_t)(4 * y_id)) != hartid){
+            printf("We fucking loooooost... on core %d\n", hartid);
+        }
 
         /**
          * 2c. UNLOCK https://libraryofruina.wiki.gg/wiki/Unlock-%E2%85%A0
          */
-        //amo_unlock(tail_a, mynode);
-        amo_unlock_naive(tail_a);
+        amo_unlock(tail_a, mynode);
+        //amo_unlock_naive(tail_a);
         sentinel_end();
 
         /**
