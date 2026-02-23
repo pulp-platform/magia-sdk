@@ -10,12 +10,12 @@
 #include "magia_tile_utils.h"
 #include "magia_spatz_utils.h"
 
-volatile onnx_add_params_t *params;
-
-static void init_data()
+static int init_data(void *params)
 {
     uint32_t offset;
+    volatile onnx_add_params_t *add_params;
 
+    add_params = (volatile onnx_add_params_t *) params;
     for (int i = 0; i < LEN; i++) {
         offset = i * sizeof(float16);
 
@@ -25,12 +25,14 @@ static void init_data()
         mmio_fp16(RES_BASE + offset) = 0;
     }
 
-    params = (volatile onnx_add_params_t *) ONNX_ADD_PARAMS_BASE;
-    params->addr_a = SRC_A_BASE;
-    params->addr_b = SRC_B_BASE;
-    params->addr_res = RES_BASE;
-    params->addr_exp = EXP_BASE;
-    params->len = LEN;
+
+    add_params->addr_a = SRC_A_BASE;
+    add_params->addr_b = SRC_B_BASE;
+    add_params->addr_res = RES_BASE;
+    add_params->addr_exp = EXP_BASE;
+    add_params->len = LEN;
+
+    return 0;
 }
 
 static int run_spatz_task()
@@ -52,17 +54,26 @@ static int run_spatz_task()
     return ret;
 }
 
-static bool check_result()
+static bool check_result(void *params)
 {
-    return vector_compare_fp16_bitwise(params->addr_res, params->addr_exp, params->len);
+    volatile onnx_add_params_t *add_params;
+    add_params = (volatile onnx_add_params_t *) params;
+    return vector_compare_fp16_bitwise(add_params->addr_res, add_params->addr_exp, add_params->len);
 }
 
 static bool run_test()
 {
     int ret;
     bool check;
+    volatile onnx_add_params_t *params;
 
-    init_data();
+    params = (volatile onnx_add_params_t *) ONNX_ADD_PARAMS_BASE;
+
+    ret = init_data(params);
+    if (ret != 0) {
+        printf("[CV32] Params initialization failed with error: %d\n", ret);
+        return ret;
+    }
 
     ret = run_spatz_task();
     if (ret != 0) {
@@ -70,7 +81,7 @@ static bool run_test()
         return ret;
     }
 
-    check = check_result();
+    check = check_result(params);
     if (check) {
         printf("[CV32] Test SUCCESS\n");
     } else {
