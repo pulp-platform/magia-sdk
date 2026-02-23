@@ -121,6 +121,22 @@ else
 	$(error Only rtl and gvsoc are supported as platforms.)
 endif
 
+run_with_spatz: set_mesh
+ifndef test
+	$(error Proper formatting is: make run_with_spatz test=<test_name> platform=<rtl|gvsoc>)
+endif
+ifeq (,$(wildcard ./build/bin/$(test)))
+	$(error No test found with name: $(test))
+endif
+ifndef platform
+	$(error Proper formatting is: make run_with_spatz test=<test_name> platform=rtl|gvsoc)
+endif
+ifeq ($(platform), gvsoc)
+	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin
+else
+	$(error Only gvsoc is currently supported as emulation platform.)
+endif
+
 MAGIA: set_mesh
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
 	$(eval tiles_2=256)
