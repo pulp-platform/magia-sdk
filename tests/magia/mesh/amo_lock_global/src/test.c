@@ -10,10 +10,15 @@
 #include "tile.h"
 #include "fsync.h"
 #include "eventunit.h"
+#include "utils/cache_fill.h"
 
 #define WAIT_MODE POLLING
+#define CACHE_HEAT_CYCLES (3)
 
 int main(void){
+    // Filling up the cache
+    fill_icache();
+
     /** 
      * 0. Get the mesh-tile's hartid, and also initialize fsync + eu
      */
@@ -67,38 +72,43 @@ int main(void){
     #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     #endif
-    
-    /**
-     * 2a. Amo lock test, get the lock to enter the protected code area.
-     */
-    amo_lock(tail_a, mynode);
+    for (int i = 0; i < CACHE_HEAT_CYCLES; i++) {
+        sentinel_start();
+        /**
+         * 2a. Amo lock test, get the lock to enter the protected code area.
+         */
+        amo_lock(tail_a, mynode);
+        //amo_lock_naive(tail_a);
 
-    /**
-     * 2b. Protected code area.
-     * Write own hartid on shared global value.
-     * Wait a bit.
-     * Check if the value is still the same, and nobody else got inside.  
-     */
-    mmio32(&value) = hartid;
-    wait_nop(100);
-    if(mmio32(&value) != hartid){
-        printf("We fucking loooooost... on core %d\n", hartid);
+        /**
+         * 2b. Protected code area.
+         * Write own hartid on shared global value.
+         * Wait a bit.
+         * Check if the value is still the same, and nobody else got inside.  
+         */
+        mmio32(&value) = hartid;
+        wait_nop(100);
+        if(mmio32(&value) != hartid){
+            printf("We fucking loooooost... on core %d\n", hartid);
+        }
+
+        /**
+         * 2c. UNLOCK https://libraryofruina.wiki.gg/wiki/Unlock-%E2%85%A0
+         */
+        amo_unlock(tail_a, mynode);
+        //amo_unlock_naive(tail_a);
+        sentinel_end();
+
+        /**
+         * 3. Synch all the tiles and return
+         */
+        // Synch all the tiles
+        fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+
+        #if STALLING == 0
+        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        #endif
     }
-
-    /**
-     * 2c. UNLOCK https://libraryofruina.wiki.gg/wiki/Unlock-%E2%85%A0
-     */
-    amo_unlock(tail_a, mynode);
-
-    /**
-     * 3. Synch all the tiles and return
-     */
-    // Synch all the tiles
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-
-    #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-    #endif
 
     if(hartid == 0)
         printf("Uh I guess the lock works?\n");

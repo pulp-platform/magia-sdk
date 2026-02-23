@@ -101,11 +101,9 @@ void amo_unlock(volatile uint32_t tail, volatile uint32_t mynode){
             asm volatile("mv %0, t0" :"=r"(retval)::"t0");
             if(retval == 0)
                 return;
-            else{
-                while(((volatile lock_node*)(mynode)) -> next == NULL);
-            }
         }
     }
+    while(((volatile lock_node*)(mynode)) -> next == NULL);
     ((volatile lock_node*)(mynode)) -> next -> locked = 0;
 }
 

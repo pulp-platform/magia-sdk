@@ -120,6 +120,9 @@ else
 endif
 
 MAGIA: set_mesh
+ifeq ($(shell expr $(tiles_2) \> 256), 1)
+	$(eval tiles_2=256)
+endif
 ifeq ($(target_platform), magia_v1)
 	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_DIR)/Makefile
 	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40P/\1CV32E40X/' $(MAGIA_DIR)/Makefile
