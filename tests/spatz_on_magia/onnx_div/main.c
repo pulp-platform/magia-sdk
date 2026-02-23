@@ -74,7 +74,7 @@ static bool run_test()
     if (check) {
         printf("[CV32] Test SUCCESS\n");
     } else {
-        printf("[CV32 Test FAILED\n]");
+        printf("[CV32] Test FAILED\n");
         ret = -1;
     }
 
