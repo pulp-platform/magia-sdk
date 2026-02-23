@@ -7,26 +7,21 @@
 #include "magia_tile_utils.h"
 #include "printf_wrapper.h"
 
-#define TOLL 0.004f
-
-static inline bool vector_compare_fp16(uintptr_t addr_res, uintptr_t addr_exp, int len) {
+static inline bool vector_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t addr_exp, int len) {
+    volatile uint16_t val_exp;
+    volatile uint16_t val_res;
     uint32_t offset;
-    float abs_diff;
-    float computed;
-    float expected;
     bool ret;
 
     ret = true;
     for (int i = 0; i < len; i++) {
-        offset = i * sizeof(float16);
+        offset = i * sizeof (uint16_t);
 
-        computed = (float)mmio_fp16(addr_res + offset);
-        expected = (float)mmio_fp16(addr_exp + offset);
+        val_exp = mmio16(addr_exp + offset);
+        val_res = mmio16(addr_res + offset);
 
-        abs_diff = fabs(computed - expected);
-
-        if (abs_diff > TOLL) {
-            printf("Mismatch at index %d\n", i);
+        if (val_exp != val_res) {
+            printf("Mismatch at index %d - expected raw: 0x%04x - computed raw: 0x%04x\n", i, val_exp, val_res);
             ret = false;
         }
     }
