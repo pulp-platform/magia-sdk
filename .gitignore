@@ -19,3 +19,7 @@ CMakeFiles
 /*/*/*/*/Makefile
 log.txt
 gvsoc/
+testsuite.py
+test.conf
+testsuite*
+testlogs/

@@ -101,12 +101,29 @@ void amo_unlock(volatile uint32_t tail, volatile uint32_t mynode){
             asm volatile("mv %0, t0" :"=r"(retval)::"t0");
             if(retval == 0)
                 return;
-            else{
-                while(((volatile lock_node*)(mynode)) -> next == NULL);
-            }
         }
     }
+    while(((volatile lock_node*)(mynode)) -> next == NULL);
     ((volatile lock_node*)(mynode)) -> next -> locked = 0;
+}
+
+void amo_lock_naive(volatile uint32_t tail){
+    volatile uint32_t retval = 1;
+    while(retval){
+        asm volatile("addi t0, %0, 0" ::"r"(tail):"t0");
+        asm volatile("addi t1, %0, 0" ::"r"(retval):"t1");
+        asm volatile("addi t2, %0, 0" ::"r"(retval):"t2");
+        asm volatile("amoswap.w t2, t1, (t0)" :::"t2", "t1", "t0");
+        asm volatile("mv %0, t2" :"=r"(retval)::"t2");
+    }
+}
+
+void amo_unlock_naive(volatile uint32_t tail){
+    volatile uint32_t retval = 0;
+    asm volatile("addi t0, %0, 0" ::"r"(tail):"t0");
+    asm volatile("addi t1, %0, 0" ::"r"(retval):"t1");
+    asm volatile("addi t2, %0, 0" ::"r"(retval):"t2");
+    asm volatile("amoswap.w t2, t1, (t0)" :::"t2", "t1", "t0");
 }
 
 #endif //AMO_UTILS_H
