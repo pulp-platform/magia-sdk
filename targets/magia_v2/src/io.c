@@ -20,8 +20,6 @@
  * 
  * IO
  */
-#ifndef IO_H
-#define IO_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -114,6 +112,3 @@ void *memmove(void *d, const void *s, size_t n)
 
     return d;
 }
-
-
-#endif // IO_H
