@@ -135,7 +135,9 @@ function(add_spatz_task)
         DEPENDS
             ${TASK_HEADER}
             ${TASK_BIN}
-            ${TASK_DUMP}
+    )
+    add_custom_target(${ARG_TEST_NAME}_spatz_dump
+        DEPENDS ${TASK_DUMP}
     )
 
     set(${ARG_TEST_NAME}_SPATZ_HEADER ${TASK_HEADER} PARENT_SCOPE)
