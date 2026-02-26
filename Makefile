@@ -21,7 +21,7 @@
 SHELL 			:= /bin/bash
 
 BUILD_DIR 		?= ../sw/tests/$(test)
-MAGIA_DIR 		?= ../
+MAGIA_DIR 		?= ../MAGIA
 GVSOC_DIR 		?= ./gvsoc
 CURR_DIR		?= $(shell pwd)
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
@@ -133,8 +133,10 @@ ifndef platform
 endif
 ifeq ($(platform), gvsoc)
 	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin
+else ifeq ($(platform), rtl)
+	$(MAKE) run test=$(test) platform=rtl
 else
-	$(error Only gvsoc is currently supported as emulation platform.)
+	$(error Only rtl and gvsoc are supported as platforms.)
 endif
 
 MAGIA: set_mesh

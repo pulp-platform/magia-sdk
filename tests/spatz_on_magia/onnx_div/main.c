@@ -41,7 +41,10 @@ static int run_spatz_task()
     eu_init();
     eu_enable_events(EU_SPATZ_DONE_MASK);
 
+
+
     spatz_init(SPATZ_BINARY_START);
+    printf("[CV32] Random print just to slow down CV32 between Spatz init and run\n");  // TODOs: remove me
     spatz_run_task_with_params(ONNX_DIV_TASK, ONNX_DIV_PARAMS_BASE);
 
     eu_wait_spatz_wfe(EU_SPATZ_DONE_MASK);

@@ -12,9 +12,7 @@
 #
 #   2. add_cv32_executable_with_spatz()
 #      - Builds CV32 executable with embedded Spatz binary
-#      - Generates disassembly and simulation stimuli
 #      - Outputs to: build/bin/<executable>
-#                    build/bin/spatz_on_magia/<TARGET_NAME>/stim/
 # ============================================================================
 
 include(${CMAKE_CURRENT_LIST_DIR}/spatz_config.cmake)
@@ -176,7 +174,9 @@ function(add_spatz_task)
         DEPENDS
             ${TASK_HEADER}
             ${TASK_BIN}
-            ${TASK_DUMP}
+    )
+    add_custom_target(${ARG_TEST_NAME}_spatz_dump
+        DEPENDS ${TASK_DUMP}
     )
 
     # Export to parent scope
@@ -190,7 +190,7 @@ function(add_spatz_task)
 endfunction()
 
 # Function: add_cv32_executable_with_spatz
-# Builds CV32 executable with embedded Spatz task binary and generates disassembly/stimuli
+# Builds CV32 executable with embedded Spatz task binary
 # Parameters:
 #   TARGET_NAME (required): Executable name
 #   SPATZ_HEADER (required): Path to Spatz task header file
@@ -200,8 +200,6 @@ endfunction()
 #   INCLUDE_DIRS: Additional include directories
 # Output locations:
 #   Executable: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}
-#   Disassembly: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}.s
-#   Stimuli files: ${CMAKE_BINARY_DIR}/bin/spatz_on_magia/${TARGET_NAME}/stim/
 function(add_cv32_executable_with_spatz)
     set(options)
     set(oneValueArgs TARGET_NAME SPATZ_HEADER LINK_SCRIPT CRT0_SRC)
@@ -291,30 +289,4 @@ function(add_cv32_executable_with_spatz)
         add_dependencies(${ARG_TARGET_NAME} ${EXTRACTED_TEST_NAME}_spatz_header)
     endif()
 
-    # Post-build: disassembly and stimuli [MAGIA/Makefile: $(STIM_INSTR) $(STIM_DATA)]
-    set(STIM_DIR "${CMAKE_BINARY_DIR}/bin/spatz_on_magia/${ARG_TARGET_NAME}/stim/")
-    set(ELF_DUMP "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${ARG_TARGET_NAME}.s")
-    set(ELF_OBJDUMP "${STIM_DIR}${ARG_TARGET_NAME}.objdump")
-    set(ELF_ITB "${STIM_DIR}${ARG_TARGET_NAME}.itb")
-    set(ELF_S19 "${STIM_DIR}${ARG_TARGET_NAME}.s19")
-    set(ELF_TXT "${STIM_DIR}${ARG_TARGET_NAME}.txt")
-    set(STIM_INSTR "${STIM_DIR}${ARG_TARGET_NAME}_stim_instr.txt")
-    set(STIM_DATA "${STIM_DIR}${ARG_TARGET_NAME}_stim_data.txt")
-    file(MAKE_DIRECTORY "${STIM_DIR}")
-
-    add_custom_command(TARGET ${ARG_TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_OBJDUMP} -D -S $<TARGET_FILE:${ARG_TARGET_NAME}> > ${ELF_DUMP}
-        COMMAND ${CMAKE_OBJDUMP} -h -S $<TARGET_FILE:${ARG_TARGET_NAME}> > ${ELF_OBJDUMP}
-        COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/objdump2itb.py ${ELF_OBJDUMP} > ${ELF_ITB}
-        COMMENT "[CV32] Generating disassembly and ITB for ${ARG_TARGET_NAME}"
-        VERBATIM
-    )
-
-    add_custom_command(TARGET ${ARG_TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_OBJCOPY} --srec-len 1 --output-target=srec $<TARGET_FILE:${ARG_TARGET_NAME}> ${ELF_S19}
-        COMMAND perl ${CMAKE_SOURCE_DIR}/scripts/parse_s19.pl ${ELF_S19} > ${ELF_TXT}
-        COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/s19tomem.py ${ELF_TXT} ${STIM_INSTR} ${STIM_DATA}
-        COMMENT "[CV32] Generating stimuli for ${ARG_TARGET_NAME}"
-        VERBATIM
-    )
 endfunction()
