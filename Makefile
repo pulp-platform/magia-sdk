@@ -109,8 +109,8 @@ else ifeq ($(platform), rtl)
 	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
 	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/build/stim_instr.txt $(BUILD_DIR)/build/stim_data.txt
 	cd $(BUILD_DIR)													&& \
-	cp -sf ../../../sim/modelsim.ini modelsim.ini    				&& \
-	ln -sfn ../../../sim/work work
+	cp -sf "$(MAGIA_DIR)/sim/modelsim.ini" modelsim.ini    				&& \
+	ln -sfn "$(MAGIA_DIR)/sim/work" work
 	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
