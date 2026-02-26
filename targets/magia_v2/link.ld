@@ -127,8 +127,7 @@ SECTIONS
         . = ALIGN(4);
         sl2_heap  =  .;
         _sl2_heap  =  .;
-        *(.l2_heap);
-        *(.l2_heap.*)
+        . = . + L2_HEAP_SIZE;
         el2_heap  =  .;
         _el2_heap  =  .;
     } > dataram
