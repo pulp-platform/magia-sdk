@@ -12,6 +12,7 @@
 #
 #   2. add_cv32_executable_with_spatz()
 #      - Builds CV32 executable with embedded Spatz binary
+#      - Generates disassembly
 #      - Outputs to: build/bin/<executable>
 # ============================================================================
 
@@ -174,9 +175,7 @@ function(add_spatz_task)
         DEPENDS
             ${TASK_HEADER}
             ${TASK_BIN}
-    )
-    add_custom_target(${ARG_TEST_NAME}_spatz_dump
-        DEPENDS ${TASK_DUMP}
+            ${TASK_DUMP}
     )
 
     # Export to parent scope
@@ -190,7 +189,7 @@ function(add_spatz_task)
 endfunction()
 
 # Function: add_cv32_executable_with_spatz
-# Builds CV32 executable with embedded Spatz task binary
+# Builds CV32 executable with embedded Spatz task binary and generates disassembly
 # Parameters:
 #   TARGET_NAME (required): Executable name
 #   SPATZ_HEADER (required): Path to Spatz task header file
@@ -200,6 +199,7 @@ endfunction()
 #   INCLUDE_DIRS: Additional include directories
 # Output locations:
 #   Executable: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}
+#   Disassembly: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}.s
 function(add_cv32_executable_with_spatz)
     set(options)
     set(oneValueArgs TARGET_NAME SPATZ_HEADER LINK_SCRIPT CRT0_SRC)
@@ -288,5 +288,11 @@ function(add_cv32_executable_with_spatz)
         endif()
         add_dependencies(${ARG_TARGET_NAME} ${EXTRACTED_TEST_NAME}_spatz_header)
     endif()
+
+    set(ELF_DUMP "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${ARG_TARGET_NAME}.s")
+    add_custom_command(TARGET ${ARG_TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_OBJDUMP} -D -S $<TARGET_FILE:${ARG_TARGET_NAME}> > ${ELF_DUMP}
+        VERBATIM
+    )
 
 endfunction()
