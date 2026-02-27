@@ -32,3 +32,4 @@ tests/magia/mesh/gemm/*/include/*
 
 # Editor
 .vscode/
+llvm/
