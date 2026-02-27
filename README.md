@@ -81,7 +81,7 @@ The following steps assume the default target platform, `magia_v2`, on which Spa
 
 The following *optional* parameters can be specified when running the make command:
 
-`target_platform`: **magia_v1**|**magia_v2** (**Default**: magia_v2). Selects the target platform to build and run tests on. Magia V1 is the legacy mode using the CV32E40X core, whereas magia_v2 is the new platform using CV32E40P. No future support for magia_v1 is planned.
+`target_platform`: **magia_v1**|**magia_v2**|**magia_v3** (**Default**: magia_v3). Selects the target platform to build and run tests on. Magia V1 is the legacy mode using the CV32E40X core, whereas magia_v2 is the platform using CV32E40P. Magia_v3 extends V2 with per-tile PULP cluster. No future support for magia_v1 is planned.
 
 `build_mode`: **update**|**profile**|**synth** (**Default**: profile). Selects the mode that the MAGIA architecture is built.
 
@@ -111,6 +111,8 @@ The following *optional* parameters can be specified when running the make comma
 
 `spatz`: **0**|**1** (**Default**: 1). Enable compilation of GVSoC and tests with Spatz enabled
 
+`pulp_cluster`: **0**|**1** (**Default**: 1). Enable compilation of GVSoC and tests with PULP clusters enabled.
+
 `verbose`: **0**|**1** (**Default**: 0). When 1, `make build` restores the full CMake configure trace and per-file compiler command lines. Leave at 0 for concise progress output.
 
 `test`: When set on `make build` (e.g. `make build test=<test_name>`), builds only that single test target instead of the whole test suite. The name is the same test binary name used by `make run test=...`.
@@ -125,7 +127,7 @@ Once the [Prerequisites](#prerequisites) are in place:
 
     `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode>`
 
-    and/or the GVSoC module:
+    and/or the GVSoC module **NOTE: GCC AND G++ 11.2.0 AND ABOVE IS MANDATORY**:
 
     `make gvsoc <tiles>`
 
@@ -259,7 +261,7 @@ This enables GVSoC instruction traces for the cv32 cores by appending one `--tra
 
 ## Continuous Integration
 
-CI runs via GitHub Actions (`.github/workflows/github-ci.yml`). It does **not** execute tests locally — instead it mirrors the branch to a GitLab instance at `iis-git.ee.ethz.ch/github-mirror/magia-sdk-mirror` and waits for that pipeline to complete. A `GITLAB_TOKEN` secret with `read_api` scope must be configured on the GitHub repository. CI is automatically skipped for forks.
+CI runs via GitHub Actions (`.github/workflows/github-ci.yml`). It does **not** execute tests locally ? instead it mirrors the branch to a GitLab instance at `iis-git.ee.ethz.ch/github-mirror/magia-sdk-mirror` and waits for that pipeline to complete. A `GITLAB_TOKEN` secret with `read_api` scope must be configured on the GitHub repository. CI is automatically skipped for forks.
 
 ### Reading CI failure logs
 
@@ -267,9 +269,9 @@ When the GitLab pipeline fails, the workflow automatically:
 
 1. Fetches the trace (console log) for every failed GitLab job via `scripts/ci/fetch_gitlab_logs.sh`.
 2. Saves each trace as `gitlab-logs/<stage>__<job>.trace`.
-3. Prints the **last 200 lines** of each trace in the **"🔶 Show error log"** GitHub Actions step (visible in the collapsible group labelled `FAILED: <job_name>`).
+3. Prints the **last 200 lines** of each trace in the **"? Show error log"** GitHub Actions step (visible in the collapsible group labelled `FAILED: <job_name>`).
 
-To read the full logs, download the `gitlab-logs` artifact from the failed GitHub Actions run — it contains the complete `.trace` files for all failed jobs, plus any job artifacts (e.g. build outputs) if the GitLab job uploaded them.
+To read the full logs, download the `gitlab-logs` artifact from the failed GitHub Actions run ? it contains the complete `.trace` files for all failed jobs, plus any job artifacts (e.g. build outputs) if the GitLab job uploaded them.
 
 ## Code Style
 
@@ -287,7 +289,7 @@ Files outside the branch's diff are never touched, avoiding noisy reformats of p
 
 ### Format CI
 
-The `Format Check` GitHub Actions workflow (`.github/workflows/format-ci.yml`) runs on every push and pull request. It invokes `scripts/ci/format-changed.sh check --committed`, which runs `clang-format --dry-run --Werror` on the same set of changed files. The job fails if any of those files are not properly formatted — run `make format` locally and commit the result to fix it.
+The `Format Check` GitHub Actions workflow (`.github/workflows/format-ci.yml`) runs on every push and pull request. It invokes `scripts/ci/format-changed.sh check --committed`, which runs `clang-format --dry-run --Werror` on the same set of changed files. The job fails if any of those files are not properly formatted ? run `make format` locally and commit the result to fix it.
 
 ### VS Code setup
 
