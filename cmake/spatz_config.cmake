@@ -1,11 +1,11 @@
 # Spatz task global config
 
-set(SPATZ_LLVM_PATH "/opt/riscv/spatz-14-llvm" CACHE PATH "Path to Spatz LLVM installation")
 
 # Toolchain paths [MAGIA/spatz/sw/Makefile]
-find_program(SPATZ_CLANG clang PATHS "${SPATZ_LLVM_PATH}/bin" REQUIRED)
-find_program(SPATZ_OBJCOPY llvm-objcopy PATHS "${SPATZ_LLVM_PATH}/bin" REQUIRED)
-find_program(SPATZ_OBJDUMP llvm-objdump PATHS "${SPATZ_LLVM_PATH}/bin" REQUIRED)
+set(SPATZ_LLVM_PATH "${CMAKE_SOURCE_DIR}/../llvm/install" CACHE PATH "Path to Spatz LLVM installation")
+set(SPATZ_CLANG "${SPATZ_LLVM_PATH}/bin/clang" CACHE PATHS "a")
+set(SPATZ_OBJCOPY "${SPATZ_LLVM_PATH}/bin/llvm-objcopy" CACHE PATHS "b")
+set(SPATZ_OBJDUMP "${SPATZ_LLVM_PATH}/bin/llvm-objdump" CACHE PATHS "c")
 
 # Spatz configuration options [MAGIA/Makefile]
 set(SPATZ_RVD 0 CACHE INT "0: 32-bit TCDM w/ ELEN=32, 1: 64-bit TCDM w/ ELEN=64")

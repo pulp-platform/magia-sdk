@@ -48,6 +48,14 @@ gui 			?= 0
 tiles 			?= 2
 spatz_tests		?= 1
 
+LLVM_CMAKE			?= cmake
+LLVM_DIR			?= llvm
+LLVM_REPO			?= git@github.com:pulp-platform/llvm-project.git
+LLVM_COMMIT			?= b494f2d8dde88723026db8ec16ac6c7ee1e140ca
+LLVM_INSTALL_DIR	?= $(CURR_DIR)/llvm/install
+LLVM_BUILD_DIR		?= $(LLVM_DIR)/llvm-project/build
+LLVM_JOBS			?= 8
+
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
@@ -80,7 +88,7 @@ ifeq ($(compiler), GCC_MULTILIB)
 	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/$(target_platform)/include/tile.h
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz_tests) -B build --trace-expand
+	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz_tests) -DSPATZ_LLVM_PATH=$(LLVM_INSTALL_DIR) -B build --trace-expand
 	cmake --build build --verbose
 
 set_mesh:
@@ -193,3 +201,28 @@ gvsoc_init:
 	git checkout lz/magia-v2-core && \
 	cd ../pulp && \
 	git checkout lz/magia-v2-pulp
+
+llvm:
+	mkdir -p $(LLVM_DIR)
+	if [ ! -d "$(LLVM_DIR)/llvm-project/.git" ]; then \
+		cd $(LLVM_DIR) && git clone $(LLVM_REPO); \
+	fi
+	cd $(LLVM_DIR)/llvm-project && \
+	git checkout $(LLVM_COMMIT) && \
+	git submodule update --init --recursive --jobs=$(LLVM_JOBS) .
+	mkdir -p $(LLVM_INSTALL_DIR)
+	cd $(LLVM_DIR)/llvm-project && mkdir -p build && cd build && \
+	$(LLVM_CMAKE) \
+		-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
+		-DCMAKE_CXX_COMPILER=${CXX} \
+		-DCMAKE_C_COMPILER=${CC} \
+		-DLLVM_OPTIMIZED_TABLEGEN=True \
+		-DLLVM_ENABLE_PROJECTS="clang;lld" \
+		-DLLVM_TARGETS_TO_BUILD="RISCV" \
+		-DLLVM_DEFAULT_TARGET_TRIPLE=riscv32-unknown-elf \
+		-DLLVM_ENABLE_LLD=False \
+		-DLLVM_APPEND_VC_REV=ON \
+		-DCMAKE_BUILD_TYPE=Release \
+		../llvm && \
+	make -j$(LLVM_JOBS) all && \
+	make install
