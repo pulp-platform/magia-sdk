@@ -51,6 +51,14 @@ gui 			?= 0
 tiles 			?= 2
 spatz_tests		?= 1
 
+LLVM_CMAKE			?= cmake
+LLVM_DIR			?= llvm
+LLVM_REPO			?= git@github.com:pulp-platform/llvm-project.git
+LLVM_COMMIT			?= b494f2d8dde88723026db8ec16ac6c7ee1e140ca
+LLVM_INSTALL_DIR	?= $(CURR_DIR)/llvm/install
+LLVM_BUILD_DIR		?= $(LLVM_DIR)/llvm-project/build
+LLVM_JOBS			?= 8
+
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
@@ -205,3 +213,28 @@ gvsoc_venv:
 	python -m venv gvsoc_venv && \
 	source gvsoc_venv/bin/activate && \
 	pip install .
+
+llvm:
+	mkdir -p $(LLVM_DIR)
+	if [ ! -d "$(LLVM_DIR)/llvm-project/.git" ]; then \
+		cd $(LLVM_DIR) && git clone $(LLVM_REPO); \
+	fi
+	cd $(LLVM_DIR)/llvm-project && \
+	git checkout $(LLVM_COMMIT) && \
+	git submodule update --init --recursive --jobs=$(LLVM_JOBS) .
+	mkdir -p $(LLVM_INSTALL_DIR)
+	cd $(LLVM_DIR)/llvm-project && mkdir -p build && cd build && \
+	$(LLVM_CMAKE) \
+		-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
+		-DCMAKE_CXX_COMPILER=${CXX} \
+		-DCMAKE_C_COMPILER=${CC} \
+		-DLLVM_OPTIMIZED_TABLEGEN=True \
+		-DLLVM_ENABLE_PROJECTS="clang;lld" \
+		-DLLVM_TARGETS_TO_BUILD="RISCV" \
+		-DLLVM_DEFAULT_TARGET_TRIPLE=riscv32-unknown-elf \
+		-DLLVM_ENABLE_LLD=False \
+		-DLLVM_APPEND_VC_REV=ON \
+		-DCMAKE_BUILD_TYPE=Release \
+		../llvm && \
+	make -j$(LLVM_JOBS) all && \
+	make install
