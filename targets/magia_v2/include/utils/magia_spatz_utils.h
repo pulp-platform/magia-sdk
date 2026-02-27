@@ -80,7 +80,7 @@ static inline void spatz_init(uint32_t spatz_start_addr) {
     spatz_set_func(spatz_start_addr);
     spatz_clk_en();
     while (mmio32(SPATZ_READY) == 0){
-        printf("Waiting for Spatz to be ready...\n");
+        printf("[CV32] Waiting for Spatz to be ready...\n");
     };
 }
 
