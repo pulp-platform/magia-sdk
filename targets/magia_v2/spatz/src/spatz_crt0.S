@@ -21,11 +21,12 @@
  *
  */
 
-#define START_ADDR        0x00001704
-#define TASKBIN_ADDR      0x00001708
-#define DATA_ADDR         0x0000170C
-#define RETURN_ADDR       0x00001710
-#define DONE_ADDR         0x00001714
+#define READY_ADDR        0x00001704
+#define START_ADDR        0x00001708
+#define TASKBIN_ADDR      0x0000170C
+#define DATA_ADDR         0x00001710
+#define RETURN_ADDR       0x00001714
+#define DONE_ADDR         0x00001718
 #define MSTATUS_VS        0x200        // Vector Status [9:8] = 01
 #define MSTATUS_MIE       0x8          // Machine Interrupt Enable
 #define MIE_MEIE          0x800        // External interrupt enable
@@ -94,7 +95,19 @@ _start:
     li      t0, MSTATUS_MIE
     csrs    mstatus, t0
 
-    /* Fall through to dispatcher loop */
+    /* Signal ready to CV32 - now ready to receive interrupts */
+    li      t0, READY_ADDR
+    li      t1, 1
+    sw      t1, 0(t0)
+
+    /* First WFI - after this we deassert READY */
+    wfi
+
+    /* Deassert READY after first wakeup (only once) */
+    li      t0, READY_ADDR
+    sw      zero, 0(t0)
+
+    /* Fall through to main dispatcher loop */
 
 dispatcher_loop:
     /* Wait for interrupt from CV32 */
@@ -109,7 +122,7 @@ _trap_handler:
     csrr    t0, mcause
     bltz    t0, _handle_interrupt   // mcause[31]=1 → interrupt
 
-    /* EXCEPTION: Write error code to EXCHANGE_REG, signal DONE, halt */
+    /* EXCEPTION: Write error code to RETURN_ADDR, signal DONE, halt */
 _handle_exception:
     csrr    t1, mcause      // Read full mcause
     andi    t1, t1, 0xFF    // Extract exception code [7:0]
@@ -131,7 +144,7 @@ _handle_interrupt:
     li      t1, 11
     bne     t0, t1, _trap_ret
 
-    /* Read task address from EXCHANGE_REG and save it in t1 */
+    /* Read task address from TASKBIN_ADDR and save it in t1 */
     li      t0, TASKBIN_ADDR
     lw      t1, 0(t0)
     beqz    t1, _trap_ret

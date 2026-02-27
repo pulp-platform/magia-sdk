@@ -26,11 +26,12 @@
 #include "addr_map/tile_addr_map.h"
 
 #define SPATZ_CLK_EN   (SPATZ_CTRL_BASE + 0x00)
-#define SPATZ_START    (SPATZ_CTRL_BASE + 0x04)
-#define SPATZ_TASKBIN  (SPATZ_CTRL_BASE + 0x08)
-#define SPATZ_DATA     (SPATZ_CTRL_BASE + 0x0C)
-#define SPATZ_RETURN   (SPATZ_CTRL_BASE + 0x10)
-#define SPATZ_DONE     (SPATZ_CTRL_BASE + 0x14)
+#define SPATZ_READY    (SPATZ_CTRL_BASE + 0x04)
+#define SPATZ_START    (SPATZ_CTRL_BASE + 0x08)
+#define SPATZ_TASKBIN  (SPATZ_CTRL_BASE + 0x0C)
+#define SPATZ_DATA     (SPATZ_CTRL_BASE + 0x10)
+#define SPATZ_RETURN   (SPATZ_CTRL_BASE + 0x14)
+#define SPATZ_DONE     (SPATZ_CTRL_BASE + 0x18)
 
 static inline void spatz_clk_en(void) {
     mmio32(SPATZ_CLK_EN) = 1;
