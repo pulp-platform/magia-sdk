@@ -17,7 +17,7 @@
  * Authors: Victor Isachi <victor.isachi@unibo.it>
  * Alberto Dequino <alberto.dequino@unibo.it>
  * Luca Balboni <luca.balboni10@studio.unibo.it>
- * 
+ *
  * MAGIA Tile Address Map
  */
 
@@ -39,8 +39,10 @@
 #define FSYNC_END      (0x000006FF)
 #define EU_BASE        (0x00000700)
 #define EU_END         (0x000016FF)
-#define RESERVED_START (0x00001700)   
-#define RESERVED_END   (0x0000FFFF)   
+#define SPATZ_CTRL_BASE (0x00001700)
+#define SPATZ_CTRL_END  (0x000017FF)
+#define RESERVED_START (0x00001800)
+#define RESERVED_END   (0x0000FFFF)
 #define STACK_START    (0x00010000)
 #define STACK_END      (0x0001FFFF)
 #define L1_BASE        (0x00020000)
@@ -54,11 +56,11 @@
 #define IDMA_BASE_AXI2OBI (IDMA_BASE)           // direction=0, L2 to L1
 #define IDMA_BASE_OBI2AXI (IDMA_BASE + 0x200)   // direction=1, L1 to L2
 
-#define MESH_X_TILES 2
-#define MESH_Y_TILES 2
+#define MESH_X_TILES 1
+#define MESH_Y_TILES 1
 #define NUM_HARTS    (MESH_X_TILES*MESH_Y_TILES)
-#define MAX_SYNC_LVL 2
-#define MESH_2_POWER 1
+#define MAX_SYNC_LVL 0
+#define MESH_2_POWER 0
 
 #define STR_OFFSET  (0x00000000)
 #define STR_BASE    (RESERVED_START + STR_OFFSET)

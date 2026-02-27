@@ -36,6 +36,8 @@ The following *optional* parameters can be specified when running the make comma
 
 `profile_cmp|cmi|cmo|snc`: **0**|**1** (**Default**: 0). Activates the profiling utilities for computing|comunication(input line)|comunication(output line)|synchronization
 
+`spatz_tests`: **0**|**1** (**Default**: 1). Enable compilation of tests with Spatz task (along with default mesh tests)
+
 0. In case you are using this SDK as non-submodule: Clone the [MAGIA](https://github.com/pulp-platform/MAGIA/tree/main) repository:
 
     `git clone git@github.com:pulp-platform/MAGIA.git`
@@ -51,9 +53,9 @@ The following *optional* parameters can be specified when running the make comma
 1. Initialize the GVSoC submodule:
 
     `make gvsoc_init`
-    
+
 2. Build the Magia architecture (*this command may take time and return an error, please be patient.*):
-        
+
     `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode>`
 
     And/Or the GVSoC module:
@@ -90,7 +92,7 @@ The following *optional* parameters can be specified when running the make comma
 
     `make run test=<test_name> <platform>`
 
-***WARNING: YOU HAVE TO REBUILD BOTH RTL/GVSOC AND THE TEST BINARY EACH TIME YOU WANT TO TEST A MAGIA MESH WITH A DIFFERENT NUMBER OF TILES.*** 
+***WARNING: YOU HAVE TO REBUILD BOTH RTL/GVSOC AND THE TEST BINARY EACH TIME YOU WANT TO TEST A MAGIA MESH WITH A DIFFERENT NUMBER OF TILES.***
 
 If you want to run gvsoc or a binary from outside the magia-sdk directory you can edit the **GVSOC_ABS_PATH** and **BIN_ABS_PATH** option in Makefile or directly on the *run* command line.
 
@@ -122,7 +124,7 @@ To add your own test, you have to integrate a new test folder inside the **tests
 4. Add to the *\<test_name\>* directory:
 
     1. A new CMakeList.txt file following this template:
-    
+
             set(TEST_NAME <test_name>)
 
             file(GLOB_RECURSE TEST_SRCS
@@ -142,10 +144,80 @@ To add your own test, you have to integrate a new test folder inside the **tests
                     TARGET ${TEST_NAME}
                     POST_BUILD
                     COMMAND ${CMAKE_OBJDUMP} -dhS -Mmarch=${ISA} $<TARGET_FILE:${TEST_NAME}> > $<TARGET_FILE:${TEST_NAME}>.s)
-    
+
     2. An **src** directory containing your test's source (.c) files
 
     3. An **include** directory containing your test's header (.h) files
+
+## Spatz integration in MAGIA
+
+This SDK provides a flow to compile C code for the Spatz vector accelerator, embed the resulting binary into the main CV32 executable, and manage the execution. This allows the main RISC-V core (CV32) to offload tasks to the Spatz accelerator.
+
+Examples using this flow are available in the `tests/spatz_on_magia/` directory. Each test sub-folder contains a `main.c` for the CV32 host and a `spatz_task/` directory with the source code for the Spatz accelerator.
+
+For more informations about hardware integration, configuration parameters, control interface, programming APIs and execution flow please refer to the [MAGIA-Spatz README](https://github.com/pulp-platform/MAGIA/tree/lb/magia-spatz/spatz)
+
+### Prerequisites
+
+The compilation flow requires a dedicated Spatz LLVM toolchain.
+You can install it automatically by running the following command from the SDK root:
+
+```sh
+make llvm
+```
+This will clone the required repository and build the toolchain in the `llvm/install` directory. Alternatively, if you have a pre-built toolchain, you can specify its location by passing the `LLVM_INSTALL_DIR` variable to the make command:
+```sh
+make build LLVM_INSTALL_DIR=/path/to/your/llvm/install
+```
+
+### Compilation Flow
+
+The compilation process is managed by two CMake functions defined in `cmake/spatz_helpers.cmake`: `add_spatz_task` and `add_cv32_executable_with_spatz`.
+
+#### 1. `add_spatz_task`
+This function compiles the C code for the Spatz accelerator and prepares it for embedding.
+
+*   **What it does**:
+    1.  Compiles the Spatz source code into an ELF binary using a dedicated `clang` compiler from the Spatz LLVM toolchain.
+    2.  Converts the ELF file into a raw binary format (`.bin`).
+    3.  Uses the `scripts/bin2header.py` script to transform the raw binary into a C header file. This header contains a `uint32_t` array holding the machine code of the Spatz task. This array is placed in a special linker section named `.spatz_binary`.
+    4.  Runs the `scripts/extract_task_symbols.sh` script to append additional information to the header. This script inspects the Spatz ELF file and extracts the addresses of key symbols, defining them as macros. These symbols include:
+        *   `SPATZ_BINARY_START`: The starting memory address where the Spatz binary will be loaded. This is resolved by the CV32 linker.
+        *   `SPATZ_DISPATCHER_LOOP`: The entry point for the Spatz control loop.
+        *   Task function addresses (e.g., `MY_TASK`): Entry points for specific functions within the Spatz code that can be called from the CV32 host.
+
+#### 2. `add_cv32_executable_with_spatz`
+This function compiles the main application for the CV32 core and embeds the Spatz binary within it.
+
+*   **What it does**:
+    1.  Compiles the C source code for the CV32 processor.
+    2.  Includes the header file generated by `add_spatz_task`. By including this header, the Spatz binary (as a C array) becomes part of the CV32 application's source.
+    3.  Links the compiled CV32 code with the Spatz binary data. The main linker script (`targets/magia_v2/link.ld`) ensures that the `.spatz_binary` section is placed at the correct memory address.
+
+### Example Usage
+To use this flow, you need to call the two functions in your `CMakeLists.txt`. The convention is to have separate sources for the host (CV32) and the accelerator (Spatz).
+
+Here is an example from `tests/spatz_on_magia/hello_spatz/CMakeLists.txt`:
+```cmake
+set(TEST_NAME hello_spatz)
+
+# Step 1: Compile the Spatz task and generate the C header
+add_spatz_task(
+    TEST_NAME ${TEST_NAME}
+    TASK_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/spatz_task/hello_task.c
+    FIRST_TASK_NAME hello_task
+)
+
+# Step 2: Compile the CV32 executable and embed the Spatz binary
+add_cv32_executable_with_spatz(
+    TARGET_NAME ${TEST_NAME}
+    SPATZ_HEADER ${SPATZ_HEADER}
+    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/main.c
+)
+```
+
+### Run Tests
+To run test a special Makefile rule can be used: `make run_with_spatz test=<test_name> platform=<rtl|gvsoc>`.
 
 ## Folder Structure
 
@@ -171,7 +243,7 @@ Contains the weak definitions of this SDK APIs. These are the API instruction th
 Contains the architecture-specific implementation and source code for the HAL APIs. Despite each implementation having different names, thanks to an aliasing system the programmer can use the same name for the same API instruction on different architectures.
 
 ### devices
-Nothing there. 
+Nothing there.
 
 If MAGIA ever evolves to have a host-offload mechanism, this folder will contain the trampoline functions.
 
@@ -180,4 +252,3 @@ Contains utility files for *cmake* automatic compilation.
 
 ### gvsoc
 A submodule containing the Germain Virtual System on Chip, built to simulate MAGIA (and other PULP-related platforms).
-
