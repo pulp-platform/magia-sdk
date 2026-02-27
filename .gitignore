@@ -31,6 +31,15 @@ llvm/
 
 # Generated test inputs
 tests/magia/mesh/gemm/*/include/*
+*.log
+
+# nn_is_bench dataset, produced at build time by scripts/gen_nn_is_data.py.
+# Deliberately not committed: nn_is_data.h alone is 6.3 MB of hex literals at the
+# default geometry, and it is fully reproducible from --size/--timeslots/--seed.
+tests/spatz_pulp_on_magia/nn_is_bench/include/nn_is_data.h
+tests/spatz_pulp_on_magia/nn_is_bench/include/nn_is_size.h
+
+scripts/gvsoc2perfetto-rs
 
 # Editor
 .vscode/
