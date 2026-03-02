@@ -143,7 +143,7 @@ int main(void){
     uint32_t obi_addr_y_0 = obi_addr_w + (tile_w * t_size * 2);
     uint32_t obi_addr_y_1 = obi_addr_y_0 + (tile_h * t_size * 2);
 
-    sentinel_start();
+    //sentinel_start();
 
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x, len_x, std_x, reps_x);
     #if STALLING == 0
@@ -259,8 +259,8 @@ int main(void){
         }
     }
 
-    sentinel_end();
-    stnl_r();
+    //sentinel_end();
+    //stnl_r();
 
     /**
      * 5. Check results

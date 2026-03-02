@@ -36,6 +36,8 @@ int fsync32_init(fsync_controller_t *ctrl) {
  * @param dir Direction of the tree, 0 = Horizontal 1 = Vertical
  */
 int fsync32_sync_level(fsync_controller_t *ctrl, uint32_t level, uint8_t dir){
+    if(MESH_2_POWER == 0)
+        return 0;
     if(level >= MAX_SYNC_LVL){
         printf("Error: synchronization level is too high! Maximum level is: %d\n", MAX_SYNC_LVL - 1);
         return 1;
@@ -76,6 +78,8 @@ int fsync32_getgroup_level(fsync_controller_t *ctrl, uint32_t level, uint32_t id
  * It just works - Todd howard
  */
 int fsync32_sync_row(fsync_controller_t *ctrl) {
+    if(MESH_2_POWER == 0)
+        return 0;
     uint32_t y_id = GET_Y_ID(get_hartid()) % (MESH_Y_TILES/2);
     fsync(y_id * 2, (0b101010101 >> ((5 - MESH_2_POWER) * 2)));
     return 0;
@@ -85,6 +89,8 @@ int fsync32_sync_row(fsync_controller_t *ctrl) {
  * Synchronize the tile with the others of the same mesh column.
  */
 int fsync32_sync_col(fsync_controller_t *ctrl) {
+    if(MESH_2_POWER == 0)
+        return 0;
     uint32_t x_id = GET_X_ID(get_hartid()) % (MESH_X_TILES/2);
     fsync(((x_id * 2) + 1), (0b101010101 >> ((5 - MESH_2_POWER) * 2)));
     return 0;
@@ -94,6 +100,8 @@ int fsync32_sync_col(fsync_controller_t *ctrl) {
  * Synchronize the tile with the others of the diagonal.
  */
 int fsync32_sync_diag(fsync_controller_t *ctrl) {
+    if(MESH_2_POWER == 0)
+        return 0;
     if(GET_X_ID(get_hartid()) != GET_Y_ID(get_hartid())){
         printf("Error: non-diagonal tile attempted to synchronize with the diagonal.\n");
         return 1;
@@ -113,6 +121,8 @@ int fsync32_sync_diag(fsync_controller_t *ctrl) {
  * @param bid Barrier ID for synchronization
  */
 int fsync32_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid) {
+    if(MESH_2_POWER == 0)
+        return 0;
     uint32_t aggregate = 0x00000000;
     uint32_t hartid = get_hartid();
     if(n_tiles <= 2){
@@ -160,6 +170,8 @@ int fsync32_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8
  * Synchronizes with the tile on the left.
  */
 int fsync32_sync_left(fsync_controller_t *ctrl){
+    if(MESH_2_POWER == 0)
+        return 0;
     uint32_t hartid = get_hartid();
     if(GET_X_ID(hartid) == 0)
         return 1;
@@ -174,6 +186,8 @@ int fsync32_sync_left(fsync_controller_t *ctrl){
  * Synchronizes with the tile on the right.
  */
 int fsync32_sync_right(fsync_controller_t *ctrl){
+    if(MESH_2_POWER == 0)
+        return 0;
     uint32_t hartid = get_hartid();
     if(GET_X_ID(hartid) == MESH_X_TILES - 1)
         return 1;
@@ -188,6 +202,8 @@ int fsync32_sync_right(fsync_controller_t *ctrl){
  * Synchronizes with the tile above.
  */
 int fsync32_sync_up(fsync_controller_t *ctrl){
+    if(MESH_2_POWER == 0)
+        return 0;
     uint32_t hartid = get_hartid();
     if(GET_Y_ID(hartid) == 0)
         return 1;
@@ -202,6 +218,8 @@ int fsync32_sync_up(fsync_controller_t *ctrl){
  * Synchronizes with the tile below.
  */
 int fsync32_sync_down(fsync_controller_t *ctrl){
+    if(MESH_2_POWER == 0)
+        return 0;
     uint32_t hartid = get_hartid();
     if(GET_Y_ID(hartid) == MESH_Y_TILES - 1)
         return 1;
@@ -217,6 +235,8 @@ int fsync32_sync_down(fsync_controller_t *ctrl){
  * Synchronizes the entire mesh.
  */
 int fsync32_sync_global(fsync_controller_t *ctrl){
+    if(MESH_2_POWER == 0)
+        return 0;
     fsync(0, (uint32_t) (0xFFFFFFFF >> (32 - MAX_SYNC_LVL)));
     return 0;
 }
@@ -230,6 +250,8 @@ void fsync32_vnbr(fsync_controller_t *ctrl){
 }
 
 void fsync32_hring(fsync_controller_t *ctrl){
+    if(MESH_2_POWER == 0)
+        return;
   uint32_t hartid   = get_hartid();
   uint32_t hartid_x = GET_X_ID(hartid);
   uint32_t hartid_y = GET_Y_ID(hartid);
@@ -242,6 +264,8 @@ void fsync32_hring(fsync_controller_t *ctrl){
 }
 
 void fsync32_vring(fsync_controller_t *ctrl){
+    if(MESH_2_POWER == 0)
+        return;
   uint32_t hartid   = get_hartid();
   uint32_t hartid_x = GET_X_ID(hartid);
   uint32_t hartid_y = GET_Y_ID(hartid);

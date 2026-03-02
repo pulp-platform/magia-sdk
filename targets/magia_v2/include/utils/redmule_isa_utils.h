@@ -92,9 +92,11 @@ inline void redmule_marith(volatile uint32_t y_base, volatile uint32_t w_base, v
 
 inline int redmule_mm_mcnfig(volatile uint16_t k_size, volatile uint16_t m_size, volatile uint16_t n_size){
   volatile uint32_t mcfg_reg0 = (k_size << 16) | (m_size << 0);
-  volatile uint32_t mcfg_reg1 = n_size << 0;
+  volatile uint32_t mcfg_reg1 = (0x1 << 25) | (0x1 << 23) | (0x1 << 20) | (n_size << 0);  
+  volatile uint32_t mcfg_reg2 = 0;
   HWPE_WRITE(mcfg_reg0, REDMULE_REG_OFFS + REDMULE_MCFG0_PTR);
   HWPE_WRITE(mcfg_reg1, REDMULE_REG_OFFS + REDMULE_MCFG1_PTR);
+  HWPE_WRITE(mcfg_reg2, REDMULE_REG_OFFS + REDMULE_MCFG2_PTR);
   return 0;
 }
 
