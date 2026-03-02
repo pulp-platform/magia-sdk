@@ -37,12 +37,16 @@ _start:
   csrrs   zero, mie, t0
 
   # clear the bss segment
+  csrr    t2, mhartid
+  bnez    t2, skip_bss_clear
   la      t0, _bss_start
   la      t1, _bss_end
 1:
   sw      zero, 0(t0)
   addi    t0, t0, 4
   bltu    t0, t1, 1b
+
+skip_bss_clear:
 
   /* Stack initialization */
   la   x2, stack
@@ -71,7 +75,7 @@ _fini:
   ret
 
 exit:
- csrr    a0, mhartid 
+ csrr    a0, mhartid
  andi    s0, s0, 0x7ff
  li      a1, 0xCCff0000
  li      a2, 0x800
