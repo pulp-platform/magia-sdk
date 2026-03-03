@@ -157,6 +157,8 @@ Examples using this flow are available in the `tests/spatz_on_magia/` directory.
 
 For more informations about hardware integration, configuration parameters, control interface, programming APIs and execution flow please refer to the [MAGIA-Spatz README](https://github.com/pulp-platform/MAGIA/tree/lb/magia-spatz/spatz)
 
+> **Warning:** The external README linked above is tailored for baremetal hardware development. Some information may overlap or contain minor inaccuracies regarding the specific abstractions and automation provided by this SDK.
+
 ### Prerequisites
 
 The compilation flow requires a dedicated Spatz LLVM toolchain.
