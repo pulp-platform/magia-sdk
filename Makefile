@@ -20,8 +20,10 @@
 
 SHELL 			:= /bin/bash
 
-MAGIA_DIR 		?= ../MAGIA
-BUILD_DIR 		?= $(MAGIA_DIR)/sw/tests/$(test)
+BUILD_DIR 		?= ../sw/tests/$(test)
+MAGIA_DIR 		?= ../
+MAGIA_DIR_ABS	?= $(abspath $(MAGIA_DIR))
+BUILD_DIR_ABS	?= $(MAGIA_DIR_ABS)/sw/tests/$(test)
 GVSOC_DIR 		?= ./gvsoc
 CURR_DIR		?= $(shell pwd)
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
@@ -118,8 +120,8 @@ else ifeq ($(platform), rtl)
 	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
 	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/build/stim_instr.txt $(BUILD_DIR)/build/stim_data.txt
 	cd $(BUILD_DIR)													&& \
-	cp -sf "$(MAGIA_DIR)/sim/modelsim.ini" modelsim.ini    				&& \
-	ln -sfn "$(MAGIA_DIR)/sim/work" work
+	cp -sf ../../../sim/modelsim.ini modelsim.ini    				&& \
+	ln -sfn ../../../sim/work work
 	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
@@ -142,7 +144,19 @@ endif
 ifeq ($(platform), gvsoc)
 	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin
 else ifeq ($(platform), rtl)
-	$(MAKE) run test=$(test) platform=rtl
+	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
+	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
+	objcopy --srec-len 1 --output-target=srec $(BUILD_DIR_ABS)/build/verif $(BUILD_DIR_ABS)/build/verif.s19
+	scripts/parse_s19.pl $(BUILD_DIR_ABS)/build/verif.s19 > $(BUILD_DIR_ABS)/build/verif.txt
+	python3 scripts/s19tomem.py $(BUILD_DIR_ABS)/build/verif.txt $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
+	cd $(BUILD_DIR_ABS)													&& \
+	cp -sf "$(MAGIA_DIR_ABS)/sim/modelsim.ini" modelsim.ini    				&& \
+	ln -sfn "$(MAGIA_DIR_ABS)/sim/work" work
+	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BUILD_DIR_ABS)/build/verif > $(BUILD_DIR_ABS)/build/verif.dump
+	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BUILD_DIR_ABS)/build/verif > $(BUILD_DIR_ABS)/build/verif.objdump
+	python3 scripts/objdump2itb.py $(BUILD_DIR_ABS)/build/verif.objdump > $(BUILD_DIR_ABS)/build/verif.itb
+	cd $(MAGIA_DIR_ABS) 												&& \
+	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv)
 else
 	$(error Only rtl and gvsoc are supported as platforms.)
 endif
