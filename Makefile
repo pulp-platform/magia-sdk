@@ -25,6 +25,9 @@ include scripts/deps.env
 CMAKE_BUILDDIR  ?= $(CURR_DIR)/build
 MAGIA_RTL_DIR 	?= ..
 BUILD_DIR 		?= $(MAGIA_RTL_DIR)/sw/tests/$(test)
+MAGIA_DIR 		?= ../
+MAGIA_DIR_ABS	?= $(abspath $(MAGIA_DIR))
+BUILD_DIR_ABS	?= $(MAGIA_DIR_ABS)/sw/tests/$(test)
 GVSOC_DIR 		?= ./gvsoc
 CURR_DIR		?= $(shell pwd)
 CMAKE_BUILDDIR  ?= $(CURR_DIR)/build
@@ -131,8 +134,8 @@ else ifeq ($(platform), rtl)
 	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
 	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/build/stim_instr.txt $(BUILD_DIR)/build/stim_data.txt
 	cd $(BUILD_DIR)													&& \
-	cp -sf "$(MAGIA_DIR)/sim/modelsim.ini" modelsim.ini    				&& \
-	ln -sfn "$(MAGIA_DIR)/sim/work" work
+	cp -sf ../../../sim/modelsim.ini modelsim.ini    				&& \
+	ln -sfn ../../../sim/work work
 	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
