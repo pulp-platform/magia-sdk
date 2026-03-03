@@ -23,7 +23,7 @@
 #ifndef FSYNC_ISA_UTILS_H
 #define FSYNC_ISA_UTILS_H
 
-#include "printf_wrapper.h"
+#include "printf.h"
 #include "addr_map/tile_addr_map.h"
 #include "regs/tile_ctrl.h"
 #include "performance_utils.h"

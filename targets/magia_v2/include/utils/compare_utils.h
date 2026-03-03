@@ -5,7 +5,7 @@
 #include <math.h>
 
 #include "magia_tile_utils.h"
-#include "printf_wrapper.h"
+#include "printf.h"
 
 #define TOLL 0x0011
 
