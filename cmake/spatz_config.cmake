@@ -72,8 +72,7 @@ set(SPATZ_COMPILE_FLAGS
     "-ffunction-sections"
     "-fdata-sections"
     "-fPIC"
-    "-fno-builtin-memset"
-    "-fno-builtin-memcpy"
+    "-fno-builtin"
     "-mcmodel=medany"
 )
 

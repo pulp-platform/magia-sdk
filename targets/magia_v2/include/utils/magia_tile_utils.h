@@ -23,7 +23,7 @@
 #ifndef MAGIA_TILE_UTILS_H
 #define MAGIA_TILE_UTILS_H
 
-#include "printf_wrapper.h"
+#include "printf.h"
 
 #define mmio64(x) (*(volatile uint64_t *)(x))
 #define mmio32(x) (*(volatile uint32_t *)(x))

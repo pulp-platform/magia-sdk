@@ -87,6 +87,7 @@ function(add_spatz_task)
     set(TASK_BIN "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.bin")
     set(TASK_HEADER "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}_bin.h")
     set(TASK_DUMP "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.dump")
+    set(SPATZ_IO_SRC "${CMAKE_SOURCE_DIR}/targets/magia_v2/src/io.c")
 
     set(INCLUDE_FLAGS "")
     # Add targets/magia_v2 include paths
@@ -124,9 +125,11 @@ function(add_spatz_task)
             -Wl,--defsym,__first_task=${ARG_FIRST_TASK_NAME}
             -o ${TASK_ELF}
             ${TASK_CRT0_OBJ}
+            ${SPATZ_IO_SRC}
             ${ARG_TASK_SOURCES}
         DEPENDS
             ${TASK_CRT0_OBJ}
+            ${SPATZ_IO_SRC}
             ${ARG_TASK_SOURCES}
             ${ARG_LINKER_SCRIPT}
         COMMENT "[SPATZ] Building ELF..."
