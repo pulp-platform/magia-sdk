@@ -1,7 +1,5 @@
+#include "tile.h"
 #include "onnx_clip_params.h"
-
-#include "magia_spatz_utils.h"
-#include "magia_tile_utils.h"
 
 int onnx_clip_task(void)
 {

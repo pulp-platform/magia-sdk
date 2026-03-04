@@ -71,7 +71,7 @@ extern uint32_t eu_redmule_is_busy(eu_controller_t *ctrl);
 extern uint32_t eu_redmule_is_done(eu_controller_t *ctrl);
 
 //=============================================================================
-// iDMA-specific Event Functions  
+// iDMA-specific Event Functions
 //=============================================================================
 
 /**
@@ -103,7 +103,7 @@ extern uint32_t eu_idma_wait_direction(eu_controller_t *ctrl, uint32_t direction
 extern uint32_t eu_idma_wait_a2o(eu_controller_t *ctrl, eu_wait_mode_t mode);
 
 /**
- * @brief Wait for L1->L2 (OBI2AXI) completion specifically  
+ * @brief Wait for L1->L2 (OBI2AXI) completion specifically
  * @param mode Wait mode (polling, WFE, etc.)
  * @return Non-zero if L1->L2 completed, 0 if timeout/error
  */
@@ -192,10 +192,30 @@ extern uint32_t eu_fsync_is_done(eu_controller_t *ctrl);
  */
 extern uint32_t eu_fsync_has_error(eu_controller_t *ctrl);
 
+//=============================================================================
+// Spatz-specific Event Functions
+//=============================================================================
+
+/**
+ * @brief Initialize Event Unit for Spatz events
+ */
+extern void eu_spatz_init(eu_controller_t *ctrl, uint32_t enable_irq);
+
+/**
+ * @brief Wait for Spatz completion in WFE mode
+ */
+extern void eu_spatz_wait(eu_controller_t *ctrl, eu_wait_mode_t mode);
+
+/**
+ * @brief Check if Spatz has completed, non-blocking
+ * @return Non-zero if Spatz completed
+ */
+extern uint32_t eu_spatz_is_done(eu_controller_t *ctrl);
+
 struct eu_controller_api {
     void (*init) (eu_controller_t *ctrl);
     void (*redmule_init) (eu_controller_t *ctrl, uint32_t enable_irq);
-    uint32_t (*redmule_wait) (eu_controller_t *ctrl, eu_wait_mode_t mode); 
+    uint32_t (*redmule_wait) (eu_controller_t *ctrl, eu_wait_mode_t mode);
     uint32_t (*redmule_is_busy) (eu_controller_t *ctrl);
     uint32_t (*redmule_is_done) (eu_controller_t *ctrl);
     void (*idma_init) (eu_controller_t *ctrl, uint32_t enable_irq);
@@ -215,6 +235,9 @@ struct eu_controller_api {
     uint32_t (*fsync_wait) (eu_controller_t *ctrl, eu_wait_mode_t mode);
     uint32_t (*fsync_is_done) (eu_controller_t *ctrl);
     uint32_t (*fsync_has_error) (eu_controller_t *ctrl);
+    void (*spatz_init) (eu_controller_t *ctrl, uint32_t enable_irq);
+    void (*spatz_wait) (eu_controller_t *ctrl, eu_wait_mode_t mode);
+    uint32_t (*spatz_is_done) (eu_controller_t *ctrl);
 };
 
 /*

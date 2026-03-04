@@ -2,7 +2,6 @@
 #define COMPARE_UTILS_H_
 
 #include <stdbool.h>
-#include <math.h>
 
 #include "magia_tile_utils.h"
 #include "printf.h"
