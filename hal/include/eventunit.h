@@ -236,7 +236,7 @@ struct eu_controller_api {
     uint32_t (*fsync_is_done) (eu_controller_t *ctrl);
     uint32_t (*fsync_has_error) (eu_controller_t *ctrl);
     void (*spatz_init) (eu_controller_t *ctrl, uint32_t enable_irq);
-    void (*spatz_wait) (eu_controller_t *ctrl, eu_wait_mode_t mode);
+    uint32_t (*spatz_wait) (eu_controller_t *ctrl, eu_wait_mode_t mode);
     uint32_t (*spatz_is_done) (eu_controller_t *ctrl);
 };
 
