@@ -246,29 +246,29 @@ static inline uint32_t eu_fsync_has_error(void) {
 // SPATZ FUNCTIONS
 //=============================================================================
 
-static inline void eu_spatz_init(void) {
-    eu_clear_events(0xFFFFFFFF);
-    eu_enable_events(EU_SPATZ_DONE_MASK);
-}
+// static inline void eu_spatz_init(void) {
+//     eu_clear_events(0xFFFFFFFF);
+//     eu_enable_events(EU_SPATZ_DONE_MASK);
+// }
 
-static inline uint32_t eu_spatz_is_done(void) {
-    return eu_check_events(EU_SPATZ_DONE_MASK);
-}
+// static inline uint32_t eu_spatz_is_done(void) {
+//     return eu_check_events(EU_SPATZ_DONE_MASK);
+// }
 
 
-static inline void eu_wait_spatz_wfe(uint32_t event_mask) {
-    while (!eu_check_events(event_mask)) {
-        eu_evt_wait();
-    }
-    eu_clear_events(event_mask);
-}
+// static inline void eu_wait_spatz_wfe(uint32_t event_mask) {
+//     while (!eu_check_events(event_mask)) {
+//         eu_evt_wait();
+//     }
+//     eu_clear_events(event_mask);
+// }
 
-static inline void eu_wait_spatz_polling(uint32_t event_mask) {
-    while (!eu_check_events(event_mask)) {
-        wait_nop(10);
-    }
-    eu_clear_events(event_mask);
-}
+// static inline void eu_wait_spatz_polling(uint32_t event_mask) {
+//     while (!eu_check_events(event_mask)) {
+//         wait_nop(10);
+//     }
+//     eu_clear_events(event_mask);
+// }
 
 //=============================================================================
 // MULTI-ACCELERATOR FUNCTIONS

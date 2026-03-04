@@ -24,7 +24,7 @@ typedef struct eu_controller_api eu_controller_api_t;
 struct eu_controller {
     eu_controller_api_t *api; /**< Function pointers for this interface. */
     uint32_t base;            /**< MMIO base address (if applicable). */
-    void *cfg;                /**< Driver‑specific configuration. */
+    void *cfg;                /**< Driver?specific configuration. */
 };
 
 /**
@@ -39,6 +39,23 @@ typedef struct {
  * @brief Initialize Event Unit with default configuration
  */
 extern void eu_init(eu_controller_t *ctrl);
+
+//=============================================================================
+// PULP-cluster-specific Event Functions
+//=============================================================================
+
+/**
+ * @brief Initialize Event Unit for Pulp cluster events
+ * @param enable_irq If true, enable IRQ for Pulp-Cluster completion
+ */
+extern void eu_pulp_init(eu_controller_t *ctrl, uint32_t enable_irq);
+
+/**
+ * @brief Wait for Pulp cluster completion specifically
+ * @param mode Wait mode (polling, WFE, etc.)
+ * @return Non-zero if Pulp cluster completed, 0 if timeout/error
+ */
+extern uint32_t eu_pulp_wait(eu_controller_t *ctrl, eu_wait_mode_t mode);
 
 //=============================================================================
 // RedMulE-specific Event Functions
