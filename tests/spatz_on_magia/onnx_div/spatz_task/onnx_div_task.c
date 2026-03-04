@@ -1,5 +1,4 @@
-#include "magia_spatz_utils.h"
-#include "magia_tile_utils.h"
+#include "tile.h"
 #include "onnx_div_params.h"
 
 int onnx_div_task(void)

@@ -1,14 +1,10 @@
-#include <stdint.h>
+#include "tile.h"
+#include "eventunit.h"
 
-#include "compare_utils.h"
 #include "data.h"
-#include "event_unit_utils.h"
 #include "onnx_div_mem_layout.h"
 #include "onnx_div_params.h"
 #include "onnx_div_task_bin.h"
-
-#include "magia_tile_utils.h"
-#include "magia_spatz_utils.h"
 
 static int init_data(void *params)
 {
@@ -37,14 +33,21 @@ static int init_data(void *params)
 static int run_spatz_task()
 {
     int ret;
+    eu_config_t eu_cfg;
+    eu_controller_t eu_ctrl;
 
-    eu_init();
-    eu_enable_events(EU_SPATZ_DONE_MASK);
+    eu_cfg.hartid = get_hartid();
+    eu_ctrl.base = NULL,
+    eu_ctrl.cfg = &eu_cfg,
+    eu_ctrl.api = &eu_api,
+
+    eu_init(&eu_ctrl);
+    eu_spatz_init(&eu_ctrl, 0);
 
     spatz_init(SPATZ_BINARY_START);
     spatz_run_task_with_params(ONNX_DIV_TASK, ONNX_DIV_PARAMS_BASE);
 
-    eu_wait_spatz_wfe(EU_SPATZ_DONE_MASK);
+    eu_spatz_wait(&eu_ctrl, WFE);
 
     ret = spatz_get_exit_code();
 
