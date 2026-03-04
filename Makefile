@@ -29,7 +29,7 @@ CURR_DIR		?= $(shell pwd)
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
 BIN_ABS_PATH	?= $(CURR_DIR)/build/bin
 BIN 			?= $(BUILD_DIR)/build/verif
-build_mode		?= profile
+build_mode		?= update
 fsync_mode		?= stall
 mesh_dv			?= 1
 fast_sim		?= 0
@@ -212,9 +212,9 @@ gvsoc_init:
 	cd $(GVSOC_DIR) && \
 	git submodule update --init --recursive && \
 	cd core && \
-	git checkout lz/magia-v2-core && \
+	git checkout lz/magia-v2-core_test_new_spatz && \
 	cd ../pulp && \
-	git checkout lz/magia-v2-pulp
+	git checkout lz/magia-v2-pulp_add_spatz_reg
 
 llvm:
 	mkdir -p $(LLVM_DIR)

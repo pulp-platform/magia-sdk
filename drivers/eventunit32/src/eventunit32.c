@@ -271,6 +271,38 @@ uint32_t eu32_fsync_has_error(eu_controller_t *ctrl) {
     return eu_check_events(EU_FSYNC_ERROR_MASK);
 }
 
+//=============================================================================
+// Spatz-specific Event Functions
+//=============================================================================
+
+/**
+ * @brief Initialize Event Unit for FSync events
+ * @param enable_irq If true, enable IRQ for FSync completion
+ */
+void eu32_spatz_init(eu_controller_t *ctrl, uint32_t enable_irq) {
+    // Enable FSync events in mask (bits 25:24)
+    eu_enable_events(EU_SPATZ_ALL_MASK);
+    
+    // Optionally enable IRQ for FSync completion (bit 24)
+    if (enable_irq) {
+        eu_enable_irq(EU_SPATZ_DONE_MASK);
+    }
+}
+
+/**
+ * @brief Wait for Spatz completion using specified mode
+ * @param mode Wait mode (polling, WFE, etc.)
+ * @return Non-zero if Spatz completed, 0 if timeout/error
+ */
+uint32_t eu32_spatz_wait(eu_controller_t *ctrl, eu_wait_mode_t mode) {
+    uint32_t retval = eu_wait_events(EU_SPATZ_DONE_MASK, mode, 1000000);
+    #if PROFILE_SNC == 1
+    stnl_snc_f();
+    #endif
+    return retval; // 1M cycle timeout
+}
+
+
 extern void eu_init(eu_controller_t *ctrl)
     __attribute__((alias("eu32_init"), used, visibility("default")));
 extern void eu_redmule_init(eu_controller_t *ctrl, uint32_t enable_irq)
@@ -315,6 +347,10 @@ extern uint32_t eu_fsync_is_done(eu_controller_t *ctrl)
     __attribute__((alias("eu32_fsync_is_done"), used, visibility("default")));
 extern uint32_t eu_fsync_has_error(eu_controller_t *ctrl)
     __attribute__((alias("eu32_fsync_has_error"), used, visibility("default")));
+extern void eu_spatz_init(eu_controller_t *ctrl, uint32_t enable_irq)
+    __attribute__((alias("eu32_spatz_init"), used, visibility("default")));
+extern uint32_t eu_spatz_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
+    __attribute__((alias("eu32_spatz_wait"), used, visibility("default")));
 
 eu_controller_api_t eu_api = {
     .init                   = eu32_init,
@@ -339,4 +375,6 @@ eu_controller_api_t eu_api = {
     .fsync_wait             = eu32_fsync_wait,
     .fsync_is_done          = eu32_fsync_is_done,
     .fsync_has_error        = eu32_fsync_has_error,
+    .spatz_init             = eu32_spatz_init,
+    .spatz_wait             = eu32_spatz_wait,
 };

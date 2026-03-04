@@ -240,6 +240,8 @@ function(add_cv32_executable_with_spatz)
         ${ARG_INCLUDE_DIRS}
     )
 
+    target_link_libraries(${ARG_TARGET_NAME} PUBLIC runtime hal)
+
     if(ARG_SPATZ_HEADER)
         get_filename_component(SPATZ_HEADER_DIR "${ARG_SPATZ_HEADER}" DIRECTORY)
         target_include_directories(${ARG_TARGET_NAME} PRIVATE ${SPATZ_HEADER_DIR})

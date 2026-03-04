@@ -21,5 +21,6 @@
 #include "utils/performance_utils.h"
 //#include "utils/amo_utils.h"
 #include "utils/eu_isa_utils.h"
+#include "utils/magia_spatz_utils.h"
 
 #endif //_TILE_INCLUDE_GUARD_
