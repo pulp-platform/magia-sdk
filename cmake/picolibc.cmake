@@ -7,19 +7,19 @@
 
 include(ExternalProject)
 
-message(STATUS "[MAGIA-SDK] Setting up picolibc for Host (ISA: ${ISA}, ABI: ${ABI})")
+message(STATUS "[MAGIA-SDK] Setting up picolibc for Mesh (ISA: ${ISA}, ABI: ${ABI})")
 
-set(CROSS_C_COMPILER "${CMAKE_C_COMPILER}")
-set(CROSS_C_COMPILER_ARGS "-target ${CROSS_COMPILE} -march=${ISA} -nostdlib" CACHE STRING "Compiler arguments")
-# VIVIANEP: These flags are only for building Picolibc; adding them globally breaks
-#           app builds (e.g., missing <sys/types.h>) or causes issues in freestanding mode.
-set(CROSS_C_ARGS "-Werror=double-promotion -Wno-unsupported-floating-point-opt -fshort-enums ${CMAKE_ALT_C_OPTIONS} -march=${ISA} -mabi=${ABI}")
-set(CROSS_C_LINK_ARGS "-Wl,-z,noexecstack -march=${ISA} -mabi=${ABI}")
+set(CROSS_C_COMPILER    "${CMAKE_C_COMPILER}")
+set(CROSS_C_ARGS        "--target=${CROSS_COMPILE} -nostdlib -ggdb -gdwarf-4 -gstrict-dwarf -mno-relax")
+set(CROSS_C_LINK_ARGS   "--target=${CROSS_COMPILE} -nostdlib -fno-common -Wl,-z,noexecstack -fuse-ld=lld")
 
-set(CROSS_AR "${CMAKE_AR}")
-set(CROSS_STRIP "${CMAKE_STRIP}")
+set(CROSS_AR            "${CMAKE_AR}")
+set(CROSS_STRIP         "${CMAKE_STRIP}")
 
-set(CROSS_SKIP_SANITY_CHECK "true")
+set(CROSS_CPU           "${MESH_ARCH}")
+set(CROSS_CPU_FAMILY    "${MESH_FAMILY}")
+set(CROSS_ENDIAN        "${MESH_ENDIAN}")
+set(CROSS_SYSTEM        "${MESH_SYSTEM}")
 
 # Prepare Meson arrays
 function(prepare_meson_array output_var input_string)
