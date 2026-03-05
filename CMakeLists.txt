@@ -38,6 +38,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+#include("targets/${TARGET_PLATFORM}/config.cmake")
+
 project(magia-sdk LANGUAGES C ASM)
 
 set(ABI ilp32)
@@ -71,12 +73,9 @@ include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 # Depending on the target, following static libraries have to added by the targets
 add_subdirectory(targets)
 
-<<<<<<< HEAD
 # VIVIANEP: Include the picolibc library
-include(${CMAKE_CURRENT_LIST_DIR}/cmake/picolibc.cmake)
+#include(${CMAKE_CURRENT_LIST_DIR}/cmake/picolibc.cmake)
 
-=======
->>>>>>> main
 # Include other subdirectories
 add_subdirectory(hal)
 # add_subdirectory(devices)
