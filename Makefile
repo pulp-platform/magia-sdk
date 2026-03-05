@@ -33,9 +33,9 @@ mesh_dv			?= 1
 fast_sim		?= 0
 eval			?= 0
 stalling		?= 0
-fsync_mm		?= 0
-idma_mm			?= 0
-redmule_mm		?= 0
+fsync_mm		?= 1
+idma_mm			?= 1
+redmule_mm		?= 1
 profile_cmp		?= 0
 profile_cmi		?= 0
 profile_cmo		?= 0
@@ -43,6 +43,7 @@ profile_snc		?= 0
 
 target_platform ?= magia_v2
 compiler 		?= GCC_PULP
+ISA				?= rv32imcxgap9
 gui 			?= 0
 tiles 			?= 2
 
@@ -110,8 +111,8 @@ else ifeq ($(platform), rtl)
 	cd $(BUILD_DIR)													&& \
 	cp -sf ../../../sim/modelsim.ini modelsim.ini    				&& \
 	ln -sfn ../../../sim/work work         			
-	riscv32-unknown-elf-objdump -d -S $(BIN) > $(BIN).dump
-	riscv32-unknown-elf-objdump -d -l -s $(BIN) > $(BIN).objdump
+	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
+	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
 	cd $(MAGIA_DIR) 												&& \
 	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv)
