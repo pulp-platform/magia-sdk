@@ -248,6 +248,8 @@ void eu32_fsync_init(eu_controller_t *ctrl, uint32_t enable_irq) {
  * @return Non-zero if FSync completed, 0 if timeout/error
  */
 uint32_t eu32_fsync_wait(eu_controller_t *ctrl, eu_wait_mode_t mode) {
+    if(MESH_2_POWER == 0)
+        return 1;
     uint32_t retval = eu_wait_events(EU_FSYNC_DONE_MASK, mode, 1000000);
     #if PROFILE_SNC == 1
     stnl_snc_f();
@@ -260,6 +262,8 @@ uint32_t eu32_fsync_wait(eu_controller_t *ctrl, eu_wait_mode_t mode) {
  * @return Non-zero if FSync completed
  */
 uint32_t eu32_fsync_is_done(eu_controller_t *ctrl) {
+    if(MESH_2_POWER == 0)
+        return 1;
     return eu_check_events(EU_FSYNC_DONE_MASK);
 }
 
@@ -268,6 +272,8 @@ uint32_t eu32_fsync_is_done(eu_controller_t *ctrl) {
  * @return Non-zero if FSync error occurred
  */
 uint32_t eu32_fsync_has_error(eu_controller_t *ctrl) {
+    if(MESH_2_POWER == 0)
+        return 0;
     return eu_check_events(EU_FSYNC_ERROR_MASK);
 }
 
