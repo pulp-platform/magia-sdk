@@ -198,14 +198,13 @@ endfunction()
 #   SPATZ_HEADER (required): Path to Spatz task header file
 #   SOURCES (required): List of source files to compile
 #   CRT0_SRC: Path to CV32 CRT0 assembly (default: CV32_CRT0_SRC from config)
-#   LINK_SCRIPT: Path to CV32 linker script (default: CV32_LINK_SCRIPT from config)
 #   INCLUDE_DIRS: Additional include directories
 # Output locations:
 #   Executable: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}
 #   Disassembly: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}.s
 function(add_cv32_executable_with_spatz)
     set(options)
-    set(oneValueArgs TARGET_NAME SPATZ_HEADER LINK_SCRIPT CRT0_SRC)
+    set(oneValueArgs TARGET_NAME SPATZ_HEADER CRT0_SRC)
     set(multiValueArgs SOURCES INCLUDE_DIRS)
     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -213,15 +212,9 @@ function(add_cv32_executable_with_spatz)
     if(NOT DEFINED ARG_CRT0_SRC)
         set(ARG_CRT0_SRC ${CV32_CRT0_SRC})
     endif()
-    if(NOT DEFINED ARG_LINK_SCRIPT)
-        set(ARG_LINK_SCRIPT ${CV32_LINK_SCRIPT})
-    endif()
 
     if(NOT IS_ABSOLUTE "${ARG_CRT0_SRC}")
         set(ARG_CRT0_SRC "${CMAKE_CURRENT_SOURCE_DIR}/${ARG_CRT0_SRC}")
-    endif()
-    if(ARG_LINK_SCRIPT AND NOT IS_ABSOLUTE "${ARG_LINK_SCRIPT}")
-        set(ARG_LINK_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/${ARG_LINK_SCRIPT}")
     endif()
 
     # Add io.c source to provide string functions for printf/prf.h
@@ -246,6 +239,8 @@ function(add_cv32_executable_with_spatz)
         get_filename_component(SPATZ_HEADER_DIR "${ARG_SPATZ_HEADER}" DIRECTORY)
         target_include_directories(${ARG_TARGET_NAME} PRIVATE ${SPATZ_HEADER_DIR})
     endif()
+
+    target_link_libraries(${ARG_TARGET_NAME} PUBLIC runtime hal)
 
     # Compiler flags [MAGIA/Makefile: CC_OPTS]
     target_compile_options(${ARG_TARGET_NAME} PRIVATE
@@ -277,10 +272,6 @@ function(add_cv32_executable_with_spatz)
         -nostdlib
         -Wl,--gc-sections
     )
-
-    if(ARG_LINK_SCRIPT)
-        target_link_options(${ARG_TARGET_NAME} PRIVATE -T${ARG_LINK_SCRIPT})
-    endif()
 
     if(ARG_SPATZ_HEADER)
         # Use SPATZ_TASK_NAME if available (set by add_spatz_task), otherwise extract from header filename

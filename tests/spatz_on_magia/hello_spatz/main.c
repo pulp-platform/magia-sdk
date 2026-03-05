@@ -1,4 +1,5 @@
 #include "tile.h"
+
 #include "hello_spatz_task_bin.h"
 
 #include "eventunit.h"
@@ -7,6 +8,7 @@
 
 int main(void) {
     uint32_t hartid = get_hartid();
+    uint32_t errors = 0;
 
     eu_config_t eu_cfg = {.hartid = hartid};
     eu_controller_t eu_ctrl = {
@@ -17,9 +19,7 @@ int main(void) {
     eu_init(&eu_ctrl);
     eu_spatz_init(&eu_ctrl, 0);
 
-    int errors = 0;
-
-    printf("[CV32] Spatz Test:\n");
+    printf("[CV32] Hello Spatz Test\n");
 
     printf("[CV32] Initializing Spatz...\n");
     spatz_init(SPATZ_BINARY_START);

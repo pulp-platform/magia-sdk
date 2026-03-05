@@ -34,4 +34,5 @@ __attribute__((weak)) eu_controller_api_t eu_api = {
     .fsync_has_error        = eu_fsync_has_error,
     .spatz_init             = eu_spatz_init,
     .spatz_wait             = eu_spatz_wait,
+    .spatz_is_done          = eu_spatz_is_done,
 };
