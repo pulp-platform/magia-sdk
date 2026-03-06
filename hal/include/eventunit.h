@@ -204,7 +204,7 @@ extern void eu_spatz_init(eu_controller_t *ctrl, uint32_t enable_irq);
 /**
  * @brief Wait for Spatz completion in WFE mode
  */
-extern void eu_spatz_wait(eu_controller_t *ctrl, eu_wait_mode_t mode);
+extern uint32_t eu_spatz_wait(eu_controller_t *ctrl, eu_wait_mode_t mode);
 
 /**
  * @brief Check if Spatz has completed, non-blocking
