@@ -84,12 +84,6 @@ int main(void){
     uint32_t B_SIZE         = S_SIZE;
     uint32_t T              = S_SIZE / B_SIZE;
 
-    /**
-     * 1b. Set arbitrary timestep value to further divide the Q and K tiles in subtiles.
-     */
-    uint32_t n_timesteps    = 1;
-    uint32_t t_size         = D_SIZE / n_timesteps;
-
     /** TODO: if S_SIZE is not a multiple of B_SIZE, we should do something for the leftover.
      * "We" is most likely Future Me.
      * Fuck you, Future Me! - signed Past Me.
@@ -129,9 +123,9 @@ int main(void){
     uint32_t obi_addr_o_0   = obi_addr_l_1  +   (tile_h * 2);
     uint32_t obi_addr_o_1   = obi_addr_o_0  +   (tile_h * D_SIZE * 2);
     uint32_t obi_addr_q     = obi_addr_o_1  +   (tile_h * D_SIZE * 2);
-    uint32_t obi_addr_k     = obi_addr_q    +   (tile_h * t_size * 2);
-    uint32_t obi_addr_v     = obi_addr_k    +   (tile_w * t_size * 2);
-    uint32_t obi_addr_s     = obi_addr_v    +   (tile_w * t_size * 2);
+    uint32_t obi_addr_k     = obi_addr_q    +   (tile_h * D_SIZE * 2);
+    uint32_t obi_addr_v     = obi_addr_k    +   (tile_w * D_SIZE * 2);
+    uint32_t obi_addr_s     = obi_addr_v    +   (tile_w * D_SIZE * 2);
     uint32_t obi_addr_sb    = obi_addr_s    +   (tile_h * tile_w * 2);
     
 
@@ -145,17 +139,17 @@ int main(void){
     /**
      * 1e. Initialize the L2 addresses for the tiles
      */
-    uint32_t len_q      = t_size * 2;
+    uint32_t len_q      = D_SIZE * 2;
     uint32_t std_q      = D_SIZE * 2;
     uint32_t reps_q     = (uint32_t) tile_h;
     uint32_t axi_addr_q = (uint32_t) q_inp + (y_id * tile_h_max * D_SIZE * 2);
-    
+
     uint32_t len_k      = tile_w * 2;
     uint32_t std_k      = S_SIZE * 2;
-    uint32_t reps_k     = (uint32_t) t_size;
+    uint32_t reps_k     = (uint32_t) D_SIZE;
     uint32_t axi_addr_k = (uint32_t) k_inp + (x_id * tile_w_max * 2);
 
-    uint32_t len_v      = t_size * 2;
+    uint32_t len_v      = D_SIZE * 2;
     uint32_t std_v      = D_SIZE * 2;
     uint32_t reps_v     = (uint32_t) tile_w;
     uint32_t axi_addr_v = (uint32_t) v_inp + (x_id * tile_w_max * D_SIZE * 2);
@@ -202,22 +196,21 @@ int main(void){
              * 3b. Output static matmul Q * Kt
              */
             flush(obi_addr_s, tile_h * tile_w);
-            for(uint32_t k = 0; k < n_timesteps; k++){
-                /**
-                * 3ba. IDMA to load the input and weight data-tile for current timeslot
-                */
-                idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_q + (t_size * k * 2)), obi_addr_q, len_q, std_q, reps_q);
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
-                idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_k + (j * B_SIZE * 2) + (t_size * S_SIZE * i * 2)), obi_addr_k, len_k, std_k, reps_k);
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
-                /**
-                * 3bb. Evoke the RED MULE
-                * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
-                */
-                redmule_gemm(&redmule_ctrl, obi_addr_q, obi_addr_k, obi_addr_s, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
-                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
-            }
+            /**
+             * 3ba. IDMA to load the Q and K data-tiles
+             */
+            idma_memcpy_2d(&idma_ctrl, 0, axi_addr_q, obi_addr_q, len_q, std_q, reps_q);
+            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_k + (j * B_SIZE * 2) + (D_SIZE * S_SIZE * i * 2)), obi_addr_k, len_k, std_k, reps_k);
+            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+
+            /**
+             * 3bb. Evoke the RED MULE
+             * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
+             */
+            redmule_gemm(&redmule_ctrl, obi_addr_q, obi_addr_k, obi_addr_s, (uint16_t) tile_h, (uint16_t) D_SIZE, (uint16_t) tile_w);
+            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
 
             /**
              * 3c. Find row maxes.
@@ -329,27 +322,26 @@ int main(void){
             /**
              * 3h. Input static Activation * V
              */
-            for(uint32_t k = 0; k < n_timesteps; k++){
-                /**
-                * 3ha. Load V data-tile required for the j-th block column and k-th timestep
-                */
-                idma_memcpy_2d(&idma_ctrl, 0, axi_addr_v + (j * B_SIZE * D_SIZE * 2) + (k * t_size * 2), obi_addr_v, len_v, std_v, reps_v);
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
-                /**
-                 * 3hb. Evoke REDMULE
-                 * https://www.youtube.com/watch?v=xDbIDKel-O4
-                 */
-                flush(obi_addr_sb, tile_h * t_size);
-                redmule_gemm(&redmule_ctrl, obi_addr_s, obi_addr_v, obi_addr_sb, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
-                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            /**
+             * 3ha. Load V data-tile required for the j-th block column
+             */
+            idma_memcpy_2d(&idma_ctrl, 0, axi_addr_v + (j * B_SIZE * D_SIZE * 2), obi_addr_v, len_v, std_v, reps_v);
+            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
-                /**
-                 * 3hc. Strided store of the current timestep buffer in the output
-                 */
-                idma_memcpy_2d(&idma_ctrl, 0, obi_addr_sb, output_buffer + (k * t_size * 2), t_size * 2, D_SIZE * 2, tile_h);
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
-            }
+            /**
+             * 3hb. Evoke REDMULE
+             * https://www.youtube.com/watch?v=xDbIDKel-O4
+             */
+            flush(obi_addr_sb, tile_h * D_SIZE);
+            redmule_gemm(&redmule_ctrl, obi_addr_s, obi_addr_v, obi_addr_sb, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) D_SIZE);
+            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+
+            /**
+             * 3hc. Copy result to the output buffer
+             */
+            idma_memcpy_2d(&idma_ctrl, 0, obi_addr_sb, output_buffer, D_SIZE * 2, D_SIZE * 2, tile_h);
+            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
             
 
             /**
@@ -373,7 +365,7 @@ int main(void){
             if(T % 2)
                 vect_sum(output_buffer, get_l1_base(hartid - 1) + (8 * tile_h), tile_h * D_SIZE);
             else
-                vect_sum(output_buffer, get_l1_base(hartid - 1) + (8 * tile_h + D_SIZE * tile_h), tile_h * D_SIZE);
+                vect_sum(output_buffer, get_l1_base(hartid - 1) + (8 * tile_h + D_SIZE * 2 * tile_h), tile_h * D_SIZE);
         }
         if(x_id != (MESH_X_TILES - 1)){
             fsync_sync_right(&fsync_ctrl);
@@ -402,13 +394,13 @@ int main(void){
                 _Float16 expected = o_golden[i * D_SIZE + j];
                 _Float16 diff = (computed > expected) ? (computed - expected) : (expected - computed);
                 if(diff > tol){
-                    printf("Error at [%d][%d]: got=%x exp=%x\n", i, j,
+                    printf("\n\nError at [%d][%d]: got=%x exp=%x\n", i, j,
                         *(uint16_t*)&computed, *(uint16_t*)&expected);
                     errors++;
                 }
             }
         }
-        printf("Number of errors: %d / %d\n", errors, S_SIZE * D_SIZE);
+        printf("\nTest is over.\nNumber of errors: %d / %d\n\n", errors, S_SIZE * D_SIZE);
     }
 
     return errors;
