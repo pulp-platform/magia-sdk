@@ -1,6 +1,7 @@
 #include "tile.h"
 #include "eventunit.h"
 
+#include "compare_utils.h"
 #include "data.h"
 #include "onnx_add_mem_layout.h"
 #include "onnx_add_params.h"
