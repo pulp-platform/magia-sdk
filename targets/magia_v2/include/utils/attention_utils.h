@@ -69,7 +69,7 @@ int rowdiff(uint32_t s, uint32_t m, uint32_t h, uint32_t w){
 int rowsum(uint32_t s, uint32_t l, uint32_t h, uint32_t w){
     for(uint32_t i = 0; i < h; i++){
         uint32_t row = s + i * 2 * w;
-        uint16_t sum = 0;
+        _Float16 sum = 0;
         for(uint32_t j = 0; j < w; j++){
             sum = sum + *(volatile _Float16*)(row + j * 2);
         }
@@ -117,25 +117,44 @@ int vect_prod(uint32_t v1, uint32_t v2, uint32_t dim){
     }
 }
 
-#define GIST_A  12102203.17133801f
-#define GIST_B  1064986823.010288f
-#define GIST_C  8388608
-#define GIST_D  2139095040
+// #define GIST_A  12102203.17133801f
+// #define GIST_B  1064986823.010288f
+// #define GIST_C  8388608
+// #define GIST_D  2139095040
 
-_Float16 fastexp_gist(_Float16 x) {
-    x = GIST_A * x + GIST_B;
+// _Float16 fastexp_gist(_Float16 x) {
+//     x = GIST_A * x + GIST_B;
 
-    if (x < GIST_C || x > GIST_D)
-        x = (x < GIST_C) ? 0.0f : GIST_D;
+//     if (x < GIST_C || x > GIST_D)
+//         x = (x < GIST_C) ? 0.0f : GIST_D;
 
-    uint32_t n = (uint32_t)(x);
-    return *(_Float16 *) &n;
+//     uint32_t n = (uint32_t)(x);
+//     return *(_Float16 *) &n;
+// }
+
+static float soft_expf(float x) {
+    if (x > 11.0f) x = 11.0f;
+    if (x < -17.0f) return 0.0f;
+
+    // Range reduction: x = n*ln2 + r, exp(x) = 2^n * exp(r)
+    int n = (int)(x * 1.4426950408889634f + (x >= 0 ? 0.5f : -0.5f));
+    float r = x - (float)n * 0.6931471805599453f;
+
+    // Taylor expansion of exp(r) for |r| <= ln2/2
+    float e = 1.0f + r * (1.0f + r * (0.5f + r * (0.16666667f + r * (0.04166667f + r * 0.00833333f))));
+
+    // Multiply by 2^n
+    if (n > 0) { for (int i = 0; i < n; i++) e *= 2.0f; }
+    else       { for (int i = 0; i < -n; i++) e *= 0.5f; }
+
+    return e;
 }
 
 int exponential(uint32_t matrix, uint32_t rows, uint32_t columns){
     for(uint32_t i = 0; i < rows; i++){
         for(uint32_t j = 0; j < columns; j++){
-            (*(volatile _Float16 *)(matrix + i * columns * 2 + j * 2)) = (_Float16) fastexp_gist((_Float16) (*(volatile _Float16 *)(matrix + i * columns * 2 + j * 2)));
+            volatile _Float16 *ptr = (volatile _Float16 *)(matrix + i * columns * 2 + j * 2);
+            *ptr = (_Float16)soft_expf((float)(*ptr));
         }
     }
 }
