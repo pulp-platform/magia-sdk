@@ -3,8 +3,7 @@
 
 #include <stdbool.h>
 
-#include "magia_tile_utils.h"
-#include "printf.h"
+#include "tile.h"
 
 #define TOLL 0x0011
 
