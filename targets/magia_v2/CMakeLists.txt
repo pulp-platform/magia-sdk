@@ -67,3 +67,6 @@ target_link_options(runtime
   -Wno-int-conversion #ZL-MOD 03072025
   -Wl,--gc-sections #ZL-MOD 03072025
 )
+
+# Link merged libgcc: soft-float from system GCC 10 + fp16 from GCC 15
+target_link_libraries(runtime PUBLIC ${CMAKE_CURRENT_LIST_DIR}/lib/libgcc_merged.a)

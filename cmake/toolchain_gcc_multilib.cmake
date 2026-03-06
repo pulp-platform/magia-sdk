@@ -9,9 +9,11 @@ set(CMAKE_EXECUTABLE_SUFFIX ".elf")
 
 set(CMAKE_SYSTEM_NAME Generic)
 
-set(CMAKE_C_COMPILER riscv64-unknown-elf-gcc)
-set(CMAKE_CXX_COMPILER riscv64-unknown-elf-g++)
+set(RISCV_TOOLCHAIN_PREFIX "$ENV{HOME}/riscv/bin/riscv32-unknown-elf")
+
+set(CMAKE_C_COMPILER ${RISCV_TOOLCHAIN_PREFIX}-gcc)
+set(CMAKE_CXX_COMPILER ${RISCV_TOOLCHAIN_PREFIX}-g++)
 set(CMAKE_ASM_COMPILER ${CMAKE_C_COMPILER})
-set(CMAKE_OBJCOPY riscv64-unknown-elf-objcopy)
-set(CMAKE_OBJDUMP riscv64-unknown-elf-objdump)
-set(CMAKE_AR riscv64-unknown-elf-ar)
+set(CMAKE_OBJCOPY ${RISCV_TOOLCHAIN_PREFIX}-objcopy)
+set(CMAKE_OBJDUMP ${RISCV_TOOLCHAIN_PREFIX}-objdump)
+set(CMAKE_AR ${RISCV_TOOLCHAIN_PREFIX}-ar)

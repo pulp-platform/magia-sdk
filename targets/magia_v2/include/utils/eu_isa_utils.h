@@ -140,10 +140,11 @@ static inline uint32_t eu_wait_events_polling(uint32_t event_mask, uint32_t time
 // evt_read32: blocking read with p.elw instruction
 static inline unsigned int evt_read32(unsigned int addr) {
     unsigned int value;
-    // Direct p.elw inline assembly for PULP cores (RI5CY, CV32E40P)
+    // p.elw (event load word) for PULP cores (CV32E40P)
+    // Encoding: I-type, opcode=0x03 (LOAD), funct3=0x6
     #if STALLING == 0
     __asm__ __volatile__ (
-        "p.elw %0, 0(%1)"
+        ".insn i 0x03, 0x6, %0, %1, 0"
         : "=r" (value)
         : "r" (addr)
         : "memory"

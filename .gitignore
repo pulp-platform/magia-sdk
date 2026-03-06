@@ -1,18 +1,11 @@
-next_steps.*
+# Build
 build/
-output*
-list/
-transcript
-.vscode/
-gvsoc_config.json
-power_report.csv
-trace_file.txt
-insn.txt
-debug_*
+
+# CMake generated
 compile_commands.json
 CMakeCache.txt
 cmake_install.cmake
-CMakeFiles
+CMakeFiles/
 /*/Makefile
 /*/*/Makefile
 /*/*/*/Makefile
@@ -28,3 +21,6 @@ magia_deployment.egg*
 cache_fill.h
 regression_output*
 scripts/wave.do
+
+# Binary artifacts
+targets/magia_v2/lib/libgcc_merged.a
