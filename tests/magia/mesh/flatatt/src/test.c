@@ -11,6 +11,9 @@
 #include "fsync.h"
 #include "idma.h"
 #include "redmule.h"
+#include "eventunit.h"
+
+#define WAIT_MODE WFE
 
 /**
  * Flush
@@ -54,6 +57,21 @@ int main(void){
     fsync_init(&fsync_ctrl);
     idma_init(&idma_ctrl);
     redmule_init(&redmule_ctrl);
+
+    #if STALLING == 0
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+
+    eu_init(&eu_ctrl);
+    eu_clear_events(0xFFFFFFFF);
+    eu_fsync_init(&eu_ctrl, 0);
+    eu_idma_init(&eu_ctrl, 0);
+    eu_redmule_init(&eu_ctrl, 0);
+    #endif
 
     uint32_t y_id           = GET_Y_ID(hartid);
     uint32_t x_id           = GET_X_ID(hartid);
@@ -183,21 +201,22 @@ int main(void){
             /**
              * 3b. Output static matmul Q * Kt
              */
-            for(uint32_t k = 0; k < t_size; k++){
+            flush(obi_addr_s, tile_h * tile_w);
+            for(uint32_t k = 0; k < n_timesteps; k++){
                 /**
                 * 3ba. IDMA to load the input and weight data-tile for current timeslot
                 */
                 idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_q + (t_size * k * 2)), obi_addr_q, len_q, std_q, reps_q);
-                idma_wait();
+                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
                 idma_memcpy_2d(&idma_ctrl, 0, (axi_addr_k + (j * B_SIZE * 2) + (t_size * S_SIZE * i * 2)), obi_addr_k, len_k, std_k, reps_k);
-                idma_wait();
+                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
                 /**
-                * 3bb. Evoke the RED MULE 
+                * 3bb. Evoke the RED MULE
                 * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
                 */
                 redmule_gemm(&redmule_ctrl, obi_addr_q, obi_addr_k, obi_addr_s, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
-                redmule_wait();
+                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
             }
 
             /**
@@ -209,16 +228,20 @@ int main(void){
             rowmax(obi_addr_s, max_buffer, tile_h, tile_w);
             if(x_id != 0){
                 fsync_sync_left(&fsync_ctrl);
+                eu_fsync_wait(&eu_ctrl, WAIT_MODE);
                 if(j % 2)
                     max_compare(max_buffer, get_l1_base(hartid - 1) + (tile_h * 2), tile_h);
                 else
                     max_compare(max_buffer, get_l1_base(hartid - 1), tile_h);
-            }   
-            if(x_id != (MESH_X_TILES - 1))
+            }
+            if(x_id != (MESH_X_TILES - 1)){
                 fsync_sync_right(&fsync_ctrl);
+                eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+            }
             else if(j > 0)
                 max_compare(max_buffer, prev_max_buffer, tile_h);
             fsync_sync_row(&fsync_ctrl);
+            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
             if(x_id != (MESH_X_TILES - 1)){
                 if(j % 2)
                     max_compare(max_buffer, get_l1_base(GET_ID(y_id, (MESH_X_TILES - 1))) + (tile_h * 2), tile_h);
@@ -226,6 +249,7 @@ int main(void){
                     max_compare(max_buffer, get_l1_base(GET_ID(y_id, (MESH_X_TILES - 1))), tile_h);
             }
             fsync_sync_row(&fsync_ctrl);
+            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
             /**
              * 3d. Element wise substraction for each row with their maximum
@@ -245,22 +269,27 @@ int main(void){
             rowsum(obi_addr_s, sum_buffer, tile_h, tile_w);
             if(x_id != 0){
                 fsync_sync_left(&fsync_ctrl);
+                eu_fsync_wait(&eu_ctrl, WAIT_MODE);
                 if(j % 2)
                     vect_sum(sum_buffer, get_l1_base(hartid - 1) + (tile_h * 6), tile_h);
                 else
                     vect_sum(sum_buffer, get_l1_base(hartid - 1) + (tile_h * 4), tile_h);
             }
-            if(x_id != (MESH_X_TILES - 1))
+            if(x_id != (MESH_X_TILES - 1)){
                 fsync_sync_right(&fsync_ctrl);
+                eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+            }
             fsync_sync_row(&fsync_ctrl);
+            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
             if(x_id != (MESH_X_TILES - 1)){
                 if(j % 2)
                     idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(GET_ID(y_id, (MESH_X_TILES - 1))) + (tile_h * 6), sum_buffer, tile_h * 2);
                 else
                     idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(GET_ID(y_id, (MESH_X_TILES - 1))) + (tile_h * 4), sum_buffer, tile_h * 2);
-                idma_wait();
+                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
             }
             fsync_sync_row(&fsync_ctrl);
+            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
             /**
              * 3g. Add retroactive contribution of previous blocks
@@ -305,20 +334,21 @@ int main(void){
                 * 3ha. Load V data-tile required for the j-th block column and k-th timestep
                 */
                 idma_memcpy_2d(&idma_ctrl, 0, axi_addr_v + (j * B_SIZE * D_SIZE * 2) + (k * t_size * 2), obi_addr_v, len_v, std_v, reps_v);
-                idma_wait();
+                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
                 /**
                  * 3hb. Evoke REDMULE
                  * https://www.youtube.com/watch?v=xDbIDKel-O4
                  */
+                flush(obi_addr_sb, tile_h * t_size);
                 redmule_gemm(&redmule_ctrl, obi_addr_s, obi_addr_v, obi_addr_sb, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
-                redmule_wait();
+                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
 
                 /**
                  * 3hc. Strided store of the current timestep buffer in the output
                  */
                 idma_memcpy_2d(&idma_ctrl, 0, obi_addr_sb, output_buffer + (k * t_size * 2), t_size * 2, D_SIZE * 2, tile_h);
-                idma_wait();
+                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
             }
             
 
@@ -339,19 +369,47 @@ int main(void){
          */
         if(x_id != 0){
             fsync_sync_left(&fsync_ctrl);
+            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
             if(T % 2)
                 vect_sum(output_buffer, get_l1_base(hartid - 1) + (8 * tile_h), tile_h * D_SIZE);
             else
                 vect_sum(output_buffer, get_l1_base(hartid - 1) + (8 * tile_h + D_SIZE * tile_h), tile_h * D_SIZE);
         }
-        if(x_id != (MESH_X_TILES - 1))
+        if(x_id != (MESH_X_TILES - 1)){
             fsync_sync_right(&fsync_ctrl);
+            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        }
         else{
-            idma_memcpy_2d(&idma_ctrl, 1, o_out, output_buffer, D_SIZE, D_SIZE, tile_h);
-            idma_wait();
+            idma_memcpy_2d(&idma_ctrl, 1, (uint32_t)o_out + (y_id * tile_h_max * D_SIZE * 2), output_buffer, D_SIZE * 2, D_SIZE * 2, tile_h);
+            eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
         }
         fsync_sync_row(&fsync_ctrl);
+        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     }
 
-    return 0;  
+    /**
+     * 6. Synchronize all tiles, then check results on tile 0
+     */
+    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+
+    uint32_t errors = 0;
+    if(hartid == 0){
+        _Float16 tol = (_Float16)0.02f;
+        for(uint32_t i = 0; i < S_SIZE; i++){
+            for(uint32_t j = 0; j < D_SIZE; j++){
+                _Float16 computed = *(volatile _Float16*)(&o_out[i * D_SIZE + j]);
+                _Float16 expected = o_golden[i * D_SIZE + j];
+                _Float16 diff = (computed > expected) ? (computed - expected) : (expected - computed);
+                if(diff > tol){
+                    printf("Error at [%d][%d]: got=%x exp=%x\n", i, j,
+                        *(uint16_t*)&computed, *(uint16_t*)&expected);
+                    errors++;
+                }
+            }
+        }
+        printf("Number of errors: %d / %d\n", errors, S_SIZE * D_SIZE);
+    }
+
+    return errors;
 }
