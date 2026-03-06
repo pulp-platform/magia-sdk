@@ -68,26 +68,7 @@ target_link_options(runtime
   -Wl,--gc-sections #ZL-MOD 03072025
 )
 
-
-# ==================== SPATZ INTEGRATION ====================
-
-# Include Spatz configuration and helpers if Spatz is available
-if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/spatz")
-    include(${CMAKE_SOURCE_DIR}/cmake/spatz_config.cmake)
-    include(${CMAKE_SOURCE_DIR}/cmake/spatz_helpers.cmake)
-    include(${CMAKE_SOURCE_DIR}/cmake/bootrom_helpers.cmake)
-
-    # Build bootrom only if Spatz tests are enabled
-    if(SPATZ_TESTS)
-        add_spatz_bootrom(
-            BOOTROM_SRC ${CMAKE_CURRENT_LIST_DIR}/spatz/bootrom/spatz_init.S
-            LINKER_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/spatz/bootrom/spatz_init.ld
-            OUTPUT_DIR ${CMAKE_BINARY_DIR}/bin/bootrom
-        )
-        message(STATUS "[MAGIA-SDK] Spatz integration enabled for magia_v2 (bootrom will be built)")
-    else()
-        message(STATUS "[MAGIA-SDK] Spatz integration disabled (SPATZ_TESTS=0)")
-    endif()
+# Build bootrom only when Spatz tests are enabled.
+if(SPATZ_TESTS)
+    add_spatz_bootrom()
 endif()
-
-# =========================================================

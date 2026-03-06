@@ -13,7 +13,6 @@ add_spatz_task(
 # Compile CV32 executable with embedded Spatz binary
 add_cv32_executable_with_spatz(
     TARGET_NAME ${TEST_NAME}
-    SPATZ_HEADER ${SPATZ_HEADER}
     SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/main.c
     INCLUDE_DIRS
         ${CMAKE_CURRENT_SOURCE_DIR}/test_data
