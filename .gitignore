@@ -22,5 +22,8 @@ cache_fill.h
 regression_output*
 scripts/wave.do
 
+# Generated test inputs
+tests/magia/mesh/flatatt/include/*
+
 # Binary artifacts
 targets/magia_v2/lib/libgcc_merged.a
