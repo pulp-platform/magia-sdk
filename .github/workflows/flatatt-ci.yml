@@ -19,7 +19,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential python3-pip
+          sudo apt-get install -y cmake build-essential python3-pip gcc-riscv64-unknown-elf
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -39,10 +39,10 @@ jobs:
       - name: Install RISC-V GCC multilib toolchain
         if: steps.cache-riscv.outputs.cache-hit != 'true'
         run: |
-          wget -q https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2024.09.03/riscv32-elf-ubuntu-22.04-gcc-nightly-2024.09.03-nightly.tar.gz -O /tmp/riscv-toolchain.tar.gz
+          wget -q https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2026.01.23/riscv32-elf-ubuntu-22.04-gcc.tar.xz -O /tmp/riscv-toolchain.tar.xz
           mkdir -p ~/riscv
-          tar -xzf /tmp/riscv-toolchain.tar.gz -C ~/riscv --strip-components=1
-          rm /tmp/riscv-toolchain.tar.gz
+          tar -xJf /tmp/riscv-toolchain.tar.xz -C ~/riscv --strip-components=1
+          rm /tmp/riscv-toolchain.tar.xz
 
       - name: Verify toolchain
         run: ~/riscv/bin/riscv32-unknown-elf-gcc --version

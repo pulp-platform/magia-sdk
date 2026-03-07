@@ -13,8 +13,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-LIBGCC_OLD="/usr/lib/gcc/riscv64-unknown-elf/10.2.0/rv32imac/ilp32/libgcc.a"
-LIBGCC_NEW="$HOME/riscv/lib/gcc/riscv32-unknown-elf/15.2.0/libgcc.a"
+LIBGCC_OLD_DIR="/usr/lib/gcc/riscv64-unknown-elf"
+LIBGCC_OLD_VER=$(ls "$LIBGCC_OLD_DIR" 2>/dev/null | head -1)
+LIBGCC_OLD="$LIBGCC_OLD_DIR/${LIBGCC_OLD_VER}/rv32imac/ilp32/libgcc.a"
+
+LIBGCC_NEW_DIR="$HOME/riscv/lib/gcc/riscv32-unknown-elf"
+LIBGCC_NEW_VER=$(ls "$LIBGCC_NEW_DIR" 2>/dev/null | head -1)
+LIBGCC_NEW="$LIBGCC_NEW_DIR/${LIBGCC_NEW_VER}/libgcc.a"
+
 AR="$HOME/riscv/bin/riscv32-unknown-elf-ar"
 OUTPUT="${1:-$REPO_DIR/targets/magia_v2/lib/libgcc_merged.a}"
 
