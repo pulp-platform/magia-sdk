@@ -51,6 +51,9 @@ jobs:
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           make gvsoc_init
+          pip install -r gvsoc/core/requirements.txt
+          pip install -r gvsoc/requirements.txt
+          pip install -r gvsoc/gvrun/requirements.txt
           make gvsoc tiles=${{ matrix.tiles }}
 
       - name: Run FlatAttention tests (tiles=${{ matrix.tiles }})
