@@ -49,6 +49,7 @@ jobs:
 
       - name: Setup GVSoC
         run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
           make gvsoc_init
           make gvsoc tiles=${{ matrix.tiles }}
 
