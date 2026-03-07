@@ -27,7 +27,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python dependencies
-        run: pip install numpy
+        run: pip install -r requirements.txt
 
       - name: Cache RISC-V toolchain
         id: cache-riscv
