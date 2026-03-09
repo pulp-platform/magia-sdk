@@ -53,6 +53,9 @@ s_size           ?= 16
 d_size           ?= 8
 seed             ?= 42
 flatatt_platform ?= gvsoc
+data_tiling      ?= 0
+
+FLATATT_TEST = $(if $(filter 1,$(data_tiling)),test_flatatt,test_flatatt_no_dt)
 
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
@@ -83,10 +86,12 @@ ifeq ($(compiler), LLVM)
 endif
 ifeq ($(compiler), GCC_PULP)
 	sed -i -E 's/^add_subdirectory\(flatatt\)/#&/' ./tests/magia/mesh/CMakeLists.txt
+	sed -i -E 's/^add_subdirectory\(flatatt_no_data_tiling\)/#&/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^#include "utils\/attention_utils.h"/\/\/&/' ./targets/$(target_platform)/include/tile.h
 endif
 ifeq ($(compiler), GCC_MULTILIB)
 	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
+	sed -i -E 's/^#add_subdirectory\(flatatt_no_data_tiling\)/add_subdirectory\(flatatt_no_data_tiling\)/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/$(target_platform)/include/tile.h
 	@if [ ! -f ./targets/$(target_platform)/lib/libgcc_merged.a ]; then \
 		echo "libgcc_merged.a not found, generating..."; \
@@ -206,7 +211,8 @@ gvsoc_venv:
 
 # ─── FlatAttention pipeline ──────────────────────────────────────────
 # Usage:
-#   make flatatt                                    # 2x2, S=16, D=8, gvsoc
+#   make flatatt                                    # no data tiling (default)
+#   make flatatt data_tiling=1                      # with data tiling (original)
 #   make flatatt tiles=4 s_size=32 d_size=16        # 4x4, larger problem
 #   make flatatt flatatt_platform=rtl               # RTL simulator
 #   make flatatt-gen s_size=32 d_size=16            # regenerate golden only
@@ -214,13 +220,14 @@ gvsoc_venv:
 flatatt-gen:
 	python3 tests/magia/mesh/flatatt/gen_golden.py \
 		--s-size $(s_size) --d-size $(d_size) --mesh $(tiles) --seed $(seed)
+	cp tests/magia/mesh/flatatt/include/test.h tests/magia/mesh/flatatt_no_data_tiling/include/test.h
 
 flatatt-build:
 	$(MAKE) clean
 	$(MAKE) build target_platform=magia_v2 tiles=$(tiles) compiler=GCC_MULTILIB eval=$(eval)
 
 flatatt-run:
-	$(MAKE) run test=test_flatatt platform=$(flatatt_platform) tiles=$(tiles)
+	$(MAKE) run test=$(FLATATT_TEST) platform=$(flatatt_platform) tiles=$(tiles)
 
 flatatt:
 	$(MAKE) flatatt-gen tiles=$(tiles) s_size=$(s_size) d_size=$(d_size) seed=$(seed)

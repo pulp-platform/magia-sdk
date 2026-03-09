@@ -5,14 +5,12 @@
 // Viviane Potocnik <vivianep@iis.ee.ethz.ch>
 // Alberto Dequino <alberto.dequino@unibo.it>
 
-
 #ifndef HAL_IDMA_H
 #define HAL_IDMA_H
 
 /** Forward declaration of the idma controller instance and API structure. */
 typedef struct idma_controller idma_controller_t;
 typedef struct idma_controller_api idma_controller_api_t;
-
 
 /**
  * WIP
@@ -29,7 +27,7 @@ struct idma_controller {
  * This structure holds the configuration settings for IDMA initialization.
  */
 typedef struct {
-    uint32_t hartid;    /**< Mesh tile ID*/
+    uint32_t hartid; /**< Mesh tile ID*/
 } idma_config_t;
 
 /**
@@ -45,12 +43,33 @@ extern int idma_init(idma_controller_t *ctrl);
 /**
  * Start 1-dimensional memory copy.
  */
-extern int idma_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len);
+extern int idma_memcpy_1d(
+    idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len);
 
 /**
  * Start 2-dimensional memory copy.
+ * Copies `reps` blocks of `len` bytes each. After each block, the source address
+ * is advanced by `std` bytes (stride), while the destination is advanced by `len`.
+ * The caller must wait for completion (e.g. via eu_idma_wait).
+ *
+ * @param ctrl  IDMA controller handle.
+ * @param dir   Copy direction. 0 = AXI to OBI (L2 to L1), !0 = OBI to AXI (L1 to L2).
+ * @param axi_addr AXI (L2) memory address of first element.
+ * @param obi_addr OBI (L1) memory address of first element.
+ * @param len   Byte length of each row to transfer.
+ * @param std   Stride in bytes between row starts in the strided side (source for L2->L1, dest for
+ * L1->L2).
+ * @param reps  Number of rows (repetitions).
+ *
+ * @return 0 on successful dispatch.
  */
-extern int idma_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps);
+extern int idma_memcpy_2d(idma_controller_t *ctrl,
+                          uint8_t dir,
+                          uint32_t axi_addr,
+                          uint32_t obi_addr,
+                          uint32_t len,
+                          uint32_t std,
+                          uint32_t reps);
 
 /**
  * WIP
@@ -58,9 +77,19 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_add
  */
 struct idma_controller_api {
     int (*init)(idma_controller_t *ctrl);
-/*     void (*wait)(); */
-    int (*memcpy_1d)(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, volatile uint32_t len);
-    int (*memcpy_2d)(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps);
+    /*     void (*wait)(); */
+    int (*memcpy_1d)(idma_controller_t *ctrl,
+                     uint8_t dir,
+                     uint32_t axi_addr,
+                     uint32_t obi_addr,
+                     volatile uint32_t len);
+    int (*memcpy_2d)(idma_controller_t *ctrl,
+                     uint8_t dir,
+                     uint32_t axi_addr,
+                     uint32_t obi_addr,
+                     uint32_t len,
+                     uint32_t std,
+                     uint32_t reps);
 };
 
 /*
@@ -68,4 +97,4 @@ struct idma_controller_api {
  */
 extern idma_controller_api_t idma_api;
 
-#endif //HAL_IDMA_H
+#endif // HAL_IDMA_H
