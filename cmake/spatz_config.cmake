@@ -33,7 +33,7 @@ set(MAGIA_TARGET_INCLUDE_DIRS
     "${CMAKE_SOURCE_DIR}/targets/magia_v2/include/utils"
     "${CMAKE_SOURCE_DIR}/targets/magia_v2/include/addr_map"
     "${CMAKE_SOURCE_DIR}/targets/magia_v2/include/regs"
-    "${CMAKE_SOURCE_DIR}/tests/spatz_on_magia/common"
+    "${CMAKE_SOURCE_DIR}/tests/common"
 )
 set(MAGIA_CV32_EXTRA_INCLUDE_DIRS
     "${CMAKE_SOURCE_DIR}/hal/include"
