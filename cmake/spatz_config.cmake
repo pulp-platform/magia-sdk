@@ -136,7 +136,7 @@ set(SPATZ_COMPILE_FLAGS
     "-static"
     "-nostartfiles"
     "-nostdlib"
-    "-O2"
+    "-O0"
     "-g"
     "-Wall"
     "-Wextra"
