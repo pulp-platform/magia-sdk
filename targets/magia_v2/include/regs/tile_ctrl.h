@@ -170,11 +170,12 @@
 #define REDMULE_SOFT_CLEAR   0x14
 
 /* RedMulE configuration registers */
-#define REDMULE_REG_X_PTR    0x40
-#define REDMULE_REG_W_PTR    0x44
-#define REDMULE_REG_Z_PTR    0x48
-#define REDMULE_MCFG0_PTR    0x4C
-#define REDMULE_MCFG1_PTR    0x50
+#define REDMULE_REG_X_PTR    0x2C
+#define REDMULE_REG_W_PTR    0x30
+#define REDMULE_REG_Z_PTR    0x34
+#define REDMULE_MCFG0_PTR    0x20
+#define REDMULE_MCFG1_PTR    0x24
+#define REDMULE_MCFG2_PTR    0x28
 #define REDMULE_ARITH_PTR    0x54
 
 #define REDMULE_STATUS_BUSY_MASK     (0xFFFFFFFF)
