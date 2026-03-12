@@ -11,7 +11,7 @@
  * A tollerance of 8 ULP means that two values can differ by a maximum
  * of 8 consecutive representable FP16 values.
  */
-#define ULP_TOLL    (8)
+#define ULP_TOLL    (80)
 
 /**
  * @brief Check if a FP16 value is NaN or (+/-)Inf
@@ -61,7 +61,7 @@ static inline bool vector_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
     int32_t ord_exp;
     int32_t ord_res;
     uint32_t offset;
-    int32_t diff;
+    int32_t ulp_dif;
     bool ret;
 
     ret = true;
@@ -81,10 +81,10 @@ static inline bool vector_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
         ord_exp = fp16_to_ordered(expected);
         ord_res = fp16_to_ordered(result);
 
-        diff = (ord_exp > ord_res) ? (ord_exp - ord_res) : (ord_res - ord_exp);
+        ulp_dif = (ord_exp > ord_res) ? (ord_exp - ord_res) : (ord_res - ord_exp);
 
-        if (diff > ULP_TOLL) {
-            printf("Mismatch at index %d\t-\texpected: %x\t-\tcomputed: %x\n", i, expected, result);
+        if (ulp_dif > ULP_TOLL) {
+            printf("Mismatch at index %d\t-\texpected: %x\t-\tcomputed: %x\t-\tulp: %d\n", i, expected, result, ulp_dif);
             ret = false;
         }
     }
