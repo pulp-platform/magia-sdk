@@ -18,6 +18,7 @@ stages:
   before_script:
     # Cloning MAGIA and recreating Python venv at each job to avoid issues with artifacts
     - make python_ci MAGIA_DIR=$MAGIA
+    - source $MAGIA/magia_venv/bin/activate
 
 .base:
  artifacts:
