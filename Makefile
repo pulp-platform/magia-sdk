@@ -20,8 +20,8 @@
 
 SHELL 			:= /bin/bash
 
-BUILD_DIR 		?= ../sw/tests/$(test)
-MAGIA_DIR 		?= ../
+MAGIA_DIR 		?= ..
+BUILD_DIR 		?= $(MAGIA_DIR)/sw/tests/$(test)
 GVSOC_DIR 		?= ./gvsoc
 CURR_DIR		?= $(shell pwd)
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc

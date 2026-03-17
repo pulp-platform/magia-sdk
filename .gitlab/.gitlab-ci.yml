@@ -1,0 +1,21 @@
+# Copyright 2025 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE.APACHE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Author: Alessandro Nadalini <alessandro.nadalini3@unibo.it>
+#         Alberto Dequino <alberto.dequino@unibo.it> 
+#         Victor Jung <junvi@iis.ee.ethz.ch>
+
+variables:
+  MAGIA: './MAGIA'
+
+stages:
+  - build
+
+init:
+  stage: build
+  script: 
+    - git clone https://github.com/pulp-platform/MAGIA.git
+    - make MAGIA MAGIA_DIR=$MAGIA tiles=2
+    - make clean build tiles=2
+    - make run test=test_helloworld platform=rtl tiles=2 MAGIA_DIR=$MAGIA
