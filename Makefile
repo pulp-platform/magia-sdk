@@ -183,7 +183,7 @@ python_ci:
 	make python_deps && \
 	python -m pip install --upgrade "setuptools<81" && \
 	python -c "import pkg_resources; print('pkg_resources ok')" && \
-	env 
+	source magia_venv/bin/activate
 
 
 
