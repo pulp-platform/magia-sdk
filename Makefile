@@ -175,4 +175,16 @@ gvsoc_init:
 	cd ../pulp && \
 	git checkout lz/magia-v2-pulp
 
+python_ci:
+	cd $(MAGIA_DIR) && \
+	rm -rf magia_venv && \
+	make python_venv && \
+	source setup_env.sh && \
+	make python_deps && \
+	python -m pip install --upgrade "setuptools<81" && \
+	python -c "import pkg_resources; print('pkg_resources ok')" && \
+	env 
+
+
+
 
