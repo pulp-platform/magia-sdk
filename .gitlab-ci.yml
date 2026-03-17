@@ -9,18 +9,30 @@
 variables:
   MAGIA: './MAGIA'
 
+stages:
+  - clone
+  - build
+
+
 .python:
   before_script:
-    # Recreating Python venv at each job to avoid issues with artifacts
+    # Cloning MAGIA and recreating Python venv at each job to avoid issues with artifacts
     - make python_ci MAGIA_DIR=$MAGIA
-
-stages:
-  - build
 
 .base:
  artifacts:
   when: always
   expire_in: 4 week
+
+
+clone-magia:
+  extends: .base
+  stage: clone
+  script:
+    - git clone https://github.com/pulp-platform/MAGIA.git
+  artifacts:
+    paths: [ "MAGIA" ]
+
 
 .MAGIA:
   extends: [.base, .python]
@@ -33,6 +45,9 @@ stages:
 MAGIA_V2_TILES_2:
   extends: .MAGIA
   stage: build
+  needs:
+    - job: clone-magia
+      artifacts : true
   variables:
     tiles: 2
     target_platform: magia_v2
