@@ -18,7 +18,6 @@ stages:
   before_script:
     # Cloning MAGIA and recreating Python venv at each job to avoid issues with artifacts
     - make python_ci MAGIA_DIR=$MAGIA
-    - source $MAGIA/magia_venv/bin/activate
 
 .base:
  artifacts:
@@ -39,7 +38,7 @@ clone-magia:
   extends: [.base, .python]
   script:
     - make rtl-clean MAGIA_DIR=$MAGIA
-    - make MAGIA MAGIA_DIR=$MAGIA tiles=${tiles} target_platform=${target_platform}
+    - source $MAGIA/magia_venv/bin/activate; make MAGIA MAGIA_DIR=$MAGIA tiles=${tiles} target_platform=${target_platform}
   artifacts:
     paths: [ "$MAGIA/work", "$MAGIA/sim/work", "$MAGIA/sim/modelsim.ini", "$MAGIA/scripts/sim_ret_errors.sh", "$MAGIA/scripts/compile.tcl" ]
 
