@@ -85,10 +85,11 @@ jobs:
             for d in 8 16 32; do
               total=$((total + 1))
               echo "=== [$total] tiles=${{ matrix.tiles }} S=$s D=$d ==="
-              make flatatt-gen  tiles=${{ matrix.tiles }} s_size=$s d_size=$d
-              make flatatt-build tiles=${{ matrix.tiles }}
+              make flatatt-gen   tiles=${{ matrix.tiles }} s_size=$s d_size=$d > /dev/null 2>&1
+              make flatatt-build tiles=${{ matrix.tiles }} > /dev/null 2>&1
               output=$(make flatatt-run tiles=${{ matrix.tiles }} 2>&1) || true
-              echo "$output"
+              result=$(echo "$output" | grep -E 'Number of errors:|Test is over' || true)
+              echo "$result"
               errors=$(echo "$output" | grep -oP 'Number of errors:\s*\K[0-9]+' | head -1)
               if [ -n "$errors" ] && [ "$errors" -gt 0 ]; then
                 failed="$failed\n  - tiles=${{ matrix.tiles }}, S=$s, D=$d ($errors errors)"
