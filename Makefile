@@ -145,9 +145,6 @@ else
 endif
 ifneq (,$(filter $(build_mode), update synth profile))
 	cd $(MAGIA_DIR)														&& \
-	make python_venv || true											&& \
-	source setup_env.sh 												&& \
-	make python_deps || true											&& \
 	make bender															&& \
 	make $(build_mode)-ips > $(build_mode)-ips.log mesh_dv=$(mesh_dv)	&& \
 	make floonoc-patch || true											&& \
