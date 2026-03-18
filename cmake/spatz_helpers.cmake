@@ -103,7 +103,7 @@ function(add_spatz_task)
     # Generate disassembly [MAGIA/spatz/sw/Makefile: $(DUMP)]
     add_custom_command(
         OUTPUT ${TASK_DUMP}
-        COMMAND ${SPATZ_OBJDUMP} -D -S ${TASK_ELF} > ${TASK_DUMP}
+        COMMAND ${SPATZ_OBJDUMP} -D -S --mattr=+i,+m,+a,+f,+v,+zfh  ${TASK_ELF} > ${TASK_DUMP}
         DEPENDS ${TASK_ELF}
         COMMENT "[SPATZ] Generating disassembly..."
         VERBATIM
