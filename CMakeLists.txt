@@ -17,7 +17,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 set(CMAKE_VERBOSE_MAKEFILE TRUE)
 
 set(CMAKE_EXE_LINKER_FLAGS_INIT "--specs=nosys.specs")
-set(CMAKE_LINK_LIBRARY_USING_WHOLE_ARCHIVE 
+set(CMAKE_LINK_LIBRARY_USING_WHOLE_ARCHIVE
 "-Wl,--whole-archive <LIBRARY> -Wl,--no-whole-archive"
 )
 set(CMAKE_LINK_LIBRARY_USING_WHOLE_ARCHIVE_SUPPORTED True)
@@ -80,6 +80,7 @@ add_subdirectory(targets)
 add_subdirectory(hal)
 # add_subdirectory(devices)
 add_subdirectory(drivers)
+add_subdirectory(kernels)
 
 ################################################################################
 # Testing                                                                      #

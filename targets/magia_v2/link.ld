@@ -122,7 +122,7 @@ SECTIONS
         _bss_end = .;
     } > dataram
 
-    .l2_heap : 
+    /* .l2_heap : 
     {
         . = ALIGN(4);
         sl2_heap  =  .;
@@ -130,7 +130,7 @@ SECTIONS
         . = . + L2_HEAP_SIZE;
         el2_heap  =  .;
         _el2_heap  =  .;
-    } > dataram
+    } > dataram */
 
     /* ensure there is enough room for stack */
     .stack (NOLOAD): {

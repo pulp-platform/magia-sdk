@@ -1,7 +1,7 @@
 # Copyright (C) 2025 ETH Zurich and University of Bologna
 #
-# Licensed under the Solderpad Hardware License, Version 0.51 
-# (the "License"); you may not use this file except in compliance 
+# Licensed under the Solderpad Hardware License, Version 0.51
+# (the "License"); you may not use this file except in compliance
 # with the License. You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
@@ -15,7 +15,7 @@
 #
 # Authors: Victor Isachi <victor.isachi@unibo.it>
 # Alberto Dequino <alberto.dequino@unibo.it>
-# 
+#
 # Magia-sdk Makefile
 
 SHELL 			:= /bin/bash
@@ -46,6 +46,14 @@ compiler 		?= GCC_PULP
 ISA				?= rv32imcxgap9
 gui 			?= 0
 tiles 			?= 2
+
+LLVM_CMAKE			?= cmake
+LLVM_DIR			?= llvm
+LLVM_REPO			?= git@github.com:pulp-platform/llvm-project.git
+LLVM_COMMIT			?= b494f2d8dde88723026db8ec16ac6c7ee1e140ca
+LLVM_INSTALL_DIR	?= $(CURR_DIR)/llvm/install
+LLVM_BUILD_DIR		?= $(LLVM_DIR)/llvm-project/build
+LLVM_JOBS			?= 8
 
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
@@ -85,7 +93,7 @@ endif
 set_mesh:
 ifeq ($(tiles), 1)
 	$(eval mesh_dv=0)
-endif 
+endif
 
 run: set_mesh
 	@echo 'Magia is available at https://github.com/pulp-platform/MAGIA.git'
@@ -107,10 +115,10 @@ else ifeq ($(platform), rtl)
 	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
 	objcopy --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
 	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
-	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/build/stim_instr.txt $(BUILD_DIR)/build/stim_data.txt	
+	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/build/stim_instr.txt $(BUILD_DIR)/build/stim_data.txt
 	cd $(BUILD_DIR)													&& \
 	cp -sf ../../../sim/modelsim.ini modelsim.ini    				&& \
-	ln -sfn ../../../sim/work work         			
+	ln -sfn ../../../sim/work work
 	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
@@ -171,8 +179,44 @@ gvsoc_init:
 	cd $(GVSOC_DIR) && \
 	git submodule update --init --recursive && \
 	cd core && \
-	git checkout lz/magia-v2-core && \
+	git checkout master && \
 	cd ../pulp && \
-	git checkout lz/magia-v2-pulp
+	git checkout master
 
+llvm:
+	mkdir -p $(LLVM_DIR)
+	if [ ! -d "$(LLVM_DIR)/llvm-project/.git" ]; then \
+		cd $(LLVM_DIR) && git clone $(LLVM_REPO); \
+	fi
+	cd $(LLVM_DIR)/llvm-project && \
+	git checkout $(LLVM_COMMIT) && \
+	git submodule update --init --recursive --jobs=$(LLVM_JOBS) .
+	mkdir -p $(LLVM_INSTALL_DIR)
+	cd $(LLVM_DIR)/llvm-project && mkdir -p build && cd build && \
+	$(LLVM_CMAKE) \
+		-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
+		-DCMAKE_CXX_COMPILER=${CXX} \
+		-DCMAKE_C_COMPILER=${CC} \
+		-DLLVM_OPTIMIZED_TABLEGEN=True \
+		-DLLVM_ENABLE_PROJECTS="clang;lld" \
+		-DLLVM_TARGETS_TO_BUILD="RISCV" \
+		-DLLVM_DEFAULT_TARGET_TRIPLE=riscv32-unknown-elf \
+		-DLLVM_ENABLE_LLD=False \
+		-DLLVM_APPEND_VC_REV=ON \
+		-DCMAKE_BUILD_TYPE=Release \
+		../llvm && \
+	make -j$(LLVM_JOBS) all && \
+	make install
 
+deploy:
+ifndef test
+	$(error Proper formatting is: make deploy test=<test_name> platform=rtl|gvsoc)
+endif
+ifndef platform
+	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
+endif
+	python deployment/generate.py \
+		-s ./deployment/tests/$(test) \
+		-d ./tests/magia/mesh/$(test) && \
+	make clean build tiles=$(tiles) compiler=$(compiler) eval=$(eval) && \
+	make run test=test_$(test) platform=gvsoc
