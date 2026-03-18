@@ -51,6 +51,10 @@ The following *optional* parameters can be specified when running the make comma
 1. Initialize the GVSoC submodule:
 
     `make gvsoc_init`
+
+    You can also create a virtual environment for python with the requirements by running:
+
+    `make python_ci`
     
 2. Build the Magia architecture (*this command may take time and return an error, please be patient.*):
         

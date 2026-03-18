@@ -51,3 +51,19 @@ MAGIA_V2_TILES_2:
   variables:
     tiles: 2
     target_platform: magia_v2
+
+
+.build:
+  extends: .base
+  script:
+    - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler}
+  artifacts:
+    paths: [ "build" ]
+
+build_test_magiav2_tiles_2:
+  extends: .build
+  stage: build
+  variables: 
+    tiles: 2
+    target_platform: magia_v2
+    compiler: GCC_PULP
