@@ -25,6 +25,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
 
       - name: Install Python dependencies
         run: pip install -r requirements.txt
@@ -47,14 +48,32 @@ jobs:
       - name: Verify toolchain
         run: ~/riscv/bin/riscv32-unknown-elf-gcc --version
 
-      - name: Setup GVSoC
+      - name: Cache GVSoC
+        id: cache-gvsoc
+        uses: actions/cache@v4
+        with:
+          path: gvsoc
+          key: gvsoc-v1-tiles-${{ matrix.tiles }}
+          restore-keys: |
+            gvsoc-v1-tiles-
+            gvsoc-v1-
+
+      - name: Clone GVSoC
+        if: steps.cache-gvsoc.outputs.cache-hit != 'true'
         run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          make gvsoc_init
+          if [ ! -d "gvsoc" ]; then
+            git config --global url."https://github.com/".insteadOf "git@github.com:"
+            make gvsoc_init
+          fi
+
+      - name: Install GVSoC Python dependencies
+        run: |
           pip install -r gvsoc/core/requirements.txt
           pip install -r gvsoc/requirements.txt
           pip install -r gvsoc/gvrun/requirements.txt
-          make gvsoc tiles=${{ matrix.tiles }}
+
+      - name: Build GVSoC
+        run: make gvsoc tiles=${{ matrix.tiles }}
 
       - name: Run FlatAttention tests (tiles=${{ matrix.tiles }})
         run: |

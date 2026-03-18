@@ -216,6 +216,7 @@ gvsoc_venv:
 flatatt-gen:
 	python3 tests/magia/mesh/flatatt/gen_golden.py \
 		--s-size $(s_size) --d-size $(d_size) --mesh $(tiles) --seed $(seed)
+	mkdir -p tests/magia/mesh/flatatt_no_data_tiling/include
 	cp tests/magia/mesh/flatatt/include/test.h tests/magia/mesh/flatatt_no_data_tiling/include/test.h
 
 flatatt-build:
