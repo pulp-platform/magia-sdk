@@ -314,13 +314,13 @@ int main(void)
     uint32_t errors = 0;
 
     if (hartid == 0) {
-        _Float16 threshold = (_Float16)0.02f;
+        float16alt threshold = (float16alt)0.02f;
 
         for (uint32_t i = 0; i < S_SIZE; i++) {
             for (uint32_t j = 0; j < D_SIZE; j++) {
-                _Float16 computed = *(volatile _Float16 *)(&o_out[i * D_SIZE + j]);
-                _Float16 expected = o_golden[i * D_SIZE + j];
-                _Float16 diff =
+                float16alt computed = *(volatile float16alt *)(&o_out[i * D_SIZE + j]);
+                float16alt expected = o_golden[i * D_SIZE + j];
+                float16alt diff =
                     (computed > expected) ? (computed - expected) : (expected - computed);
 
                 if (diff > threshold) {

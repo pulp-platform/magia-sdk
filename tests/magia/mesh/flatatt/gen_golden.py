@@ -161,9 +161,9 @@ def compute_golden(Q, K_T, V, S, D):
 def format_array(arr, name, size_expr=None):
     """Format a numpy float16 array as a C array declaration."""
     if size_expr:
-        decl = f'extern _Float16 {name:<12s}[{size_expr}] = {{'
+        decl = f'extern float16alt {name:<12s}[{size_expr}] = {{'
     else:
-        decl = f'extern _Float16 {name:<12s}[] = {{'
+        decl = f'extern float16alt {name:<12s}[] = {{'
 
     vals = []
     for v in arr.flat:
@@ -209,7 +209,7 @@ def write_test_h(output_path, s, d, seed, mesh,
     parts.append("")
 
     # Output buffer
-    parts.append(f'extern _Float16 {"o_out":<12s}[S_SIZE * D_SIZE] = {{}};')
+    parts.append(f'extern float16alt {"o_out":<12s}[S_SIZE * D_SIZE] = {{}};')
 
     # Golden output
     parts.append(format_array(o_golden.flatten(), 'o_golden'))

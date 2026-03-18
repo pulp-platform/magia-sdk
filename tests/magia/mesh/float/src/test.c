@@ -7,7 +7,7 @@
 #include "tile.h"
 
 /**
- * This test aims to verify the functionality of _Float16 operations.
+ * This test aims to verify the functionality of float16alt operations.
  */
 int main(void){
     uint32_t hartid = get_hartid();
