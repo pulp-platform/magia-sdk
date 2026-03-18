@@ -31,8 +31,8 @@
 int max_compare(uint32_t curr, uint32_t prev, uint32_t dim)
 {
     for (uint32_t i = 0; i < dim; i++) {
-        if ((*(volatile _Float16 *)(prev + (i * 2))) > (*(volatile _Float16 *)(curr + (i * 2))))
-            (*(volatile _Float16 *)(curr + (i * 2))) = (*(volatile _Float16 *)(prev + (i * 2)));
+        if ((*(volatile float16alt *)(prev + (i * 2))) > (*(volatile float16alt *)(curr + (i * 2))))
+            (*(volatile float16alt *)(curr + (i * 2))) = (*(volatile float16alt *)(prev + (i * 2)));
     }
 }
 
@@ -42,13 +42,13 @@ int max_compare(uint32_t curr, uint32_t prev, uint32_t dim)
 int row_max(uint32_t s, uint32_t maxes, uint32_t dim_h, uint32_t dim_w)
 {
     for (uint32_t i = 0; i < dim_h; i++) {
-        uint32_t row   = s + i * dim_w * 2;
-        _Float16 r_max = 0;
+        uint32_t row     = s + i * dim_w * 2;
+        float16alt r_max = 0;
         for (uint32_t j = 0; j < dim_w; j++) {
-            if ((*(volatile _Float16 *)(row + j * 2)) > r_max)
-                r_max = *(volatile _Float16 *)(row + j * 2);
+            if ((*(volatile float16alt *)(row + j * 2)) > r_max)
+                r_max = *(volatile float16alt *)(row + j * 2);
         }
-        (*(volatile _Float16 *)(maxes + i * 2)) = r_max;
+        (*(volatile float16alt *)(maxes + i * 2)) = r_max;
     }
 }
 
@@ -58,10 +58,11 @@ int row_max(uint32_t s, uint32_t maxes, uint32_t dim_h, uint32_t dim_w)
 int rowdiff(uint32_t s, uint32_t m, uint32_t h, uint32_t w)
 {
     for (uint32_t i = 0; i < h; i++) {
-        uint32_t row  = s + i * w * 2;
-        _Float16 diff = *(volatile _Float16 *)(m + i * 2);
+        uint32_t row    = s + i * w * 2;
+        float16alt diff = *(volatile float16alt *)(m + i * 2);
         for (uint32_t j = 0; j < w; j++) {
-            (*(volatile _Float16 *)(row + j * 2)) = (*(volatile _Float16 *)(row + j * 2)) - diff;
+            (*(volatile float16alt *)(row + j * 2)) =
+                (*(volatile float16alt *)(row + j * 2)) - diff;
         }
     }
 }
@@ -76,9 +77,9 @@ int row_sum(uint32_t s, uint32_t l, uint32_t h, uint32_t w)
         uint32_t row = s + i * 2 * w;
         uint16_t sum = 0;
         for (uint32_t j = 0; j < w; j++) {
-            sum = sum + *(volatile _Float16 *)(row + j * 2);
+            sum = sum + *(volatile float16alt *)(row + j * 2);
         }
-        (*(volatile _Float16 *)(l + i * 2)) = sum;
+        (*(volatile float16alt *)(l + i * 2)) = sum;
     }
 }
 
@@ -89,10 +90,10 @@ int row_sum(uint32_t s, uint32_t l, uint32_t h, uint32_t w)
 int rowdiv(uint32_t s, uint32_t m, uint32_t h, uint32_t w)
 {
     for (uint32_t i = 0; i < h; i++) {
-        uint32_t row = s + i * w * 2;
-        _Float16 div = *(volatile _Float16 *)(m + i * 2);
+        uint32_t row   = s + i * w * 2;
+        float16alt div = *(volatile float16alt *)(m + i * 2);
         for (uint32_t j = 0; j < w; j++) {
-            (*(volatile _Float16 *)(row + j * 2)) = (*(volatile _Float16 *)(row + j * 2)) / div;
+            (*(volatile float16alt *)(row + j * 2)) = (*(volatile float16alt *)(row + j * 2)) / div;
         }
     }
 }
@@ -103,8 +104,8 @@ int rowdiv(uint32_t s, uint32_t m, uint32_t h, uint32_t w)
 int vect_sum(uint32_t v1, uint32_t v2, uint32_t dim)
 {
     for (uint32_t i = 0; i < dim; i++) {
-        (*(volatile _Float16 *)(v1 + i * 2)) =
-            *(volatile _Float16 *)(v1 + i * 2) + *(volatile _Float16 *)(v2 + i * 2);
+        (*(volatile float16alt *)(v1 + i * 2)) =
+            *(volatile float16alt *)(v1 + i * 2) + *(volatile float16alt *)(v2 + i * 2);
     }
 }
 
@@ -114,8 +115,8 @@ int vect_sum(uint32_t v1, uint32_t v2, uint32_t dim)
 int vect_diff(uint32_t v1, uint32_t v2, uint32_t dim)
 {
     for (uint32_t i = 0; i < dim; i++) {
-        (*(volatile _Float16 *)(v1 + i * 2)) =
-            *(volatile _Float16 *)(v1 + i * 2) - *(volatile _Float16 *)(v2 + i * 2);
+        (*(volatile float16alt *)(v1 + i * 2)) =
+            *(volatile float16alt *)(v1 + i * 2) - *(volatile float16alt *)(v2 + i * 2);
     }
 }
 
@@ -125,8 +126,8 @@ int vect_diff(uint32_t v1, uint32_t v2, uint32_t dim)
 int vect_prod(uint32_t v1, uint32_t v2, uint32_t dim)
 {
     for (uint32_t i = 0; i < dim; i++) {
-        (*(volatile _Float16 *)(v1 + i * 2)) =
-            (*(volatile _Float16 *)(v1 + i * 2)) * (*(volatile _Float16 *)(v2 + i * 2));
+        (*(volatile float16alt *)(v1 + i * 2)) =
+            (*(volatile float16alt *)(v1 + i * 2)) * (*(volatile float16alt *)(v2 + i * 2));
     }
 }
 
@@ -135,7 +136,7 @@ int vect_prod(uint32_t v1, uint32_t v2, uint32_t dim)
 #define GIST_C 8388608
 #define GIST_D 2139095040
 
-_Float16 fastexp_gist(_Float16 x)
+float16alt fastexp_gist(float16alt x)
 {
     x = GIST_A * x + GIST_B;
 
@@ -143,15 +144,15 @@ _Float16 fastexp_gist(_Float16 x)
         x = (x < GIST_C) ? 0.0f : GIST_D;
 
     uint32_t n = (uint32_t)(x);
-    return *(_Float16 *)&n;
+    return *(float16alt *)&n;
 }
 
 int exponential(uint32_t matrix, uint32_t rows, uint32_t columns)
 {
     for (uint32_t i = 0; i < rows; i++) {
         for (uint32_t j = 0; j < columns; j++) {
-            (*(volatile _Float16 *)(matrix + i * columns * 2 + j * 2)) = (_Float16)fastexp_gist(
-                (_Float16)(*(volatile _Float16 *)(matrix + i * columns * 2 + j * 2)));
+            (*(volatile float16alt *)(matrix + i * columns * 2 + j * 2)) = (float16alt)fastexp_gist(
+                (float16alt)(*(volatile float16alt *)(matrix + i * columns * 2 + j * 2)));
         }
     }
 }

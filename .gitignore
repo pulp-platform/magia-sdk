@@ -26,5 +26,3 @@ scripts/wave.do
 tests/magia/mesh/flatatt/include/*
 tests/magia/mesh/flatatt_no_data_tiling/include/*
 
-# Binary artifacts
-targets/magia_v2/lib/libgcc_merged.a

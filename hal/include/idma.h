@@ -83,6 +83,7 @@ struct idma_controller_api {
                      uint32_t axi_addr,
                      uint32_t obi_addr,
                      volatile uint32_t len);
+
     int (*memcpy_2d)(idma_controller_t *ctrl,
                      uint8_t dir,
                      uint32_t axi_addr,

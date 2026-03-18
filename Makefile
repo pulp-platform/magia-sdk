@@ -93,10 +93,6 @@ ifeq ($(compiler), GCC_MULTILIB)
 	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^#add_subdirectory\(flatatt_no_data_tiling\)/add_subdirectory\(flatatt_no_data_tiling\)/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/$(target_platform)/include/tile.h
-	@if [ ! -f ./targets/$(target_platform)/lib/libgcc_merged.a ]; then \
-		echo "libgcc_merged.a not found, generating..."; \
-		./scripts/merge_libgcc.sh; \
-	fi
 endif
 	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -B $(CMAKE_BUILDDIR) --trace-expand
 	cmake --build $(CMAKE_BUILDDIR) --verbose

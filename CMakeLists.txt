@@ -47,12 +47,6 @@ elseif (TARGET_PLATFORM STREQUAL "magia_v2")
     set(ISA rv32imcxgap9)
 endif ()
 
-# GCC 12+ requires explicit zicsr/zifencei extensions;
-# z-extensions must precede x-extensions in the ISA string
-if (COMPILER STREQUAL "GCC_MULTILIB")
-    set(ISA rv32imc_zicsr_zifencei)
-endif()
-
 message(STATUS "[MAGIA-SDK] ABI                     : ${ABI}")
 message(STATUS "[MAGIA-SDK] ISA                     : ${ISA}")
 if (${DISASSEMBLE_LIBRARIES})
