@@ -77,12 +77,22 @@ jobs:
 
       - name: Run FlatAttention tests (tiles=${{ matrix.tiles }})
         run: |
+          failed=""
           for s_mult in 4 8 16; do
             s=$(( s_mult * ${{ matrix.tiles }} ))
             for d in 8 16 32; do
               echo "=== tiles=${{ matrix.tiles }} S=$s D=$d ==="
               make flatatt-gen  tiles=${{ matrix.tiles }} s_size=$s d_size=$d
               make flatatt-build tiles=${{ matrix.tiles }}
-              make flatatt-run  tiles=${{ matrix.tiles }}
+              output=$(make flatatt-run tiles=${{ matrix.tiles }} 2>&1) || true
+              echo "$output"
+              if echo "$output" | grep -qP 'Number of errors:\s*[1-9]'; then
+                echo "FAIL: tiles=${{ matrix.tiles }} S=$s D=$d"
+                failed="$failed tiles=${{ matrix.tiles }},S=$s,D=$d"
+              fi
             done
           done
+          if [ -n "$failed" ]; then
+            echo "FAILED tests:$failed"
+            exit 1
+          fi
