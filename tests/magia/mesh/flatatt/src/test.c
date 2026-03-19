@@ -435,7 +435,7 @@ int main(void)
                 float16alt diff =
                     (computed > expected) ? (computed - expected) : (expected - computed);
                 if (diff > tol) {
-                    printf("\n\nError at [%d][%d]: got=%x exp=%x\n",
+                    printf("Error at [%d][%d]: got=%x exp=%x\n",
                            i,
                            j,
                            *(uint16_t *)&computed,
