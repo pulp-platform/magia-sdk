@@ -13,12 +13,20 @@ variables:
 stages:
   - clone
   - build
+  - run
 
 
 .python:
   before_script:
     # Cloning MAGIA and recreating Python venv at each job to avoid issues with artifacts
     - make python_ci MAGIA_DIR=$MAGIA
+
+.python_gvsoc:
+  before_script:
+    - conda create -n magia python=3.12 -y
+    - source activate base
+    - conda activate magia
+    - pip install .
 
 .base:
  artifacts:
@@ -33,6 +41,28 @@ clone-magia:
     - git clone https://github.com/pulp-platform/MAGIA.git
   artifacts:
     paths: [ "MAGIA" ]
+
+clone-gvsoc:
+  extends: .base
+  stage: clone
+  script:
+    - make gvsoc_init
+  artifacts:
+    paths: [ "gvsoc" ]
+
+.gvsoc:
+  extends: [.base, .python_gvsoc]
+  script:
+    - make gvsoc tiles=${tiles}
+
+gvsoc_tiles_2:
+  extends: .gvsoc
+  stage: build
+  needs:
+    - job: clone-gvsoc
+      artifacts: true
+  variables:
+    tiles: 2
 
 
 .MAGIA:
@@ -71,3 +101,4 @@ build_test_magiav2_tiles_2:
     tiles: 2
     target_platform: magia_v2
     compiler: GCC_PULP
+

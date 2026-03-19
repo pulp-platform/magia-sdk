@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "magia-deployment"
+version = "0.1.0"
+description = "Deployment on MAGIA platform"
+requires-python = ">=3.12"
+authors = [
+    {name="Alex Marchioni", email = "alex.marchioni@outlook.it"},
+]
+dependencies = [
+    "numpy",
+    "prettytable",
+    "pyelftools",
+    "rich",
+    "six",
+    "pexpect",
+    "psutil",
+    "typing_extensions",
+    "deeploy-pulp",
+]
+
+[project.optional-dependencies]
+nb = [
+    "jupyter",
+    "ipykernel",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]

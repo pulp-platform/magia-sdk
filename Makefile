@@ -168,9 +168,9 @@ gvsoc_init:
 	cd $(GVSOC_DIR) && \
 	git submodule update --init --recursive && \
 	cd core && \
-	git checkout lz/magia-v2-core && \
+	git checkout master && \
 	cd ../pulp && \
-	git checkout lz/magia-v2-pulp
+	git checkout master
 
 python_ci:
 	cd $(MAGIA_DIR) && \
