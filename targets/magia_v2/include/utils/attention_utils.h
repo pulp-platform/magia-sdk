@@ -23,6 +23,22 @@
 #define ATTENTION_UTILS_H
 
 #include "magia_tile_utils.h"
+#include <stdbool.h>
+
+/* Compare two float16 values directly via their bit patterns.
+ * IEEE 754 fp16 is monotonic within each sign, so integer comparison
+ * on the raw bits works with sign handling.  Handles +0 == -0. */
+static inline bool fp16_gt(float16 a, float16 b)
+{
+    uint16_t ua = *(uint16_t *)&a;
+    uint16_t ub = *(uint16_t *)&b;
+    if ((ua & 0x8000) != (ub & 0x8000)) {
+        if ((ua | ub) & 0x7FFF) return !!(ub & 0x8000); /* positive > negative */
+        return false;                                /* +0 == -0            */
+    }
+    if (ua & 0x8000) return ua < ub; /* both negative: smaller magnitude wins */
+    return ua > ub;                  /* both positive: larger magnitude wins  */
+}
 
 /**
  * Element-wise comparison of the max vectors.
@@ -31,8 +47,9 @@
 int max_compare(uint32_t curr, uint32_t prev, uint32_t dim)
 {
     for (uint32_t i = 0; i < dim; i++) {
-        if ((*(volatile float16alt *)(prev + (i * 2))) > (*(volatile float16alt *)(curr + (i * 2))))
-            (*(volatile float16alt *)(curr + (i * 2))) = (*(volatile float16alt *)(prev + (i * 2)));
+        float16 p = *(volatile float16 *)(prev + (i * 2));
+        if (fp16_gt(p, *(volatile float16 *)(curr + (i * 2))))
+            (*(volatile float16 *)(curr + (i * 2))) = p;
     }
 }
 
@@ -42,27 +59,28 @@ int max_compare(uint32_t curr, uint32_t prev, uint32_t dim)
 int row_max(uint32_t s, uint32_t maxes, uint32_t dim_h, uint32_t dim_w)
 {
     for (uint32_t i = 0; i < dim_h; i++) {
-        uint32_t row     = s + i * dim_w * 2;
-        float16alt r_max = 0;
+        uint32_t row  = s + i * dim_w * 2;
+        float16 r_max = 0;
+
         for (uint32_t j = 0; j < dim_w; j++) {
-            if ((*(volatile float16alt *)(row + j * 2)) > r_max)
-                r_max = *(volatile float16alt *)(row + j * 2);
+            float16 val = *(volatile float16 *)(row + j * 2);
+            if (fp16_gt(val, r_max))
+                r_max = val;
         }
-        (*(volatile float16alt *)(maxes + i * 2)) = r_max;
+        (*(volatile float16 *)(maxes + i * 2)) = r_max;
     }
 }
 
 /**
  * For each row i of the input h x w matrix "s", substract the i-th element of the "m" vector.
  */
-int rowdiff(uint32_t s, uint32_t m, uint32_t h, uint32_t w)
+int row_diff(uint32_t s, uint32_t m, uint32_t h, uint32_t w)
 {
     for (uint32_t i = 0; i < h; i++) {
-        uint32_t row    = s + i * w * 2;
-        float16alt diff = *(volatile float16alt *)(m + i * 2);
+        uint32_t row = s + i * w * 2;
+        float16 diff = *(volatile float16 *)(m + i * 2);
         for (uint32_t j = 0; j < w; j++) {
-            (*(volatile float16alt *)(row + j * 2)) =
-                (*(volatile float16alt *)(row + j * 2)) - diff;
+            (*(volatile float16 *)(row + j * 2)) = (*(volatile float16 *)(row + j * 2)) - diff;
         }
     }
 }
@@ -74,12 +92,12 @@ int rowdiff(uint32_t s, uint32_t m, uint32_t h, uint32_t w)
 int row_sum(uint32_t s, uint32_t l, uint32_t h, uint32_t w)
 {
     for (uint32_t i = 0; i < h; i++) {
-        uint32_t row   = s + i * 2 * w;
-        float16alt sum = 0;
+        uint32_t row = s + i * 2 * w;
+        float16 sum  = 0;
         for (uint32_t j = 0; j < w; j++) {
-            sum = sum + *(volatile float16alt *)(row + j * 2);
+            sum = sum + *(volatile float16 *)(row + j * 2);
         }
-        (*(volatile float16alt *)(l + i * 2)) = sum;
+        (*(volatile float16 *)(l + i * 2)) = sum;
     }
 }
 
@@ -90,10 +108,10 @@ int row_sum(uint32_t s, uint32_t l, uint32_t h, uint32_t w)
 int rowdiv(uint32_t s, uint32_t m, uint32_t h, uint32_t w)
 {
     for (uint32_t i = 0; i < h; i++) {
-        uint32_t row   = s + i * w * 2;
-        float16alt div = *(volatile float16alt *)(m + i * 2);
+        uint32_t row = s + i * w * 2;
+        float16 div  = *(volatile float16 *)(m + i * 2);
         for (uint32_t j = 0; j < w; j++) {
-            (*(volatile float16alt *)(row + j * 2)) = (*(volatile float16alt *)(row + j * 2)) / div;
+            (*(volatile float16 *)(row + j * 2)) = (*(volatile float16 *)(row + j * 2)) / div;
         }
     }
 }
@@ -104,8 +122,8 @@ int rowdiv(uint32_t s, uint32_t m, uint32_t h, uint32_t w)
 int vect_sum(uint32_t v1, uint32_t v2, uint32_t dim)
 {
     for (uint32_t i = 0; i < dim; i++) {
-        (*(volatile float16alt *)(v1 + i * 2)) =
-            *(volatile float16alt *)(v1 + i * 2) + *(volatile float16alt *)(v2 + i * 2);
+        (*(volatile float16 *)(v1 + i * 2)) =
+            *(volatile float16 *)(v1 + i * 2) + *(volatile float16 *)(v2 + i * 2);
     }
 }
 
@@ -115,8 +133,8 @@ int vect_sum(uint32_t v1, uint32_t v2, uint32_t dim)
 int vect_diff(uint32_t v1, uint32_t v2, uint32_t dim)
 {
     for (uint32_t i = 0; i < dim; i++) {
-        (*(volatile float16alt *)(v1 + i * 2)) =
-            *(volatile float16alt *)(v1 + i * 2) - *(volatile float16alt *)(v2 + i * 2);
+        (*(volatile float16 *)(v1 + i * 2)) =
+            *(volatile float16 *)(v1 + i * 2) - *(volatile float16 *)(v2 + i * 2);
     }
 }
 
@@ -126,8 +144,8 @@ int vect_diff(uint32_t v1, uint32_t v2, uint32_t dim)
 int vect_prod(uint32_t v1, uint32_t v2, uint32_t dim)
 {
     for (uint32_t i = 0; i < dim; i++) {
-        (*(volatile float16alt *)(v1 + i * 2)) =
-            (*(volatile float16alt *)(v1 + i * 2)) * (*(volatile float16alt *)(v2 + i * 2));
+        (*(volatile float16 *)(v1 + i * 2)) =
+            (*(volatile float16 *)(v1 + i * 2)) * (*(volatile float16 *)(v2 + i * 2));
     }
 }
 
@@ -136,14 +154,14 @@ int vect_prod(uint32_t v1, uint32_t v2, uint32_t dim)
 // #define GIST_C  8388608
 // #define GIST_D  2139095040
 
-// float16alt fastexp_gist(float16alt x) {
+// float16 fastexp_gist(float16 x) {
 //     x = GIST_A * x + GIST_B;
 
 //     if (x < GIST_C || x > GIST_D)
 //         x = (x < GIST_C) ? 0.0f : GIST_D;
 
 //     uint32_t n = (uint32_t)(x);
-//     return *(float16alt *) &n;
+//     return *(float16 *) &n;
 // }
 
 // fp16!
@@ -178,8 +196,8 @@ int exponential(uint32_t matrix, uint32_t rows, uint32_t columns)
 {
     for (uint32_t i = 0; i < rows; i++) {
         for (uint32_t j = 0; j < columns; j++) {
-            volatile float16alt *ptr = (volatile float16alt *)(matrix + i * columns * 2 + j * 2);
-            *ptr                     = (float16alt)soft_expf((float)(*ptr));
+            volatile float16 *ptr = (volatile float16 *)(matrix + i * columns * 2 + j * 2);
+            *ptr                  = (float16)soft_expf((float)(*ptr));
         }
     }
 }

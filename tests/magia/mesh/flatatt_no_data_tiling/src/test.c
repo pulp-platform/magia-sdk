@@ -201,7 +201,7 @@ int main(void)
      * 2.3. Element-wise substraction for each row with their maximum (stored in M)
      * S - M -> S
      */
-    rowdiff(obi_addr_s, obi_addr_m, tile_h, tile_w);
+    row_diff(obi_addr_s, obi_addr_m, tile_h, tile_w);
 
     /**
      * 2.4. In-place element-wise exponential on the scores (stored in S)
@@ -314,13 +314,13 @@ int main(void)
     uint32_t errors = 0;
 
     if (hartid == 0) {
-        float16alt threshold = (float16alt)0.02f;
+        float16 threshold = (float16)0.02f;
 
         for (uint32_t i = 0; i < S_SIZE; i++) {
             for (uint32_t j = 0; j < D_SIZE; j++) {
-                float16alt computed = *(volatile float16alt *)(&o_out[i * D_SIZE + j]);
-                float16alt expected = o_golden[i * D_SIZE + j];
-                float16alt diff =
+                float16 computed = *(volatile float16 *)(&o_out[i * D_SIZE + j]);
+                float16 expected = o_golden[i * D_SIZE + j];
+                float16 diff =
                     (computed > expected) ? (computed - expected) : (expected - computed);
 
                 if (diff > threshold) {

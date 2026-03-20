@@ -260,7 +260,7 @@ int main(void)
             /**
              * 3d. Element wise substraction for each row with their maximum
              */
-            rowdiff(obi_addr_s, max_buffer, tile_h, tile_w);
+            row_diff(obi_addr_s, max_buffer, tile_h, tile_w);
 
             /**
              * 3e. Exponential on the scores
@@ -427,12 +427,12 @@ int main(void)
 
     uint32_t errors = 0;
     if (hartid == 0) {
-        float16alt tol = (float16alt)0.02f;
+        float16 tol = (float16)0.02f;
         for (uint32_t i = 0; i < S_SIZE; i++) {
             for (uint32_t j = 0; j < D_SIZE; j++) {
-                float16alt computed = *(volatile float16alt *)(&o_out[i * D_SIZE + j]);
-                float16alt expected = o_golden[i * D_SIZE + j];
-                float16alt diff =
+                float16 computed = *(volatile float16 *)(&o_out[i * D_SIZE + j]);
+                float16 expected = o_golden[i * D_SIZE + j];
+                float16 diff =
                     (computed > expected) ? (computed - expected) : (expected - computed);
                 if (diff > tol) {
                     printf("Error at [%d][%d]: got=%x exp=%x\n",
