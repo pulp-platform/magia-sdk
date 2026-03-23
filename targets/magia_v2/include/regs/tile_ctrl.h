@@ -66,6 +66,10 @@
 #define EU_PULP_DONE_BIT              (12)         // Pulp end of compute
 #define EU_PULP_EVT_MASK              (0x00001000) // bits 12
 
+// Pulp cluster Events [12] - pulp_events_i mapping
+#define EU_PULP_DONE_BIT             (12)                        // Pulp end of compute
+#define EU_PULP_EVT_MASK             (0x00001000)                // bits 12
+
 // RedMulE specific event mapping (within accelerator events)
 #define EU_REDMULE_BUSY_BIT           EU_ACC_EVT_1_BIT // bit 9 - RedMulE busy
 #define EU_REDMULE_DONE_BIT           EU_ACC_EVT_2_BIT // bit 10 - RedMulE completion
