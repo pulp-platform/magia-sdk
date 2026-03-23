@@ -88,6 +88,7 @@ ifeq ($(tiles), 1)
 endif 
 
 run: set_mesh
+	sed -i 's/ QUESTA ?= questa-2025.1/ QUESTA ?= questa-2023.4/' $(MAGIA_DIR)/Makefile
 	@echo 'Magia is available at https://github.com/pulp-platform/MAGIA.git'
 	@echo 'please run "source setup_env.sh" in the magia folder before running this script'
 	@echo 'and make sure the risc-v objdump binary is visible on path using "which riscv32-unknown-elf-objdump".'
@@ -121,6 +122,7 @@ else
 endif
 
 MAGIA: set_mesh
+	sed -i 's/ QUESTA ?= questa-2025.1/ QUESTA ?= questa-2023.4/' $(MAGIA_DIR)/Makefile
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
 	$(eval tiles_2=256)
 endif
@@ -145,6 +147,10 @@ else
 endif
 ifneq (,$(filter $(build_mode), update synth profile))
 	cd $(MAGIA_DIR)														&& \
+	make python_venv || true											&& \
+	source setup_env.sh 												&& \
+	make python_deps || true											&& \
+	python -m pip install --upgrade "setuptools<81"						&& \
 	make bender															&& \
 	make $(build_mode)-ips > $(build_mode)-ips.log mesh_dv=$(mesh_dv)	&& \
 	make floonoc-patch || true											&& \
@@ -171,15 +177,6 @@ gvsoc_init:
 	git checkout master && \
 	cd ../pulp && \
 	git checkout master
-
-python_ci:
-	cd $(MAGIA_DIR) && \
-	rm -rf magia_venv && \
-	make python_venv && \
-	source setup_env.sh && \
-	make python_deps && \
-	python -m pip install --upgrade "setuptools<81" && \
-	python -c "import pkg_resources; print('pkg_resources ok')"
 
 
 
