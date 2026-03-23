@@ -35,30 +35,6 @@ static inline _Float16 find_max(const _Float16 *vec, size_t len)
     return max;
 }
 
-static inline _Float16 compute_exponential_sum_fastexp_scalar(const _Float16 *src, _Float16 *dst, size_t len, _Float16 max)
-{
-    _Float16 COEF = 1486.0f;
-    _Float16 BIAS = 15360.0f;
-    _Float16 sum;
-
-    sum = 0.0f;
-    for (int i = 0; i < len; i++) {
-        _Float16 val;
-        uint16_t raw;
-
-        val = src[i] - max;
-        val = val * COEF + BIAS;
-
-        raw = (uint16_t)val;
-        val = *(_Float16 *)(&raw);
-
-        dst[i] = val;
-        sum += val;
-    }
-
-    return sum;
-}
-
 /**
  * Computes a fast vectorized approximation of exp(x - max) for an FP16 vector
  * and returns the sum. Uses the bit-level fast exponential method (Schraudolph 1999):
@@ -68,11 +44,9 @@ static inline _Float16 compute_exponential_sum_fastexp_scalar(const _Float16 *sr
  */
 static inline _Float16 compute_exponential_sum_fastexp(const _Float16 *src, _Float16 *dst, size_t len, _Float16 max)
 {
-    // printf("Vectorial\n");
-
-    _Float16 COEF = 1486.0f;
-    _Float16 BIAS = 15360.0f;
-    _Float16 ZERO_f = 0.0f;
+    register _Float16 COEF asm("f10") = 1486.0f;
+    register _Float16 BIAS asm("f11") = 15360.0f;
+    register _Float16 ZERO_f asm("f2") = 0.0f;
 
     const _Float16 *p_src;
     _Float16 *p_dst;
