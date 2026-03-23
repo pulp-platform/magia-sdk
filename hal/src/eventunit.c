@@ -11,6 +11,8 @@
 
 __attribute__((weak)) eu_controller_api_t eu_api = {
     .init                   = eu_init,
+    .pulp_init              = eu_pulp_init,
+    .pulp_wait              = eu_pulp_wait,
     .redmule_init           = eu_redmule_init,
     .redmule_wait           = eu_redmule_wait,
     .redmule_is_busy        = eu_redmule_is_busy,

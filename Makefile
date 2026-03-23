@@ -43,7 +43,7 @@ profile_cmi		?= 0
 profile_cmo		?= 0
 profile_snc		?= 0
 
-target_platform ?= magia_v2
+target_platform ?= magia_v3
 compiler 		?= GCC_PULP
 ISA				?= rv32imcxgap9
 gui 			?= 0
@@ -169,6 +169,9 @@ ifeq ($(target_platform), magia_v1)
 	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_DIR)/Makefile
 	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40P/\1CV32E40X/' $(MAGIA_DIR)/Makefile
 else ifeq ($(target_platform), magia_v2)
+	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_DIR)/Makefile
+	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40X/\1CV32E40P/' $(MAGIA_DIR)/Makefile
+else ifeq ($(target_platform), magia_v3)
 	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_DIR)/Makefile
 	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40X/\1CV32E40P/' $(MAGIA_DIR)/Makefile
 else

@@ -9,6 +9,7 @@
 set(AVAILABLE_TARGETS
   "magia_v1"
   "magia_v2"
+  "magia_v3"
   CACHE STRING "Available Targets"
 )
 

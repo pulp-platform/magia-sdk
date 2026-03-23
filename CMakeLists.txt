@@ -45,6 +45,8 @@ if (TARGET_PLATFORM STREQUAL "magia_v1")
     set(ISA rv32imafc)
 elseif (TARGET_PLATFORM STREQUAL "magia_v2")
     set(ISA rv32imcxgap9)
+elseif (TARGET_PLATFORM STREQUAL "magia_v3")
+    set(ISA rv32imcxgap9)
 endif ()
 
 message(STATUS "[MAGIA-SDK] ABI                     : ${ABI}")

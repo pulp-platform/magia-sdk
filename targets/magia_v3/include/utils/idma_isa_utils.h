@@ -1,0 +1,364 @@
+/*
+ * Copyright (C) 2023-2024 ETH Zurich and University of Bologna
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Authors: Victor Isachi <victor.isachi@unibo.it>
+ * 
+ * MAGIA iDMA ISA Utils
+ */
+
+#ifndef IDMA_ISA_UTILS_H
+#define IDMA_ISA_UTILS_H
+
+#include "addr_map/tile_addr_map.h"
+#include "regs/tile_ctrl.h"
+#include "magia_tile_utils.h"
+#include "performance_utils.h"
+
+#define idma_wait() __asm__ __volatile__("wfi" ::: "memory")
+
+/* conf instruction */
+  // asm volatile(
+  //      ".word (0x0       << 27) | \     /* Reserved - 0x0 */
+  //             (0b11      << 26) | \     /* Enable ND extension - see iDMA documentation */
+  //             (0b0       << 25) | \     /* Direction - 0 for AXI2OBI (L2 to L1), 1 for OBI2AXI (L1 to L2) */
+  //             (0b000     << 22) | \     /* Destination maximum logarithmic length - see iDMA documentation */
+  //             (0b000     << 19) | \     /* Source maximum logarithmic length - see iDMA documentation */
+  //             (0b0       << 18) | \     /* Destination reduce length - see iDMA documentation */
+  //             (0b0       << 17) | \     /* Source reduce length - see iDMA documentation */
+  //             (0b0       << 16) | \     /* Decouple R/W - see iDMA documentation */
+  //             (0b0       << 15) | \     /* Decouple R/AW - see iDMA documentation */
+  //             (0b000     << 12) | \     /* FUNC3 */
+  //             (0x0       <<  7) | \     /* Reserved - 0x0 */
+  //             (0b1011011 <<  0)   \n"); /* OPCODE */
+inline void idma_conf_in(){
+  asm volatile(
+       ".word (0x0       << 27) | \
+              (0b11      << 26) | \
+              (0b0       << 25) | \
+              (0b000     << 22) | \
+              (0b000     << 19) | \
+              (0b0       << 18) | \
+              (0b0       << 17) | \
+              (0b0       << 16) | \
+              (0b0       << 15) | \
+              (0b000     << 12) | \
+              (0x0       <<  7) | \
+              (0b1011011 <<  0)   \n");
+}
+
+/* conf instruction */
+  // asm volatile(
+  //      ".word (0x0       << 27) | \     /* Reserved - 0x0 */
+  //             (0b11      << 26) | \     /* Enable ND extension - see iDMA documentation */
+  //             (0b1       << 25) | \     /* Direction - 0 for AXI2OBI (L2 to L1), 1 for OBI2AXI (L1 to L2) */
+  //             (0b000     << 22) | \     /* Destination maximum logarithmic length - see iDMA documentation */
+  //             (0b000     << 19) | \     /* Source maximum logarithmic length - see iDMA documentation */
+  //             (0b0       << 18) | \     /* Destination reduce length - see iDMA documentation */
+  //             (0b0       << 17) | \     /* Source reduce length - see iDMA documentation */
+  //             (0b0       << 16) | \     /* Decouple R/W - see iDMA documentation */
+  //             (0b0       << 15) | \     /* Decouple R/AW - see iDMA documentation */
+  //             (0b000     << 12) | \     /* FUNC3 */
+  //             (0x0       <<  7) | \     /* Reserved - 0x0 */
+  //             (0b1011011 <<  0)   \n"); /* OPCODE */
+inline void idma_conf_out(){
+  asm volatile(
+       ".word (0x0       << 27) | \
+              (0b11      << 26) | \
+              (0b1       << 25) | \
+              (0b000     << 22) | \
+              (0b000     << 19) | \
+              (0b0       << 18) | \
+              (0b0       << 17) | \
+              (0b0       << 16) | \
+              (0b0       << 15) | \
+              (0b000     << 12) | \
+              (0x0       <<  7) | \
+              (0b1011011 <<  0)   \n");
+}
+
+/* set instruction */
+  // asm volatile(
+  //      ".word (0b00111   << 27) | \     /* R3 - t2 */
+  //             (0x0       << 26) | \     /* Reserved - 0x0 */
+  //             (0b0       << 25) | \     /* Direction - 0 for AXI2OBI (L2 to L1), 1 for OBI2AXI (L1 to L2) */
+  //             (0b00110   << 20) | \     /* R2 - t1 */
+  //             (0b00101   << 15) | \     /* R1 - t0 */
+  //             (0b000     << 12) | \     /* FUNC3 - ADDR/LEN */
+  //             (0x0       <<  7) | \     /* Reserved - 0x0 */
+  //             (0b1111011 <<  0)   \n"); /* OPCODE */
+inline void idma_set_addr_len_in(volatile uint32_t dst_addr, volatile uint32_t src_addr, volatile uint32_t len){
+  asm volatile ("addi t2, %0, 0" :: "r"(dst_addr));
+  asm volatile ("addi t1, %0, 0" :: "r"(src_addr));
+  asm volatile ("addi t0, %0, 0" :: "r"(len));
+  asm volatile(
+       ".word (0b00111   << 27) | \
+              (0x0       << 26) | \
+              (0b0       << 25) | \
+              (0b00110   << 20) | \
+              (0b00101   << 15) | \
+              (0b000     << 12) | \
+              (0x0       <<  7) | \
+              (0b1111011 <<  0)   \n");
+}
+
+/* set instruction */
+  // asm volatile(
+  //      ".word (0b00111   << 27) | \     /* R3 - t2 */
+  //             (0x0       << 26) | \     /* Reserved - 0x0 */
+  //             (0b1       << 25) | \     /* Direction - 0 for AXI2OBI (L2 to L1), 1 for OBI2AXI (L1 to L2) */
+  //             (0b00110   << 20) | \     /* R2 - t1 */
+  //             (0b00101   << 15) | \     /* R1 - t0 */
+  //             (0b000     << 12) | \     /* FUNC3 - ADDR/LEN */
+  //             (0x0       <<  7) | \     /* Reserved - 0x0 */
+  //             (0b1111011 <<  0)   \n"); /* OPCODE */
+inline void idma_set_addr_len_out(volatile uint32_t dst_addr, volatile uint32_t src_addr, volatile uint32_t len){
+  asm volatile ("addi t2, %0, 0" :: "r"(dst_addr));
+  asm volatile ("addi t1, %0, 0" :: "r"(src_addr));
+  asm volatile ("addi t0, %0, 0" :: "r"(len));
+  asm volatile(
+       ".word (0b00111   << 27) | \
+              (0x0       << 26) | \
+              (0b1       << 25) | \
+              (0b00110   << 20) | \
+              (0b00101   << 15) | \
+              (0b000     << 12) | \
+              (0x0       <<  7) | \
+              (0b1111011 <<  0)   \n");
+}
+
+/* set instruction */
+  // asm volatile(
+  //      ".word (0b00111   << 27) | \     /* R3 - t2 */
+  //             (0x0       << 26) | \     /* Reserved - 0x0 */
+  //             (0b0       << 25) | \     /* Direction - 0 for AXI2OBI (L2 to L1), 1 for OBI2AXI (L1 to L2) */
+  //             (0b00110   << 20) | \     /* R2 - t1 */
+  //             (0b00101   << 15) | \     /* R1 - t0 */
+  //             (0b001     << 12) | \     /* FUNC3 - STD_2/REP_2 */
+  //             (0x0       <<  7) | \     /* Reserved - 0x0 */
+  //             (0b1111011 <<  0)   \n"); /* OPCODE */
+inline void idma_set_std2_rep2_in(volatile uint32_t dst_std_2, volatile uint32_t src_std_2, volatile uint32_t reps_2){
+  asm volatile ("addi t2, %0, 0" :: "r"(dst_std_2));
+  asm volatile ("addi t1, %0, 0" :: "r"(src_std_2));
+  asm volatile ("addi t0, %0, 0" :: "r"(reps_2));
+  asm volatile(
+       ".word (0b00111   << 27) | \
+              (0x0       << 26) | \
+              (0b0       << 25) | \
+              (0b00110   << 20) | \
+              (0b00101   << 15) | \
+              (0b001     << 12) | \
+              (0x0       <<  7) | \
+              (0b1111011 <<  0)   \n");
+}
+
+/* set instruction */
+  // asm volatile(
+  //      ".word (0b00111   << 27) | \     /* R3 - t2 */
+  //             (0x0       << 26) | \     /* Reserved - 0x0 */
+  //             (0b1       << 25) | \     /* Direction - 0 for AXI2OBI (L2 to L1), 1 for OBI2AXI (L1 to L2) */
+  //             (0b00110   << 20) | \     /* R2 - t1 */
+  //             (0b00101   << 15) | \     /* R1 - t0 */
+  //             (0b001     << 12) | \     /* FUNC3 - STD_2/REP_2 */
+  //             (0x0       <<  7) | \     /* Reserved - 0x0 */
+  //             (0b1111011 <<  0)   \n"); /* OPCODE */
+inline void idma_set_std2_rep2_out(volatile uint32_t dst_std_2, volatile uint32_t src_std_2, volatile uint32_t reps_2){
+  asm volatile ("addi t2, %0, 0" :: "r"(dst_std_2));
+  asm volatile ("addi t1, %0, 0" :: "r"(src_std_2));
+  asm volatile ("addi t0, %0, 0" :: "r"(reps_2));
+  asm volatile(
+       ".word (0b00111   << 27) | \
+              (0x0       << 26) | \
+              (0b1       << 25) | \
+              (0b00110   << 20) | \
+              (0b00101   << 15) | \
+              (0b001     << 12) | \
+              (0x0       <<  7) | \
+              (0b1111011 <<  0)   \n");
+}
+
+/* set instruction */
+  // asm volatile(
+  //      ".word (0b00111   << 27) | \     /* R3 - t2 */
+  //             (0x0       << 26) | \     /* Reserved - 0x0 */
+  //             (0b0       << 25) | \     /* Direction - 0 for AXI2OBI (L2 to L1), 1 for OBI2AXI (L1 to L2) */
+  //             (0b00110   << 20) | \     /* R2 - t1 */
+  //             (0b00101   << 15) | \     /* R1 - t0 */
+  //             (0b010     << 12) | \     /* FUNC3 - STD_3/REP_3 */
+  //             (0x0       <<  7) | \     /* Reserved - 0x0 */
+  //             (0b1111011 <<  0)   \n"); /* OPCODE */
+inline void idma_set_std3_rep3_in(volatile uint32_t dst_std_3, volatile uint32_t src_std_3, volatile uint32_t reps_3){
+  asm volatile ("addi t2, %0, 0" :: "r"(dst_std_3));
+  asm volatile ("addi t1, %0, 0" :: "r"(src_std_3));
+  asm volatile ("addi t0, %0, 0" :: "r"(reps_3));
+  asm volatile(
+       ".word (0b00111   << 27) | \
+              (0x0       << 26) | \
+              (0b0       << 25) | \
+              (0b00110   << 20) | \
+              (0b00101   << 15) | \
+              (0b010     << 12) | \
+              (0x0       <<  7) | \
+              (0b1111011 <<  0)   \n");
+}
+
+/* set instruction */
+  // asm volatile(
+  //      ".word (0b00111   << 27) | \     /* R3 - t2 */
+  //             (0x0       << 26) | \     /* Reserved - 0x0 */
+  //             (0b1       << 25) | \     /* Direction - 0 for AXI2OBI (L2 to L1), 1 for OBI2AXI (L1 to L2) */
+  //             (0b00110   << 20) | \     /* R2 - t1 */
+  //             (0b00101   << 15) | \     /* R1 - t0 */
+  //             (0b010     << 12) | \     /* FUNC3 - STD_3/REP_3 */
+  //             (0x0       <<  7) | \     /* Reserved - 0x0 */
+  //             (0b1111011 <<  0)   \n"); /* OPCODE */
+inline void idma_set_std3_rep3_out(volatile uint32_t dst_std_3, volatile uint32_t src_std_3, volatile uint32_t reps_3){
+  asm volatile ("addi t2, %0, 0" :: "r"(dst_std_3));
+  asm volatile ("addi t1, %0, 0" :: "r"(src_std_3));
+  asm volatile ("addi t0, %0, 0" :: "r"(reps_3));
+  asm volatile(
+       ".word (0b00111   << 27) | \
+              (0x0       << 26) | \
+              (0b1       << 25) | \
+              (0b00110   << 20) | \
+              (0b00101   << 15) | \
+              (0b010     << 12) | \
+              (0x0       <<  7) | \
+              (0b1111011 <<  0)   \n");
+}
+
+/* start instruction */
+  // asm volatile(
+  //      ".word (0x0       << 26) | \     /* Reserved - 0x0 */
+  //             (0b0       << 25) | \     /* Direction - 0 for AXI2OBI (L2 to L1), 1 for OBI2AXI (L1 to L2) */
+  //             (0x0       << 15) | \     /* Reserved - 0x0 */
+  //             (0b111     << 12) | \     /* FUNC3 - START */
+  //             (0x0       <<  7) | \     /* Reserved - 0x0 */
+  //             (0b1111011 <<  0)   \n"); /* OPCODE */
+inline void idma_start_in(){
+  #if PROFILE_CMI == 1
+  stnl_cmi_s();
+  #endif
+  asm volatile(
+       ".word (0x0       << 26) | \
+              (0b0       << 25) | \
+              (0x0       << 15) | \
+              (0b111     << 12) | \
+              (0x0       <<  7) | \
+              (0b1111011 <<  0)   \n");
+  #if STALLING == 1
+    // Polling mode - wait for completion
+  volatile uint32_t status;
+  do {
+    status = *(volatile uint32_t *)(IDMA_BASE_AXI2OBI + IDMA_STATUS_OFFSET);
+  } while (status & IDMA_STATUS_BUSY_MASK);
+  #if PROFILE_CMI == 1
+  stnl_cmi_f();
+  #endif
+  #endif
+}
+
+/* start instruction */
+  // asm volatile(
+  //      ".word (0x0       << 26) | \     /* Reserved - 0x0 */
+  //             (0b1       << 25) | \     /* Direction - 0 for AXI2OBI (L2 to L1), 1 for OBI2AXI (L1 to L2) */
+  //             (0x0       << 15) | \     /* Reserved - 0x0 */
+  //             (0b111     << 12) | \     /* FUNC3 - START */
+  //             (0x0       <<  7) | \     /* Reserved - 0x0 */
+  //             (0b1111011 <<  0)   \n"); /* OPCODE */
+inline void idma_start_out(){
+  #if PROFILE_CMO == 1
+  stnl_cmo_s();
+  #endif
+  asm volatile(
+       ".word (0x0       << 26) | \
+              (0b1       << 25) | \
+              (0x0       << 15) | \
+              (0b111     << 12) | \
+              (0x0       <<  7) | \
+              (0b1111011 <<  0)   \n");
+  #if STALLING == 1
+  // Polling mode - wait for completion
+  volatile uint32_t status;
+  do {
+    status = *(volatile uint32_t *)(IDMA_BASE_OBI2AXI + IDMA_STATUS_OFFSET);
+  } while (status & IDMA_STATUS_BUSY_MASK);
+  #if PROFILE_CMO == 1
+  stnl_cmo_f();
+  #endif
+  #endif
+}
+
+//=============================================================================
+// Memory Mapped IDMA ISAs
+//=============================================================================
+
+inline void idma_mm_conf(uint32_t dir){
+  mmio32(IDMA_CONF_ADDR(dir)) = 0x3 << 10;
+  return;
+}
+
+inline void idma_mm_set_addr_len(uint32_t dir, uint32_t dst, uint32_t src, uint32_t len){
+  mmio32(IDMA_DST_ADDR_LOW_ADDR(dir)) = dst;
+  mmio32(IDMA_SRC_ADDR_LOW_ADDR(dir)) = src;
+  mmio32(IDMA_LENGTH_LOW_ADDR(dir)) = len;
+}
+
+inline void idma_mm_set_std2_rep2(uint32_t dir, uint32_t dst_stride_2, uint32_t src_stride_2, uint32_t reps_2){
+  mmio32(IDMA_DST_STRIDE_2_LOW_ADDR(dir)) = dst_stride_2;
+  mmio32(IDMA_SRC_STRIDE_2_LOW_ADDR(dir)) = src_stride_2;
+  mmio32(IDMA_REPS_2_LOW_ADDR(dir)) = reps_2;
+}
+
+inline void idma_mm_set_std3_rep3(uint32_t dir, uint32_t dst_stride_3, uint32_t src_stride_3, uint32_t reps_3){
+  mmio32(IDMA_DST_STRIDE_3_LOW_ADDR(dir)) = dst_stride_3;
+  mmio32(IDMA_SRC_STRIDE_3_LOW_ADDR(dir)) = src_stride_3;
+  mmio32(IDMA_REPS_3_LOW_ADDR(dir)) = reps_3;
+}
+
+inline uint32_t idma_mm_start(uint32_t dir){
+  #if PROFILE_CMI == 1
+  if(dir == 0)
+    stnl_cmi_s();
+  #endif
+  #if PROFILE_CMO == 1
+  if(dir == 1)
+    stnl_cmo_s();
+  #endif
+  uint32_t transfer_id = mmio32(IDMA_NEXT_ID_ADDR(dir, 0));
+  #if STALLING == 1
+    // Polling mode - wait for completion
+  volatile uint32_t status;
+  if(dir){
+    do {
+      status = *(volatile uint32_t *)(IDMA_BASE_OBI2AXI + IDMA_STATUS_OFFSET);
+    } while (status & IDMA_STATUS_BUSY_MASK);
+    #if PROFILE_CMO == 1
+    stnl_cmo_f();
+    #endif
+  }
+  else{
+    do {
+      status = *(volatile uint32_t *)(IDMA_BASE_AXI2OBI + IDMA_STATUS_OFFSET);
+    } while (status & IDMA_STATUS_BUSY_MASK);
+    #if PROFILE_CMI == 1
+    stnl_cmi_f();
+    #endif
+  }
+  #endif
+  return transfer_id;
+}
+
+#endif /*IDMA_ISA_UTILS_H*/
