@@ -17,6 +17,7 @@ else()
     set(TEST_MAPPINGS
         magia_v1:magia
         magia_v2:magia
+        pulp:pulp
     )
 endif()
 
