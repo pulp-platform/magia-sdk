@@ -62,8 +62,10 @@ static inline bool vector_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
     int32_t ord_res;
     uint32_t offset;
     int32_t ulp_dif;
+    int32_t ulp_avg;
     bool ret;
 
+    ulp_avg = 0;
     ret = true;
     for (int i = 0; i < len; i++) {
         offset = i * sizeof (uint16_t);
@@ -73,7 +75,7 @@ static inline bool vector_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
 
         /* Reject NaN or Inf */
         if (fp16_is_invalid(expected) || fp16_is_invalid(result)) {
-            printf("Invalid FP16 value at idx %d\t-\texpected: %x\t-\tcomputed: %x\n", i, expected, result);
+            printf("[CV32] Invalid FP16 value at idx %d\t-\texpected: %x\t-\tcomputed: %x\n", i, expected, result);
             ret = false;
             continue;
         }
@@ -82,12 +84,16 @@ static inline bool vector_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
         ord_res = fp16_to_ordered(result);
 
         ulp_dif = (ord_exp > ord_res) ? (ord_exp - ord_res) : (ord_res - ord_exp);
+        ulp_avg += ulp_dif;
 
         if (ulp_dif > ULP_TOLL) {
-            printf("Mismatch at index %d\t-\texpected: %x\t-\tcomputed: %x\t-\tulp: %d\n", i, expected, result, ulp_dif);
+            printf("[CV32] Mismatch at index %d\t-\texpected: %x\t-\tcomputed: %x\t-\tulp: %d\n", i, expected, result, ulp_dif);
             ret = false;
         }
     }
+
+    ulp_avg = ulp_avg / len;
+    printf("[CV32] Average ULP: %u\n", ulp_avg);
 
     return ret;
 }
