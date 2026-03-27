@@ -63,7 +63,7 @@ clone-gvsoc:
   script:
     - source gvsoc_venv/bin/activate && make gvsoc tiles=${tiles}
   artifacts:
-    paths: [ "gvsoc/install" ]
+    paths: [ "gvsoc/install" , "gvsoc/pulp/pulp/chips/magia_v2/arch.py"]
 
 gvsoc_tiles_2:
   extends: .gvsoc
@@ -99,7 +99,7 @@ gvsoc_tiles_1:
     - make rtl-clean MAGIA_DIR=$MAGIA
     - make MAGIA MAGIA_DIR=$MAGIA tiles=${tiles} target_platform=${target_platform} fast_sim=1
   artifacts:
-    paths: [ "$MAGIA/work", "$MAGIA/sim/work", "$MAGIA/sim/modelsim.ini", "$MAGIA/scripts/sim_ret_errors.sh", "$MAGIA/scripts/compile.tcl" ]
+    paths: [ "$MAGIA/work", "$MAGIA/sim/work", "$MAGIA/sim/modelsim.ini", "$MAGIA/scripts/sim_ret_errors.sh", "$MAGIA/scripts/compile.tcl", "$MAGIA/Makefile", "$MAGIA/hw/mesh/magia_pkg.sv", "$MAGIA/hw/tile/magia_tile_pkg.sv" ]
 
 magia_v2_tiles_2:
   extends: .MAGIA
@@ -124,7 +124,7 @@ magia_v2_tiles_1:
   script:
     - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler}
   artifacts:
-    paths: [ "build" ]
+    paths: [ "build", "targets/${target_platform}/include/addr_map/tile_addr_map.h" ]
 
 build_test_magia_v2_tiles_2:
   extends: .build
