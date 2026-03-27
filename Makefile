@@ -102,7 +102,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles)
+	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) --trace-level=trace run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --trace=kill-module
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
@@ -174,9 +174,9 @@ gvsoc_init:
 	cd $(GVSOC_DIR) && \
 	git submodule update --init --recursive && \
 	cd core && \
-	git checkout master && \
+	git checkout chips-it && \
 	cd ../pulp && \
-	git checkout master
+	git checkout lz/magia-v2-pulp-fix_kill_module
 
 
 
