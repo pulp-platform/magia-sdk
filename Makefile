@@ -27,7 +27,7 @@ CURR_DIR		?= $(shell pwd)
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
 BIN_ABS_PATH	?= $(CURR_DIR)/build/bin
 BIN 			?= $(BUILD_DIR)/build/verif
-build_mode		?= profile
+build_mode		?= update
 fsync_mode		?= stall
 mesh_dv			?= 1
 fast_sim		?= 0
@@ -148,6 +148,7 @@ ifneq (,$(filter $(build_mode), update synth profile))
 	make python_venv || true											&& \
 	source setup_env.sh 												&& \
 	make python_deps || true											&& \
+	python -m pip install --upgrade "setuptools<81"						&& \
 	make bender															&& \
 	make $(build_mode)-ips > $(build_mode)-ips.log mesh_dv=$(mesh_dv)	&& \
 	make floonoc-patch || true											&& \
