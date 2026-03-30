@@ -280,7 +280,7 @@ int main(void){
              * 3f. Sync before next timeslot
              */
             pt++;
-            fsync_sync_global(&fsync_ctrl);
+            fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
             #if STALLING == 0
             eu_fsync_wait(&eu_ctrl, WAIT_MODE);
             #endif
