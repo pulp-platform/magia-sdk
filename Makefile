@@ -20,14 +20,14 @@
 
 SHELL 			:= /bin/bash
 
-BUILD_DIR 		?= ../sw/tests/$(test)
-MAGIA_DIR 		?= ../
+MAGIA_DIR 		?= ..
+BUILD_DIR 		?= $(MAGIA_DIR)/sw/tests/$(test)
 GVSOC_DIR 		?= ./gvsoc
 CURR_DIR		?= $(shell pwd)
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
 BIN_ABS_PATH	?= $(CURR_DIR)/build/bin
 BIN 			?= $(BUILD_DIR)/build/verif
-build_mode		?= update
+build_mode		?= profile
 fsync_mode		?= stall
 mesh_dv			?= 1
 fast_sim		?= 0
@@ -88,6 +88,7 @@ ifeq ($(tiles), 1)
 endif 
 
 run: set_mesh
+	sed -i 's/ QUESTA ?= questa-2025.1/ QUESTA ?= questa-2023.4/' $(MAGIA_DIR)/Makefile
 	@echo 'Magia is available at https://github.com/pulp-platform/MAGIA.git'
 	@echo 'please run "source setup_env.sh" in the magia folder before running this script'
 	@echo 'and make sure the risc-v objdump binary is visible on path using "which riscv32-unknown-elf-objdump".'
@@ -101,7 +102,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles)
+	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) --trace-level=trace run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --trace=kill-module
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
@@ -121,6 +122,7 @@ else
 endif
 
 MAGIA: set_mesh
+	sed -i 's/ QUESTA ?= questa-2025.1/ QUESTA ?= questa-2023.4/' $(MAGIA_DIR)/Makefile
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
 	$(eval tiles_2=256)
 endif
@@ -172,8 +174,12 @@ gvsoc_init:
 	cd $(GVSOC_DIR) && \
 	git submodule update --init --recursive && \
 	cd core && \
-	git checkout lz/magia-v2-core && \
+	git checkout chips-it && \
 	cd ../pulp && \
-	git checkout lz/magia-v2-pulp
+	git checkout lz/magia-v2-pulp-fix_kill_module
 
-
+gvsoc_pyenv:
+	eval "$(pyenv init -)" && \
+    pyenv local 3.12 && \
+    python -m venv gvsoc_venv && \
+    source gvsoc_venv/bin/activate && pip install .
