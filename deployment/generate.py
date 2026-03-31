@@ -329,7 +329,7 @@ def main(src_dir: Path, dst_dir: Path) -> None:
     # CMakeLists
     cmakelists_path = dst_dir / 'CMakeLists.txt'
     logger.debug(f"generate {cmakelists_path}")
-    cmakelist = generate_cmakelist('adder')
+    cmakelist = generate_cmakelist(dst_dir.name)
     with open(cmakelists_path, "w") as f:
         f.write(cmakelist)
 
@@ -364,8 +364,3 @@ if __name__ == "__main__":
     # generate code
     logger.debug(f"args: {args}")
     main(Path(args.source), Path(args.destination))
-
-    # test_name = 'adder'
-    # src_dir = Path('/home/alex/magia-sdk/deployment/tests/') / test_name
-    # dst_dir = Path('/home/alex/magia-sdk/tests/magia/mesh') / test_name
-    # main(src_dir, dst_dir)

@@ -219,4 +219,4 @@ endif
 		-s ./deployment/tests/$(test) \
 		-d ./tests/magia/mesh/$(test) && \
 	make clean build tiles=$(tiles) compiler=$(compiler) eval=$(eval) && \
-	make run test=test_$(test) platform=gvsoc
+	make run test=test_$(test) platform=$(platform)
