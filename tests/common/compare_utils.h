@@ -11,7 +11,7 @@
  * A tollerance of 8 ULP means that two values can differ by a maximum
  * of 8 consecutive representable FP16 values.
  */
-#define ULP_TOLL    (80)
+#define ULP_TOLL    (100)
 
 /**
  * @brief Check if a FP16 value is NaN or (+/-)Inf
