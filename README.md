@@ -51,9 +51,9 @@ The following *optional* parameters can be specified when running the make comma
 1. Initialize the GVSoC submodule:
 
     `make gvsoc_init`
-    
+
 2. Build the Magia architecture (*this command may take time and return an error, please be patient.*):
-        
+
     `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode>`
 
     And/Or the GVSoC module:
@@ -90,7 +90,7 @@ The following *optional* parameters can be specified when running the make comma
 
     `make run test=<test_name> <platform>`
 
-***WARNING: YOU HAVE TO REBUILD BOTH RTL/GVSOC AND THE TEST BINARY EACH TIME YOU WANT TO TEST A MAGIA MESH WITH A DIFFERENT NUMBER OF TILES.*** 
+***WARNING: YOU HAVE TO REBUILD BOTH RTL/GVSOC AND THE TEST BINARY EACH TIME YOU WANT TO TEST A MAGIA MESH WITH A DIFFERENT NUMBER OF TILES.***
 
 If you want to run gvsoc or a binary from outside the magia-sdk directory you can edit the **GVSOC_ABS_PATH** and **BIN_ABS_PATH** option in Makefile or directly on the *run* command line.
 
@@ -122,7 +122,7 @@ To add your own test, you have to integrate a new test folder inside the **tests
 4. Add to the *\<test_name\>* directory:
 
     1. A new CMakeList.txt file following this template:
-    
+
             set(TEST_NAME <test_name>)
 
             file(GLOB_RECURSE TEST_SRCS
@@ -142,10 +142,70 @@ To add your own test, you have to integrate a new test folder inside the **tests
                     TARGET ${TEST_NAME}
                     POST_BUILD
                     COMMAND ${CMAKE_OBJDUMP} -dhS -Mmarch=${ISA} $<TARGET_FILE:${TEST_NAME}> > $<TARGET_FILE:${TEST_NAME}>.s)
-    
+
     2. An **src** directory containing your test's source (.c) files
 
     3. An **include** directory containing your test's header (.h) files
+
+
+## Deployment with Deeploy
+
+[Deeploy](https://github.com/pulp-platform/Deeploy) is a code generation framework that takes an ONNX model and produces C inference code targeting a specific hardware platform. In this SDK it is used to automatically generate mesh tests from a network description.
+
+### User: generating and running a test
+
+Each deployable test lives under `deployment/tests/<test_name>/` and must contain three files:
+```
+deployment/tests/<test_name>/
+├── network.onnx   # ONNX model
+├── inputs.npz     # reference input tensors
+└── outputs.npz    # reference output tensors
+```
+
+To generate the corresponding test, build it, and run it on the simulator, use:
+
+```
+make deploy test=<test_name> platform=rtl|gvsoc [tiles=<tiles>] [compiler=<compiler>] [eval=<eval>]
+```
+
+This will:
+1. Generate a complete test under `tests/magia/mesh/<test_name>/` (C sources, headers, `CMakeLists.txt`)
+2. Build the test binary (`make clean build`)
+3. Run it on the selected platform (`make run`)
+
+The available `tiles`, `compiler`, and `eval` parameters are the same as described in the [Getting started](#getting-started-and-usage) section.
+
+### Developer: how the pipeline works
+
+The code generation is driven by `deployment/generate.py`, which can also be invoked directly:
+
+```
+python deployment/generate.py -s deployment/tests/<test_name> -d tests/magia/mesh/<test_name> [-v]
+```
+
+The script performs the following steps:
+
+1. **Load** the ONNX model and the reference I/O tensors from the source directory.
+2. **Deploy** the model usign the Deeploy Target for Magia (defined in `deployment/MagiaDeeployTarget/`)
+3. **Generate** the following files in the destination directory:
+   - `include/network.h` — buffer declarations and `InitNetwork`/`RunNetwork` prototypes
+   - `src/network.c` — generated inference code calling into `kernels/`
+   - `include/test.h` — C arrays with the reference inputs and outputs
+   - `src/test.c` — test harness (copied from `deployment/test.c`)
+   - `CMakeLists.txt` — build file linking against `runtime`, `hal`, and `kernels`
+
+
+#### Adding support for a new operator
+
+Supporting a new ONNX operator requires four coordinated additions:
+
+1. **Kernel** — implement the C kernel in `kernels/src/` and expose it in `kernels/include/`.
+2. **Template** — add a Deeploy `NodeTemplate` in `deployment/MagiaDeeployTarget/Templates/` that renders the C call to the kernel.
+3. **Bindings** — add the type bindings for the operator in `deployment/MagiaDeeployTarget/Bindings.py`.
+4. **Registration** — add a `NodeMapper` using the appropriate Deeploy parser and the new bindings, then register it in the `MagiaMapping` dict inside `deployment/MagiaDeeployTarget/Platform.py`.
+
+See the `Add` operator (`AddTemplate.py`, `Bindings.py`, `kernels/src/add.c`) as a reference implementation.
+
 
 ## Folder Structure
 
@@ -171,7 +231,7 @@ Contains the weak definitions of this SDK APIs. These are the API instruction th
 Contains the architecture-specific implementation and source code for the HAL APIs. Despite each implementation having different names, thanks to an aliasing system the programmer can use the same name for the same API instruction on different architectures.
 
 ### devices
-Nothing there. 
+Nothing there.
 
 If MAGIA ever evolves to have a host-offload mechanism, this folder will contain the trampoline functions.
 
