@@ -4,6 +4,7 @@
 
 #include "tile.h"
 #include "eventunit.h"
+#include "idma.h"
 
 #include "compare_utils.h"
 #include "data.h"
@@ -21,6 +22,24 @@ static int init_data(void *params)
     uint32_t left;
     uint32_t len;
     uint32_t end;
+
+    idma_config_t idma_cfg      = {.hartid = get_hartid()};
+    idma_controller_t idma_ctrl = {
+        .base = NULL,
+        .cfg  = &idma_cfg,
+        .api  = &idma_api,
+    };
+    idma_init(&idma_ctrl);
+
+    eu_config_t eu_cfg      = {.hartid = get_hartid()};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg  = &eu_cfg,
+        .api  = &eu_api,
+    };
+
+    eu_init(&eu_ctrl);
+    eu_idma_init(&eu_ctrl, 0);
 
     sub_params = (volatile onnx_sub_params_t *)params;
 
@@ -42,6 +61,13 @@ static int init_data(void *params)
         mmio_fp16(CHUNK_G_BASE + offset) = G[global_idx];
         mmio_fp16(CHUNK_C_BASE + offset) = 0;
     }
+
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)(A + start), CHUNK_A_BASE, (len * 2));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)(B + start), CHUNK_B_BASE, (len * 2));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)(G + start), CHUNK_G_BASE, (len * 2));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     sub_params->chunk_A = CHUNK_A_BASE;
     sub_params->chunk_B = CHUNK_B_BASE;
