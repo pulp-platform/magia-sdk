@@ -33,11 +33,33 @@ static inline bool fp16_gt(float16 a, float16 b)
     uint16_t ua = *(uint16_t *)&a;
     uint16_t ub = *(uint16_t *)&b;
     if ((ua & 0x8000) != (ub & 0x8000)) {
-        if ((ua | ub) & 0x7FFF) return !!(ub & 0x8000); /* positive > negative */
-        return false;                                /* +0 == -0            */
+        if ((ua | ub) & 0x7FFF)
+            return !!(ub & 0x8000); /* positive > negative */
+        return false;               /* +0 == -0            */
     }
-    if (ua & 0x8000) return ua < ub; /* both negative: smaller magnitude wins */
-    return ua > ub;                  /* both positive: larger magnitude wins  */
+    if (ua & 0x8000)
+        return ua < ub; /* both negative: smaller magnitude wins */
+    return ua > ub;     /* both positive: larger magnitude wins  */
+}
+
+/* Convert float16 (IEEE 754 half-precision, 5-bit exp, 10-bit mant) bits
+ * directly to double64 via bit manipulation, bypassing all soft-float helpers
+ * (__extendohfdf2, __extendsfdf2) absent from this toolchain's libgcc.
+ * Subnormals are flushed to zero for display. Used for printing. */
+static inline double fp16_to_f64(uint16_t h)
+{
+    union {
+        uint64_t u;
+        double d;
+    } u;
+    uint64_t sign = (uint64_t)(h >> 15);
+    uint64_t exp  = (uint64_t)((h >> 10) & 0x1f);
+    uint64_t mant = (uint64_t)(h & 0x3ff);
+    if (exp == 0)
+        u.u = sign << 63;
+    else
+        u.u = (sign << 63) | ((exp - 15 + 1023) << 52) | (mant << 42);
+    return u.d;
 }
 
 /**
