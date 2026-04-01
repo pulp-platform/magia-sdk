@@ -18,8 +18,11 @@ CMakeFiles
 /*/*/*/Makefile
 /*/*/*/*/Makefile
 log.txt
-gvsoc/
+gvsoc*
 testsuite.py
 test.conf
 testsuite*
 testlogs/
+magia_deployment.egg-info/
+targets/magia_v1/include/utils/cache_fill.h
+.python-version
