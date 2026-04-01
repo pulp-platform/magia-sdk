@@ -174,9 +174,9 @@ gvsoc_init:
 	cd $(GVSOC_DIR) && \
 	git submodule update --init --recursive && \
 	cd core && \
-	git checkout chips-it && \
+	git checkout master && \
 	cd ../pulp && \
-	git checkout lz/magia-v2-pulp-fix_kill_module
+	git checkout master
 
 
 
