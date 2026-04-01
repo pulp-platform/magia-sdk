@@ -28,12 +28,12 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Generate test.h for the GEMM chain test."
     )
-    parser.add_argument("--dim-a", type=int, default=8, help="Dimension A (default: 8)")
+    parser.add_argument("--dim-a", type=int, default=4, help="Dimension A (default: 4)")
     parser.add_argument("--dim-b", type=int, default=8, help="Dimension B (default: 8)")
-    parser.add_argument("--dim-c", type=int, default=8, help="Dimension C (default: 8)")
-    parser.add_argument("--dim-d", type=int, default=8, help="Dimension D (default: 8)")
-    parser.add_argument("--dim-e", type=int, default=8, help="Dimension E (default: 8)")
-    parser.add_argument("--dim-f", type=int, default=8, help="Dimension F (default: 8)")
+    parser.add_argument("--dim-c", type=int, default=16, help="Dimension C (default: 16)")
+    parser.add_argument("--dim-d", type=int, default=32, help="Dimension D (default: 32)")
+    parser.add_argument("--dim-e", type=int, default=64, help="Dimension E (default: 64)")
+    parser.add_argument("--dim-f", type=int, default=128, help="Dimension F (default: 128)")
     parser.add_argument("--seed", type=int, default=42, help="RNG seed (default: 42)")
     parser.add_argument("-o", "--output", type=str, default=DEFAULT_OUTPUT,
                         help=f"Output path (default: {DEFAULT_OUTPUT})")
@@ -57,11 +57,11 @@ def validate_params(a, b, c, d, e, f):
 
 def generate_inputs(a, b, c, d, e, f, seed):
     rng = np.random.default_rng(seed)
-    m1 = rng.uniform(-0.1, 0.1, size=(a, b)).astype(np.float16)
-    m2 = rng.uniform(-0.1, 0.1, size=(b, c)).astype(np.float16)
-    m3 = rng.uniform(-0.1, 0.1, size=(c, d)).astype(np.float16)
-    m4 = rng.uniform(-0.1, 0.1, size=(d, e)).astype(np.float16)
-    m5 = rng.uniform(-0.1, 0.1, size=(e, f)).astype(np.float16)
+    m1 = rng.uniform(-0.5, 0.5, size=(a, b)).astype(np.float16)
+    m2 = rng.uniform(-0.5, 0.5, size=(b, c)).astype(np.float16)
+    m3 = rng.uniform(-0.5, 0.5, size=(c, d)).astype(np.float16)
+    m4 = rng.uniform(-0.5, 0.5, size=(d, e)).astype(np.float16)
+    m5 = rng.uniform(-0.5, 0.5, size=(e, f)).astype(np.float16)
     return m1, m2, m3, m4, m5
 
 
