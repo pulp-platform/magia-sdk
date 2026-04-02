@@ -6,6 +6,7 @@
 #include "test.h"
 
 #include "tile.h"
+#include "utils/gemm_utils.h"
 #include "fsync.h"
 #include "idma.h"
 #include "redmule.h"
