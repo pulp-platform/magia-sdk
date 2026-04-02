@@ -48,13 +48,6 @@ ISA				?= rv32imcxgap9
 gui 			?= 0
 tiles 			?= 2
 
-# FlatAttention pipeline parameters
-s_size           ?= 16
-d_size           ?= 8
-seed             ?= 42
-flatatt_platform ?= gvsoc
-data_tiling      ?= 0
-
 # GEMM chain pipeline parameters
 dim_a            ?= 4
 dim_b            ?= 8
@@ -64,8 +57,6 @@ dim_e            ?= 64
 dim_f            ?= 128
 gemm_platform    ?= gvsoc
 
-FLATATT_TEST = $(if $(filter 1,$(data_tiling)),test_flatatt,test_flatatt_no_dt)
-
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
@@ -73,7 +64,7 @@ tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
 GVRUN_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --trace-level=trace run --trace=kill-module
 
-.PHONY: gvsoc build flatatt flatatt-gen flatatt-build flatatt-run flatatt-ci gemm-test gemm-gen gemm-build gemm-run gemm-ci
+.PHONY: gvsoc build gemm-test gemm-gen gemm-build gemm-run gemm-ci
 
 clean:
 	rm -rf build/
@@ -201,76 +192,6 @@ gvsoc_venv:
 	python -m venv gvsoc_venv && \
 	source gvsoc_venv/bin/activate && \
 	pip install .
-
-# ─── FlatAttention pipeline ──────────────────────────────────────────
-# Usage:
-#   make flatatt                                    # no data tiling (default)
-#   make flatatt data_tiling=1                      # with data tiling (original)
-#   make flatatt tiles=4 s_size=32 d_size=16        # 4x4, larger problem
-#   make flatatt flatatt_platform=rtl               # RTL simulator
-#   make flatatt-gen s_size=32 d_size=16            # regenerate golden only
-
-flatatt-gen:
-	python3 tests/magia/mesh/flatatt/gen_golden.py \
-		--s-size $(s_size) --d-size $(d_size) --mesh $(tiles) --seed $(seed)
-	mkdir -p tests/magia/mesh/flatatt_no_data_tiling/include
-	cp tests/magia/mesh/flatatt/include/test.h tests/magia/mesh/flatatt_no_data_tiling/include/test.h
-
-flatatt-build:
-	$(MAKE) clean
-	$(MAKE) build target_platform=magia_v2 tiles=$(tiles) compiler=GCC_MULTILIB eval=$(eval)
-
-flatatt-run:
-	$(MAKE) run test=$(FLATATT_TEST) platform=$(flatatt_platform) tiles=$(tiles)
-
-flatatt:
-	$(MAKE) flatatt-gen tiles=$(tiles) s_size=$(s_size) d_size=$(d_size) seed=$(seed)
-	$(MAKE) flatatt-build tiles=$(tiles) eval=$(eval)
-ifeq ($(flatatt_platform), gvsoc)
-	$(MAKE) gvsoc tiles=$(tiles)
-endif
-	$(MAKE) flatatt-run tiles=$(tiles) flatatt_platform=$(flatatt_platform)
-
-# ─── FlatAttention CI matrix ─────────────────────────────────────────
-# Runs all (tiles, S_size, D_size) combinations.
-# GVSoC is rebuilt once per tile count to avoid redundant rebuilds.
-#   make flatatt-ci                          # all 27 combos on gvsoc
-#   make flatatt-ci flatatt_platform=rtl     # all 27 combos on RTL
-
-FLATATT_TILES  := 2 4 8
-FLATATT_D      := 8 16 32
-FLATATT_S_MULT := 4 8 16
-
-flatatt-ci:
-	@failed=""; total=0; passed=0; \
-	for t in $(FLATATT_TILES); do \
-		echo ""; \
-		echo "====== Building GVSoC for tiles=$$t ======"; \
-		$(MAKE) gvsoc tiles=$$t || { echo "GVSOC BUILD FAILED for tiles=$$t"; exit 1; }; \
-		for s_mult in $(FLATATT_S_MULT); do \
-			s=$$((s_mult * t)); \
-			for d in $(FLATATT_D); do \
-				total=$$((total + 1)); \
-				echo ""; \
-				echo "====== [$${total}] tiles=$$t S=$$s D=$$d ======"; \
-				if $(MAKE) flatatt-gen tiles=$$t s_size=$$s d_size=$$d seed=$(seed) && \
-				   $(MAKE) flatatt-build tiles=$$t eval=$(eval) && \
-				   $(MAKE) flatatt-run  tiles=$$t flatatt_platform=$(flatatt_platform); then \
-					passed=$$((passed + 1)); \
-					echo "PASS: tiles=$$t S=$$s D=$$d"; \
-				else \
-					failed="$$failed tiles=$$t,S=$$s,D=$$d"; \
-					echo "FAIL: tiles=$$t S=$$s D=$$d"; \
-				fi; \
-			done; \
-		done; \
-	done; \
-	echo ""; \
-	echo "====== Summary: $$passed/$$total passed ======"; \
-	if [ -n "$$failed" ]; then \
-		echo "Failed:$$failed"; \
-		exit 1; \
-	fi
 
 # ─── GEMM chain pipeline ────────────────────────────────────────────
 # Usage:
