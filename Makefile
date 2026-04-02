@@ -73,7 +73,7 @@ tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
 GVRUN_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --trace-level=trace run --trace=kill-module
 
-.PHONY: gvsoc build flatatt flatatt-gen flatatt-build flatatt-run flatatt-ci gemm-test gemm-gen gemm-build gemm-run
+.PHONY: gvsoc build flatatt flatatt-gen flatatt-build flatatt-run flatatt-ci gemm-test gemm-gen gemm-build gemm-run gemm-ci
 
 clean:
 	rm -rf build/
@@ -309,3 +309,29 @@ ifeq ($(gemm_platform), gvsoc)
 	$(MAKE) gvsoc tiles=$(tiles)
 endif
 	$(MAKE) gemm-run tiles=$(tiles) gemm_platform=$(gemm_platform)
+
+# ─── GEMM chain CI ──────────────────────────────────────────────────
+# Runs the GEMM chain test on an 8x8 mesh with default dimensions.
+#   make gemm-ci                        # on gvsoc (default)
+#   make gemm-ci gemm_platform=rtl      # on RTL
+
+gemm-ci:
+	@echo "====== Building GVSoC for tiles=8 ======"; \
+	$(MAKE) gvsoc tiles=8 || { echo "GVSOC BUILD FAILED"; exit 1; }; \
+	echo ""; \
+	echo "====== Generating golden data ======"; \
+	$(MAKE) gemm-gen dim_a=$(dim_a) dim_b=$(dim_b) dim_c=$(dim_c) \
+		dim_d=$(dim_d) dim_e=$(dim_e) dim_f=$(dim_f) seed=$(seed) || { echo "GEMM-GEN FAILED"; exit 1; }; \
+	echo ""; \
+	echo "====== Building test (tiles=8) ======"; \
+	$(MAKE) gemm-build tiles=8 compiler=$(compiler) eval=$(eval) || { echo "GEMM-BUILD FAILED"; exit 1; }; \
+	echo ""; \
+	echo "====== Running GEMM chain test ======"; \
+	if $(MAKE) gemm-run tiles=8 gemm_platform=$(gemm_platform); then \
+		echo ""; \
+		echo "====== PASS ======"; \
+	else \
+		echo ""; \
+		echo "====== FAIL ======"; \
+		exit 1; \
+	fi
