@@ -24,7 +24,9 @@ jobs:
           cache: 'pip'
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Cache RISC-V toolchain
         id: cache-riscv
@@ -71,10 +73,14 @@ jobs:
       - name: Build GVSoC
         run: make gvsoc tiles=8
 
+      - name: Generate golden data
+        run: make gemm-gen
+
+      - name: Build GEMM test
+        run: make gemm-build tiles=8
+
       - name: Run GEMM chain test (8x8 mesh)
         run: |
-          make gemm-gen > /dev/null 2>&1
-          make gemm-build tiles=8 > /dev/null 2>&1
           output=$(make gemm-run tiles=8 2>&1) || true
           result=$(echo "$output" | grep -E 'Errors:|Test complete' || true)
           echo "$result"
