@@ -43,8 +43,11 @@ jobs:
           tar -xjf /tmp/riscv-toolchain.tar.bz2 -C ~/riscv --strip-components=1
           rm /tmp/riscv-toolchain.tar.bz2
 
+      - name: Add toolchain to PATH
+        run: echo "$HOME/riscv/bin" >> "$GITHUB_PATH"
+
       - name: Verify toolchain
-        run: ~/riscv/bin/riscv32-unknown-elf-gcc --version
+        run: riscv32-unknown-elf-gcc --version
 
       - name: Cache GVSoC
         id: cache-gvsoc
