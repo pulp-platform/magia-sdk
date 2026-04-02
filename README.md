@@ -48,6 +48,24 @@ The following *optional* parameters can be specified when running the make comma
 
     It is also required to have a cmake version >= 3.13.
 
+    In case you are NOT interested in the RTL and only want to simulate the architecture on GVSoC, you can ignore the previous command.
+
+    ***IT IS STRONGLY SUGGEST YOU CREATE A NEW PYENV ENVIRONMENT FOR RUNNING GVSOC***
+
+    You can build a new environment by first installing pyenv by running the following command. FOLLOW THE INSTRUCTIONS GIVE BY THE TERMINAL TO THE LETTER (including updating the PATH environment variable)
+
+    `curl https://pyenv.run | bash`
+
+    After you have done that, you can install a python environment with all the necessary requirements by running:
+
+    `make gvsoc_pyenv`
+
+    To activate the generated environment, run:
+
+    `source ./gvsoc_venv/bin/activate`
+
+    From the SDK's root directory. If you have done it correctly, you'll see a "(gvsoc_venv)" preceding your terminal command line.
+
 1. Initialize the GVSoC submodule:
 
     `make gvsoc_init`
