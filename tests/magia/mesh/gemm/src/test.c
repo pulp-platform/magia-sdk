@@ -28,32 +28,15 @@
 #define GEMM3_N_TILES 12
 #define GEMM4_N_TILES 24
 
-static const uint32_t gemm1_tiles[GEMM1_N_TILES] = {
-    0, 1, 8, 9
-};
+static const uint32_t gemm1_tiles[GEMM1_N_TILES] = {0, 1, 8, 9};
 
-static const uint32_t gemm2_tiles[GEMM2_N_TILES] = {
-    16, 17, 18, 19,
-    24, 25, 26, 27,
-    32, 33, 34, 35,
-    40, 41, 42, 43,
-    48, 49, 50, 51,
-    56, 57, 58, 59
-};
+static const uint32_t gemm2_tiles[GEMM2_N_TILES] = {16, 17, 18, 19, 24, 25, 26, 27, 32, 33, 34, 35,
+                                                    40, 41, 42, 43, 48, 49, 50, 51, 56, 57, 58, 59};
 
-static const uint32_t gemm3_tiles[GEMM3_N_TILES] = {
-    2, 3, 4, 5, 6, 7,
-    10, 11, 12, 13, 14, 15
-};
+static const uint32_t gemm3_tiles[GEMM3_N_TILES] = {2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15};
 
-static const uint32_t gemm4_tiles[GEMM4_N_TILES] = {
-    20, 21, 22, 23,
-    28, 29, 30, 31,
-    36, 37, 38, 39,
-    44, 45, 46, 47,
-    52, 53, 54, 55,
-    60, 61, 62, 63
-};
+static const uint32_t gemm4_tiles[GEMM4_N_TILES] = {20, 21, 22, 23, 28, 29, 30, 31, 36, 37, 38, 39,
+                                                    44, 45, 46, 47, 52, 53, 54, 55, 60, 61, 62, 63};
 
 int get_local_idx(uint32_t hartid, const uint32_t *tiles, uint32_t n_tiles)
 {
@@ -63,13 +46,16 @@ int get_local_idx(uint32_t hartid, const uint32_t *tiles, uint32_t n_tiles)
     return -1;
 }
 
-void get_row_range(uint32_t local_idx, uint32_t n_tiles, uint32_t total_rows,
-                   uint32_t *start_row, uint32_t *num_rows)
+void get_row_range(uint32_t local_idx,
+                   uint32_t n_tiles,
+                   uint32_t total_rows,
+                   uint32_t *start_row,
+                   uint32_t *num_rows)
 {
     uint32_t base = total_rows / n_tiles;
     uint32_t rem  = total_rows % n_tiles;
-    *start_row = local_idx * base + (local_idx < rem ? local_idx : rem);
-    *num_rows  = base + (local_idx < rem ? 1 : 0);
+    *start_row    = local_idx * base + (local_idx < rem ? local_idx : rem);
+    *num_rows     = base + (local_idx < rem ? 1 : 0);
 }
 
 int mem_set_zero(uint32_t o, uint32_t dim)
@@ -147,6 +133,12 @@ int main(void)
     eu_redmule_init(&eu_ctrl, 0);
 #endif
 
+    // Global barrier: ensure all tiles have completed startup (including BSS zeroing
+    // in crt0.S) before any tile begins writing results to L2 output buffers.
+    // Without this, slow tiles still zeroing BSS can overwrite Phase 1 results.
+    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+
     /**
      * Phase 1: GEMM1 and GEMM2 in parallel (row-parallel within each group)
      *   GEMM1 group: R1 = M1 @ M2
@@ -164,29 +156,34 @@ int main(void)
             uint32_t obi_r1 = obi_m2 + (DIM_B * DIM_C * 2);
 
             // Load slice of M1 [num_rows x B] from L2
-            idma_memcpy_1d(&idma_ctrl, 0,
+            idma_memcpy_1d(&idma_ctrl,
+                           0,
                            (uint32_t)m1_inp + start_row * DIM_B * 2,
-                           obi_m1, num_rows * DIM_B * 2);
+                           obi_m1,
+                           num_rows * DIM_B * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
             // Load full M2 [BxC] from L2
-            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m2_inp,
-                           obi_m2, DIM_B * DIM_C * 2);
+            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m2_inp, obi_m2, DIM_B * DIM_C * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
             // Zero accumulator and compute: R1_slice = M1_slice @ M2
             mem_set_zero(obi_r1, num_rows * DIM_C);
             redmule_gemm(&redmule_ctrl,
-                         obi_m1, obi_m2, obi_r1,
+                         obi_m1,
+                         obi_m2,
+                         obi_r1,
                          (uint16_t)num_rows,
                          (uint16_t)DIM_B,
                          (uint16_t)DIM_C);
             eu_redmule_wait(&eu_ctrl, WAIT_MODE);
 
             // Write R1 slice back to L2 at correct offset
-            idma_memcpy_1d(&idma_ctrl, 1,
+            idma_memcpy_1d(&idma_ctrl,
+                           1,
                            (uint32_t)r1_out + start_row * DIM_C * 2,
-                           obi_r1, num_rows * DIM_C * 2);
+                           obi_r1,
+                           num_rows * DIM_C * 2);
             eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
         }
     }
@@ -203,29 +200,34 @@ int main(void)
             uint32_t obi_r2 = obi_m4 + (DIM_D * DIM_E * 2);
 
             // Load slice of M3 [num_rows x D] from L2
-            idma_memcpy_1d(&idma_ctrl, 0,
+            idma_memcpy_1d(&idma_ctrl,
+                           0,
                            (uint32_t)m3_inp + start_row * DIM_D * 2,
-                           obi_m3, num_rows * DIM_D * 2);
+                           obi_m3,
+                           num_rows * DIM_D * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
             // Load full M4 [DxE] from L2
-            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m4_inp,
-                           obi_m4, DIM_D * DIM_E * 2);
+            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m4_inp, obi_m4, DIM_D * DIM_E * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
             // Zero accumulator and compute: R2_slice = M3_slice @ M4
             mem_set_zero(obi_r2, num_rows * DIM_E);
             redmule_gemm(&redmule_ctrl,
-                         obi_m3, obi_m4, obi_r2,
+                         obi_m3,
+                         obi_m4,
+                         obi_r2,
                          (uint16_t)num_rows,
                          (uint16_t)DIM_D,
                          (uint16_t)DIM_E);
             eu_redmule_wait(&eu_ctrl, WAIT_MODE);
 
             // Write R2 slice back to L2 at correct offset
-            idma_memcpy_1d(&idma_ctrl, 1,
+            idma_memcpy_1d(&idma_ctrl,
+                           1,
                            (uint32_t)r2_out + start_row * DIM_E * 2,
-                           obi_r2, num_rows * DIM_E * 2);
+                           obi_r2,
+                           num_rows * DIM_E * 2);
             eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
         }
     }
@@ -250,29 +252,34 @@ int main(void)
             uint32_t obi_r3 = obi_r2 + (DIM_C * DIM_E * 2);
 
             // Load slice of R1 [num_rows x C] from L2
-            idma_memcpy_1d(&idma_ctrl, 0,
+            idma_memcpy_1d(&idma_ctrl,
+                           0,
                            (uint32_t)r1_out + start_row * DIM_C * 2,
-                           obi_r1, num_rows * DIM_C * 2);
+                           obi_r1,
+                           num_rows * DIM_C * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
             // Load full R2 [CxE] from L2
-            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)r2_out,
-                           obi_r2, DIM_C * DIM_E * 2);
+            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)r2_out, obi_r2, DIM_C * DIM_E * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
             // Zero accumulator and compute: R3_slice = R1_slice @ R2
             mem_set_zero(obi_r3, num_rows * DIM_E);
             redmule_gemm(&redmule_ctrl,
-                         obi_r1, obi_r2, obi_r3,
+                         obi_r1,
+                         obi_r2,
+                         obi_r3,
                          (uint16_t)num_rows,
                          (uint16_t)DIM_C,
                          (uint16_t)DIM_E);
             eu_redmule_wait(&eu_ctrl, WAIT_MODE);
 
             // Write R3 slice back to L2 at correct offset
-            idma_memcpy_1d(&idma_ctrl, 1,
+            idma_memcpy_1d(&idma_ctrl,
+                           1,
                            (uint32_t)r3_out + start_row * DIM_E * 2,
-                           obi_r3, num_rows * DIM_E * 2);
+                           obi_r3,
+                           num_rows * DIM_E * 2);
             eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
         }
     }
@@ -297,29 +304,34 @@ int main(void)
             uint32_t obi_o  = obi_m5 + (DIM_E * DIM_F * 2);
 
             // Load slice of R3 [num_rows x E] from L2
-            idma_memcpy_1d(&idma_ctrl, 0,
+            idma_memcpy_1d(&idma_ctrl,
+                           0,
                            (uint32_t)r3_out + start_row * DIM_E * 2,
-                           obi_r3, num_rows * DIM_E * 2);
+                           obi_r3,
+                           num_rows * DIM_E * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
             // Load full M5 [ExF] from L2
-            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m5_inp,
-                           obi_m5, DIM_E * DIM_F * 2);
+            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m5_inp, obi_m5, DIM_E * DIM_F * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
             // Zero accumulator and compute: O_slice = R3_slice @ M5
             mem_set_zero(obi_o, num_rows * DIM_F);
             redmule_gemm(&redmule_ctrl,
-                         obi_r3, obi_m5, obi_o,
+                         obi_r3,
+                         obi_m5,
+                         obi_o,
                          (uint16_t)num_rows,
                          (uint16_t)DIM_E,
                          (uint16_t)DIM_F);
             eu_redmule_wait(&eu_ctrl, WAIT_MODE);
 
             // Write O slice back to L2 at correct offset
-            idma_memcpy_1d(&idma_ctrl, 1,
+            idma_memcpy_1d(&idma_ctrl,
+                           1,
                            (uint32_t)o_out + start_row * DIM_F * 2,
-                           obi_o, num_rows * DIM_F * 2);
+                           obi_o,
+                           num_rows * DIM_F * 2);
             eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
         }
     }
@@ -341,9 +353,12 @@ int main(void)
 
                 uint16_t uc = *(uint16_t *)&computed;
                 uint16_t ue = *(uint16_t *)&expected;
+
                 int32_t ic = (uc & 0x8000) ? -(int32_t)(uc & 0x7FFF) : (int32_t)uc;
                 int32_t ie = (ue & 0x8000) ? -(int32_t)(ue & 0x7FFF) : (int32_t)ue;
+
                 int32_t ulp_diff = ic - ie;
+
                 if (ulp_diff < 0)
                     ulp_diff = -ulp_diff;
                 if (ulp_diff > 17) {

@@ -6,7 +6,7 @@ Computes a 4-GEMM chain with task-level parallelism:
   Phase 2:            R3 = R1 @ R2
   Phase 3:            O  = R3 @ M5
 
-All GEMMs use fp32 accumulation with fp16 inputs/outputs (matching RedMule).
+All GEMMs use fp16 throughout (inputs, accumulation, outputs).
 
 Usage:
   python3 tests/magia/mesh/gemm/gen_golden.py
@@ -17,7 +17,7 @@ import argparse
 import os
 import sys
 
-import numpy as np
+import torch
 
 DEFAULT_OUTPUT = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "include", "test.h"
@@ -35,6 +35,9 @@ def parse_args():
     parser.add_argument("--dim-e", type=int, default=64, help="Dimension E (default: 64)")
     parser.add_argument("--dim-f", type=int, default=128, help="Dimension F (default: 128)")
     parser.add_argument("--seed", type=int, default=42, help="RNG seed (default: 42)")
+    parser.add_argument("--dtype", type=str, default="fp16",
+                        choices=["fp16", "bfloat16"],
+                        help="Input data type (default: fp16)")
     parser.add_argument("-o", "--output", type=str, default=DEFAULT_OUTPUT,
                         help=f"Output path (default: {DEFAULT_OUTPUT})")
     return parser.parse_args()
@@ -55,38 +58,50 @@ def validate_params(a, b, c, d, e, f):
         sys.exit(1)
 
 
-def generate_inputs(a, b, c, d, e, f, seed):
-    rng = np.random.default_rng(seed)
-    m1 = rng.uniform(-0.5, 0.5, size=(a, b)).astype(np.float16)
-    m2 = rng.uniform(-0.5, 0.5, size=(b, c)).astype(np.float16)
-    m3 = rng.uniform(-0.5, 0.5, size=(c, d)).astype(np.float16)
-    m4 = rng.uniform(-0.5, 0.5, size=(d, e)).astype(np.float16)
-    m5 = rng.uniform(-0.5, 0.5, size=(e, f)).astype(np.float16)
+def get_device():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if device.type == 'cuda':
+        print(f"Using GPU: {torch.cuda.get_device_name(device)} (true fp16 accumulation)")
+    else:
+        print("WARNING: CUDA not available, falling back to CPU. "
+              "CPU fp16 matmul may use fp32 accumulation internally.",
+              file=sys.stderr)
+    return device
+
+
+def generate_inputs(a, b, c, d, e, f, seed, device, dtype=torch.float16):
+    gen = torch.Generator(device=device).manual_seed(seed)
+    m1 = torch.empty((a, b), dtype=dtype, device=device).uniform_(-0.5, 0.5, generator=gen)
+    m2 = torch.empty((b, c), dtype=dtype, device=device).uniform_(-0.5, 0.5, generator=gen)
+    m3 = torch.empty((c, d), dtype=dtype, device=device).uniform_(-0.5, 0.5, generator=gen)
+    m4 = torch.empty((d, e), dtype=dtype, device=device).uniform_(-0.5, 0.5, generator=gen)
+    m5 = torch.empty((e, f), dtype=dtype, device=device).uniform_(-0.5, 0.5, generator=gen)
     return m1, m2, m3, m4, m5
 
 
 def compute_golden(m1, m2, m3, m4, m5):
-    # GEMM1: R1 = M1 @ M2 (fp32 accumulation, fp16 output)
-    r1 = (m1.astype(np.float32) @ m2.astype(np.float32)).astype(np.float16)
+    """Compute golden outputs using matmul in the same dtype as the inputs."""
+    # GEMM1: R1 = M1 @ M2
+    r1 = m1 @ m2
     # GEMM2: R2 = M3 @ M4
-    r2 = (m3.astype(np.float32) @ m4.astype(np.float32)).astype(np.float16)
+    r2 = m3 @ m4
     # GEMM3: R3 = R1 @ R2
-    r3 = (r1.astype(np.float32) @ r2.astype(np.float32)).astype(np.float16)
+    r3 = r1 @ r2
     # GEMM4: O = R3 @ M5
-    o = (r3.astype(np.float32) @ m5.astype(np.float32)).astype(np.float16)
+    o = r3 @ m5
     return r1, r2, r3, o
 
 
 def format_array(arr, name, size_expr=None):
-    """Format a numpy float16 array as a C array declaration."""
+    """Format a torch tensor as a C float16 array declaration."""
     if size_expr:
         decl = f'extern float16 {name:<12s}[{size_expr}] = {{'
     else:
         decl = f'extern float16 {name:<12s}[] = {{'
 
     vals = []
-    for v in arr.flat:
-        vals.append(f'{float(v)}f')
+    for v in arr.flatten().tolist():
+        vals.append(f'{v}f')
 
     lines = [decl]
     for i in range(0, len(vals), 8):
@@ -174,7 +189,10 @@ def main():
     print(f"  GEMM3: R1[{a}x{c}] @ R2[{c}x{e}] -> R3[{a}x{e}]")
     print(f"  GEMM4: R3[{a}x{e}] @ M5[{e}x{f}] -> O[{a}x{f}]")
 
-    m1, m2, m3, m4, m5 = generate_inputs(a, b, c, d, e, f, args.seed)
+    device = get_device()
+    dtype = torch.bfloat16 if args.dtype == "bfloat16" else torch.float16
+    print(f"Input dtype: {dtype}")
+    m1, m2, m3, m4, m5 = generate_inputs(a, b, c, d, e, f, args.seed, device, dtype)
     r1, r2, r3, o = compute_golden(m1, m2, m3, m4, m5)
 
     print(f"\nR1 range: [{float(r1.min()):.4f}, {float(r1.max()):.4f}]")
