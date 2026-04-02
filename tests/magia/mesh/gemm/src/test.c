@@ -28,6 +28,8 @@
 #define GEMM3_N_TILES 12
 #define GEMM4_N_TILES 24
 
+#define abs_threshold_millis 8 /* 0.008 expressed as integer millis */
+
 static const uint32_t gemm1_tiles[GEMM1_N_TILES] = {0, 1, 8, 9};
 
 static const uint32_t gemm2_tiles[GEMM2_N_TILES] = {16, 17, 18, 19, 24, 25, 26, 27, 32, 33, 34, 35,
@@ -354,23 +356,23 @@ int main(void)
                 uint16_t uc = *(uint16_t *)&computed;
                 uint16_t ue = *(uint16_t *)&expected;
 
-                int32_t ic = (uc & 0x8000) ? -(int32_t)(uc & 0x7FFF) : (int32_t)uc;
-                int32_t ie = (ue & 0x8000) ? -(int32_t)(ue & 0x7FFF) : (int32_t)ue;
+                int32_t vc = fp16_to_millis(uc);
+                int32_t ve = fp16_to_millis(ue);
 
-                int32_t ulp_diff = ic - ie;
-
-                if (ulp_diff < 0)
-                    ulp_diff = -ulp_diff;
-                if (ulp_diff > 17) {
+                int32_t abs_diff = vc - ve;
+                if (abs_diff < 0)
+                    abs_diff = -abs_diff;
+                if (abs_diff > abs_threshold_millis) {
                     errors++;
 
-                    printf("O[%d][%d]: got=%f (0x%x) exp=%f (0x%x)\n",
+                    printf("O[%d][%d]: got=%f (0x%x) exp=%f (0x%x) (abs_diff=%ld)\n",
                            i,
                            j,
                            fp16_to_f64(uc),
                            uc,
                            fp16_to_f64(ue),
-                           ue);
+                           ue,
+                           (long)abs_diff);
                 }
             }
         }

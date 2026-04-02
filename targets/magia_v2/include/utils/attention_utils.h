@@ -62,6 +62,28 @@ static inline double fp16_to_f64(uint16_t h)
     return u.d;
 }
 
+/* Decode an fp16 bit pattern to a signed integer in millis (value × 1000).
+ * Works directly on the bit string: sign(1)|exp(5)|mant(10).
+ * Normal:    value = (1024+mant) × 2^(exp-25),  millis = (1024+mant)×1000 << or >> shift
+ * Subnormal: value = mant × 2^(-24),             millis ≈ 0 for all representable values
+ * Inf/NaN:   returns MAX to force an error */
+static inline int32_t fp16_to_millis(uint16_t bits)
+{
+    int32_t sign = (bits & 0x8000) ? -1 : 1;
+    int32_t exp  = (bits >> 10) & 0x1F;
+    int32_t mant = bits & 0x3FF;
+
+    if (exp == 31) /* inf / nan */
+        return sign * 0x7FFFFFFF;
+    if (exp == 0) /* subnormal or zero: value*1000 = mant*1000 >> 24, rounds to 0 */
+        return sign * ((mant * 1000) >> 24);
+
+    /* normal: value*1000 = (1024+mant) * 1000 * 2^(exp-25) */
+    int32_t v     = (1024 + mant) * 1000;
+    int32_t shift = exp - 25;
+    return sign * (shift >= 0 ? v << shift : v >> -shift);
+}
+
 /**
  * Element-wise comparison of the max vectors.
  * Saves in the curr buffer the bigger values.
