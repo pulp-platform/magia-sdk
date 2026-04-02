@@ -55,6 +55,7 @@ dim_c            ?= 16
 dim_d            ?= 32
 dim_e            ?= 64
 dim_f            ?= 128
+seed			 ?= 42
 gemm_platform    ?= gvsoc
 
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))

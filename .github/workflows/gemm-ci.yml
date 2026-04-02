@@ -80,7 +80,7 @@ jobs:
         run: make gemm-gen
 
       - name: Build GEMM test
-        run: make gemm-build tiles=8 compiler=GCC_MULTILIB
+        run: make gemm-build tiles=8 compiler=GCC_PULP
 
       - name: Run GEMM chain test (8x8 mesh)
         run: |
