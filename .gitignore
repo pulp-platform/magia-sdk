@@ -29,4 +29,5 @@ scripts/wave.do
 tests/magia/mesh/flatatt/include/*
 tests/magia/mesh/flatatt_no_data_tiling/include/*
 tests/magia/mesh/gemm/include/*
+tests/magia/mesh/gemm/via_l2/include/*
 

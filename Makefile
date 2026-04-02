@@ -290,7 +290,7 @@ flatatt-ci:
 #   make gemm-run  tiles=2 gemm_platform=rtl
 
 gemm-gen:
-	python3 tests/magia/mesh/gemm/gen_golden.py \
+	python3 tests/magia/mesh/gemm/via_l2/gen_golden.py \
 		--dim-a $(dim_a) --dim-b $(dim_b) --dim-c $(dim_c) \
 		--dim-d $(dim_d) --dim-e $(dim_e) --dim-f $(dim_f) --seed $(seed)
 
