@@ -9,8 +9,8 @@ Computes a 4-GEMM chain with task-level parallelism:
 All GEMMs use fp16 throughout (inputs, accumulation, outputs).
 
 Usage:
-  python3 tests/magia/mesh/gemm/gen_golden.py
-  python3 tests/magia/mesh/gemm/gen_golden.py --dim-a 8 --dim-b 12 --dim-c 16 --dim-d 8 --dim-e 8 --dim-f 12
+  python3 tests/magia/mesh/gemm/via_l2/gen_golden.py
+  python3 tests/magia/mesh/gemm/via_l2/gen_golden.py --dim-a 8 --dim-b 12 --dim-c 16 --dim-d 8 --dim-e 8 --dim-f 12
 """
 
 import argparse
@@ -95,9 +95,9 @@ def compute_golden(m1, m2, m3, m4, m5):
 def format_array(arr, name, size_expr=None):
     """Format a torch tensor as a C float16 array declaration."""
     if size_expr:
-        decl = f'extern float16 {name:<12s}[{size_expr}] = {{'
+        decl = f'static const float16 {name:<12s}[{size_expr}] = {{'
     else:
-        decl = f'extern float16 {name:<12s}[] = {{'
+        decl = f'static const float16 {name:<12s}[] = {{'
 
     vals = []
     for v in arr.flatten().tolist():
@@ -153,10 +153,10 @@ def write_test_h(output_path, dims, seed, m1, m2, m3, m4, m5, r1, r2, r3, o):
 
     # Runtime output buffers (written by tiles via DMA)
     parts.append("// Runtime output buffers (written by tiles via DMA)")
-    parts.append(f'extern float16 {"r1_out":<12s}[DIM_A * DIM_C] = {{}};')
-    parts.append(f'extern float16 {"r2_out":<12s}[DIM_C * DIM_E] = {{}};')
-    parts.append(f'extern float16 {"r3_out":<12s}[DIM_A * DIM_E] = {{}};')
-    parts.append(f'extern float16 {"o_out":<12s}[DIM_A * DIM_F] = {{}};')
+    parts.append(f'extern float16 {"r1_out":<12s}[DIM_A * DIM_C];')
+    parts.append(f'extern float16 {"r2_out":<12s}[DIM_C * DIM_E];')
+    parts.append(f'extern float16 {"r3_out":<12s}[DIM_A * DIM_E];')
+    parts.append(f'extern float16 {"o_out":<12s}[DIM_A * DIM_F];')
     parts.append("")
 
     # Golden arrays

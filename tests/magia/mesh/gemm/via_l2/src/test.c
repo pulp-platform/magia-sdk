@@ -61,7 +61,7 @@ void get_row_range(uint32_t local_idx,
     *num_rows     = base + (local_idx < rem ? 1 : 0);
 }
 
-int mem_set_zero(uint32_t o, uint32_t dim)
+void mem_set_zero(uint32_t o, uint32_t dim)
 {
     for (uint32_t i = 0; i < dim; i++)
         mmio16(o + i * 2) = 0x0000;
