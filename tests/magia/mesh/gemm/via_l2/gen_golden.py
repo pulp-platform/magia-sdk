@@ -153,10 +153,10 @@ def write_test_h(output_path, dims, seed, m1, m2, m3, m4, m5, r1, r2, r3, o):
 
     # Runtime output buffers (written by tiles via DMA)
     parts.append("// Runtime output buffers (written by tiles via DMA)")
-    parts.append(f'extern float16 {"r1_out":<12s}[DIM_A * DIM_C];')
-    parts.append(f'extern float16 {"r2_out":<12s}[DIM_C * DIM_E];')
-    parts.append(f'extern float16 {"r3_out":<12s}[DIM_A * DIM_E];')
-    parts.append(f'extern float16 {"o_out":<12s}[DIM_A * DIM_F];')
+    parts.append(f'float16 {"r1_out":<12s}[DIM_A * DIM_C] = {{}};')
+    parts.append(f'float16 {"r2_out":<12s}[DIM_C * DIM_E] = {{}};')
+    parts.append(f'float16 {"r3_out":<12s}[DIM_A * DIM_E] = {{}};')
+    parts.append(f'float16 {"o_out":<12s}[DIM_A * DIM_F] = {{}};')
     parts.append("")
 
     # Golden arrays
