@@ -95,3 +95,21 @@ jobs:
           else
             echo "PASS: 0 errors"
           fi
+
+      - name: Run GEMM interlaced test (8x8 mesh)
+        run: |
+          output=$(make gemm-interlaced-run tiles=8 2>&1) || true
+          result=$(echo "$output" | grep -E 'Errors:|Test complete' || true)
+          echo "$result"
+          errors=$(echo "$output" | grep -oP 'Errors:\s*\K[0-9]+' | head -1)
+          if [ -z "$errors" ]; then
+            echo "ERROR: Could not parse test output"
+            echo "Full output:"
+            echo "$output"
+            exit 1
+          elif [ "$errors" -gt 0 ]; then
+            echo "FAIL: $errors errors"
+            exit 1
+          else
+            echo "PASS: 0 errors"
+          fi
