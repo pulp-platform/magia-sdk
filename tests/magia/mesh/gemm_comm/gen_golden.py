@@ -9,8 +9,8 @@ Computes a 4-GEMM chain with task-level parallelism:
 All GEMMs use fp16 throughout (inputs, accumulation, outputs).
 
 Usage:
-  python3 tests/magia/mesh/gemm/via_l2/gen_golden.py
-  python3 tests/magia/mesh/gemm/via_l2/gen_golden.py --dim-a 8 --dim-b 12 --dim-c 16 --dim-d 8 --dim-e 8 --dim-f 12
+  python3 tests/magia/mesh/gemm_comm/gen_golden.py
+  python3 tests/magia/mesh/gemm_comm/gen_golden.py --dim-a 8 --dim-b 12 --dim-c 16 --dim-d 8 --dim-e 8 --dim-f 12
 """
 
 import argparse

@@ -26,7 +26,7 @@ regression_output*
 scripts/wave.do
 
 # Generated test inputs
-tests/magia/mesh/gemm/*/include/*
+tests/magia/mesh/gemm_comm/*/include/*
 
 # Editor
 .vscode/
