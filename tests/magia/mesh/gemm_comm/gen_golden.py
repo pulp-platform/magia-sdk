@@ -24,6 +24,7 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUTPUT = os.path.join(_SCRIPT_DIR, "via_L2", "naive", "include", "test.h")
 INTERLACED_OUTPUT = os.path.join(_SCRIPT_DIR, "via_L2", "interlaced", "include", "test.h")
 L1_NAIVE_OUTPUT = os.path.join(_SCRIPT_DIR, "via_L1", "naive", "include", "test.h")
+L1_INTERLACED_OUTPUT = os.path.join(_SCRIPT_DIR, "via_L1", "interlaced", "include", "test.h")
 
 
 def parse_args():
@@ -211,7 +212,9 @@ def main():
                      m1, m2, m3, m4, m5, r1, r2, r3, o)
         write_test_h(L1_NAIVE_OUTPUT, (a, b, c, d, e, f), args.seed,
                      m1, m2, m3, m4, m5, r1, r2, r3, o)
-        print(f"\nWrote {args.output}, {INTERLACED_OUTPUT}, and {L1_NAIVE_OUTPUT}:")
+        write_test_h(L1_INTERLACED_OUTPUT, (a, b, c, d, e, f), args.seed,
+                     m1, m2, m3, m4, m5, r1, r2, r3, o)
+        print(f"\nWrote {args.output}, {INTERLACED_OUTPUT}, {L1_NAIVE_OUTPUT}, and {L1_INTERLACED_OUTPUT}:")
     else:
         print(f"\nWrote {args.output}:")
     print(f"  m1_inp:    {a*b} values ({a}x{b})")

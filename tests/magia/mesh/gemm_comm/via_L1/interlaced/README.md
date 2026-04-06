@@ -1,16 +1,16 @@
-# via_l1_naive — GEMM Chain Test (Direct L1-to-L1 inter-mesh communication)
+# via_l1_interlaced — GEMM Chain Test (L1 communication with improved data movement)
 
 4-GEMM chain with task-level and row-parallel data parallelism across a 64-tile (8×8) mesh.
-Inter-tile communication happens through L1 memory: tiles DMA intermediate results
+Inter-tile communication happens through L1 memory, in an interlaced way: tiles DMA intermediate results
 directly into the L1 locations of tiles that need that data for subsequent computations.
 
 ## Overview
 
 - Phase 1:
-    - Move data L2->L1 (GEMM 1 and GEMM 2)
+    - Move data L2->L1 (GEMM 1, GEMM 2, and M5 for GEMM 4)
     - GEMM 1 and GEMM 2
     - Move result source L1->target L1 (GEMM 1 and GEMM 2 to GEMM 3)
-    - === Global barrier ===
+    - === Local barrier ===
 
 - Phase 2:
     - GEMM 3
@@ -18,7 +18,6 @@ directly into the L1 locations of tiles that need that data for subsequent compu
     - === Global barrier ===
 
 - Phase 3:
-    - Move data L2->L1 (M5 for GEMM 4)
     - GEMM 4
     - Move result L1->L2 (GEMM 4)
     - === Global barrier ===
@@ -61,7 +60,11 @@ For each tile in the group:
 
 Same steps as GEMM1, operating on `M3`, `M4` → `r2_out` (`R2_slice = M3_slice @ M4`).
 
-**Global barrier** — all tiles synchronize before Phase 2 reads `r1_out` / `r2_out`.
+**GEMM4** — `O[A×F] = R3[A×E] @ M5[E×F]`
+
+1. DMA full `M5[E × F]` from L2 into L1.
+
+**Local barrier** — Synchronize GEMM 1 and GEMM 2 responsible tiles before Phase 2 reads `r1_out` / `r2_out`.
 
 ---
 
@@ -85,7 +88,6 @@ For each tile in the group:
 
 For each tile in the group:
 1. Compute the tile's row slice of `O`.
-2. DMA full `M5[E × F]` from L2 into L1.
 3. Zero the L1 accumulator buffer for `O_slice`.
 4. RedMulE GEMM: `O_slice = R3_slice @ M5`.
 5. DMA `O_slice` back to L2 at `o_out[start_row * F]`.
