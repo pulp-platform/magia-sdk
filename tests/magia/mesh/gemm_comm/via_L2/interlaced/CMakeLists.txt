@@ -3,7 +3,7 @@ set(TEST_NAME test_gemm_interlaced)
 file(GLOB_RECURSE TEST_SRCS "src/*.c")
 
 add_executable(${TEST_NAME} ${TEST_SRCS})
-target_include_directories(${TEST_NAME} PUBLIC include ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_include_directories(${TEST_NAME} PUBLIC include ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 target_compile_options(${TEST_NAME} PRIVATE -O2)
 target_link_libraries(${TEST_NAME} PUBLIC runtime hal)
 

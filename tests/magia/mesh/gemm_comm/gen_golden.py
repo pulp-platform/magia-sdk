@@ -21,8 +21,8 @@ import torch
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-DEFAULT_OUTPUT = os.path.join(_SCRIPT_DIR, "via_l2_naive", "include", "test.h")
-INTERLACED_OUTPUT = os.path.join(_SCRIPT_DIR, "via_l2_interlaced", "include", "test.h")
+DEFAULT_OUTPUT = os.path.join(_SCRIPT_DIR, "via_L2", "naive", "include", "test.h")
+INTERLACED_OUTPUT = os.path.join(_SCRIPT_DIR, "via_L2", "interlaced", "include", "test.h")
 
 
 def parse_args():
