@@ -19,9 +19,10 @@ import sys
 
 import torch
 
-DEFAULT_OUTPUT = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "include", "test.h"
-)
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+DEFAULT_OUTPUT = os.path.join(_SCRIPT_DIR, "via_l2_naive", "include", "test.h")
+INTERLACED_OUTPUT = os.path.join(_SCRIPT_DIR, "via_l2_interlaced", "include", "test.h")
 
 
 def parse_args():
@@ -203,7 +204,13 @@ def main():
     write_test_h(args.output, (a, b, c, d, e, f), args.seed,
                  m1, m2, m3, m4, m5, r1, r2, r3, o)
 
-    print(f"\nWrote {args.output}:")
+    # Also generate for the interlaced test (same golden data, different scheduling)
+    if args.output == DEFAULT_OUTPUT:
+        write_test_h(INTERLACED_OUTPUT, (a, b, c, d, e, f), args.seed,
+                     m1, m2, m3, m4, m5, r1, r2, r3, o)
+        print(f"\nWrote {args.output} and {INTERLACED_OUTPUT}:")
+    else:
+        print(f"\nWrote {args.output}:")
     print(f"  m1_inp:    {a*b} values ({a}x{b})")
     print(f"  m2_inp:    {b*c} values ({b}x{c})")
     print(f"  m3_inp:    {c*d} values ({c}x{d})")
