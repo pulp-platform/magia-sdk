@@ -3,13 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "tile.h"
-#include "onnx_hardsigmoid_params.h"
+#include "onnx_hardswish_params.h"
 
-static inline void hardsigmoid(
-    const _Float16 *src, _Float16 *dst, const _Float16 alpha, const _Float16 beta, const size_t len)
+static inline void hardswish(const _Float16 *src, _Float16 *dst, const size_t len)
 {
-    register _Float16 ZERO asm("fs0") = 0.0f;
-    register _Float16 ONE asm("fs1")  = 1.0f;
+    register _Float16 ALPHA asm("fs0") = (1.0f / 6.0f);
+    register _Float16 BETA asm("fs1")  = 0.5f;
+    register _Float16 ZERO asm("fs2")  = 0.0f;
+    register _Float16 ONE asm("fs3")   = 1.0f;
     const _Float16 *p_src;
     _Float16 *p_dst;
     size_t avl;
@@ -24,11 +25,12 @@ static inline void hardsigmoid(
 
         asm volatile("vle16.v v0,( %0)" ::"r"(p_src));
 
-        asm volatile("vfmul.vf v0, v0, %0" ::"f"(alpha));
-        asm volatile("vfadd.vf v0, v0, %0" ::"f"(beta));
+        asm volatile("vfmul.vf v8, v0, %0" ::"f"(ALPHA));
+        asm volatile("vfadd.vf v8, v8, %0" ::"f"(BETA));
 
-        asm volatile("vfmin.vf v0, v0, %0" ::"f"(ONE));
-        asm volatile("vfmax.vf v0, v0, %0" ::"f"(ZERO));
+        asm volatile("vfmin.vf v8, v8, %0" ::"f"(ONE));
+        asm volatile("vfmax.vf v8, v8, %0" ::"f"(ZERO));
+        asm volatile("vfmul.vv v0, v8, v0");
 
         asm volatile("vse16.v v0, (%0)" ::"r"(p_dst));
 
@@ -37,26 +39,22 @@ static inline void hardsigmoid(
     }
 }
 
-int onnx_hardsigmoid_task(void)
+int onnx_hardswish_task(void)
 {
-    volatile onnx_hardsigmoid_params_t *params;
+    volatile onnx_hardswish_params_t *params;
     uintptr_t params_addr;
-    _Float16 alpha;
-    _Float16 beta;
     _Float16 *X;
     _Float16 *Y;
     size_t len;
 
     params_addr = mmio32(SPATZ_DATA);
-    params      = (volatile onnx_hardsigmoid_params_t *)params_addr;
+    params      = (volatile onnx_hardswish_params_t *)params_addr;
 
-    alpha = *(_Float16 *)params->alpha;
-    beta  = *(_Float16 *)params->beta;
-    X     = (_Float16 *)params->chunk_X;
-    Y     = (_Float16 *)params->chunk_Y;
-    len   = params->len;
+    X   = (_Float16 *)params->chunk_X;
+    Y   = (_Float16 *)params->chunk_Y;
+    len = params->len;
 
-    hardsigmoid(X, Y, alpha, beta, len);
+    hardswish(X, Y, len);
 
     return 0;
 }
