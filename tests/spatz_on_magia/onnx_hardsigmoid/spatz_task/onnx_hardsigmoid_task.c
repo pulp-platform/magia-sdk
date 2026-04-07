@@ -14,9 +14,6 @@ static inline void hardsigmoid(const _Float16 *src, _Float16 *dst, const _Float1
     p_dst = dst;
     avl = len;
 
-    asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
-    asm volatile ("vfmv.v.f v8, %0" :: "f"(ONE));
-
     for(; avl > 0; avl -= vl) {
         asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
 
