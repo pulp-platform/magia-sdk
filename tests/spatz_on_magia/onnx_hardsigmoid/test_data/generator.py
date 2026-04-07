@@ -1,0 +1,92 @@
+import argparse
+import onnx
+import os
+import numpy as np
+import onnxruntime as ort
+
+
+def positive_float(value):
+    try:
+        fvalue = float(value)
+
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{value}' is not a valid Real number.")
+
+    if fvalue <= 0:
+        raise argparse.ArgumentTypeError(f"Epsilon must be positive ({value}).")
+
+    return fvalue
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generator of Input Data and Golden Model for ONNX Hardsigmoid test")
+    parser.add_argument("length", type=int, help="Input vector length")
+    parser.add_argument("--alpha", type=positive_float, default=0.2, help="Value of alpha (default 0.2)")
+    parser.add_argument("--beta", type=positive_float, default=0.5, help="Value of beta (default 0.5)")
+    args = parser.parse_args()
+
+    return args
+
+
+def generate_input_data(length):
+    input = (np.random.randn(length)).astype(np.float16)
+    return input
+
+
+def run_onnx_hardsigmoid(input, args):
+    input_info = onnx.helper.make_tensor_value_info('I', onnx.TensorProto.FLOAT16, input.shape)
+    output_info = onnx.helper.make_tensor_value_info('O', onnx.TensorProto.FLOAT16, input.shape)
+
+    opset = onnx.helper.make_operatorsetid("", 22)
+    node_def = onnx.helper.make_node('HardSigmoid', ['I'], ['O'], alpha=args.alpha, beta=args.beta)
+    graph_def = onnx.helper.make_graph([node_def], 'onnx-hardsigmoid-test', [input_info], [output_info])
+    model_def = onnx.helper.make_model(graph_def, producer_name='onnx-generator', opset_imports=[opset])
+
+    ses = ort.InferenceSession(model_def.SerializePartialToString())
+    res = ses.run(None, {'I':input})
+
+    return res[0]
+
+
+def format_array(array):
+    return "{ " + ", ".join(f"{x:f}f" for x in array) + " }"
+
+
+def format_float(value):
+    return f"{value:f}f"
+
+
+def generate_header_file(args, input, expected, filename="data.h"):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    filepath = os.path.join(script_dir, filename)
+
+    with open(filepath, "w") as f:
+        f.write(f"/* Automatically generated header file for Spatz ONNX testing */\n")
+        f.write(f"#ifndef DATA_H_\n")
+        f.write(f"#define DATA_H_\n\n")
+
+        f.write(f"#define LEN {args.length}\n\n")
+
+        f.write(f"static const float16 alpha = {format_float(args.alpha)};\n")
+        f.write(f"static const float16 beta = {format_float(args.beta)};\n\n")
+
+        f.write(f"static const float16 input_vec[] = {format_array(input)};\n")
+        f.write(f"static const float16 expected_vec[] = {format_array(expected)};\n\n")
+
+        f.write(f"#endif   /* DATA_H_ */\n")
+
+
+def main():
+    args = parse_args()
+
+    input = generate_input_data(args.length)
+
+    expected = run_onnx_hardsigmoid(input, args)
+
+    generate_header_file(args, input, expected)
+
+    print(f"File 'data.h' successfully generated")
+
+
+if __name__ == "__main__":
+    main()
