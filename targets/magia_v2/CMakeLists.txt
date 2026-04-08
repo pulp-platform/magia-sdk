@@ -67,3 +67,8 @@ target_link_options(runtime
   -Wno-int-conversion #ZL-MOD 03072025
   -Wl,--gc-sections #ZL-MOD 03072025
 )
+
+# Build bootrom only when Spatz tests are enabled.
+if(SPATZ_TESTS)
+    add_spatz_bootrom()
+endif()
