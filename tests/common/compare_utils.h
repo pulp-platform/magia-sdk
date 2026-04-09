@@ -98,4 +98,63 @@ static inline bool vector_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
     return ret;
 }
 
+/**
+ * @brief Compare two FP16 matrices using Units in the Last Place tollerance
+ *
+ * @param [in] uintptr_t addr_res result matrix start address
+ * @param [in] uintptr_t addr_exp expected matrix start address
+ * @param [in] int rows number of rows
+ * @param [in] int cols number of cols
+ *
+ * @return true if match, false otherwise
+ */
+static inline bool matrix_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t addr_exp, int rows, int cols) {
+    uint16_t expected;
+    uint16_t result;
+    int32_t ord_exp;
+    int32_t ord_res;
+    uint32_t offset;
+    int32_t ulp_dif;
+    int32_t ulp_avg;
+    bool ret;
+
+    ulp_avg = 0;
+    ret = true;
+
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            int i = r * cols + c;
+            offset = i * sizeof(uint16_t);
+
+            expected = mmio16(addr_exp + offset);
+            result = mmio16(addr_res + offset);
+
+            /* Reject NaN or Inf */
+            if (fp16_is_invalid(expected) || fp16_is_invalid(result)) {
+                printf("[CV32] Invalid FP16 value at (%d,%d)\t-\texpected: %x\t-\tcomputed: %x\n",
+                       r, c, expected, result);
+                ret = false;
+                continue;
+            }
+
+            ord_exp = fp16_to_ordered(expected);
+            ord_res = fp16_to_ordered(result);
+
+            ulp_dif = (ord_exp > ord_res) ? (ord_exp - ord_res) : (ord_res - ord_exp);
+            ulp_avg += ulp_dif;
+
+            if (ulp_dif > ULP_TOLL) {
+                printf("[CV32] Mismatch at (%d,%d)\t-\texpected: %x\t-\tcomputed: %x\t-\tulp: %d\n",
+                       r, c, expected, result, ulp_dif);
+                ret = false;
+            }
+        }
+    }
+
+    ulp_avg = ulp_avg / (rows * cols);
+    printf("[CV32] Average ULP: %u\n", ulp_avg);
+
+    return ret;
+}
+
 #endif  /* COMPARE_UTILS_H_ */
