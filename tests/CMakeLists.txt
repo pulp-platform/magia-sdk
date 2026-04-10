@@ -12,6 +12,7 @@ if(SPATZ_TESTS)
         magia_v1:magia
         magia_v2:magia,spatz_on_magia
         magia_v3:spatz_pulp_on_magia
+        pulp:pulp
     )
 else()
     set(TEST_MAPPINGS

@@ -48,6 +48,7 @@ compiler 		?= GCC_PULP
 ISA				?= rv32imcxgap9
 gui 			?= 0
 tiles 			?= 2
+pulp_cores		?= 1
 spatz_tests		?= 1
 
 LLVM_CMAKE			?= cmake
@@ -79,6 +80,10 @@ endif
 	sed -i -E 's/^#define MESH_([XY])_TILES[[:space:]]*[0-9]+/#define MESH_\1_TILES $(tiles)/' ./targets/$(target_platform)/include/addr_map/tile_addr_map.h
 	sed -i -E 's/^(#define MAX_SYNC_LVL[[:space:]]*)[0-9]+/\1$(tiles_log)/' ./targets/$(target_platform)/include/addr_map/tile_addr_map.h
 	sed -i -E 's/^(#define MESH_2_POWER[[:space:]]*)[0-9]+/\1$(tiles_log_real)/' ./targets/$(target_platform)/include/addr_map/tile_addr_map.h
+ifeq ($(target_platform), pulp)
+	sed -i -E 's/^(#define PULP_CORE_COUNT[[:space:]]*)\([0-9]+\)/\1($(pulp_cores))/' ./targets/$(target_platform)/include/addr_map/tile_addr_map.h
+	sed -i -E 's/^(_stack_hart_count[[:space:]]*=[[:space:]]*)[0-9]+/\1$(pulp_cores)/' ./targets/$(target_platform)/link.ld
+endif
 ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
 endif

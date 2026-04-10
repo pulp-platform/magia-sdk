@@ -44,11 +44,24 @@
 #define PRINT_ADDR     (0xFFFF0004)
 #define MHARTID_OFFSET (0x00100000)
 
-#define MESH_X_TILES 1
-#define MESH_Y_TILES 1
-#define NUM_HARTS    (MESH_X_TILES*MESH_Y_TILES)
-#define MAX_SYNC_LVL 0
-#define MESH_2_POWER 0
+#define PULP_CORE_COUNT (8)
+
+#define PULP_STACK_SLICE_SIZE (0x800)
+#define PULP_STACK_MAX_CORES  (16)
+
+#if (PULP_CORE_COUNT < 1) || (PULP_CORE_COUNT > PULP_STACK_MAX_CORES)
+#error "PULP_CORE_COUNT must be between 1 and 16"
+#endif
+
+#define MESH_X_TILES 4
+#define MESH_Y_TILES 4
+#define NUM_CLUSTERS (MESH_X_TILES*MESH_Y_TILES)
+#define NUM_HARTS    (NUM_CLUSTERS)
+#define NUM_PULP_CORES (PULP_CORE_COUNT)
+#define PULP_HARTID_BASE (2 * NUM_CLUSTERS)
+#define TOTAL_PULP_HARTS (NUM_CLUSTERS * NUM_PULP_CORES)
+#define MAX_SYNC_LVL 4
+#define MESH_2_POWER 2
 
 #define STR_OFFSET  (0x00000000)
 #define STR_BASE    (RESERVED_START + STR_OFFSET)
@@ -59,5 +72,8 @@
 #define GET_X_ID(mhartid)  ((mhartid)%MESH_Y_TILES)
 #define GET_Y_ID(mhartid)  ((mhartid)/MESH_Y_TILES)
 #define GET_ID(y_id, x_id) (((y_id)*MESH_Y_TILES)+(x_id))
+#define GET_PULP_GLOBAL_ID(mhartid) ((mhartid) - PULP_HARTID_BASE)
+#define GET_PULP_LOCAL_ID(mhartid)  (GET_PULP_GLOBAL_ID(mhartid) % NUM_PULP_CORES)
+#define GET_PULP_TILE_ID(mhartid)   (GET_PULP_GLOBAL_ID(mhartid) / NUM_PULP_CORES)
 
 #endif // _TILE_ADDR_MAP_INCLUDE_GUARD_
