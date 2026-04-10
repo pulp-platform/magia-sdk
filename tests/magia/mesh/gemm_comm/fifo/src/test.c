@@ -1,7 +1,3 @@
-// Copyright 2025 University of Bologna.
-// Licensed under the Apache License, Version 2.0, see LICENSE for details.
-// SPDX-License-Identifier: Apache-2.0
-
 #include <stdint.h>
 #include "test.h"
 
@@ -44,12 +40,26 @@
 #define FIFO_RESERVE_SIZE 0x4000u
 
 /*
- * Rows pushed per fifo_push() call.
- * Set at build time via -DFIFO_BATCH_ROWS=N (default 1).
+ * Fraction of a tile's rows to push per fifo_push_dma() call.
+ * Set at build time via -DFIFO_BATCH_FRAC=F (default 0.2, i.e. 5 steps of 20%).
+ * If <= 0, falls back to one row at a time.
  */
-#ifndef FIFO_BATCH_ROWS
-#define FIFO_BATCH_ROWS 1
+#ifndef FIFO_BATCH_FRAC
+#define FIFO_BATCH_FRAC 0.2f
 #endif
+
+/*
+ * Compute the batch size (rows per push) for a tile with `total` rows.
+ * Returns ceil(total * frac), minimum 1.
+ * If frac <= 0, returns 1 (one row at a time).
+ */
+static uint32_t compute_batch(uint32_t total, float frac)
+{
+    if (frac <= 0.0f || total == 0)
+        return 1;
+    uint32_t b = (uint32_t)(total * frac + 0.9999f); /* ceiling */
+    return (b < 1) ? 1 : b;
+}
 
 static const uint32_t gemm1_tiles[GEMM1_N_TILES] = {0, 1, 8, 9};
 
@@ -88,51 +98,29 @@ static void mem_set_zero(uint32_t o, uint32_t dim)
 }
 
 /*
- * Copy nbytes from src to dst, both in L1 (local or remote).
- * Uses volatile word writes to ensure cross-tile visibility.
+ * Push data to a target tile's FIFO slot using iDMA for the payload transfer.
  */
-static void copy_words(uint32_t dst, uint32_t src, uint32_t nbytes)
+static void fifo_push_dma(uint32_t target_hartid,
+                          uint32_t slot_idx,
+                          uint32_t src_addr,
+                          uint32_t size_bytes,
+                          uint32_t matrix_id,
+                          uint32_t row_index,
+                          idma_controller_t *idma_ctrl,
+                          eu_controller_t *eu_ctrl)
 {
-    uint32_t nwords = nbytes / 4;
-    for (uint32_t i = 0; i < nwords; i++)
-        ((volatile uint32_t *)dst)[i] = ((volatile uint32_t *)src)[i];
-    for (uint32_t i = nwords * 4; i < nbytes; i++)
-        ((volatile uint8_t *)dst)[i] = ((volatile uint8_t *)src)[i];
+    fifo_header_t *hdr = fifo_get_header(target_hartid);
+    fifo_slot_t *slot  = fifo_get_slot(hdr, slot_idx);
+    uint32_t dst       = (uint32_t)fifo_slot_data(slot);
+
+    /* DMA payload: local L1 (OBI) → remote L1 (AXI) */
+    idma_memcpy_1d(idma_ctrl, 1, dst, src_addr, size_bytes);
+    eu_idma_wait_o2a(eu_ctrl, WAIT_MODE);
+
+    /* Publish metadata + valid flag */
+    fifo_slot_publish(target_hartid, slot_idx, size_bytes, matrix_id, row_index);
 }
 
-/**
- * GEMM chain test with FIFO-based out-of-order inter-tile communication.
- *
- * Same 4-GEMM chain as the L1 interlaced variant, but barriers between
- * Phase 1/2/3 are replaced by FIFO mailboxes. Producers push result rows
- * directly into consumers' FIFOs (allocated in the consumer's L1). Consumers
- * spin on their own FIFO and compute as soon as all required rows are present,
- * enabling out-of-order processing.
- *
- * Only two global barriers remain: a startup barrier (before any communication)
- * and a final barrier (before tile 0 validates o_out from L2).
- *
- * Phase 1 (parallel):
- *   GEMM1 (4 tiles):  R1[AxC] = M1[AxB] @ M2[BxC]
- *     -> push R1 rows to matching GEMM3 tiles' FIFOs (MATRIX_R1 tag)
- *   GEMM2 (24 tiles): R2[CxE] = M3[CxD] @ M4[DxE]
- *     -> push R2 rows to all GEMM3 tiles' FIFOs (MATRIX_R2 tag)
- *   GEMM4 (24 tiles): prefetch M5[ExF] from L2 into L1 workspace
- *     -> enter FIFO consumer loop immediately after (no Phase 1/2 barrier)
- *
- * Phase 2 (data-driven, no explicit barrier):
- *   GEMM3 (12 tiles): spin on own FIFO; for each received R1 batch, if R2 is
- *     already complete compute R3 immediately; when R2 becomes complete, compute
- *     all pending R1 batches. Push R3 rows to matching GEMM4 tiles' FIFOs (MATRIX_R3).
- *
- * Phase 3 (data-driven, no explicit barrier):
- *   GEMM4 (24 tiles): spin on own FIFO; for each received R3 batch, compute
- *     O = R3_batch @ M5 and DMA the result to L2.
- *
- * Final barrier + validation (same as reference).
- *
- * Requires 8x8 mesh (64 tiles).
- */
 int main(void)
 {
     /* 0. Initialization */
@@ -198,16 +186,26 @@ int main(void)
 
         if (gemm3_idx >= 0) {
             uint32_t g3s, g3n;
+
             get_row_range((uint32_t)gemm3_idx, GEMM3_N_TILES, DIM_A, &g3s, &g3n);
-            uint32_t r1_payload = FIFO_BATCH_ROWS * DIM_C * 2;
-            uint32_t r2_payload = FIFO_BATCH_ROWS * DIM_E * 2;
-            num_slots           = g3n + DIM_C;
-            slot_data_size      = r1_payload > r2_payload ? r1_payload : r2_payload;
+
+            uint32_t r1_batch = compute_batch(g3n, FIFO_BATCH_FRAC);
+            uint32_t r2_batch = compute_batch(DIM_C, FIFO_BATCH_FRAC);
+
+            uint32_t r1_payload = r1_batch * DIM_C * 2;
+            uint32_t r2_payload = r2_batch * DIM_E * 2;
+
+            num_slots      = g3n + DIM_C;
+            slot_data_size = r1_payload > r2_payload ? r1_payload : r2_payload;
         } else if (gemm4_idx >= 0) {
             uint32_t g4s, g4n;
+
             get_row_range((uint32_t)gemm4_idx, GEMM4_N_TILES, DIM_A, &g4s, &g4n);
+
+            uint32_t r3_batch = compute_batch(g4n, FIFO_BATCH_FRAC);
+
             num_slots      = g4n;
-            slot_data_size = FIFO_BATCH_ROWS * DIM_E * 2;
+            slot_data_size = r3_batch * DIM_E * 2;
         }
 
         fifo_init(hartid, num_slots, slot_data_size);
@@ -270,22 +268,10 @@ int main(void)
              * row_index tag = global row of the first row in the batch.
              */
             for (uint32_t j = 0; j < GEMM3_N_TILES; j++) {
-                printf("Tile %u step %u: Checking overlap with GEMM3 tile %u\n",
-                       hartid,
-                       j,
-                       gemm3_tiles[j]);
-
                 uint32_t g3_start, g3_nrows;
                 get_row_range(j, GEMM3_N_TILES, DIM_A, &g3_start, &g3_nrows);
                 if (g3_nrows == 0)
                     continue;
-
-                printf("Tile %u step %u: GEMM3 tile %u has rows [%u, %u)\n",
-                       hartid,
-                       j,
-                       gemm3_tiles[j],
-                       g3_start,
-                       g3_start + g3_nrows);
 
                 /* Overlap between this tile's R1 rows and GEMM3 tile j's rows */
                 uint32_t ov_start = start_row > g3_start ? start_row : g3_start;
@@ -293,53 +279,25 @@ int main(void)
                                         ? (start_row + num_rows)
                                         : (g3_start + g3_nrows);
 
-                printf("Tile %u step %u: Overlap with GEMM3 tile %u is rows [%u, %u)\n",
-                       hartid,
-                       j,
-                       gemm3_tiles[j],
-                       ov_start,
-                       ov_end);
-
                 if (ov_start >= ov_end)
                     continue;
 
-                for (uint32_t r = ov_start; r < ov_end; r += FIFO_BATCH_ROWS) {
-                    printf("Tile %u step %u: Pushing R1 rows [%u, %u) to GEMM3 tile %u\n",
-                           hartid,
-                           j,
-                           r,
-                           (r + FIFO_BATCH_ROWS <= ov_end) ? (r + FIFO_BATCH_ROWS) : ov_end,
-                           gemm3_tiles[j]);
-
-                    uint32_t batch =
-                        (r + FIFO_BATCH_ROWS <= ov_end) ? FIFO_BATCH_ROWS : (ov_end - r);
+                uint32_t g3_r1_batch = compute_batch(g3_nrows, FIFO_BATCH_FRAC);
+                for (uint32_t r = ov_start; r < ov_end; r += g3_r1_batch) {
+                    uint32_t batch   = (r + g3_r1_batch <= ov_end) ? g3_r1_batch : (ov_end - r);
                     uint32_t src_off = (r - start_row) * DIM_C * 2;
 
-                    printf("Tile %u step %u: src_off=%u bytes, batch size=%u rows (%u bytes)\n",
-                           hartid,
-                           j,
-                           src_off,
-                           batch,
-                           batch * DIM_C * 2);
-
                     uint32_t slot_idx = r - g3_start;
-                    fifo_push(gemm3_tiles[j],
-                              slot_idx,
-                              (void *)(obi_r1 + src_off),
-                              batch * DIM_C * 2,
-                              MATRIX_R1,
-                              r);
-
-                    printf("Tile %u step %u: Pushed R1 rows [%u, %u) to GEMM3 tile %u\n",
-                           hartid,
-                           j,
-                           r,
-                           (r + batch <= ov_end) ? (r + batch) : ov_end,
-                           gemm3_tiles[j]);
+                    fifo_push_dma(gemm3_tiles[j],
+                                  slot_idx,
+                                  obi_r1 + src_off,
+                                  batch * DIM_C * 2,
+                                  MATRIX_R1,
+                                  r,
+                                  &idma_ctrl,
+                                  &eu_ctrl);
                 }
             }
-
-            printf("Tile %u: GEMM1 pushes to GEMM3 FIFOs done\n", hartid);
         }
     }
 
@@ -382,22 +340,25 @@ int main(void)
             /*
              * Push R2 rows to every GEMM3 tile (all need the full R2).
              * row_index = global row in the full R2 matrix (0..DIM_C-1).
+             * Batch size is a fraction of DIM_C (the total R2 row count).
              */
-            for (uint32_t r = 0; r < num_rows; r += FIFO_BATCH_ROWS) {
-                uint32_t batch =
-                    (r + FIFO_BATCH_ROWS <= num_rows) ? FIFO_BATCH_ROWS : (num_rows - r);
+            uint32_t r2_batch = compute_batch(DIM_C, FIFO_BATCH_FRAC);
+            for (uint32_t r = 0; r < num_rows; r += r2_batch) {
+                uint32_t batch   = (r + r2_batch <= num_rows) ? r2_batch : (num_rows - r);
                 uint32_t src_off = r * DIM_E * 2;
                 for (uint32_t j = 0; j < GEMM3_N_TILES; j++) {
                     /* R2 slots start after R1 slots in the consumer's FIFO */
                     uint32_t g3s_j, g3n_j;
                     get_row_range(j, GEMM3_N_TILES, DIM_A, &g3s_j, &g3n_j);
                     uint32_t slot_idx = g3n_j + (start_row + r);
-                    fifo_push(gemm3_tiles[j],
-                              slot_idx,
-                              (void *)(obi_r2 + src_off),
-                              batch * DIM_E * 2,
-                              MATRIX_R2,
-                              start_row + r);
+                    fifo_push_dma(gemm3_tiles[j],
+                                  slot_idx,
+                                  obi_r2 + src_off,
+                                  batch * DIM_E * 2,
+                                  MATRIX_R2,
+                                  start_row + r,
+                                  &idma_ctrl,
+                                  &eu_ctrl);
                 }
             }
         }
@@ -436,6 +397,9 @@ int main(void)
 
         uint32_t r2_rows_received = 0;
         uint32_t total_r3_done    = 0;
+
+        /* Batch size for R1/R3 rows owned by this tile (matches what GEMM1 sends here) */
+        uint32_t my_r1_batch = compute_batch(num_rows, FIFO_BATCH_FRAC);
 
         /*
          * Spin until all R3 rows for this tile have been computed and pushed.
@@ -490,12 +454,14 @@ int main(void)
                         uint32_t ov_count = ov_end - ov_start;
                         uint32_t src_off  = (ov_start - global_row) * DIM_E * 2;
                         uint32_t slot_idx = ov_start - g4_start;
-                        fifo_push(gemm4_tiles[k],
-                                  slot_idx,
-                                  (void *)(obi_r3_batch + src_off),
-                                  ov_count * DIM_E * 2,
-                                  MATRIX_R3,
-                                  ov_start);
+                        fifo_push_dma(gemm4_tiles[k],
+                                      slot_idx,
+                                      obi_r3_batch + src_off,
+                                      ov_count * DIM_E * 2,
+                                      MATRIX_R3,
+                                      ov_start,
+                                      &idma_ctrl,
+                                      &eu_ctrl);
                     }
 
                     r3_computed[local_row] = 1;
@@ -509,7 +475,8 @@ int main(void)
                  * at the correct row offset. row_index is the global R2 row (0..DIM_C-1).
                  */
                 uint32_t batch_rows = data_size / (DIM_E * 2);
-                copy_words(obi_r2 + row_index * DIM_E * 2, data_ptr, data_size);
+                idma_memcpy_1d(&idma_ctrl, 1, obi_r2 + row_index * DIM_E * 2, data_ptr, data_size);
+                eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
                 r2_rows_received += batch_rows;
 
                 if (r2_rows_received == DIM_C) {
@@ -517,13 +484,12 @@ int main(void)
                      * R2 just became complete. Process all R1 batches that arrived earlier
                      * and haven't been computed yet.
                      */
-                    for (uint32_t lr = 0; lr < num_rows; lr += FIFO_BATCH_ROWS) {
+                    for (uint32_t lr = 0; lr < num_rows; lr += my_r1_batch) {
                         if (!r1_received[lr] || r3_computed[lr])
                             continue;
 
-                        uint32_t remaining = num_rows - lr;
-                        uint32_t batch_r3 =
-                            (remaining < FIFO_BATCH_ROWS) ? remaining : FIFO_BATCH_ROWS;
+                        uint32_t remaining    = num_rows - lr;
+                        uint32_t batch_r3     = (remaining < my_r1_batch) ? remaining : my_r1_batch;
                         uint32_t r1_payload   = r1_data_ptrs[lr];
                         uint32_t obi_r3_batch = obi_r3 + lr * DIM_E * 2;
 
@@ -554,12 +520,14 @@ int main(void)
                             uint32_t ov_count = ov_end - ov_start;
                             uint32_t src_off  = (ov_start - global_row) * DIM_E * 2;
                             uint32_t slot_idx = ov_start - g4_start;
-                            fifo_push(gemm4_tiles[k],
-                                      slot_idx,
-                                      (void *)(obi_r3_batch + src_off),
-                                      ov_count * DIM_E * 2,
-                                      MATRIX_R3,
-                                      ov_start);
+                            fifo_push_dma(gemm4_tiles[k],
+                                          slot_idx,
+                                          obi_r3_batch + src_off,
+                                          ov_count * DIM_E * 2,
+                                          MATRIX_R3,
+                                          ov_start,
+                                          &idma_ctrl,
+                                          &eu_ctrl);
                         }
 
                         r3_computed[lr] = 1;

@@ -92,7 +92,7 @@ static inline void *fifo_slot_data(fifo_slot_t *slot)
  */
 static inline void fifo_init(uint32_t hartid, uint32_t num_slots, uint32_t slot_data_size)
 {
-    fifo_header_t *hdr = fifo_get_header(hartid);
+    fifo_header_t *hdr         = fifo_get_header(hartid);
     uint32_t aligned_data_size = (slot_data_size + 3) & ~3u;
 
     hdr->num_slots   = num_slots;
@@ -102,7 +102,7 @@ static inline void fifo_init(uint32_t hartid, uint32_t num_slots, uint32_t slot_
 
     for (uint32_t i = 0; i < num_slots; i++) {
         fifo_slot_t *slot = fifo_get_slot(hdr, i);
-        slot->valid = 0;
+        slot->valid       = 0;
     }
 
     asm volatile("fence w, w" ::: "memory");
@@ -128,14 +128,18 @@ static inline void fifo_push(uint32_t target_hartid,
 
     /* Copy payload word-by-word via volatile writes */
     volatile uint32_t *d = (volatile uint32_t *)dst;
-    uint32_t *s          = (uint32_t *)src_data;
-    uint32_t words       = size_bytes / 4;
-    uint32_t remainder   = size_bytes % 4;
+
+    uint32_t *s        = (uint32_t *)src_data;
+    uint32_t words     = size_bytes / 4;
+    uint32_t remainder = size_bytes % 4;
+
     for (uint32_t i = 0; i < words; i++)
         d[i] = s[i];
+
     if (remainder) {
         volatile uint8_t *db = (volatile uint8_t *)((uint8_t *)dst + words * 4);
         uint8_t *sb          = (uint8_t *)src_data + words * 4;
+
         for (uint32_t i = 0; i < remainder; i++)
             db[i] = sb[i];
     }
@@ -191,6 +195,27 @@ static inline uint32_t fifo_pop(uint32_t hartid,
     }
 
     return 0;
+}
+
+/**
+ * Publish a slot after its payload has been written externally (e.g. via DMA).
+ * Writes metadata, issues a fence, and sets the valid flag.
+ */
+static inline void fifo_slot_publish(uint32_t target_hartid,
+                                     uint32_t slot_idx,
+                                     uint32_t size_bytes,
+                                     uint32_t matrix_id,
+                                     uint32_t row_index)
+{
+    fifo_header_t *hdr = fifo_get_header(target_hartid);
+    fifo_slot_t *slot  = fifo_get_slot(hdr, slot_idx);
+
+    slot->data_size = size_bytes;
+    slot->matrix_id = matrix_id;
+    slot->row_index = row_index;
+
+    asm volatile("fence w, w" ::: "memory");
+    slot->valid = 1;
 }
 
 /**
