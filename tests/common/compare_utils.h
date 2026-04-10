@@ -157,4 +157,61 @@ static inline bool matrix_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
     return ret;
 }
 
+static inline bool tensor_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t addr_exp, int N, int C, int H, int W)
+{
+    uint16_t expected;
+    uint16_t result;
+    int32_t ord_exp;
+    int32_t ord_res;
+    uint32_t offset;
+    int32_t ulp_dif;
+    int32_t ulp_avg;
+    bool ret;
+    int idx;
+
+    idx = 0;
+    ret = true;
+    ulp_avg = 0;
+    for (int n = 0; n < N; n++) {
+        for (int c = 0; c < C; c++) {
+            for (int h = 0; h < H; h++) {
+                for (int w = 0; w < W; w++, idx++) {
+
+                    offset = idx * sizeof(uint16_t);
+
+                    expected = mmio16(addr_exp + offset);
+                    result   = mmio16(addr_res + offset);
+
+                    if (fp16_is_invalid(expected) || fp16_is_invalid(result)) {
+                        printf("[CV32] Invalid FP16 at (%d,%d,%d,%d) - exp: %x - got: %x\n",
+                            n,c,h,w, expected, result);
+                        ret = false;
+                        continue;
+                    }
+
+                    ord_exp = fp16_to_ordered(expected);
+                    ord_res = fp16_to_ordered(result);
+
+                    ulp_dif = (ord_exp > ord_res) ?
+                            (ord_exp - ord_res) :
+                            (ord_res - ord_exp);
+
+                    ulp_avg += ulp_dif;
+
+                    if (ulp_dif > ULP_TOLL) {
+                        printf("[CV32] Mismatch at (%d,%d,%d,%d) - exp: %x - got: %x - ulp: %d\n",
+                            n,c,h,w, expected, result, ulp_dif);
+                        ret = false;
+                    }
+                }
+            }
+        }
+    }
+
+    ulp_avg /= (N*C*H*W);
+    printf("[CV32] Average ULP: %d\n", ulp_avg);
+
+    return ret;
+}
+
 #endif  /* COMPARE_UTILS_H_ */
