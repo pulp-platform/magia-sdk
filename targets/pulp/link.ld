@@ -22,13 +22,19 @@ MEMORY
 {
     instrram    : ORIGIN = 0xc0000000, LENGTH = 0x8000
     dataram     : ORIGIN = 0xc0100000, LENGTH = 0xF00000
-    stack       : ORIGIN = 0x00018000, LENGTH = 0x4000 /* 16KB */
+    stack       : ORIGIN = 0x00014000, LENGTH = 0x8000 /* 32KB */
 }
 
 /* Stack information variables */
-_min_stack     = 0x1000;   /* 4K - minimum stack space to reserve */
+_stack_slice_size = 0x800; /* 2KB per hart */
+_stack_max_cores  = 16;
+_stack_hart_count = 8;
+ASSERT(_stack_hart_count > 0, "PULP core count must be at least 1");
+ASSERT(_stack_hart_count <= _stack_max_cores, "PULP core count must be <= 16");
+_min_stack     = _stack_slice_size * _stack_hart_count;
 _stack_len     = LENGTH(stack);
 _stack_start   = ORIGIN(stack) + LENGTH(stack);
+ASSERT(_min_stack <= _stack_len, "Configured PULP stacks exceed stack memory");
 
 /* We have to align each sector to word boundaries as our current s19->slm
  * conversion scripts are not able to handle non-word aligned sections. */
@@ -129,8 +135,9 @@ SECTIONS
     } > dataram :data
 
     /* ensure there is enough room for stack */
-    .stack (NOLOAD): {
+    .stack ORIGIN(stack) + LENGTH(stack) - _min_stack (NOLOAD): {
         . = ALIGN(4);
+        _stack_bottom = .;
         . = . + _min_stack ;
         . = ALIGN(4);
         stack = . ;

@@ -20,6 +20,8 @@
  *          Francesco Conti, ETHZ & UNIBO
  */
 
+#include "addr_map/tile_addr_map.h"
+
   .section .text
   .global _start
 _start:
@@ -27,8 +29,13 @@ _start:
   # Cluster PEs will also starts here to avoid aligning another entry point
   # Just re-route them to the right entry
   csrr    a0, mhartid
-  andi    a1, a0, 0x1f
-  srli    a0, a0, 5
+  li      t0, PULP_HARTID_BASE
+  bltu    a0, t0, _halt_unused_hart
+  sub     a1, a0, t0
+  li      t0, TOTAL_PULP_HARTS
+  bgeu    a1, t0, _halt_unused_hart
+  li      t0, PULP_CORE_COUNT
+  remu    a1, a1, t0
   # Enabling CV32E40P mstatus.MIE
   li      t0, 0x1
   csrrs   zero, mstatus, t0
@@ -45,7 +52,9 @@ _start:
   bltu    t0, t1, 1b
 
   /* Stack initialization */
-  la   x2, stack
+  la      x2, stack
+  slli    t0, a1, 11
+  sub     x2, x2, t0
 
 .section .text
 
@@ -69,6 +78,10 @@ _init:
 _fini:
   # These don't have to do anything since we use init_array/fini_array.
   ret
+
+_halt_unused_hart:
+  wfi
+  j       _halt_unused_hart
 
 exit:
   li      a1, 0x00001744

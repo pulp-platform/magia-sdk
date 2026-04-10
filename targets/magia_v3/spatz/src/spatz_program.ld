@@ -19,8 +19,8 @@
  *   0xCC000000 + CV32_size: .spatz_binary (Spatz code inline)
  *
  * Stack: Spatz uses remaining 16KB after CV32 and PULP (0x0001C000-0x00020000)
- *   - CV32 uses: 0x00010000-0x00018000 (32KB)
- *   - Pulp uses: 0x00018000-0x0001C000 (16KB)
+ *   - CV32 uses: 0x00010000-0x00014000 (16KB)
+ *   - Pulp uses: 0x00014000-0x0001C000 (32KB)
  *   - Spatz uses: 0x0001C000-0x00020000 (16KB)
  */
 

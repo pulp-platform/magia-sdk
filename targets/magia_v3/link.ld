@@ -22,7 +22,7 @@ MEMORY
 {
     instrram    : ORIGIN = 0xcc000000, LENGTH = 0x8000
     dataram     : ORIGIN = 0xcc100000, LENGTH = 0xF00000
-    stack       : ORIGIN = 0x00010000, LENGTH = 0x8000 /* 32K for control core CV32 */
+    stack       : ORIGIN = 0x00010000, LENGTH = 0x4000 /* 16K for control core CV32 */
 }
 
 /* Stack information variables */
