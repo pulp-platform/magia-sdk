@@ -179,37 +179,37 @@ int main(void)
     /*
      * Initialize this tile's FIFO before the startup barrier.
      * Slot count and payload size depend on the tile's consumer role.
+     * Only needed for GEMM 3 and GEMM 4 (which have as input the result
+     * of other GEMMs, performed by other tiles).
      */
-    {
-        uint32_t num_slots      = 0;
-        uint32_t slot_data_size = 0;
+    uint32_t num_slots      = 0;
+    uint32_t slot_data_size = 0;
 
-        if (gemm3_idx >= 0) {
-            uint32_t g3s, g3n;
+    if (gemm3_idx >= 0) {
+        uint32_t g3s, g3n;
 
-            get_row_range((uint32_t)gemm3_idx, GEMM3_N_TILES, DIM_A, &g3s, &g3n);
+        get_row_range((uint32_t)gemm3_idx, GEMM3_N_TILES, DIM_A, &g3s, &g3n);
 
-            uint32_t r1_batch = compute_batch(g3n, FIFO_BATCH_FRAC);
-            uint32_t r2_batch = compute_batch(DIM_C, FIFO_BATCH_FRAC);
+        uint32_t r1_batch = compute_batch(g3n, FIFO_BATCH_FRAC);
+        uint32_t r2_batch = compute_batch(DIM_C, FIFO_BATCH_FRAC);
 
-            uint32_t r1_payload = r1_batch * DIM_C * 2;
-            uint32_t r2_payload = r2_batch * DIM_E * 2;
+        uint32_t r1_payload = r1_batch * DIM_C * 2;
+        uint32_t r2_payload = r2_batch * DIM_E * 2;
 
-            num_slots      = g3n + DIM_C;
-            slot_data_size = r1_payload > r2_payload ? r1_payload : r2_payload;
-        } else if (gemm4_idx >= 0) {
-            uint32_t g4s, g4n;
+        num_slots      = g3n + DIM_C;
+        slot_data_size = r1_payload > r2_payload ? r1_payload : r2_payload;
+    } else if (gemm4_idx >= 0) {
+        uint32_t g4s, g4n;
 
-            get_row_range((uint32_t)gemm4_idx, GEMM4_N_TILES, DIM_A, &g4s, &g4n);
+        get_row_range((uint32_t)gemm4_idx, GEMM4_N_TILES, DIM_A, &g4s, &g4n);
 
-            uint32_t r3_batch = compute_batch(g4n, FIFO_BATCH_FRAC);
+        uint32_t r3_batch = compute_batch(g4n, FIFO_BATCH_FRAC);
 
-            num_slots      = g4n;
-            slot_data_size = r3_batch * DIM_E * 2;
-        }
-
-        fifo_init(hartid, num_slots, slot_data_size);
+        num_slots      = g4n;
+        slot_data_size = r3_batch * DIM_E * 2;
     }
+
+    fifo_init(hartid, num_slots, slot_data_size);
 
     /*
      * Startup barrier: ensure all tiles finish crt0.S BSS zeroing (which
@@ -227,7 +227,7 @@ int main(void)
     uint32_t ws = l1_tile_base + FIFO_RESERVE_SIZE;
 
     /* ------------------------------------------------------------------ */
-    /* GEMM1: R1 = M1 @ M2, push R1 rows to GEMM3 FIFOs        */
+    /* GEMM1: R1 = M1 @ M2, push R1 rows to GEMM3 FIFOs                   */
     /* ------------------------------------------------------------------ */
     if (gemm1_idx >= 0) {
         uint32_t start_row, num_rows;
@@ -302,7 +302,7 @@ int main(void)
     }
 
     /* ------------------------------------------------------------------ */
-    /* GEMM2: R2 = M3 @ M4, push R2 rows to all GEMM3 FIFOs    */
+    /* GEMM2: R2 = M3 @ M4, push R2 rows to all GEMM3 FIFOs               */
     /* ------------------------------------------------------------------ */
     if (gemm2_idx >= 0) {
         uint32_t start_row, num_rows;
@@ -365,7 +365,7 @@ int main(void)
     }
 
     /* ------------------------------------------------------------------ */
-    /* GEMM3: out-of-order FIFO consumer + R3 producer          */
+    /* GEMM3: out-of-order partial GEMM with local R3 accumulation        */
     /* ------------------------------------------------------------------ */
     if (gemm3_idx >= 0) {
         uint32_t start_row, num_rows;
@@ -539,7 +539,7 @@ int main(void)
     }
 
     /* ------------------------------------------------------------------ */
-    /* GEMM4: prefetch M5 into L1, then enter FIFO consumer     */
+    /* GEMM4: prefetch M5 into L1, then enter FIFO consumer               */
     /* ------------------------------------------------------------------ */
     if (gemm4_idx >= 0) {
         uint32_t start_row, num_rows;
