@@ -6,6 +6,8 @@
 
 #include "tile.h"
 
+#define HID get_hartid()
+
 /**
  * One ULP is the difference between two consecutive FP16 numbers
  * A tollerance of 8 ULP means that two values can differ by a maximum
@@ -75,7 +77,7 @@ static inline bool vector_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
 
         /* Reject NaN or Inf */
         if (fp16_is_invalid(expected) || fp16_is_invalid(result)) {
-            printf("[CV32] Invalid FP16 value at idx %d\t-\texpected: %x\t-\tcomputed: %x\n", i, expected, result);
+            printf("[CV32 (%d)] Invalid FP16 value at idx %d\t-\texpected: %x\t-\tcomputed: %x\n", HID, i, expected, result);
             ret = false;
             continue;
         }
@@ -87,13 +89,13 @@ static inline bool vector_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
         ulp_avg += ulp_dif;
 
         if (ulp_dif > ULP_TOLL) {
-            printf("[CV32] Mismatch at index %d\t-\texpected: %x\t-\tcomputed: %x\t-\tulp: %d\n", i, expected, result, ulp_dif);
+            printf("[CV32 (%d)] Mismatch at index %d\t-\texpected: %x\t-\tcomputed: %x\t-\tulp: %d\n", HID, i, expected, result, ulp_dif);
             ret = false;
         }
     }
 
     ulp_avg = ulp_avg / len;
-    printf("[CV32] Average ULP: %u\n", ulp_avg);
+    printf("[CV32 (%d)] Average ULP: %u\n", HID, ulp_avg);
 
     return ret;
 }
@@ -131,8 +133,7 @@ static inline bool matrix_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
 
             /* Reject NaN or Inf */
             if (fp16_is_invalid(expected) || fp16_is_invalid(result)) {
-                printf("[CV32] Invalid FP16 value at (%d,%d)\t-\texpected: %x\t-\tcomputed: %x\n",
-                       r, c, expected, result);
+                printf("[CV32 (%d)] Invalid FP16 value at (%d,%d)\t-\texpected: %x\t-\tcomputed: %x\n", HID, r, c, expected, result);
                 ret = false;
                 continue;
             }
@@ -144,19 +145,33 @@ static inline bool matrix_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
             ulp_avg += ulp_dif;
 
             if (ulp_dif > ULP_TOLL) {
-                printf("[CV32] Mismatch at (%d,%d)\t-\texpected: %x\t-\tcomputed: %x\t-\tulp: %d\n",
-                       r, c, expected, result, ulp_dif);
+                printf("[CV32 (%d)] Mismatch at (%d,%d)\t-\texpected: %x\t-\tcomputed: %x\t-\tulp: %d\n", HID, r, c, expected, result, ulp_dif);
                 ret = false;
             }
         }
     }
 
     ulp_avg = ulp_avg / (rows * cols);
-    printf("[CV32] Average ULP: %u\n", ulp_avg);
+    printf("[CV32 (%d)] Average ULP: %u\n", HID, ulp_avg);
 
     return ret;
 }
 
+/**
+ * @brief Compare two FP16 tensors using Units in the Last Place tollerance
+ *
+ * @param [in] uintptr_t addr_res result tensor start address
+ * @param [in] uintptr_t addr_exp expected tensor start address
+ * @param [in] int N batch dimension
+ * @param [in] int C channel dimension
+ * @param [in] int H height dimension
+ * @param [in] int W width dimension
+ *
+ * The tensor is assumed to be stored in contiguous NCHW layout:
+ * index = (((n * C + c) * H + h) * W + w)
+ *
+ * @return true if match, false otherwise
+ */
 static inline bool tensor_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t addr_exp, int N, int C, int H, int W)
 {
     uint16_t expected;
@@ -183,8 +198,7 @@ static inline bool tensor_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
                     result   = mmio16(addr_res + offset);
 
                     if (fp16_is_invalid(expected) || fp16_is_invalid(result)) {
-                        printf("[CV32] Invalid FP16 at (%d,%d,%d,%d) - exp: %x - got: %x\n",
-                            n,c,h,w, expected, result);
+                        printf("[CV32 (%d)] Invalid FP16 at (%d,%d,%d,%d) - exp: %x - got: %x\n", HID, n, c, h, w, expected, result);
                         ret = false;
                         continue;
                     }
@@ -199,8 +213,7 @@ static inline bool tensor_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
                     ulp_avg += ulp_dif;
 
                     if (ulp_dif > ULP_TOLL) {
-                        printf("[CV32] Mismatch at (%d,%d,%d,%d) - exp: %x - got: %x - ulp: %d\n",
-                            n,c,h,w, expected, result, ulp_dif);
+                        printf("[CV32 (%d)] Mismatch at (%d,%d,%d,%d) - exp: %x - got: %x - ulp: %d\n", HID, n, c, h, w, expected, result, ulp_dif);
                         ret = false;
                     }
                 }
@@ -210,6 +223,64 @@ static inline bool tensor_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t add
 
     ulp_avg /= (N*C*H*W);
     printf("[CV32] Average ULP: %d\n", ulp_avg);
+
+    return ret;
+}
+
+/**
+ * @brief Compare a chunk of two FP16 vectors using Units in the Last Place tolerance
+ *
+ * @param [in] addr_res   Tile's computed result chunk
+ * @param [in] addr_exp   Tile's expected result chunk
+ * @param [in] idx_start  Tile's chunk global start index
+ * @param [in] len        Tile's chunk len
+ *
+ * @return true if all elements in chunk match within ULP_TOLL, false otherwise
+ */
+static inline bool chunk_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t addr_exp, int idx_start, int len) {
+    uint32_t global_idx;
+    uint16_t expected;
+    uint16_t result;
+    int32_t ord_exp;
+    int32_t ord_res;
+    uint32_t offset;
+    int32_t ulp_dif;
+    int32_t ulp_avg;
+    bool ret;
+
+    if (len == 0)
+        return true;
+
+    ulp_avg = 0;
+    ret = true;
+    for (int i = 0; i < len; i++) {
+        global_idx = idx_start + i;
+        offset = i * sizeof (uint16_t);
+
+        expected = mmio16(addr_exp + offset);
+        result = mmio16(addr_res + offset);
+
+        /* Reject NaN or Inf */
+        if (fp16_is_invalid(expected) || fp16_is_invalid(result)) {
+            printf("[CV32 (%d)] Invalid FP16 value at idx %d\t-\texpected: %x\t-\tcomputed: %x\n", HID, global_idx, expected, result);
+            ret = false;
+            continue;
+        }
+
+        ord_exp = fp16_to_ordered(expected);
+        ord_res = fp16_to_ordered(result);
+
+        ulp_dif = (ord_exp > ord_res) ? (ord_exp - ord_res) : (ord_res - ord_exp);
+        ulp_avg += ulp_dif;
+
+        if (ulp_dif > ULP_TOLL) {
+            printf("[CV32 (%d)] Mismatch at index %d\t-\texpected: %x\t-\tcomputed: %x\t-\tulp: %d\n", HID, global_idx, expected, result, ulp_dif);
+            ret = false;
+        }
+    }
+
+    ulp_avg = ulp_avg / len;
+    printf("[CV32 (%d)] Average ULP: %u\n", HID, ulp_avg);
 
     return ret;
 }
