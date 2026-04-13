@@ -173,7 +173,7 @@ magia_v2_tiles_4_rtl_sim:
     - build_test_magia_v2_tiles_4
 
 
-magia_v2_tiles_2_gvsoc_sim:
+magia_v2_tiles_4_gvsoc_sim:
   extends: [.sim_gvsoc]
   stage: test_tiles_4
   variables:
