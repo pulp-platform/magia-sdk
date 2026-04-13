@@ -49,18 +49,18 @@ int onnx_exp_task(void)
 {
     volatile onnx_exp_params_t *params;
     uintptr_t params_addr;
-    _Float16 *src;
-    _Float16 *dst;
-    int len;
+    _Float16 *result;
+    _Float16 *input;
+    size_t len;
 
     params_addr = mmio32(SPATZ_DATA);
     params = (volatile onnx_exp_params_t *) params_addr;
 
-    src = (_Float16 *)params->addr_input;
-    dst = (_Float16 *)params->addr_res;
+    input = (_Float16 *)params->chunk_input;
+    result = (_Float16 *)params->chunk_res;
     len = params->len;
 
-    fast_exp(src, dst, len);
+    fast_exp(input, result, len);
 
     return 0;
 }
