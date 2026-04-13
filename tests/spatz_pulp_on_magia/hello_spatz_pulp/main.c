@@ -7,7 +7,6 @@ int main(void) {
     int errors;
     eu_config_t eu_cfg;
     eu_controller_t eu_ctrl;
-    uint32_t *pulp_start = (uint32_t *)PULP_CTRL_BASE;
 
     printf("[CV32] Hello Spatz Test\n");
 
@@ -41,7 +40,7 @@ int main(void) {
 
     spatz_clk_dis();
 
-    *pulp_start=0x1;
+    mmio32(PULP_CTRL_BASE) = 0x1;
     eu_pulp_wait(&eu_ctrl, WFE);
 
     return errors;
