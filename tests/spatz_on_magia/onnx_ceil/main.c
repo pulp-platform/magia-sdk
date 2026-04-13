@@ -120,8 +120,6 @@ int main(void)
 
     ret = run_test();
 
-    fsync32_sync_global();
-
     if (HID == 0) printf("\n##########################################################################################\n\n");
 
     return ret;
