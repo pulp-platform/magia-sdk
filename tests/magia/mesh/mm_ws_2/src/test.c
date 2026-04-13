@@ -103,7 +103,7 @@ int main(void){
      * t_start is the first timeslot in which it is possible to elaborate the output.
      * t_end is the last timeslot.
      */
-    uint8_t timeslots = 16;
+    uint8_t timeslots = 4;
     uint8_t t_size = M_SIZE / timeslots;
     uint8_t t_start = y_id * 2;
     uint8_t t_end = t_start + timeslots;

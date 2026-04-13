@@ -19,8 +19,8 @@ variables:
 stages:
   - clone
   - python_setup
-  - build_tiles_2
-  - test_tiles_2
+  - build_tiles_4
+  - test_tiles_4
   - build_tiles_1
   - test_tiles_1
 
@@ -42,7 +42,7 @@ python_gvsoc:
   expire_in: 4 week
 
 
-clone-magia:
+clone_magia:
   extends: .base
   stage: clone
   script:
@@ -50,7 +50,7 @@ clone-magia:
   artifacts:
     paths: [ "MAGIA" ]
 
-clone-gvsoc:
+clone_gvsoc:
   extends: .base
   stage: clone
   script:
@@ -65,20 +65,15 @@ clone-gvsoc:
   artifacts:
     paths: [ "gvsoc/install" , "gvsoc/pulp/pulp/chips/magia_v2/arch.py"]
 
-gvsoc_tiles_2:
+gvsoc_tiles_4:
   extends: .gvsoc
-  stage: build_tiles_2
-  needs:
-    - job: clone-gvsoc
-      artifacts: true
-    - job: python_gvsoc
-      artifacts: true
+  stage: build_tiles_4
   variables:
-    tiles: 2
+    tiles: 4
   artifacts:
     paths: [ "gvsoc/install" ]
   dependencies:
-    - clone-gvsoc
+    - clone_gvsoc
     - python_gvsoc
 
 gvsoc_tiles_1:
@@ -89,7 +84,7 @@ gvsoc_tiles_1:
   artifacts:
     paths: [ "gvsoc/install" ]
   dependencies:
-    - clone-gvsoc
+    - clone_gvsoc
     - python_gvsoc
 
 
@@ -101,14 +96,14 @@ gvsoc_tiles_1:
   artifacts:
     paths: [ "$MAGIA/work", "$MAGIA/sim/work", "$MAGIA/sim/modelsim.ini", "$MAGIA/scripts/sim_ret_errors.sh", "$MAGIA/scripts/compile.tcl", "$MAGIA/Makefile", "$MAGIA/hw/mesh/magia_pkg.sv", "$MAGIA/hw/tile/magia_tile_pkg.sv" ]
 
-magia_v2_tiles_2:
+magia_v2_tiles_4:
   extends: .MAGIA
-  stage: build_tiles_2
+  stage: build_tiles_4
   variables:
-    tiles: 2
+    tiles: 4
     target_platform: magia_v2
   dependencies:
-    - clone-magia
+    - clone_magia
 
 magia_v2_tiles_1:
   extends: .MAGIA
@@ -117,7 +112,7 @@ magia_v2_tiles_1:
     tiles: 1
     target_platform: magia_v2
   dependencies:
-    - clone-magia
+    - clone_magia
 
 .build:
   extends: [.base, .export_path]
@@ -126,11 +121,11 @@ magia_v2_tiles_1:
   artifacts:
     paths: [ "build", "targets/${target_platform}/include/addr_map/tile_addr_map.h" ]
 
-build_test_magia_v2_tiles_2:
+build_test_magia_v2_tiles_4:
   extends: .build
-  stage: build_tiles_2
+  stage: build_tiles_4
   variables: 
-    tiles: 2
+    tiles: 4
     target_platform: magia_v2
     compiler: GCC_PULP
 
@@ -163,36 +158,36 @@ build_test_magia_v2_tiles_1:
     paths: [ "*.log" ]
     expire_in: 2 weeks
 
-magia_v2_tiles_2_rtl_sim:
+magia_v2_tiles_4_rtl_sim:
   extends: [.sim]
-  stage: test_tiles_2
+  stage: test_tiles_4
   variables:
     platform: rtl
-    tiles: 2
+    tiles: 4
   parallel:
     matrix:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
   dependencies:
-    - clone-magia
-    - magia_v2_tiles_2
-    - build_test_magia_v2_tiles_2
+    - clone_magia
+    - magia_v2_tiles_4
+    - build_test_magia_v2_tiles_4
 
 
 magia_v2_tiles_2_gvsoc_sim:
   extends: [.sim_gvsoc]
-  stage: test_tiles_2
+  stage: test_tiles_4
   variables:
     platform: gvsoc
-    tiles: 2
+    tiles: 4
   parallel:
     matrix:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
   dependencies:
-    - clone-magia
-    - magia_v2_tiles_2
-    - clone-gvsoc
-    - gvsoc_tiles_2
-    - build_test_magia_v2_tiles_2
+    - clone_magia
+    - magia_v2_tiles_4
+    - clone_gvsoc
+    - gvsoc_tiles_4
+    - build_test_magia_v2_tiles_4
     - python_gvsoc
 
 
@@ -206,7 +201,7 @@ magia_v2_tiles_1_rtl_sim:
     matrix:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
   dependencies:
-    - clone-magia
+    - clone_magia
     - magia_v2_tiles_1
     - build_test_magia_v2_tiles_1
 
@@ -221,9 +216,9 @@ magia_v2_tiles_1_gvsoc_sim:
     matrix:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
   dependencies:
-    - clone-magia
+    - clone_magia
     - magia_v2_tiles_1
-    - clone-gvsoc
+    - clone_gvsoc
     - gvsoc_tiles_1
     - build_test_magia_v2_tiles_1
     - python_gvsoc
