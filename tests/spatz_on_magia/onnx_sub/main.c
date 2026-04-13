@@ -7,27 +7,45 @@
 #include "onnx_sub_params.h"
 #include "onnx_sub_task_bin.h"
 
+#define HID get_hartid()
+
 static int init_data(void *params)
 {
-    uint32_t offset;
     volatile onnx_sub_params_t *sub_params;
+    uint32_t start;
+    uint32_t chunk;
+    uint32_t left;
+    uint32_t len;
+    uint32_t end;
 
     sub_params = (volatile onnx_sub_params_t *) params;
-    for (int i = 0; i < LEN; i++) {
-        offset = i * sizeof(float16);
 
-        mmio_fp16(EXP_BASE + offset) = expected_vec[i];
-        mmio_fp16(INPUT_A_BASE + offset) = vec_a[i];
-        mmio_fp16(INPUT_B_BASE + offset) = vec_b[i];
-        mmio_fp16(RES_BASE + offset) = 0;
+    chunk = TENSOR_LEN / NUM_HARTS;
+    left = TENSOR_LEN % NUM_HARTS;
+    start = HID * chunk + (HID < left ? HID : left);
+    end = start + chunk + (HID < left ? 1 : 0);
+    len = end - start;
+
+    for (int i = 0; i < len; i++) {
+        int global_idx;
+        uint32_t offset;
+
+        global_idx = start + i;
+        offset =  i * sizeof(float16);
+
+        mmio_fp16(CHUNK_A_BASE + offset) = A[global_idx];
+        mmio_fp16(CHUNK_B_BASE + offset) = B[global_idx];
+        mmio_fp16(CHUNK_G_BASE + offset) = G[global_idx];
+        mmio_fp16(CHUNK_C_BASE + offset) = 0;
     }
 
-
-    sub_params->addr_input_a = INPUT_A_BASE;
-    sub_params->addr_input_b = INPUT_B_BASE;
-    sub_params->addr_res = RES_BASE;
-    sub_params->addr_exp = EXP_BASE;
-    sub_params->len = LEN;
+    sub_params->chunk_A = CHUNK_A_BASE;
+    sub_params->chunk_B = CHUNK_B_BASE;
+    sub_params->chunk_C = CHUNK_C_BASE;
+    sub_params->chunk_G = CHUNK_G_BASE;
+    sub_params->start = start;
+    sub_params->len = len;
+    sub_params->end = end;
 
     return 0;
 }
@@ -62,7 +80,7 @@ static bool check_result(void *params)
 {
     volatile onnx_sub_params_t *sub_params;
     sub_params = (volatile onnx_sub_params_t *) params;
-    return vector_compare_fp16_bitwise(sub_params->addr_res, sub_params->addr_exp, sub_params->len);
+    return chunk_compare_fp16_bitwise(sub_params->chunk_C, sub_params->chunk_G, sub_params->start, sub_params->len);
 }
 
 static bool run_test()
@@ -75,21 +93,21 @@ static bool run_test()
 
     ret = init_data(params);
     if (ret != 0) {
-        printf("[CV32] Params initialization failed with error: %d\n", ret);
+        printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
         return ret;
     }
 
     ret = run_spatz_task();
     if (ret != 0) {
-        printf("[CV32] Spatz task FAILED with error: %d", ret);
+        printf("[CV32 (%d)] Spatz task FAILED with error: %d", HID, ret);
         return ret;
     }
 
     check = check_result(params);
     if (check) {
-        printf("[CV32] Test SUCCESS\n");
+        printf("[CV32 (%d)] Test SUCCESS\n", HID);
     } else {
-        printf("[CV32] Test FAILED\n");
+        printf("[CV32 (%d)] Test FAILED\n", HID);
         ret = -1;
     }
 
@@ -100,11 +118,13 @@ int main(void)
 {
     int ret;
 
-    printf("\n##################################### ONNX_SUB TEST #####################################\n\n");
+    if (HID == 0) printf("\n############################### ONNX_SUB TEST on %d Tiles ################################\n\n", NUM_HARTS);
 
     ret = run_test();
 
-    printf("\n##########################################################################################\n\n");
+    fsync32_sync_global();
+
+    if (HID == 0) printf("\n##########################################################################################\n\n");
 
     return ret;
 }
