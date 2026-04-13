@@ -1,63 +1,76 @@
-import os
-import sys
-import numpy as np
+import argparse
 import onnx
+import os
+import numpy as np
 import onnxruntime as ort
-from onnx import helper, TensorProto
+
+
+def positive_int(value):
+    try:
+        ival = int(value)
+
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{value}' is not a valid Integer number.")
+
+    if ival <= 0:
+        raise argparse.ArgumentTypeError(f"Value must be positive ({value}).")
+
+    return ival
+
 
 def parse_args():
-    if len(sys.argv) != 2:
-        print("Error: missing argument <length>")
-        print("Usage: python3 generator.py <length>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Generator of Input Data and Golden Model for ONNX Add test")
 
-    try:
-        length = int(sys.argv[1])
-    except ValueError:
-        print("Error: <length> must be an integer")
-        print("Usage: python3 generator.py <length>")
-        sys.exit(1)
+    parser.add_argument("N", type=positive_int, help="Batch size")
+    parser.add_argument("C", type=positive_int, help="Number of input channels")
+    parser.add_argument("H", type=positive_int, help="Spatial height dimension")
+    parser.add_argument("W", type=positive_int, help="Spatial width dimension")
 
-    return length
+    args = parser.parse_args()
+    return args
 
-def generate_data(length):
-    vals = (np.random.randn(2) * 5).astype(np.float16)
-    val_min = np.array([np.min(vals)], dtype=np.float16)
-    val_max = np.array([np.max(vals)], dtype=np.float16)
 
-    a = (np.random.randn(length) * 10).astype(np.float16)
+def generate_input_data(args):
+    shape = (args.N, args.C, args.H, args.W)
 
-    return a, val_min, val_max
+    input = np.random.randn(*shape).astype(np.float16)
+    idx = np.random.randint(0, input.size, size=2)
+    val1 = input.flat[idx[0]]
+    val2 = input.flat[idx[1]]
+    val1, val2 = np.sort([val1, val2])
+    min = np.array(val1, dtype=np.float16)
+    max = np.array(val2, dtype=np.float16)
 
-def run_onnx_clip(input_vec, val_min, val_max):
-    a_info = helper.make_tensor_value_info('A', TensorProto.FLOAT16, input_vec.shape)
-    min_info = helper.make_tensor_value_info('Min', TensorProto.FLOAT16, val_min.shape)
-    max_info = helper.make_tensor_value_info('Max', TensorProto.FLOAT16, val_max.shape)
-    out_info = helper.make_tensor_value_info('Output', TensorProto.FLOAT16, input_vec.shape)
+    return input, min, max
 
-    node_def = helper.make_node('Clip', ['A', 'Min', 'Max'], ['Output'])
-    graph_def = helper.make_graph(
-        [node_def],
-        'onnx-clip-test',
-        [a_info, min_info, max_info],
-        [out_info]
-    )
 
-    model_def = helper.make_model(graph_def, producer_name='onnx-generator')
+def run_onnx_clip(input, min, max):
+    input_info = onnx.helper.make_tensor_value_info('input', onnx.TensorProto.FLOAT16, input.shape)
+    output_info = onnx.helper.make_tensor_value_info('output', onnx.TensorProto.FLOAT16, input.shape)
+    min_info = onnx.helper.make_tensor_value_info('min', onnx.TensorProto.FLOAT16, min.shape)
+    max_info = onnx.helper.make_tensor_value_info('max', onnx.TensorProto.FLOAT16, max.shape)
+
+    opset = onnx.helper.make_operatorsetid("", 13)
+    node_def = onnx.helper.make_node('Clip', ['input', 'min', 'max'], ['output'])
+    graph_def = onnx.helper.make_graph([node_def], 'onnx-clip-test', [input_info, min_info, max_info], [output_info])
+    model_def = onnx.helper.make_model(graph_def, producer_name='onnx-generator')
+
     sess = ort.InferenceSession(model_def.SerializeToString())
-    res = sess.run(None, {'A': input_vec, 'Min': val_min, 'Max': val_max})
+    res = sess.run(None, {'input': input, 'min': min, 'max': max})
 
     return res[0]
 
+
 def format_array(array):
-    return "{ " + ", ".join(f"{x:f}f" for x in array) + " }"
+    return "{ " + ", ".join(f"{x:f}f" for x in array.flatten()) + " }"
+
 
 def format_float(value):
     """Convert a float value into a C-style representation."""
     return f"{value:f}"
 
-def generate_header_file(length, input_vec, min, max, expected, filename="data.h"):
 
+def generate_header_file(args, input, output, min, max, filename="data.h"):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     filepath = os.path.join(script_dir, filename)
 
@@ -66,24 +79,29 @@ def generate_header_file(length, input_vec, min, max, expected, filename="data.h
         f.write("#ifndef DATA_H_\n")
         f.write("#define DATA_H_\n\n")
 
-        f.write(f"#define LEN {length}\n\n")
+        f.write(f"#define BATCH {args.N}\n")
+        f.write(f"#define CHANNELS {args.C}\n")
+        f.write(f"#define HEIGHT {args.H}\n")
+        f.write(f"#define WIDTH {args.W}\n\n")
 
-        f.write(f"static const float16 input_vec[] = {format_array(input_vec)};\n")
-        f.write(f"static const float16 min_val = {format_float(min.item())};\n")
-        f.write(f"static const float16 max_val = {format_float(max.item())};\n")
-        f.write(f"static const float16 expected[] = {format_array(expected)};\n\n")
+        f.write(f"static const float16 min = {format_float(min.item())};\n")
+        f.write(f"static const float16 max = {format_float(max.item())};\n\n")
+
+        f.write(f"static const float16 input[] = {format_array(input)};\n")
+        f.write(f"static const float16 golden[] = {format_array(output)};\n\n")
 
         f.write("#endif  /* DATA_H_ */\n")
 
 def main():
-    length = parse_args()
+    args = parse_args()
 
-    input, min, max = generate_data(length)
-    expected = run_onnx_clip(input, min, max)
+    input, min, max = generate_input_data(args)
 
-    generate_header_file(length, input, min, max, expected)
+    output = run_onnx_clip(input, min, max)
 
-    print(f"File 'data.h' successfully generated with {length} elements.")
+    generate_header_file(args, input, output, min, max)
+
+    print(f"File 'data.h' successfully generated with [N:{args.N}, C:{args.C}, H:{args.H}, W:{args.W}]")
 
 if __name__ == "__main__":
     main()
