@@ -1,9 +1,0 @@
-numpy
-prettytable
-pyelftools>=0.24
-argparse>=1.4
-pexpect
-lz4
-pycryptodome
-rich
-psutil

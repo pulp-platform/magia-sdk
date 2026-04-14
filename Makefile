@@ -228,22 +228,7 @@ endif
 #   make gemm-ci gemm_platform=rtl      # on RTL
 
 gemm-ci:
-	@echo "====== Building GVSoC for tiles=8 ======"; \
-	$(MAKE) gvsoc tiles=8 || { echo "GVSOC BUILD FAILED"; exit 1; }; \
-	echo ""; \
-	echo "====== Generating golden data ======"; \
-	$(MAKE) gemm-gen dim_a=$(dim_a) dim_b=$(dim_b) dim_c=$(dim_c) \
-		dim_d=$(dim_d) dim_e=$(dim_e) dim_f=$(dim_f) seed=$(seed) || { echo "GEMM-GEN FAILED"; exit 1; }; \
-	echo ""; \
-	echo "====== Building test (tiles=8) ======"; \
-	$(MAKE) gemm-build tiles=8 compiler=$(compiler) eval=$(eval) || { echo "GEMM-BUILD FAILED"; exit 1; }; \
-	echo ""; \
-	echo "====== Running GEMM chain test ======"; \
-	if $(MAKE) gemm-run tiles=8 gemm_platform=$(gemm_platform); then \
-		echo ""; \
-		echo "====== PASS ======"; \
-	else \
-		echo ""; \
-		echo "====== FAIL ======"; \
-		exit 1; \
-	fi
+	@GEMM_PLATFORM=$(gemm_platform) COMPILER=$(compiler) EVAL=$(eval) \
+	 DIM_A=$(dim_a) DIM_B=$(dim_b) DIM_C=$(dim_c) \
+	 DIM_D=$(dim_d) DIM_E=$(dim_e) DIM_F=$(dim_f) SEED=$(seed) \
+	 bash scripts/gemm-ci.sh
