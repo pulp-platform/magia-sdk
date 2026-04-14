@@ -1,67 +1,91 @@
-import os
-import sys
+import argparse
 import onnx
+import os
 import numpy as np
 import onnxruntime as ort
 
-def parse_args():
-    if len(sys.argv) != 2:
-        print("Error: missing argmuent <length>")
-        print("Usage: python3 generator.py <length>")
-        sys.exit(1)
 
+def positive_int(value):
     try:
-        length = int(sys.argv[1])
-    except:
-        print("Error: <length> must be an integer")
-        print("Usage: python3 generator.py <length>")
-        sys.exit(1)
+        ival = int(value)
 
-    return length
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{value}' is not a valid Integer number.")
 
-def run_onnx_gelu(input):
-    input_info = onnx.helper.make_tensor_value_info('I', onnx.TensorProto.FLOAT16, input.shape)
-    output_info = onnx.helper.make_tensor_value_info('O', onnx.TensorProto.FLOAT16, input.shape)
+    if ival <= 0:
+        raise argparse.ArgumentTypeError(f"Value must be positive ({value}).")
+
+    return ival
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generator of Input Data and Golden Model for ONNX Add test")
+
+    parser.add_argument("N", type=positive_int, help="Batch size")
+    parser.add_argument("C", type=positive_int, help="Number of input channels")
+    parser.add_argument("H", type=positive_int, help="Spatial height dimension")
+    parser.add_argument("W", type=positive_int, help="Spatial width dimension")
+
+    args = parser.parse_args()
+    return args
+
+
+def generate_input_data(args):
+    shape = (args.N, args.C, args.H, args.W)
+    # X = np.random.randn(*shape).astype(np.float16)
+    X = np.random.uniform(-2, 2, size=shape).astype(np.float16)
+    return X
+
+def run_onnx_gelu(X):
+    X_info = onnx.helper.make_tensor_value_info('X', onnx.TensorProto.FLOAT16, X.shape)
+    Y_info = onnx.helper.make_tensor_value_info('Y', onnx.TensorProto.FLOAT16, X.shape)
 
     opset = onnx.helper.make_operatorsetid("", 20)
-    node_def = onnx.helper.make_node('Gelu', ['I'], ['O'], approximate='tanh')
-    graph_def = onnx.helper.make_graph([node_def], 'onnx-gelu-test', [input_info], [output_info])
+    node_def = onnx.helper.make_node('Gelu', ['X'], ['Y'], approximate='tanh')
+    graph_def = onnx.helper.make_graph([node_def], 'onnx-gelu-test', [X_info], [Y_info])
     model_def = onnx.helper.make_model(graph_def, producer_name='onnx-generator', opset_imports=[opset])
 
     ses = ort.InferenceSession(model_def.SerializeToString())
-    res = ses.run(None, {'I':input})
+    res = ses.run(None, {'X': X})
 
     return res[0]
 
-def format_array(array):
-    return "{ " + ", ".join(f"{x:f}f" for x in array) + " }"
 
-def generate_header_file(length, input, expected, filename="data.h"):
+def format_array(array):
+    return "{ " + ", ".join(f"{x:f}f" for x in array.flatten()) + " }"
+
+
+def generate_header_file(args, X, G, filename="data.h"):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     filepath = os.path.join(script_dir, filename)
 
     with open(filepath, "w") as f:
-        f.write(f"/* Automatically generated header file for Spatz ONNX testing */\n")
-        f.write(f"#ifndef DATA_H_\n")
-        f.write(f"#define DATA_H_\n\n")
+        f.write("/* Automatically generated header file for Spatz ONNX testing */\n")
+        f.write("#ifndef DATA_H_\n")
+        f.write("#define DATA_H_\n\n")
 
-        f.write(f"#define LEN {length}\n\n")
+        f.write(f"#define BATCH {args.N}\n")
+        f.write(f"#define CHANNELS {args.C}\n")
+        f.write(f"#define HEIGHT {args.H}\n")
+        f.write(f"#define WIDTH {args.W}\n\n")
 
-        f.write(f"static const float16 input_vec[] = {format_array(input)};\n")
-        f.write(f"static const float16 expected_vec[] = {format_array(expected)};\n\n")
+        f.write(f"static const float16 X[] = {format_array(X)};\n")
+        f.write(f"static const float16 G[] = {format_array(G)};\n\n")
 
-        f.write (f"#endif   /* DATA_H_ */\n")
+        f.write("#endif  /* DATA_H_ */\n")
+
 
 def main():
-    length = parse_args()
+    args = parse_args()
 
-    input = (np.random.randn(length)).astype(np.float16)
+    X = generate_input_data(args)
 
-    expected = run_onnx_gelu(input)
+    G = run_onnx_gelu(X)
 
-    generate_header_file(length, input, expected)
+    generate_header_file(args, X, G)
 
-    print(f"File 'data.h' successfully generated with {length} elements.")
+    print(f"File 'data.h' successfully generated with [N:{args.N}, C:{args.C}, H:{args.H}, W:{args.W}]")
+
 
 if __name__ == "__main__":
     main()
