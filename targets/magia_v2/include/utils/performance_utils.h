@@ -29,8 +29,9 @@
  */
 static inline void perf_start(void) {
     // enable all counters
-    asm volatile("csrw 0x7E0, %0" :: "r"(0x1));  // Enable PCCR[0]
-    asm volatile("csrw 0x7E1, %0" :: "r"(0x1));  // Enable counting, , no saturation
+    asm volatile("csrw 0xB00, %0" :: "r"(0x1));  // Enable PCCR[0]
+    // enable counting, , no saturation
+    //asm volatile("csrw 0x7E1, %0" :: "r"(0x1));
 }
 
 /**
@@ -52,7 +53,7 @@ static inline void perf_reset(void) {
  */
 static inline unsigned int perf_get_cycles(){
     unsigned int value = 0;
-    asm volatile("csrr %0, 0xB00" : "=r"(value));
+    asm volatile("csrr %0, 0xC00" : "=r"(value));
     return value;
 }
 
