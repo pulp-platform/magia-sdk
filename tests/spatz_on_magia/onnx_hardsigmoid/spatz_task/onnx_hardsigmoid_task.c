@@ -38,20 +38,20 @@ int onnx_hardsigmoid_task(void)
     uintptr_t params_addr;
     _Float16 alpha;
     _Float16 beta;
-    _Float16 *src;
-    _Float16 *dst;
+    _Float16 *X;
+    _Float16 *Y;
     size_t len;
 
     params_addr = mmio32(SPATZ_DATA);
     params = (volatile onnx_hardsigmoid_params_t *) params_addr;
 
-    alpha = *(_Float16 *)params->addr_alpha;
-    beta = *(_Float16 *)params->addr_beta;
-    src = (_Float16 *)params->addr_input;
-    dst = (_Float16 *)params->addr_res;
+    alpha = *(_Float16 *)params->alpha;
+    beta = *(_Float16 *)params->beta;
+    X = (_Float16 *)params->chunk_X;
+    Y = (_Float16 *)params->chunk_Y;
     len = params->len;
 
-    hardsigmoid(src, dst, alpha, beta, len);
+    hardsigmoid(X, Y, alpha, beta, len);
 
     return 0;
 }
