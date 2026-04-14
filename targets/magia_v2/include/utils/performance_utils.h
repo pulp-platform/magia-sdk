@@ -23,6 +23,31 @@
 #ifndef PERFORMANCE_UTILS_H
 #define PERFORMANCE_UTILS_H
 
+
+/**
+ * @brief Starts all performance counters
+ */
+static inline void perf_start(void) {
+    // enable all counters
+    asm volatile("csrw 0xB00, %0" :: "r"(0x1));  // Enable PCCR[0]
+    // enable counting, , no saturation
+    //asm volatile("csrw 0x7E1, %0" :: "r"(0x1));
+}
+
+/**
+ * @brief Stops all performance counters
+ */
+static inline void perf_stop(void) {
+    asm volatile("csrw 0x320, %0" : : "r"(0xffffffff));
+}
+
+/**
+ * @brief Resets all performance counters to 0 without stopping them
+ */
+static inline void perf_reset(void) {
+    asm volatile("csrw 0xB00, %0" : : "r"(0));
+}
+
 /**
  * @brief Returns the cycles of the performance counter
  * !! WARNING !! AT THE MOMENT OF WRITING (06/05/2026) THIS PROFILING UTILITY ONLY WORKS ON GVSOC.
@@ -31,7 +56,7 @@
 static inline unsigned int perf_get_cycles()
 {
     unsigned int value = 0;
-    asm volatile("csrr %0, 0xB00" : "=r"(value));
+    asm volatile("csrr %0, 0xC00" : "=r"(value));
     return value;
 }
 
