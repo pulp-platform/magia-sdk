@@ -29,4 +29,4 @@
 #define ALPHA_BASE  ALIGN_4B(EXP_BASE + EXP_SIZE)
 #define ALPHA_SIZE  ALIGN_4B(SCALAR_SIZE)
 
-#endif  /* ONNX_ADD_H_ */
+#endif  /* ONNX_SWISH_H_ */

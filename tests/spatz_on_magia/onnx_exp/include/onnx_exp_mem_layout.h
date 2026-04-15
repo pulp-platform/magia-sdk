@@ -33,4 +33,4 @@
 #define EXP_BASE    ALIGN_4B(RES_BASE + RES_SIZE)
 #define EXP_SIZE    ALIGN_4B(OUT_CHUNK_SIZE)
 
-#endif  /* ONNX_ADD_H_ */
+#endif  /* ONNX_EXP_H_ */

@@ -32,4 +32,4 @@
 #define CHUNK_G_BASE    ALIGN_4B(CHUNK_Y_BASE + CHUNK_Y_SIZE)
 #define CHUNK_G_SIZE    ALIGN_4B(OUT_CHUNK_SIZE)
 
-#endif  /* ONNX_ADD_H_ */
+#endif  /* ONNX_FLOOR_H_ */
