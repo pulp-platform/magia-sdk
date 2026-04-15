@@ -3,6 +3,7 @@
 testlist="test_helloworld test_fsync_levels test_fsync_rc test_fsync_diag test_mm_is test_mm_ws test_mm_os test_idma_2d test_idma_1d test_cemm_global test_mm_is_2 test_mm_os_2 test_mm_ws_2 test_fsync_lr test_gemv"
 nlist="1 2 4 8 16"
 
+rm -rf scripts/regression_output_*
 eval "$(pyenv init -)"
 pyenv local 3.12
 python -m venv gvsoc_venv
