@@ -49,19 +49,19 @@ int onnx_swish_task(void)
     volatile onnx_swish_params_t *params;
     uintptr_t params_addr;
     _Float16 alpha;
-    _Float16 *src;
-    _Float16 *dst;
+    _Float16 *X;
+    _Float16 *Y;
     size_t len;
 
     params_addr = mmio32(SPATZ_DATA);
     params = (volatile onnx_swish_params_t *) params_addr;
 
-    alpha = *(_Float16 *)params->addr_alpha;
-    src = (_Float16 *)params->addr_input;
-    dst = (_Float16 *)params->addr_res;
+    alpha = *(_Float16 *)params->alpha;
+    X = (_Float16 *)params->chunk_X;
+    Y = (_Float16 *)params->chunk_Y;
     len = params->len;
 
-    swish(src, dst, alpha, len);
+    swish(X, Y, alpha, len);
 
     return 0;
 }

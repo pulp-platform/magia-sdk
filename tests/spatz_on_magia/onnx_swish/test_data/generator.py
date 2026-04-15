@@ -18,18 +18,37 @@ def positive_int(value):
     return ival
 
 
+def positive_float(value):
+    try:
+        fvalue = float(value)
+
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{value}' is not a valid Real number.")
+
+    if fvalue <= 0:
+        raise argparse.ArgumentTypeError(f"Epsilon must be positive ({value}).")
+
+    return fvalue
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Generator of Input Data and Golden Model for ONNX Swish test")
-    parser.add_argument("length", type=positive_int, help="Input vector length")
-    parser.add_argument("--alpha", type=float, default=1.0, help="Coefficient to multiply with input before sigmoid.")
-    args = parser.parse_args()
 
+    parser.add_argument("N", type=positive_int, help="Batch size")
+    parser.add_argument("C", type=positive_int, help="Number of input channels")
+    parser.add_argument("H", type=positive_int, help="Spatial height dimension")
+    parser.add_argument("W", type=positive_int, help="Spatial width dimension")
+
+    parser.add_argument("--alpha", type=positive_float, default=0.2, help="Value of alpha (default 0.2)")
+
+    args = parser.parse_args()
     return args
 
 
-def generate_input_data(length):
-    input = (np.random.randn(length)).astype(np.float16)
-    return input
+def generate_input_data(args):
+    shape = (args.N, args.C, args.H, args.W)
+    X = np.random.randn(*shape).astype(np.float16)
+    return X
 
 
 def run_onnx_swish(input, args):
@@ -48,14 +67,14 @@ def run_onnx_swish(input, args):
 
 
 def format_array(array):
-    return "{ " + ", ".join(f"{x:f}f" for x in array) + " }"
+    return "{ " + ", ".join(f"{x:f}f" for x in array.flatten()) + " }"
 
 
 def format_float(value):
     return f"{value:f}"
 
 
-def generate_header_file(args, input, expected, filename="data.h"):
+def generate_header_file(args, X, G, filename="data.h"):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     filepath = os.path.join(script_dir, filename)
 
@@ -64,11 +83,15 @@ def generate_header_file(args, input, expected, filename="data.h"):
         f.write(f"#ifndef DATA_H_\n")
         f.write(f"#define DATA_H_\n\n")
 
-        f.write(f"#define LEN {args.length}\n\n")
+        f.write(f"#define BATCH {args.N}\n")
+        f.write(f"#define CHANNELS {args.C}\n")
+        f.write(f"#define HEIGHT {args.H}\n")
+        f.write(f"#define WIDTH {args.W}\n\n")
 
-        f.write(f"static const float16 alpha={format_float(args.alpha)};\n")
-        f.write(f"static const float16 input_vec[] = {format_array(input)};\n")
-        f.write(f"static const float16 expected_vec[] = {format_array(expected)};\n\n")
+        f.write(f"static const float16 alpha = {format_float(args.alpha)};\n")
+
+        f.write(f"static const float16 X[] = {format_array(X)};\n")
+        f.write(f"static const float16 G[] = {format_array(G)};\n\n")
 
         f.write(f"#endif   /* DATA_H_ */\n")
 
@@ -76,13 +99,13 @@ def generate_header_file(args, input, expected, filename="data.h"):
 def main():
     args = parse_args()
 
-    input = generate_input_data(args.length)
+    X = generate_input_data(args)
 
-    expected = run_onnx_swish(input, args)
+    G = run_onnx_swish(X, args)
 
-    generate_header_file(args, input, expected)
+    generate_header_file(args, X, G)
 
-    print(f"File 'data.h' successfully generated")
+    print(f"File 'data.h' successfully generated with [N:{args.N}, C:{args.C}, H:{args.H}, W:{args.W}]")
 
 
 if __name__ == "__main__":
