@@ -52,9 +52,18 @@ The following *optional* parameters can be specified when running the make comma
 
     `make gvsoc_init`
 
-    You can also create a virtual environment for python with the requirements by running:
+    Python 3.12 is *MANDATORY*.
+    
+    It is possible to create a python environment with the requirements by running:
 
-    `make python_ci`
+    `make gvsoc_venv`
+
+    Pyenv and a Python 3.12 installation are required, you can setup it by running:
+
+        curl https://pyenv.run | bash
+        bash
+        pyenv install 3.12
+    
     
 2. Build the Magia architecture (*this command may take time and return an error, please be patient.*):
         
@@ -150,6 +159,24 @@ To add your own test, you have to integrate a new test folder inside the **tests
     2. An **src** directory containing your test's source (.c) files
 
     3. An **include** directory containing your test's header (.h) files
+
+## GVSOC Regression Test
+
+It is possible to test the correctness of the repository by running the extensive regression test on the GVSoC simulator.
+
+To do so, you need pyenv, which can be enabled on your shell setup by running:
+
+    curl https://pyenv.run | bash
+    bash
+    pyenv install 3.12
+
+After doing that, you can run the entire testsuite on all the available mesh architectures (from 1x1 to 16x16) with:
+
+    source scripts/regression_gvsoc.sh
+
+Which must be run from the root directory.
+
+The test outputs are stored in the *scripts/regression_output_* folders.
 
 ## Folder Structure
 

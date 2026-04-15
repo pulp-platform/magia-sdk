@@ -176,7 +176,14 @@ gvsoc_init:
 	cd core && \
 	git checkout master && \
 	cd ../pulp && \
-	git checkout master
+	git checkout lz/magia-v2-pulp_L12L1_fix
+
+gvsoc_venv:
+	eval "$(pyenv init -)" && \
+	pyenv local 3.12 && \
+	python -m venv gvsoc_venv && \
+	source gvsoc_venv/bin/activate && \
+	pip install .
 
 
 
