@@ -10,6 +10,9 @@ variables:
   MAGIA: './MAGIA'
   RISCV_GCC_BINROOT: /usr/pack/pulpsdk-1.0-kgf/artifactory/pulp-sdk-release/pkg/pulp_riscv_gcc/1.0.16/bin
   PYENV_BINROOT: /home/adequi/.pyenv/bin
+  GIT_CLONE_PATH: "$CI_BUILDS_DIR/$CI_CONCURRENT_ID/$CI_JOB_ID"
+  GIT_STRATEGY: clone
+  GIT_CLEAN_FLAGS: "-ffdx"
 
 .export_path:
   before_script:

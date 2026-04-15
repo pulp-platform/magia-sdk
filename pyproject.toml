@@ -30,3 +30,6 @@ nb = [
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[runners.custom_build_dir]
+    enabled = true

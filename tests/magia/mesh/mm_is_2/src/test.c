@@ -267,7 +267,8 @@ int main(void){
                 }        
             }
             if(pt < timeslots){
-                //printf("Received this data: %x, %x, %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2), *(volatile uint16_t*)(output_pt + 4), *(volatile uint16_t*)(output_pt + 6));
+                // printf("Received this data: %x, %x, %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2), *(volatile uint16_t*)(output_pt + 4), *(volatile uint16_t*)(output_pt + 6));
+                // printf("weight this data: %x, %x, %x, %x\n", *(volatile uint16_t*)(weight_pt), *(volatile uint16_t*)(weight_pt + 2), *(volatile uint16_t*)(weight_pt + 4), *(volatile uint16_t*)(weight_pt + 6));
                 redmule_gemm(&redmule_ctrl, obi_addr_x, weight_pt, output_pt, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
             }
             
