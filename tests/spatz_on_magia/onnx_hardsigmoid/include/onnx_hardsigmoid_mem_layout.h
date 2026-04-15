@@ -39,4 +39,4 @@
 #define BETA_BASE       ALIGN_4B(ALPHA_BASE + ALPHA_SIZE)
 #define BETA_SIZE       ALIGN_4B(SCALAR_SIZE)
 
-#endif  /* ONNX_ADD_H_ */
+#endif  /* ONNX_HARDSIGMOID_H_ */
