@@ -20,8 +20,8 @@
 
 SHELL 			:= /bin/bash
 
-MAGIA_DIR 		?= ..
-BUILD_DIR 		?= $(MAGIA_DIR)/sw/tests/$(test)
+MAGIA_RTL_DIR 		?= ..
+BUILD_DIR 		?= $(MAGIA_RTL_DIR)/sw/tests/$(test)
 GVSOC_DIR 		?= ./gvsoc
 CURR_DIR		?= $(shell pwd)
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
@@ -57,9 +57,9 @@ clean:
 	rm -rf build/
 
 rtl-clean:
-	cd $(MAGIA_DIR) 		&& \
+	cd $(MAGIA_RTL_DIR) 		&& \
 	make hw-clean-all
-	rm -rf $(MAGIA_DIR)/sw/tests/test_*
+	rm -rf $(MAGIA_RTL_DIR)/sw/tests/test_*
 
 build:
 ifeq ($(tiles), )
@@ -114,7 +114,7 @@ else ifeq ($(platform), rtl)
 	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
-	cd $(MAGIA_DIR) 												&& \
+	cd $(MAGIA_RTL_DIR) 												&& \
 	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv)
 else
 	$(error Only rtl and gvsoc are supported as platforms.)
@@ -125,26 +125,26 @@ ifeq ($(shell expr $(tiles_2) \> 256), 1)
 	$(eval tiles_2=256)
 endif
 ifeq ($(target_platform), magia_v1)
-	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_DIR)/Makefile
-	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40P/\1CV32E40X/' $(MAGIA_DIR)/Makefile
+	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_RTL_DIR)/Makefile
+	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40P/\1CV32E40X/' $(MAGIA_RTL_DIR)/Makefile
 else ifeq ($(target_platform), magia_v2)
-	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_DIR)/Makefile
-	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40X/\1CV32E40P/' $(MAGIA_DIR)/Makefile
+	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_RTL_DIR)/Makefile
+	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40X/\1CV32E40P/' $(MAGIA_RTL_DIR)/Makefile
 else
 	$(error unrecognized platform (acceptable platform: magia).)
 endif
 ifneq ($(tiles), 1)
-	sed -i -E 's/^(  localparam int unsigned N_TILES_[XY][[:space:]]*=[[:space:]]*)[0-9]+;/\1$(tiles);/' $(MAGIA_DIR)/hw/mesh/magia_pkg.sv
+	sed -i -E 's/^(  localparam int unsigned N_TILES_[XY][[:space:]]*=[[:space:]]*)[0-9]+;/\1$(tiles);/' $(MAGIA_RTL_DIR)/hw/mesh/magia_pkg.sv
 endif
 ifeq ($(fsync_mode), stall)
-	sed -i -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\11/' $(MAGIA_DIR)/hw/tile/magia_tile_pkg.sv
+	sed -i -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\11/' $(MAGIA_RTL_DIR)/hw/tile/magia_tile_pkg.sv
 else ifeq ($(fsync_mode), interrupt)
-	sed -i -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\10/' $(MAGIA_DIR)/hw/tile/magia_tile_pkg.sv
+	sed -i -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\10/' $(MAGIA_RTL_DIR)/hw/tile/magia_tile_pkg.sv
 else
 	$(error unrecognized fractal sync mode (acceptable modes: stall|interrupt).)
 endif
 ifneq (,$(filter $(build_mode), update synth profile))
-	cd $(MAGIA_DIR)														&& \
+	cd $(MAGIA_RTL_DIR)														&& \
 	make python_venv || true											&& \
 	source setup_env.sh 												&& \
 	make python_deps || true											&& \
