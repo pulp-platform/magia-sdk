@@ -94,8 +94,8 @@ gvsoc_tiles_1:
 .MAGIA:
   extends: [.base]
   script:
-    - make rtl-clean MAGIA_DIR=$MAGIA
-    - make MAGIA MAGIA_DIR=$MAGIA tiles=${tiles} target_platform=${target_platform} fast_sim=1
+    - make rtl-clean MAGIA_RTL_DIR=$MAGIA
+    - make MAGIA MAGIA_RTL_DIR=$MAGIA tiles=${tiles} target_platform=${target_platform} fast_sim=1
   artifacts:
     paths: [ "$MAGIA/work", "$MAGIA/sim/work", "$MAGIA/sim/modelsim.ini", "$MAGIA/scripts/sim_ret_errors.sh", "$MAGIA/scripts/compile.tcl", "$MAGIA/Makefile", "$MAGIA/hw/mesh/magia_pkg.sv", "$MAGIA/hw/tile/magia_tile_pkg.sv" ]
 
@@ -145,7 +145,7 @@ build_test_magia_v2_tiles_1:
   extends: [.base, .export_path]
   script:
     - export TESTLOG="${TESTNAME##*/}"
-    - make run MAGIA_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.log
+    - make run MAGIA_RTL_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.log
     - ./scripts/sim_ret_errors.sh $TESTLOG.log
   artifacts:
     paths: [ "*.log" ]
@@ -155,7 +155,7 @@ build_test_magia_v2_tiles_1:
   extends: [.base, .export_path]
   script:
     - export TESTLOG="${TESTNAME##*/}"
-    - source gvsoc_venv/bin/activate && make run MAGIA_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.log
+    - source gvsoc_venv/bin/activate && make run MAGIA_RTL_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.log
     - ./scripts/sim_ret_errors_gvsoc.sh $TESTLOG.log
   artifacts:
     paths: [ "*.log" ]
