@@ -26,6 +26,7 @@ stages:
   - test_tiles_4
   - build_tiles_1
   - test_tiles_1
+  - postscript
 
 python_gvsoc:
   extends: [.base, .export_path]
@@ -225,3 +226,9 @@ magia_v2_tiles_1_gvsoc_sim:
     - gvsoc_tiles_1
     - build_test_magia_v2_tiles_1
     - python_gvsoc
+
+cleanup:
+  stage: postscript
+  script:
+    - rm -rf /scratch2/adequi/test_runner
+
