@@ -9,6 +9,10 @@
 #include "test.h"
 #include "tile.h"
 #include "fsync.h"
+#include "eventunit.h"
+
+#define WAIT_MODE WFE
+
 
 /**
  * Compares the value written in L1 memory with the value written in L1 memory of the tile_0 of the same synched row or column.
@@ -56,7 +60,20 @@ int main(void){
         .api = &fsync_api,
     };
 
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+
     fsync_init(&fsync_ctrl);
+
+    #if STALLING == 0
+    eu_init(&eu_ctrl);
+    eu_clear_events(0xFFFFFFFF);
+    eu_fsync_init(&eu_ctrl, 0);
+    #endif
 
     uint32_t l1_tile_base = get_l1_base(hartid);
     uint8_t x_id = (uint8_t) GET_X_ID(hartid);
@@ -72,16 +89,25 @@ int main(void){
      * 1d - Wait for the read before proceding to the next test.
      */
     //wait_nop(100 * hartid);
+    if(hartid == 1){
+    wait_nop(1000);
+    }
     mmio8(l1_tile_base) = y_id;
     fsync_sync_row(&fsync_ctrl);
+    #if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
     flag = check_values(y_id, hartid);
     fsync_sync_row(&fsync_ctrl);
+    #if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
     if(!flag){
         printf("No errors detected in row synch!\n");
     }
     else{
         printf("Errors detected in row synch!\n");
-        magia_return(hartid, 1);
+        
         return 1;
     }
     
@@ -94,11 +120,20 @@ int main(void){
      * 2d - Wait for the read before proceding to the next test.
      */
     //wait_nop(100 * hartid);
+    // if(hartid == 1){
+    //     wait_nop(1000);
+    // }
     uint8_t val = x_id + (uint8_t) MESH_X_TILES;
     mmio8(l1_tile_base) = val;
     fsync_sync_col(&fsync_ctrl);
+    #if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
     flag = check_values(val, hartid);
     fsync_sync_col(&fsync_ctrl);
+    #if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
     if(!flag){
         printf("No errors detected in column synch!\n");
     }

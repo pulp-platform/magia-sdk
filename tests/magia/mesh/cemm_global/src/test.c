@@ -11,7 +11,9 @@
 #include "idma.h"
 #include "redmule.h"
 #include "fsync.h"
+#include "eventunit.h"
 
+#define WAIT_MODE WFE
 /**
  * This test aims to verify the functionality of MAGIA as a systolic array for matrix multiplications,
  * following the output-static mechanism. 
@@ -46,6 +48,19 @@ int main(void){
         .api = &fsync_api,
     };
     fsync_init(&fsync_ctrl);
+
+    #if STALLING == 0
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+    eu_init(&eu_ctrl);
+    eu_redmule_init(&eu_ctrl, 0);
+    eu_idma_init(&eu_ctrl, 0);
+    eu_fsync_init(&eu_ctrl, 0);
+    #endif
 
     uint32_t y_id = GET_Y_ID(hartid);
     uint32_t x_id = GET_X_ID(hartid);
@@ -104,7 +119,9 @@ int main(void){
     
     //printf("Doing initial output L2 idma memcpy\n");
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
-    idma_wait();
+    #if STALLING == 0
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    #endif
     
     /**
      * 2a. Initalize and run IDMA transfer variables for initial L2 input data-tile transfers.
@@ -124,7 +141,9 @@ int main(void){
     uint32_t axi_addr_x = (uint32_t) x_inp + (y_id * N_SIZE * tile_h_max * 2) + (index * t_size * 2);
     //printf("Doing initial input L2 idma memcpy\n");
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x_0, len_x, std_x, reps_x);
-    idma_wait();
+    #if STALLING == 0
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    #endif
 
     /**
      * 2b. Initalize and run IDMA transfer variables for initial L2 weight data-tile transfers.
@@ -138,7 +157,9 @@ int main(void){
     uint32_t axi_addr_w = (uint32_t) w_inp + (x_id * tile_w_max * 2) + (index * t_size * K_SIZE * 2);
     //printf("Doing initial weight L2 idma memcpy\n");
     idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w, obi_addr_w_0, len_w, std_w, reps_w);
-    idma_wait();
+    #if STALLING == 0
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    #endif
 
     volatile uint32_t input_pt;
     volatile uint32_t weight_pt;
@@ -151,7 +172,7 @@ int main(void){
 
     printf("tile_h = %d, tile_w = %d, t_size = %d\n", tile_h, tile_w, t_size);
 
-    redmule_mcnfig((uint16_t) tile_w, (uint16_t) tile_h, (uint16_t) t_size);
+    //redmule_mcnfig((uint16_t) tile_w, (uint16_t) tile_h, (uint16_t) t_size);
     /**
      * 3. Cycle over the timeslots.
      * For each timeslot, the mesh-tile will:
@@ -183,51 +204,36 @@ int main(void){
             //printf("Syncing\n");
             // if(hartid == 0)
             //     printf("TIMESLOT NUMBER %d\n", i);
-            fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-            //printf("Loading next input tile\n");
-            idma_conf_out();
-            idma_set_addr_len_out(get_l1_base(up_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 4) + (tile_w * t_size * 2 * (((i + 1) % 2))), weight_pt, tile_w * t_size * 2);
-            idma_set_std2_rep2_out(0, 0, 1);
-            idma_set_std3_rep3_out(0, 0, 1);
-            idma_conf_in();
-            idma_set_addr_len_in(input_pt_next, get_l1_base(left_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 2 * (i % 2)), tile_h * t_size * 2);
-            idma_set_std2_rep2_in(0, 0, 1);
-            idma_set_std3_rep3_in(0, 0, 1);
-            //idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(left_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 2 * (i % 2)), input_pt_next, tile_h * t_size * 2);
-            //printf("Loading next weight tile\n");
-            //idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(down_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 4) + (tile_w * t_size * 2 * (!(i % 2))), weight_pt, tile_w * t_size * 2);
-            idma_start_in();
-            redmule_marith(obi_addr_y, weight_pt, input_pt);
-            idma_start_out();
-            idma_wait();
-            idma_wait();
-            redmule_wait();
-            // if(y_id < 3){
-            //     printf("Sent this data: %x, %x\n", *(volatile uint16_t*)(input_pt), *(volatile uint16_t*)(input_pt + 2));
-            //     printf("Received this data: %x, %x\n", *(volatile uint16_t*)(input_pt_next), *(volatile uint16_t*)(input_pt_next + 2));
-            // }
+            fsync_sync_global(&fsync_ctrl);
+            #if STALLING == 0
+            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+            #endif
+
+            idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(left_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 2 * (i % 2)), input_pt_next, tile_h * t_size * 2);
+            idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(up_id) + (tile_h * tile_w * 2) + (tile_h * t_size * 4) + (tile_w * t_size * 2 * (((i + 1) % 2))), weight_pt, tile_w * t_size * 2);
+            redmule_gemm(&redmule_ctrl, input_pt, weight_pt, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
+
+            #if STALLING == 0
+            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            #endif
         }
         else{
-            sentinel_start();
-            redmule_marith(obi_addr_y, weight_pt, input_pt);
-            redmule_wait();
-            sentinel_end();
+            redmule_gemm(&redmule_ctrl, input_pt, weight_pt, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
+            #if STALLING == 0
+            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            #endif
         }
-        
-        // /**
-        //  * 3c. Evoke the RED MULE 
-        //  * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
-        //  */
-        // //printf("Doing redmule\n");
-        // redmule_gemm(&redmule_ctrl, input_pt, weight_pt, obi_addr_y, (uint16_t) tile_h, (uint16_t) t_size, (uint16_t) tile_w);
-        // redmule_wait();
     }
 
     /**
      * 4. Store the output data-tile back to L2
      */
     idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
-    idma_wait();
+    #if STALLING == 0
+    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+    #endif
 
     
     /**

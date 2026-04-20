@@ -41,13 +41,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 project(magia-sdk LANGUAGES C ASM)
 
 set(ABI ilp32)
-if (COMPILER STREQUAL "GCC_PULP")
-    set(ISA rv32imaf)
-elseif (COMPILER STREQUAL "GCC_MULTILIB")
-    set(ISA rv32imac_zfinx_zhinx)
+if (TARGET_PLATFORM STREQUAL "magia_v1")
+    set(ISA rv32imafc)
+elseif (TARGET_PLATFORM STREQUAL "magia_v2")
+    set(ISA rv32imcxgap9)
 endif ()
-
-
 
 message(STATUS "[MAGIA-SDK] ABI                     : ${ABI}")
 message(STATUS "[MAGIA-SDK] ISA                     : ${ISA}")
@@ -66,11 +64,6 @@ include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 # Targets have to be included before the other folders to make them available
 # Depending on the target, following static libraries have to added by the targets
 add_subdirectory(targets)
-
-if (COMPILER STREQUAL "LLVM")
-    # VIVIANEP: Include the picolibc library
-    include(${CMAKE_CURRENT_LIST_DIR}/cmake/picolibc.cmake)
-endif()
 
 # Include other subdirectories
 add_subdirectory(hal)

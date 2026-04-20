@@ -9,6 +9,9 @@
 #include "test.h"
 #include "tile.h"
 #include "fsync.h"
+#include "eventunit.h"
+
+#define WAIT_MODE WFE
 
 /**
  * Compares the value written in L1 memory with the value written in L1 memory of the other tiles listed.
@@ -50,6 +53,17 @@ int main(void){
 
     fsync_init(&fsync_ctrl);
 
+    #if STALLING == 0
+    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg = &eu_cfg,
+        .api = &eu_api,
+    };
+    eu_init(&eu_ctrl);
+    eu_fsync_init(&eu_ctrl, 0);
+    #endif
+
     uint32_t l1_tile_base = get_l1_base(hartid);
     uint8_t groupid;
     uint8_t flag = 0;
@@ -75,10 +89,10 @@ int main(void){
             /**
              * 2b. Synchronize with the other tiles
              */
-            if(fsync_sync(&fsync_ctrl, ids, N_TILES, 0, 0)){
-                printf("Error in synchronization.\n");
-                return 1;
-            }
+            fsync_sync(&fsync_ctrl, ids, N_TILES, 0, 0);
+            #if STALLING == 0
+            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+            #endif
                 
 
             /**
