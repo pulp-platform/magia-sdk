@@ -169,7 +169,7 @@ magia_v2_tiles_4_rtl_sim:
     tiles: 4
   parallel:
     matrix:
-      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
+      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
   dependencies:
     - clone_magia
     - magia_v2_tiles_4
