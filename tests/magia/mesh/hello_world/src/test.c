@@ -15,10 +15,14 @@ int main(void){
 
     int test = NULL;
 
-    float test_float = -12.0456f;
+    volatile float16alt a = -12.0456f;
+    volatile float16alt b = 4.0f;
+    volatile float16alt c = (a + b);
     //int test_integer = -123;
     
-    printf("Hello world! %f\n", test_float);
+    uint32_t *v = (uint32_t *) &c; 
+    printf("Hello world! %#x\n", *v);
+    // printf("Hello world! %f\n", c);
     //printf("Hello world! %d\n", test_integer);
 
     return 0;

@@ -103,11 +103,11 @@ int main(void){
      * t_start is the first timeslot in which it is possible to elaborate the output.
      * t_end is the last timeslot.
      */
-    uint8_t timeslots = 16;
+    volatile uint8_t timeslots = 4;
     uint8_t t_size = K_SIZE / timeslots;
     uint8_t t_start = x_id * 2;
     uint8_t t_end = t_start + timeslots;
-    uint8_t total_timeslots = (MESH_X_TILES - 1) * 2 + timeslots + 1;
+    volatile uint8_t total_timeslots = (MESH_X_TILES - 1) * 2 + timeslots + 1;
     //printf("timeslots=%d, t_start=%d, t_end=%d\n", timeslots, t_start, t_end);
 
     /**
@@ -142,17 +142,28 @@ int main(void){
     uint32_t axi_addr_y = (uint32_t) y_inp + (y_id * K_SIZE * tile_h_max * 2);
     //uint32_t axi_addr_y_out = (uint32_t) y_out + (y_id * K_SIZE * tile_h_max * 2);
 
-    uint8_t pt = 0;
+    uint32_t nb_l1_buffer_0;
+    uint32_t nb_l1_buffer_1;
+    uint32_t nb_l1_buffer_2;
+    uint32_t nb_l1_buffer_pt;
+
+    if(x_id != (MESH_X_TILES-1)){
+        nb_l1_buffer_0 = get_l1_base(hartid + 1) + (tile_h * tile_w * 2) + (tile_w * t_size * 6);
+        nb_l1_buffer_1 = get_l1_base(hartid + 1) + (tile_h * tile_w * 2) + (tile_w * t_size * 6) + (tile_h * t_size * 2);
+        nb_l1_buffer_2 = get_l1_base(hartid + 1) + (tile_h * tile_w * 2) + (tile_w * t_size * 6) + (tile_h * t_size * 4);
+    }
+
+    volatile uint8_t pt = 0;
     volatile uint32_t output_pt;
     volatile uint32_t weight_pt;
     volatile uint32_t output_pt_prev;
     volatile uint32_t weight_pt_next;
     //redmule_mcnfig((uint16_t) t_size, (uint16_t) tile_h, (uint16_t) tile_w);
-    
+
     /**
      * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
      */
-    for(int z = 0; z < N_ITERATIONS; z++){
+    for(uint8_t z = 0; z < N_ITERATIONS; z++){
         // TIMESLOT t = -1
         // Initial static input load
         idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x, len_x, std_x, reps_x);
@@ -166,7 +177,7 @@ int main(void){
         eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
         #endif
 
-        fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+        fsync_sync_global(&fsync_ctrl);
         #if STALLING == 0
         eu_fsync_wait(&eu_ctrl, WAIT_MODE);
         #endif
@@ -176,11 +187,12 @@ int main(void){
          */
         for(int t = 0; t < total_timeslots; t++){
             //printf("TIMESLOT N: %d\n", t);
+            //printf("RELATIVE TIMESLOT: %d\n", pt);
             /**
              * 3a. Skip the timeslot if outside the range
              */
             if(t < t_start || t > t_end){
-                fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+                fsync_sync_global(&fsync_ctrl);
                 #if STALLING == 0
                 eu_fsync_wait(&eu_ctrl, WAIT_MODE);
                 #endif
@@ -197,6 +209,7 @@ int main(void){
                     output_pt_prev = obi_addr_y_2;
                     weight_pt = obi_addr_w_0;
                     weight_pt_next = obi_addr_w_1;
+                    nb_l1_buffer_pt = nb_l1_buffer_2;
                     break;
                 case 1:
                     // printf("Case 1\n");
@@ -204,6 +217,7 @@ int main(void){
                     output_pt_prev = obi_addr_y_0;
                     weight_pt = obi_addr_w_1;
                     weight_pt_next = obi_addr_w_2;
+                    nb_l1_buffer_pt = nb_l1_buffer_0;
                     break;
                 case 2:
                     // printf("Case 2\n");
@@ -211,6 +225,7 @@ int main(void){
                     output_pt_prev = obi_addr_y_1;
                     weight_pt = obi_addr_w_2;
                     weight_pt_next = obi_addr_w_0;
+                    nb_l1_buffer_pt = nb_l1_buffer_1;
                     break;
             }
 
@@ -243,34 +258,32 @@ int main(void){
             if(pt < timeslots - 1)
                 idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w + (t_size * (pt + 1) * 2), weight_pt_next, len_w, std_w, reps_w);
             if(pt > 0){
-                if(x_id == (MESH_X_TILES-1)){
+                //printf("Sending this data: %x, %x, %x, %x\n", *(volatile uint16_t*)(output_pt_prev), *(volatile uint16_t*)(output_pt_prev + 2), *(volatile uint16_t*)(output_pt_prev + 4), *(volatile uint16_t*)(output_pt_prev + 6));
+                if(x_id == (MESH_X_TILES-1))
                     idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y + ((pt - 1) * t_size * 2), output_pt_prev, len_y, std_y, reps_y);
-                }
                 else{
-                    switch (pt % 3){
-                        case 0:
-                            idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(hartid + 1) + (tile_h * tile_w * 2) + (tile_w * t_size * 6) + (tile_h * t_size * 4), output_pt_prev, tile_h * t_size * 2);
-                            break;
-                        case 1:
-                            idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(hartid + 1) + (tile_h * tile_w * 2) + (tile_w * t_size * 6), output_pt_prev, tile_h * t_size * 2);
-                            break;
-                        case 2:
-                            idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(hartid + 1) + (tile_h * tile_w * 2) + (tile_w * t_size * 6) + (tile_h * t_size * 2), output_pt_prev, tile_h * t_size * 2);
-                            break;
-                    }
-                }
+                    //printf("Sending it to: %x\n", nb_l1_buffer_pt);
+                    idma_memcpy_2d(&idma_ctrl, 1, nb_l1_buffer_pt, output_pt_prev, tile_h * t_size * 2, 0, 1);
+                }        
             }
-            if(pt < timeslots)
+            if(pt < timeslots){
+                // printf("Received this data: %x, %x, %x, %x\n", *(volatile uint16_t*)(output_pt), *(volatile uint16_t*)(output_pt + 2), *(volatile uint16_t*)(output_pt + 4), *(volatile uint16_t*)(output_pt + 6));
+                // printf("weight this data: %x, %x, %x, %x\n", *(volatile uint16_t*)(weight_pt), *(volatile uint16_t*)(weight_pt + 2), *(volatile uint16_t*)(weight_pt + 4), *(volatile uint16_t*)(weight_pt + 6));
                 redmule_gemm(&redmule_ctrl, obi_addr_x, weight_pt, output_pt, (uint16_t) tile_h, (uint16_t) tile_w, (uint16_t) t_size);
+            }
             
             #if STALLING == 0
-            if(pt < timeslots - 1)
+            uint32_t wait_done;
+            if(pt < timeslots)
+                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            if(pt < (timeslots - 1))
                 eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
             if(pt > 0)
                 eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
-            if(pt < timeslots)
-                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
             #endif
+
+            //if(x_id != (MESH_X_TILES-1))
+                //printf("The data that was received is: %x, %x, %x, %x\n", *(volatile uint16_t*)(nb_l1_buffer_pt), *(volatile uint16_t*)(nb_l1_buffer_pt + 2), *(volatile uint16_t*)(nb_l1_buffer_pt + 4), *(volatile uint16_t*)(nb_l1_buffer_pt + 6));
 
             /**
              * 3f. Sync before next timeslot
@@ -287,16 +300,16 @@ int main(void){
     /**
      * 5. Check results
      */
-    volatile uint32_t errors=0;
+    
     fsync_sync_row(&fsync_ctrl);
     #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     #endif
-    
+    uint32_t errors=0;
     if(x_id == MESH_X_TILES - 1){
         uint16_t computed, expected, diff = 0;
-        for(int i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
-            for(int j = 0; j < K_SIZE; j++){
+        for(uint8_t i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
+            for(uint8_t j = 0; j < K_SIZE; j++){
                 computed = *(volatile uint16_t*)(y_inp + (i * K_SIZE + j));
                 expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
                 diff = (computed > expected) ? (computed - expected) : (expected - computed);

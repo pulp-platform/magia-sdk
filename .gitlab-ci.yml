@@ -1,0 +1,227 @@
+# Copyright 2025 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE.APACHE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Author: Alessandro Nadalini <alessandro.nadalini3@unibo.it>
+#         Alberto Dequino <alberto.dequino@unibo.it> 
+#         Victor Jung <junvi@iis.ee.ethz.ch>
+
+variables:
+  MAGIA: './MAGIA'
+  RISCV_GCC_BINROOT: /usr/pack/pulpsdk-1.0-kgf/artifactory/pulp-sdk-release/pkg/pulp_riscv_gcc/1.0.16/bin
+  PYENV_BINROOT: /home/adequi/.pyenv/bin
+  GIT_CLONE_PATH: "$CI_BUILDS_DIR/$CI_CONCURRENT_ID/$CI_JOB_ID"
+  GIT_STRATEGY: clone
+  GIT_CLEAN_FLAGS: "-ffdx"
+
+.export_path:
+  before_script:
+    - export PATH=$RISCV_GCC_BINROOT:$PATH
+    - export PATH=$PYENV_BINROOT:$PATH
+
+stages:
+  - clone
+  - python_setup
+  - build_tiles_4
+  - test_tiles_4
+  - build_tiles_1
+  - test_tiles_1
+
+python_gvsoc:
+  extends: [.base, .export_path]
+  stage: python_setup
+  script:
+    - eval "$(pyenv init -)"
+    - pyenv local 3.12
+    - python -m venv gvsoc_venv
+    - source gvsoc_venv/bin/activate && pip install .
+  artifacts:
+    paths: [ "gvsoc_venv" ]
+
+
+.base:
+ artifacts:
+  when: always
+  expire_in: 4 week
+
+
+clone_magia:
+  extends: .base
+  stage: clone
+  script:
+    - git clone https://github.com/pulp-platform/MAGIA.git
+  artifacts:
+    paths: [ "MAGIA" ]
+
+clone_gvsoc:
+  extends: .base
+  stage: clone
+  script:
+    - make gvsoc_init
+  artifacts:
+    paths: [ "gvsoc" ]
+
+.gvsoc:
+  extends: [.base]
+  script:
+    - source gvsoc_venv/bin/activate && make gvsoc tiles=${tiles}
+  artifacts:
+    paths: [ "gvsoc/install" , "gvsoc/pulp/pulp/chips/magia_v2/arch.py"]
+
+gvsoc_tiles_4:
+  extends: .gvsoc
+  stage: build_tiles_4
+  variables:
+    tiles: 4
+  artifacts:
+    paths: [ "gvsoc/install" ]
+  dependencies:
+    - clone_gvsoc
+    - python_gvsoc
+
+gvsoc_tiles_1:
+  extends: .gvsoc
+  stage: build_tiles_1
+  variables:
+    tiles: 1
+  artifacts:
+    paths: [ "gvsoc/install" ]
+  dependencies:
+    - clone_gvsoc
+    - python_gvsoc
+
+
+.MAGIA:
+  extends: [.base]
+  script:
+    - make rtl-clean MAGIA_RTL_DIR=$MAGIA
+    - make MAGIA MAGIA_RTL_DIR=$MAGIA tiles=${tiles} target_platform=${target_platform} fast_sim=1
+  artifacts:
+    paths: [ "$MAGIA/work", "$MAGIA/sim/work", "$MAGIA/sim/modelsim.ini", "$MAGIA/scripts/sim_ret_errors.sh", "$MAGIA/scripts/compile.tcl", "$MAGIA/Makefile", "$MAGIA/hw/mesh/magia_pkg.sv", "$MAGIA/hw/tile/magia_tile_pkg.sv" ]
+
+magia_v2_tiles_4:
+  extends: .MAGIA
+  stage: build_tiles_4
+  variables:
+    tiles: 4
+    target_platform: magia_v2
+  dependencies:
+    - clone_magia
+
+magia_v2_tiles_1:
+  extends: .MAGIA
+  stage: build_tiles_1
+  variables:
+    tiles: 1
+    target_platform: magia_v2
+  dependencies:
+    - clone_magia
+
+.build:
+  extends: [.base, .export_path]
+  script:
+    - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler}
+  artifacts:
+    paths: [ "build", "targets/${target_platform}/include/addr_map/tile_addr_map.h" ]
+
+build_test_magia_v2_tiles_4:
+  extends: .build
+  stage: build_tiles_4
+  variables: 
+    tiles: 4
+    target_platform: magia_v2
+    compiler: GCC_PULP
+
+
+build_test_magia_v2_tiles_1:
+  extends: .build
+  stage: build_tiles_1
+  variables: 
+    tiles: 1
+    target_platform: magia_v2
+    compiler: GCC_PULP
+
+.sim:
+  extends: [.base, .export_path]
+  script:
+    - export TESTLOG="${TESTNAME##*/}"
+    - make run MAGIA_RTL_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.log
+    - ./scripts/sim_ret_errors.sh $TESTLOG.log
+  artifacts:
+    paths: [ "*.log" ]
+    expire_in: 2 weeks
+
+.sim_gvsoc:
+  extends: [.base, .export_path]
+  script:
+    - export TESTLOG="${TESTNAME##*/}"
+    - source gvsoc_venv/bin/activate && make run MAGIA_RTL_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.log
+    - ./scripts/sim_ret_errors_gvsoc.sh $TESTLOG.log
+  artifacts:
+    paths: [ "*.log" ]
+    expire_in: 2 weeks
+
+magia_v2_tiles_4_rtl_sim:
+  extends: [.sim]
+  stage: test_tiles_4
+  variables:
+    platform: rtl
+    tiles: 4
+  parallel:
+    matrix:
+      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
+  dependencies:
+    - clone_magia
+    - magia_v2_tiles_4
+    - build_test_magia_v2_tiles_4
+
+
+magia_v2_tiles_4_gvsoc_sim:
+  extends: [.sim_gvsoc]
+  stage: test_tiles_4
+  variables:
+    platform: gvsoc
+    tiles: 4
+  parallel:
+    matrix:
+      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
+  dependencies:
+    - clone_magia
+    - magia_v2_tiles_4
+    - clone_gvsoc
+    - gvsoc_tiles_4
+    - build_test_magia_v2_tiles_4
+    - python_gvsoc
+
+
+magia_v2_tiles_1_rtl_sim:
+  extends: [.sim]
+  stage: test_tiles_1
+  variables:
+    platform: rtl
+    tiles: 1
+  parallel:
+    matrix:
+      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
+  dependencies:
+    - clone_magia
+    - magia_v2_tiles_1
+    - build_test_magia_v2_tiles_1
+
+
+magia_v2_tiles_1_gvsoc_sim:
+  extends: [.sim_gvsoc]
+  stage: test_tiles_1
+  variables:
+    platform: gvsoc
+    tiles: 1
+  parallel:
+    matrix:
+      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
+  dependencies:
+    - clone_magia
+    - magia_v2_tiles_1
+    - clone_gvsoc
+    - gvsoc_tiles_1
+    - build_test_magia_v2_tiles_1
+    - python_gvsoc

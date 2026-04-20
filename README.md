@@ -42,7 +42,7 @@ The following *optional* parameters can be specified when running the make comma
 
     Then modify the magia-sdk **Makefile** to point to the correct paths:
 
-        MAGIA_DIR ?= path/to/MAGIA/repository
+        MAGIA_RTL_DIR ?= path/to/MAGIA/repository
 
         BUILD_DIR ?= $(MAGIA_DIR)//work/sw/tests/$(test).c
 
@@ -51,6 +51,19 @@ The following *optional* parameters can be specified when running the make comma
 1. Initialize the GVSoC submodule:
 
     `make gvsoc_init`
+
+    Python 3.12 is *MANDATORY*.
+    
+    It is possible to create a python environment with the requirements by running:
+
+    `make gvsoc_venv`
+
+    Pyenv and a Python 3.12 installation are required, you can setup it by running:
+
+        curl https://pyenv.run | bash
+        bash
+        pyenv install 3.12
+    
     
 2. Build the Magia architecture (*this command may take time and return an error, please be patient.*):
         
@@ -68,17 +81,17 @@ The following *optional* parameters can be specified when running the make comma
 
 3. Make sure the RISC-V GCC compiler is installed and visible in the `$PATH` environment variable. You can check if and where the compiler is installed by running the following command on your root (`/`) directory:
 
-    `find . ! -readable -prune -o -name "riscv64-unknown-elf-gcc" -print`
-
-    Or (in case you want to use the 32-bit only PULP toolchain):
-
     `find . ! -readable -prune -o -name "riscv32-unknown-elf-gcc" -print`
 
+    It is possible to also use the PULP_MULTILIB toolchain from openhwgroup, which has a different name. However, do keep in mind its full operationality has **NOT** been tested:
+
+    `find . ! -readable -prune -o -name "riscv64-unknown-elf-gcc" -print`
+    
     Then add the compiler to the `$PATH` environment variable with:
 
     `export PATH=<absolute path to directory containing the compiler binary>:$PATH`
 
-    In case you don't have a toolchain, or the toolchain in your machine has compiler errors (such as requiring strange strange ISA extensions), you can build your own toolchain by following the steps listed [HERE](https://github.com/pulp-platform/pulp-riscv-gnu-toolchain). **Make sure you enable multilib to support 32-bit.** Despite having 64 in the name, the toolchain also supports 32-bit targets.
+    In case you don't have a toolchain, or the toolchain in your machine has compiler errors (such as requiring strange strange ISA extensions), you can build your own toolchain by following the steps listed [HERE](https://github.com/pulp-platform/pulp-riscv-gnu-toolchain).
 
     In case you want to use a different toolchain, or want to specify a particular toolchain installed in your filesystem, you can edit the file *magia-sdk/cmake/toolchain_gcc_multilib.cmake* to point to your desired toolchain binary file. Make sure the ILP and API extensions in *CMakeLists.txt* are supported by the toolchain.
 
@@ -146,6 +159,24 @@ To add your own test, you have to integrate a new test folder inside the **tests
     2. An **src** directory containing your test's source (.c) files
 
     3. An **include** directory containing your test's header (.h) files
+
+## GVSOC Regression Test
+
+It is possible to test the correctness of the repository by running the extensive regression test on the GVSoC simulator.
+
+To do so, you need pyenv, which can be enabled on your shell setup by running (in case you didn't do it before):
+
+    curl https://pyenv.run | bash
+    bash
+    pyenv install 3.12
+
+After doing that, you can run the entire testsuite on all the available mesh architectures (from 1x1 to 16x16) with:
+
+    source scripts/regression_gvsoc.sh
+
+**Must be run from the root directory of magia-sdk**.
+
+The test outputs are stored in the *scripts/regression_output_* folders.
 
 ## Folder Structure
 

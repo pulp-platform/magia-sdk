@@ -18,8 +18,13 @@ CMakeFiles
 /*/*/*/Makefile
 /*/*/*/*/Makefile
 log.txt
-gvsoc/
+gvsoc*
 testsuite.py
 test.conf
 testsuite*
 testlogs/
+magia_deployment.egg*
+.python-version
+cache_fill.h
+regression_output*
+scripts/wave.do
