@@ -23,7 +23,7 @@ jobs:
           HTTP_CODE=$(curl -s -o /tmp/gl_response.json -w "%{http_code}" -X POST \
             -H "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d '{"ref": "${{ github.sha }}"}' \
+            -d '{"ref": "${{ github.head_ref || github.ref_name }}"}' \
             "$GITLAB_API/pipeline")
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
             echo "::error::curl failed to trigger GitLab pipeline (HTTP $HTTP_CODE): $(cat /tmp/gl_response.json)"
