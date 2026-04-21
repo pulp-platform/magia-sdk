@@ -16,20 +16,23 @@
  *
  * Authors: Victor Isachi <victor.isachi@unibo.it>
  * Alberto Dequino <alberto.dequino@unibo.it>
- * 
+ *
  * MAGIA Tile Utils
  */
 
 #ifndef MAGIA_TILE_UTILS_H
 #define MAGIA_TILE_UTILS_H
 
-//#include "tinyprintf.h"
 #include "printf.h"
 
 #define mmio64(x) (*(volatile uint64_t *)(x))
 #define mmio32(x) (*(volatile uint32_t *)(x))
 #define mmio16(x) (*(volatile uint16_t *)(x))
 #define mmio8(x)  (*(volatile uint8_t  *)(x))
+
+#define mmio_fp64(x) (*(volatile float64 *)(x))
+#define mmio_fp32(x) (*(volatile float32 *)(x))
+#define mmio_fp16(x) (*(volatile float16 *)(x))
 
 #define addr64(x) (*(uint64_t *)(&x))
 #define addr32(x) (*(uint32_t *)(&x))
@@ -122,4 +125,4 @@ static uint32_t get_time(){
     return timel;
 }
 
-#endif /*MAGIA_TILE_UTILS_H*/
+#endif /* MAGIA_TILE_UTILS_H */

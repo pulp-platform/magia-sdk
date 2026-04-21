@@ -17,7 +17,7 @@
  *
  * Authors:
  * Alberto Dequino <alberto.dequino@unibo.it>
- * 
+ *
  * IO
  */
 #ifndef IO_H
