@@ -20,9 +20,11 @@
 
 SHELL 			:= /bin/bash
 
-CMAKE_BUILDDIR  	?= $(CURR_DIR)/build
-MAGIA_RTL_DIR 		?= ..
+CMAKE_BUILDDIR  ?= $(CURR_DIR)/build
+MAGIA_RTL_DIR 	?= ..
 BUILD_DIR 		?= $(MAGIA_RTL_DIR)/sw/tests/$(test)
+MAGIA_DIR_ABS	?= $(abspath $(MAGIA_RTL_DIR))
+BUILD_DIR_ABS	?= $(MAGIA_DIR_ABS)/sw/tests/$(test)
 GVSOC_DIR 		?= ./gvsoc
 CURR_DIR		?= $(shell pwd)
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
@@ -47,6 +49,15 @@ compiler 		?= GCC_PULP
 ISA				?= rv32imcxgap9
 gui 			?= 0
 tiles 			?= 2
+spatz_tests		?= 1
+
+LLVM_CMAKE			?= cmake
+LLVM_DIR			?= llvm
+LLVM_REPO			?= git@github.com:pulp-platform/llvm-project.git
+LLVM_COMMIT			?= b494f2d8dde88723026db8ec16ac6c7ee1e140ca
+LLVM_INSTALL_DIR	?= $(CURR_DIR)/llvm/install
+LLVM_BUILD_DIR		?= $(LLVM_DIR)/llvm-project/build
+LLVM_JOBS			?= 8
 
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
@@ -83,7 +94,7 @@ ifeq ($(compiler), GCC_MULTILIB)
 	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/$(target_platform)/include/tile.h
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -B $(CMAKE_BUILDDIR) --trace-expand
+	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz_tests) -DSPATZ_LLVM_PATH=$(LLVM_INSTALL_DIR) -B $(CMAKE_BUILDDIR) --trace-expand
 	cmake --build $(CMAKE_BUILDDIR) --verbose
 
 set_mesh:
@@ -119,6 +130,36 @@ else ifeq ($(platform), rtl)
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
 	cd $(MAGIA_RTL_DIR) 												&& \
+	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv)
+else
+	$(error Only rtl and gvsoc are supported as platforms.)
+endif
+
+run_with_spatz: set_mesh
+ifndef test
+	$(error Proper formatting is: make run_with_spatz test=<test_name> platform=<rtl|gvsoc>)
+endif
+ifeq (,$(wildcard ./build/bin/$(test)))
+	$(error No test found with name: $(test))
+endif
+ifndef platform
+	$(error Proper formatting is: make run_with_spatz test=<test_name> platform=rtl|gvsoc)
+endif
+ifeq ($(platform), gvsoc)
+	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin
+else ifeq ($(platform), rtl)
+	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
+	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
+	objcopy --srec-len 1 --output-target=srec $(BUILD_DIR_ABS)/build/verif $(BUILD_DIR_ABS)/build/verif.s19
+	scripts/parse_s19.pl $(BUILD_DIR_ABS)/build/verif.s19 > $(BUILD_DIR_ABS)/build/verif.txt
+	python3 scripts/s19tomem.py $(BUILD_DIR_ABS)/build/verif.txt $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
+	cd $(BUILD_DIR_ABS)													&& \
+	cp -sf "$(MAGIA_DIR_ABS)/sim/modelsim.ini" modelsim.ini    				&& \
+	ln -sfn "$(MAGIA_DIR_ABS)/sim/work" work
+	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BUILD_DIR_ABS)/build/verif > $(BUILD_DIR_ABS)/build/verif.dump
+	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BUILD_DIR_ABS)/build/verif > $(BUILD_DIR_ABS)/build/verif.objdump
+	python3 scripts/objdump2itb.py $(BUILD_DIR_ABS)/build/verif.objdump > $(BUILD_DIR_ABS)/build/verif.itb
+	cd $(MAGIA_DIR_ABS) 												&& \
 	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv)
 else
 	$(error Only rtl and gvsoc are supported as platforms.)
@@ -186,3 +227,28 @@ gvsoc_venv:
 	python -m venv gvsoc_venv && \
 	source gvsoc_venv/bin/activate && \
 	pip install .
+
+llvm:
+	mkdir -p $(LLVM_DIR)
+	if [ ! -d "$(LLVM_DIR)/llvm-project/.git" ]; then \
+		cd $(LLVM_DIR) && git clone $(LLVM_REPO); \
+	fi
+	cd $(LLVM_DIR)/llvm-project && \
+	git checkout $(LLVM_COMMIT) && \
+	git submodule update --init --recursive --jobs=$(LLVM_JOBS) .
+	mkdir -p $(LLVM_INSTALL_DIR)
+	cd $(LLVM_DIR)/llvm-project && mkdir -p build && cd build && \
+	$(LLVM_CMAKE) \
+		-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
+		-DCMAKE_CXX_COMPILER=${CXX} \
+		-DCMAKE_C_COMPILER=${CC} \
+		-DLLVM_OPTIMIZED_TABLEGEN=True \
+		-DLLVM_ENABLE_PROJECTS="clang;lld" \
+		-DLLVM_TARGETS_TO_BUILD="RISCV" \
+		-DLLVM_DEFAULT_TARGET_TRIPLE=riscv32-unknown-elf \
+		-DLLVM_ENABLE_LLD=False \
+		-DLLVM_APPEND_VC_REV=ON \
+		-DCMAKE_BUILD_TYPE=Release \
+		../llvm && \
+	make -j$(LLVM_JOBS) all && \
+	make install

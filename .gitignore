@@ -28,3 +28,4 @@ magia_deployment.egg*
 cache_fill.h
 regression_output*
 scripts/wave.do
+llvm/

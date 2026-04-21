@@ -11,7 +11,6 @@
 #include <stddef.h>
 #include "regs/tile_ctrl.h"
 #include "addr_map/tile_addr_map.h"
-//#include "utils/tinyprintf.h"
 #include "utils/printf.h"
 #include "utils/magia_tile_utils.h"
 #include "utils/magia_utils.h"
@@ -22,5 +21,6 @@
 #include "utils/performance_utils.h"
 //#include "utils/amo_utils.h"
 #include "utils/eu_isa_utils.h"
+#include "utils/magia_spatz_utils.h"
 
 #endif //_TILE_INCLUDE_GUARD_

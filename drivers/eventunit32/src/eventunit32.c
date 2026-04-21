@@ -24,7 +24,7 @@
 void eu32_init(eu_controller_t *ctrl) {
     // Clear all pending events
     mmio32(EU_CORE_BUFFER_CLEAR) = 0xFFFFFFFF;
-    
+
     // Reset masks to default (disabled)
     mmio32(EU_CORE_MASK) = 0x00000000;
     mmio32(EU_CORE_IRQ_MASK) = 0x00000000;
@@ -78,7 +78,7 @@ uint32_t eu32_redmule_is_done(eu_controller_t *ctrl) {
 }
 
 //=============================================================================
-// iDMA-specific Event Functions  
+// iDMA-specific Event Functions
 //=============================================================================
 
 /**
@@ -88,7 +88,7 @@ uint32_t eu32_redmule_is_done(eu_controller_t *ctrl) {
 void eu32_idma_init(eu_controller_t *ctrl, uint32_t enable_irq) {
     // Enable iDMA events in mask (both directions)
     eu_enable_events(EU_IDMA_ALL_MASK);
-    
+
     // Optionally enable IRQ for iDMA completion (both directions)
     if (enable_irq) {
         eu_enable_irq(EU_IDMA_ALL_DONE_MASK);
@@ -138,7 +138,7 @@ uint32_t eu32_idma_wait_a2o(eu_controller_t *ctrl, eu_wait_mode_t mode) {
 }
 
 /**
- * @brief Wait for L1->L2 (OBI2AXI) completion specifically  
+ * @brief Wait for L1->L2 (OBI2AXI) completion specifically
  * @param mode Wait mode (polling, WFE, etc.)
  * @return Non-zero if L1->L2 completed, 0 if timeout/error
  */
@@ -235,7 +235,7 @@ uint32_t eu32_idma_o2a_is_busy(eu_controller_t *ctrl) {
 void eu32_fsync_init(eu_controller_t *ctrl, uint32_t enable_irq) {
     // Enable FSync events in mask (bits 25:24)
     eu_enable_events(EU_FSYNC_DONE_MASK);
-    
+
     // Optionally enable IRQ for FSync completion (bit 24)
     if (enable_irq) {
         eu_enable_irq(EU_FSYNC_DONE_MASK);
@@ -277,12 +277,49 @@ uint32_t eu32_fsync_has_error(eu_controller_t *ctrl) {
     return eu_check_events(EU_FSYNC_ERROR_MASK);
 }
 
+//=============================================================================
+// Spatz-specific Event Functions
+//=============================================================================
+
+/**
+ * @brief Initialize Event Unit for Spatz events
+ * @param enable_irq If true, enable IRQ for Spatz completion
+ */
+void eu32_spatz_init(eu_controller_t *ctrl, uint32_t enable_irq) {
+    eu_enable_events(EU_SPATZ_DONE_MASK);
+
+    if (enable_irq) {
+        eu_enable_irq(EU_SPATZ_DONE_MASK);
+    }
+}
+
+/**
+ * @brief Wait for Spatz completion using specific mode
+ * @param mode Wait mode (polling, WFE, etc.)
+ * @return Non-zero if FSync completed, 0 if timeout/error
+ */
+uint32_t eu32_spatz_wait(eu_controller_t *ctrl, eu_wait_mode_t mode) {
+    uint32_t retval = eu_wait_events(EU_SPATZ_DONE_MASK, mode, 1000000);
+    #if PROFILE_SNC == 1
+    stnl_snc_f();
+    #endif
+    return retval; // 1M cycle timeout
+}
+
+/**
+ * @brief Check if Spatz has completed, non-blocking
+ * @return Non-zero if Spatz completed
+ */
+uint32_t eu32_spatz_is_done(eu_controller_t *ctrl) {
+    return eu_check_events(EU_SPATZ_DONE_MASK);
+}
+
 extern void eu_init(eu_controller_t *ctrl)
     __attribute__((alias("eu32_init"), used, visibility("default")));
 extern void eu_redmule_init(eu_controller_t *ctrl, uint32_t enable_irq)
     __attribute__((alias("eu32_redmule_init"), used, visibility("default")));
 extern uint32_t eu_redmule_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
-    __attribute__((alias("eu32_redmule_wait"), used, visibility("default")));    
+    __attribute__((alias("eu32_redmule_wait"), used, visibility("default")));
 extern uint32_t eu_redmule_is_busy(eu_controller_t *ctrl)
     __attribute__((alias("eu32_redmule_is_busy"), used, visibility("default")));
 extern uint32_t eu_redmule_is_done(eu_controller_t *ctrl)
@@ -321,6 +358,12 @@ extern uint32_t eu_fsync_is_done(eu_controller_t *ctrl)
     __attribute__((alias("eu32_fsync_is_done"), used, visibility("default")));
 extern uint32_t eu_fsync_has_error(eu_controller_t *ctrl)
     __attribute__((alias("eu32_fsync_has_error"), used, visibility("default")));
+extern void eu_spatz_init(eu_controller_t *ctrl, uint32_t enable_irq)
+    __attribute__((alias("eu32_spatz_init"), used, visibility("default")));
+extern uint32_t eu_spatz_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
+    __attribute__((alias("eu32_spatz_wait"), used, visibility("default")));
+extern uint32_t eu_spatz_is_done(eu_controller_t *ctrl)
+    __attribute__((alias("eu32_spatz_is_done"), used, visibility("default")));
 
 eu_controller_api_t eu_api = {
     .init                   = eu32_init,
@@ -345,4 +388,7 @@ eu_controller_api_t eu_api = {
     .fsync_wait             = eu32_fsync_wait,
     .fsync_is_done          = eu32_fsync_is_done,
     .fsync_has_error        = eu32_fsync_has_error,
+    .spatz_init             = eu32_spatz_init,
+    .spatz_wait             = eu32_spatz_wait,
+    .spatz_is_done          = eu32_spatz_is_done,
 };
