@@ -13,12 +13,54 @@ name: gitlab-ci
 jobs:
   gitlab-ci:
     runs-on: ubuntu-latest
+    # Skip on external forks to avoid exposing the token
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    env:
+      GITLAB_API: https://iis-git.ee.ethz.ch/api/v4/projects/github-mirror%2Fmagia-sdk-mirror
     steps:
-      - name: Check Gitlab CI
-        uses: pulp-platform/pulp-actions/gitlab-ci@v2.4.1 # update version as needed, not auto-updated
-        # Check if GITLAB_TOKEN is set to avoid running on forks.
-        if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        with:
-          domain: iis-git.ee.ethz.ch
-          repo: github-mirror/magia-sdk-mirror
-          token: ${{ secrets.GITLAB_TOKEN }}
+      - name: Trigger GitLab pipeline
+        run: |
+          RESPONSE=$(curl -sf -X POST \
+            -H "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"ref": "${{ github.sha }}"}' \
+            "$GITLAB_API/pipeline")
+          echo "PIPELINE_ID=$(echo $RESPONSE | jq -r '.id')" >> $GITHUB_ENV
+
+      - name: Wait for pipeline to finish
+        run: |
+          while true; do
+            STATUS=$(curl -sf \
+              -H "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+              "$GITLAB_API/pipelines/$PIPELINE_ID" \
+              | jq -r '.status')
+            echo "Pipeline status: $STATUS"
+            case "$STATUS" in
+              success|failed|canceled|skipped) break ;;
+            esac
+            sleep 30
+          done
+          echo "PIPELINE_STATUS=$STATUS" >> $GITHUB_ENV
+
+      - name: Print logs of failed jobs
+        if: env.PIPELINE_STATUS != 'success'
+        run: |
+          JOB_IDS=$(curl -sf \
+            -H "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+            "$GITLAB_API/pipelines/$PIPELINE_ID/jobs?scope[]=failed" \
+            | jq -r '.[].id')
+          for JOB_ID in $JOB_IDS; do
+            JOB_NAME=$(curl -sf \
+              -H "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+              "$GITLAB_API/jobs/$JOB_ID" \
+              | jq -r '.name')
+            echo "::group::Failed job: $JOB_NAME (id=$JOB_ID)"
+            curl -sf \
+              -H "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+              "$GITLAB_API/jobs/$JOB_ID/trace" || true
+            echo "::endgroup::"
+          done
+
+      - name: Fail if pipeline did not succeed
+        run: |
+          [ "$PIPELINE_STATUS" = "success" ] || exit 1
