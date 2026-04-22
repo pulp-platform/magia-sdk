@@ -147,7 +147,7 @@ build_test_magia_v2_tiles_1:
   script:
     - export TESTLOG="${TESTNAME##*/}"
     - make run MAGIA_RTL_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.log
-    - ./scripts/sim_ret_errors.sh $TESTLOG.log
+    - $CI_PROJECT_DIR/scripts/sim_ret_errors.sh $TESTLOG.log
   artifacts:
     paths: [ "*.log" ]
     expire_in: 2 weeks
@@ -157,7 +157,7 @@ build_test_magia_v2_tiles_1:
   script:
     - export TESTLOG="${TESTNAME##*/}"
     - source gvsoc_venv/bin/activate && make run MAGIA_RTL_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.log
-    - ./scripts/sim_ret_errors_gvsoc.sh $TESTLOG.log
+    - $CI_PROJECT_DIR/scripts/sim_ret_errors_gvsoc.sh $TESTLOG.log
   artifacts:
     paths: [ "*.log" ]
     expire_in: 2 weeks

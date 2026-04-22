@@ -129,27 +129,9 @@ sub hex2int {
   return $i;                                      # return value
 }
 
-#------------------------------------------------------------------------------
-# subroutine to convert from long integer to hex, always big endian
-#
-# there should be an easier way.. 
-# only for 8 digits.. 
-# 
 sub int2hex {
-  my $i=shift;                                    # read in the integer
-  my $h = "";                                     # define hex value
-  for my $n (0..7){                               # 8 digits
-    my $e=16 ** (7-$n);                           # calculate exponent
-    if ($e > $i){                                 # if 2^e is larger
-       $h=$h."0";                                 # write 0 for the digit
-    }
-    else{                                         # now we have a non-zero 
-       my $d= int ($i/$e);                        # divide
-       $h=$h.$v2h{$d};                            # determine the hex value
-       $i=$i - ($d* (16 ** (7-$n)));              # subtract from int
-    }
-  }
-  return $h;                                      # return hex value
+  my $i=shift;
+  return sprintf("%08X", $i);
 }
 
 #------------------------------------------------------------------------------
