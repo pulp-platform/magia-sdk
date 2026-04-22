@@ -17,7 +17,18 @@ jobs:
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     env:
       GITLAB_API: https://iis-git.ee.ethz.ch/api/v4/projects/github-mirror%2Fmagia-sdk-mirror
+      GITLAB_REMOTE: https://oauth2:${{ secrets.GITLAB_TOKEN }}@iis-git.ee.ethz.ch/github-mirror/magia-sdk-mirror.git
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Push branch to GitLab mirror
+        run: |
+          git remote add gitlab "$GITLAB_REMOTE"
+          git push gitlab HEAD:${{ github.head_ref || github.ref_name }}
+
       - name: Trigger GitLab pipeline
         run: |
           HTTP_CODE=$(curl -s -o /tmp/gl_response.json -w "%{http_code}" -X POST \
@@ -32,6 +43,7 @@ jobs:
           echo "PIPELINE_ID=$(jq -r '.id' /tmp/gl_response.json)" >> $GITHUB_ENV
 
       - name: Wait for pipeline to finish
+        timeout-minutes: 120
         run: |
           while true; do
             HTTP_CODE=$(curl -s -o /tmp/gl_response.json -w "%{http_code}" \
