@@ -59,6 +59,14 @@ LLVM_INSTALL_DIR	?= $(CURR_DIR)/llvm/install
 LLVM_BUILD_DIR		?= $(LLVM_DIR)/llvm-project/build
 LLVM_JOBS			?= 8
 
+LLVM_CMAKE			?= cmake
+LLVM_DIR			?= llvm
+LLVM_REPO			?= git@github.com:pulp-platform/llvm-project.git
+LLVM_COMMIT			?= b494f2d8dde88723026db8ec16ac6c7ee1e140ca
+LLVM_INSTALL_DIR	?= $(CURR_DIR)/llvm/install
+LLVM_BUILD_DIR		?= $(LLVM_DIR)/llvm-project/build
+LLVM_JOBS			?= 8
+
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
@@ -252,3 +260,16 @@ llvm:
 		../llvm && \
 	make -j$(LLVM_JOBS) all && \
 	make install
+
+deploy:
+ifndef test
+	$(error Proper formatting is: make deploy test=<test_name> platform=rtl|gvsoc)
+endif
+ifndef platform
+	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
+endif
+	python deployment/generate.py \
+		-s ./deployment/tests/$(test) \
+		-d ./tests/magia/mesh/$(test) && \
+	make clean build tiles=$(tiles) compiler=$(compiler) eval=$(eval) && \
+	make run test=test_$(test) platform=$(platform)

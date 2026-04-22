@@ -1,27 +1,44 @@
-next_steps.*
-build/
-output*
-list/
-transcript
+# Environment & secrets
+.env
+.env.*
+.env.local
+
+# IDE & editor
 .vscode/
-gvsoc_config.json
+
+# python
+__pycache__/
+*.pyc
+
+# Build & output
+build/
+output/
+output_*.txt
+next_steps.*
 power_report.csv
+
+# Logs & traces
+log.txt
 trace_file.txt
 insn.txt
 debug_*
-compile_commands.json
+
+# CMake
 CMakeCache.txt
 cmake_install.cmake
-CMakeFiles
+CMakeFiles/
+compile_commands.json
 /*/Makefile
 /*/*/Makefile
 /*/*/*/Makefile
 /*/*/*/*/Makefile
 log.txt
 gvsoc*
+
+# Test & CI
 testsuite.py
-test.conf
 testsuite*
+test.conf
 testlogs/
 magia_deployment.egg*
 .python-version
@@ -29,3 +46,10 @@ cache_fill.h
 regression_output*
 scripts/wave.do
 llvm/
+
+# Project-specific
+gvsoc/
+gvsoc_config.json
+power_report.csv
+list/
+transcript
