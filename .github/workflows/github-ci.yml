@@ -14,7 +14,12 @@ jobs:
   gitlab-ci:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+
       - name: Check Gitlab CI
+        id: gitlab_ci
         uses: pulp-platform/pulp-actions/gitlab-ci@v2.4.1 # update version as needed, not auto-updated
         # Check if GITLAB_TOKEN is set to avoid running on forks.
         if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
@@ -22,3 +27,21 @@ jobs:
           domain: iis-git.ee.ethz.ch
           repo: github-mirror/magia-sdk-mirror
           token: ${{ secrets.GITLAB_TOKEN }}
+
+      - name: Fetch GitLab CI logs on failure
+        if: failure() && steps.gitlab_ci.conclusion == 'failure' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_DOMAIN: iis-git.ee.ethz.ch
+          GITLAB_REPO: github-mirror/magia-sdk-mirror
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          OUT_DIR: gitlab-logs
+        run: bash scripts/ci/fetch_gitlab_logs.sh
+
+      - name: Upload GitLab CI logs
+        if: failure() && steps.gitlab_ci.conclusion == 'failure' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitlab-ci-logs-${{ github.run_id }}
+          path: gitlab-logs/
+          if-no-files-found: ignore
