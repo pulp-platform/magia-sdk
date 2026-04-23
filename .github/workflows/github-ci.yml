@@ -14,10 +14,6 @@ jobs:
   gitlab-ci:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-
       - name: Check Gitlab CI
         id: gitlab_ci
         uses: pulp-platform/pulp-actions/gitlab-ci@v2.4.1 # update version as needed, not auto-updated
@@ -28,6 +24,14 @@ jobs:
           repo: github-mirror/magia-sdk-mirror
           token: ${{ secrets.GITLAB_TOKEN }}
 
+      - name: Checkout log-fetch script
+        if: failure() && steps.gitlab_ci.conclusion == 'failure' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/checkout@v4
+        with:
+          path: _ci_tools
+          sparse-checkout: scripts/ci
+          sparse-checkout-cone-mode: false
+
       - name: Fetch GitLab CI logs on failure
         if: failure() && steps.gitlab_ci.conclusion == 'failure' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         env:
@@ -36,7 +40,7 @@ jobs:
           GITLAB_REPO: github-mirror/magia-sdk-mirror
           COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           OUT_DIR: gitlab-logs
-        run: bash scripts/ci/fetch_gitlab_logs.sh
+        run: bash _ci_tools/scripts/ci/fetch_gitlab_logs.sh
 
       - name: Upload GitLab CI logs
         if: failure() && steps.gitlab_ci.conclusion == 'failure' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
