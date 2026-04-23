@@ -104,10 +104,7 @@ while IFS=$'\t' read -r job_id job_name job_stage job_url; do
   fi
   rm -f "$art_zip"
 
-  # Inline tail of the trace for quick debugging.
-  echo "::group::${job_name} (stage=${job_stage}, id=${job_id}) — ${job_url}"
-  tail -n 200 "$trace_path" || true
-  echo "::endgroup::"
+  echo "Trace: ${trace_path} (job=${job_name}, stage=${job_stage})"
 done < <(echo "$JOBS_JSON" | jq -r '.[] | select(.status == "failed") | [.id, .name, .stage, .web_url] | @tsv')
 
 echo "Fetched ${FAILED_COUNT} failed job(s) from pipeline ${PIPELINE_URL}"

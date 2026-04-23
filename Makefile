@@ -176,7 +176,7 @@ gvsoc_init:
 	cd $(GVSOC_DIR) && \
 	git submodule update --init --recursive && \
 	cd core && \
-	git checkout master && \
+	git checkout 29c7dfcdbdb7ca4e961dd9bbff148df229666fda && \
 	cd ../pulp && \
 	git checkout master
 
