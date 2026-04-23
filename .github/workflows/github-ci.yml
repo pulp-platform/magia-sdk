@@ -19,7 +19,7 @@ jobs:
   gitlab-ci:
     runs-on: ubuntu-latest
     steps:
-      - name: Check Gitlab CI
+      - name: Gitlab CI Runner
         id: gitlab_ci
         uses: pulp-platform/pulp-actions/gitlab-ci@v2.4.1 # update version as needed, not auto-updated
         # Check if GITLAB_TOKEN is set to avoid running on forks.

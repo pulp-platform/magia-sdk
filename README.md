@@ -160,6 +160,20 @@ To add your own test, you have to integrate a new test folder inside the **tests
 
     3. An **include** directory containing your test's header (.h) files
 
+## Continuous Integration
+
+CI runs via GitHub Actions (`.github/workflows/github-ci.yml`). It does **not** execute tests locally — instead it mirrors the branch to a GitLab instance at `iis-git.ee.ethz.ch/github-mirror/magia-sdk-mirror` and waits for that pipeline to complete. A `GITLAB_TOKEN` secret with `read_api` scope must be configured on the GitHub repository. CI is automatically skipped for forks.
+
+### Reading CI failure logs
+
+When the GitLab pipeline fails, the workflow automatically:
+
+1. Fetches the trace (console log) for every failed GitLab job via `scripts/ci/fetch_gitlab_logs.sh`.
+2. Saves each trace as `gitlab-logs/<stage>__<job>.trace`.
+3. Prints the **last 200 lines** of each trace in the **"🔶 Show error log"** GitHub Actions step (visible in the collapsible group labelled `FAILED: <job_name>`).
+
+To read the full logs, download the `gitlab-logs` artifact from the failed GitHub Actions run — it contains the complete `.trace` files for all failed jobs, plus any job artifacts (e.g. build outputs) if the GitLab job uploaded them.
+
 ## GVSOC Regression Test
 
 It is possible to test the correctness of the repository by running the extensive regression test on the GVSoC simulator.
