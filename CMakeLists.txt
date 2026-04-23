@@ -38,6 +38,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+#include("targets/${TARGET_PLATFORM}/config.cmake")
+
 project(magia-sdk LANGUAGES C ASM)
 
 set(ABI ilp32)
@@ -55,6 +57,12 @@ else()
     message(STATUS "[MAGIA-SDK] DISASSEMBLE_LIBRARIES : OFF")
 endif()
 
+# Set host-specific flags
+set(MESH_ARCH   "riscv32")
+set(MESH_FAMILY "riscv32")
+set(MESH_ENDIAN "little")
+set(MESH_SYSTEM "unknown")
+
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 
 ################################################################################
@@ -64,6 +72,9 @@ include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 # Targets have to be included before the other folders to make them available
 # Depending on the target, following static libraries have to added by the targets
 add_subdirectory(targets)
+
+# VIVIANEP: Include the picolibc library
+#include(${CMAKE_CURRENT_LIST_DIR}/cmake/picolibc.cmake)
 
 # Include other subdirectories
 add_subdirectory(hal)
