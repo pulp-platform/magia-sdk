@@ -47,7 +47,7 @@ jobs:
           OUT_DIR: gitlab-logs
         run: bash _ci_tools/scripts/ci/fetch_gitlab_logs.sh
 
-      - name: Show error log
+      - name: 🔶 Show error log
         if: failure() && steps.gitlab_ci.conclusion == 'failure' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: |
           shopt -s nullglob
