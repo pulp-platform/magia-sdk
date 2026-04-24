@@ -43,8 +43,10 @@ python_gvsoc:
     - pyenv local 3.12
     - python -m venv gvsoc_venv
     - source gvsoc_venv/bin/activate && pip install .
+    - source gvsoc_venv/bin/activate && pip install torch --index-url https://download.pytorch.org/whl/cpu
+    - source gvsoc_venv/bin/activate && make gemm-gen
   artifacts:
-    paths: [ "gvsoc_venv" ]
+    paths: [ "gvsoc_venv", "tests/magia/mesh/gemm/via_l2/include/test.h" ]
 
 
 .base:
@@ -135,19 +137,23 @@ magia_v2_tiles_1:
 build_test_magia_v2_tiles_4:
   extends: .build
   stage: build_tiles_4
-  variables: 
+  variables:
     tiles: 4
     target_platform: magia_v2
     compiler: GCC_PULP
+  dependencies:
+    - python_gvsoc
 
 
 build_test_magia_v2_tiles_1:
   extends: .build
   stage: build_tiles_1
-  variables: 
+  variables:
     tiles: 1
     target_platform: magia_v2
     compiler: GCC_PULP
+  dependencies:
+    - python_gvsoc
 
 .sim:
   extends: [.base, .export_path]
