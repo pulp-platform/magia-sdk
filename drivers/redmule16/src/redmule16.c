@@ -16,7 +16,6 @@
 #include "regs/tile_ctrl.h"
 #include "utils/redmule_isa_utils.h"
 #include "utils/magia_utils.h"
-// #include "utils/tinyprintf.h"
 #include "utils/printf.h"
 
 int redmule16_init(redmule_controller_t *ctrl)
@@ -24,11 +23,6 @@ int redmule16_init(redmule_controller_t *ctrl)
     irq_en(1 << IRQ_REDMULE_EVT_0);
     return 0;
 }
-
-/* static inline void redmule16_wait() {
-    asm volatile("wfi" ::: "memory");
-}
- */
 
 /**
  * Configure and launch an FP16 GEMM on the RedMulE accelerator.
@@ -71,8 +65,7 @@ int redmule16_gemm(redmule_controller_t *ctrl,
 
 extern int redmule_init(redmule_controller_t *ctrl)
     __attribute__((alias("redmule16_init"), used, visibility("default")));
-/* extern void redmule_wait()
-    __attribute__((alias("redmule16_wait"), used, visibility("default"))); */
+
 extern int redmule_gemm(redmule_controller_t *ctrl,
                         uint32_t x,
                         uint32_t w,
@@ -85,6 +78,5 @@ extern int redmule_gemm(redmule_controller_t *ctrl,
 /* Export the RedmulE-specific controller API */
 redmule_controller_api_t redmule_api = {
     .init = redmule16_init,
-    /*     .wait = redmule16_wait, */
     .gemm = redmule16_gemm,
 };

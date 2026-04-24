@@ -3,23 +3,29 @@ requires = ["setuptools>=61", "setuptools<81"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "magia-sdk"
+name = "magia-deployment"
 version = "0.1.0"
-description = "SDK for the MAGIA mesh-based heterogeneous RISC-V platform"
+description = "Deployment on MAGIA platform"
 requires-python = ">=3.12"
+authors = [
+    {name="Alex Marchioni", email = "alex.marchioni@outlook.it"},
+]
 dependencies = [
     "numpy",
     "prettytable",
-    "pyelftools>=0.24",
-    "argparse>=1.4",
-    "pexpect",
-    "lz4",
-    "pycryptodome",
+    "pyelftools",
     "rich",
-    "psutil",
     "six",
+    "pexpect",
+    "psutil",
     "typing_extensions",
     "deeploy-pulp",
+]
+
+[project.optional-dependencies]
+nb = [
+    "jupyter",
+    "ipykernel",
 ]
 
 [tool.setuptools.packages.find]
