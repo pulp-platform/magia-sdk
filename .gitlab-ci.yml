@@ -6,6 +6,11 @@
 #         Alberto Dequino <alberto.dequino@unibo.it> 
 #         Victor Jung <junvi@iis.ee.ethz.ch>
 
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
 variables:
   MAGIA: './MAGIA'
   RISCV_GCC_BINROOT: /usr/pack/pulpsdk-1.0-kgf/artifactory/pulp-sdk-release/pkg/pulp_riscv_gcc/1.0.16/bin
