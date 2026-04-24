@@ -53,7 +53,7 @@ tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
 GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
-GVRUN_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --trace-level=trace run --trace=kill-module
+GVRUN_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --trace-level=trace run --trace=kill-module
 
 .PHONY: gvsoc build
 
@@ -172,13 +172,13 @@ endif
 	make build TARGETS=magia_v2
 
 gvsoc_init:
-	git clone https://github.com/FondazioneChipsIT/gvsoc || true
+	git clone https://github.com/gvsoc/gvsoc.git || true
 	cd $(GVSOC_DIR) && \
 	git submodule update --init --recursive && \
 	cd core && \
 	git checkout master && \
 	cd ../pulp && \
-	git checkout lz/magia-v2-pulp_L12L1_fix
+	git checkout master
 
 gvsoc_venv:
 	eval "$(pyenv init -)" && \
