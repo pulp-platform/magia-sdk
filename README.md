@@ -174,6 +174,25 @@ When the GitLab pipeline fails, the workflow automatically:
 
 To read the full logs, download the `gitlab-logs` artifact from the failed GitHub Actions run — it contains the complete `.trace` files for all failed jobs, plus any job artifacts (e.g. build outputs) if the GitLab job uploaded them.
 
+## Code Style
+
+The repository ships a `.clang-format` file (LLVM-based, 100-column limit). It is not enforced automatically, but contributors are encouraged to format modified C/C++ files before committing.
+
+### VS Code setup
+
+1. Install the [C/C++ extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools) (by Microsoft).
+2. Add the following to `.vscode/settings.json`:
+
+```json
+{
+  "editor.formatOnSave": true,
+  "C_Cpp.clang_format_style": "file",
+  "C_Cpp.clang_format_fallbackStyle": "LLVM"
+}
+```
+
+`"file"` instructs the extension to locate `.clang-format` by walking up from the file being edited, picking up the one at the repo root. With `formatOnSave` enabled, every C/C++ file is formatted automatically on save. You can also trigger formatting manually with `Shift+Alt+F`.
+
 ## GVSOC Regression Test
 
 It is possible to test the correctness of the repository by running the extensive regression test on the GVSoC simulator.
