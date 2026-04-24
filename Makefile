@@ -176,12 +176,15 @@ endif
 # github.com/gvsoc/gvsoc-pulp: 17f9e7a commit - master on 24/04/2026
 gvsoc_init:
 	git clone https://github.com/gvsoc/gvsoc.git || true
-	git checkout 5f91fcc2e5923993adaaf5aad3365b690da19da2
 	cd $(GVSOC_DIR) && \
+	git fetch origin 5f91fcc2e5923993adaaf5aad3365b690da19da2 && \
+	git checkout 5f91fcc2e5923993adaaf5aad3365b690da19da2 && \
 	git submodule update --init --recursive && \
 	cd core && \
+	git fetch origin 760f25eacb135dac60acd61eea5d6f1e3611192d && \
 	git checkout 760f25eacb135dac60acd61eea5d6f1e3611192d && \
 	cd ../pulp && \
+	git fetch origin 17f9e7a56f7ccf0bf7d13af0e68b6c0c129f8555 && \
 	git checkout 17f9e7a56f7ccf0bf7d13af0e68b6c0c129f8555
 
 gvsoc_venv:
