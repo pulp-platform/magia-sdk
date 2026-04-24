@@ -171,14 +171,18 @@ endif
 	cd $(GVSOC_DIR)	&& \
 	make build TARGETS=magia_v2
 
+# github.com/gvsoc/gvsoc: 5f91fcc commit - master on 24/04/2026
+# github.com/gvsoc/gvsoc-core: 760f25e commit - master on 24/04/2026
+# github.com/gvsoc/gvsoc-pulp: 17f9e7a commit - master on 24/04/2026
 gvsoc_init:
 	git clone https://github.com/gvsoc/gvsoc.git || true
+	git checkout 5f91fcc2e5923993adaaf5aad3365b690da19da2
 	cd $(GVSOC_DIR) && \
 	git submodule update --init --recursive && \
 	cd core && \
-	git checkout 29c7dfcdbdb7ca4e961dd9bbff148df229666fda && \
+	git checkout 760f25eacb135dac60acd61eea5d6f1e3611192d && \
 	cd ../pulp && \
-	git checkout master
+	git checkout 17f9e7a56f7ccf0bf7d13af0e68b6c0c129f8555
 
 gvsoc_venv:
 	eval "$(pyenv init -)" && \
