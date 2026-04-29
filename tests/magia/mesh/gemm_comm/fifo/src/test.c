@@ -61,6 +61,22 @@ static uint32_t compute_batch(uint32_t total, float frac)
     return (b < 1) ? 1 : b;
 }
 
+/*
+ * Compute chunk i out of n_chunks for splitting `total` row count.
+ * Distributes the remainder across the first chunks (mirrors get_row_range).
+ */
+static void compute_chunk(uint32_t total,
+                          uint32_t n_chunks,
+                          uint32_t idx,
+                          uint32_t *start,
+                          uint32_t *len)
+{
+    uint32_t base = total / n_chunks;
+    uint32_t rem  = total % n_chunks;
+    *start        = idx * base + (idx < rem ? idx : rem);
+    *len          = base + (idx < rem ? 1 : 0);
+}
+
 static const uint32_t gemm1_tiles[GEMM1_N_TILES] = {0, 1, 8, 9};
 
 static const uint32_t gemm2_tiles[GEMM2_N_TILES] = {16, 17, 18, 19, 24, 25, 26, 27, 32, 33, 34, 35,
@@ -325,74 +341,106 @@ int main(void)
 
     /* ------------------------------------------------------------------ */
     /* GEMM1: R1 = M1 @ M2, push R1 rows to GEMM3 FIFOs                   */
+    /*                                                                    */
+    /* Double-buffered: split the local M1 row slice into chunks of       */
+    /* compute_batch(num_rows, FIFO_BATCH_FRAC) rows. While RedMulE        */
+    /* computes chunk i, iDMA prefetches chunk i+1 into the alternate     */
+    /* ping-pong buffer. M2 is loaded once and shared across all chunks.  */
     /* ------------------------------------------------------------------ */
     if (gemm1_idx >= 0) {
         uint32_t start_row, num_rows;
         get_row_range((uint32_t)gemm1_idx, GEMM1_N_TILES, DIM_A, &start_row, &num_rows);
 
         if (num_rows > 0) {
-            /* Workspace layout: [M1_slice | M2 | R1_slice] */
-            uint32_t obi_m1 = ws;
-            uint32_t obi_m2 = obi_m1 + num_rows * DIM_B * 2;
-            uint32_t obi_r1 = obi_m2 + DIM_B * DIM_C * 2;
+            uint32_t chunk_max = compute_batch(num_rows, FIFO_BATCH_FRAC);
+            uint32_t n_chunks  = (num_rows + chunk_max - 1) / chunk_max;
 
-            /* Load M1 slice from L2 */
-            idma_memcpy_1d(&idma_ctrl,
-                           0,
-                           (uint32_t)m1_inp + start_row * DIM_B * 2,
-                           obi_m1,
-                           num_rows * DIM_B * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            /* Workspace: [M2 | M1_pp[0] | M1_pp[1] | R1_pp[0] | R1_pp[1]] */
+            uint32_t obi_m2    = ws;
+            uint32_t obi_m1[2] = {obi_m2 + DIM_B * DIM_C * 2,
+                                  obi_m2 + DIM_B * DIM_C * 2 + chunk_max * DIM_B * 2};
+            uint32_t obi_r1[2] = {obi_m1[1] + chunk_max * DIM_B * 2,
+                                  obi_m1[1] + chunk_max * DIM_B * 2 + chunk_max * DIM_C * 2};
 
             /* Load full M2 from L2 */
             idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m2_inp, obi_m2, DIM_B * DIM_C * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
-            /* Compute R1_slice = M1_slice @ M2 */
-            mem_set_zero(obi_r1, num_rows * DIM_C);
-            redmule_gemm(&redmule_ctrl,
-                         obi_m1,
-                         obi_m2,
-                         obi_r1,
-                         (uint16_t)num_rows,
-                         (uint16_t)DIM_B,
-                         (uint16_t)DIM_C);
-            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            /* Prime the pipeline: load chunk 0 of M1 */
+            uint32_t c0s, c0l;
+            compute_chunk(num_rows, n_chunks, 0, &c0s, &c0l);
+            idma_memcpy_1d(&idma_ctrl,
+                           0,
+                           (uint32_t)m1_inp + (start_row + c0s) * DIM_B * 2,
+                           obi_m1[0],
+                           c0l * DIM_B * 2);
+            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
-            /*
-             * Push R1 rows to each GEMM3 tile that owns overlapping rows.
-             * Pushes are batched in FIFO_BATCH_ROWS increments.
-             * row_index tag = global row of the first row in the batch.
-             */
-            for (uint32_t j = 0; j < GEMM3_N_TILES; j++) {
-                uint32_t g3_start, g3_nrows;
-                get_row_range(j, GEMM3_N_TILES, DIM_A, &g3_start, &g3_nrows);
-                if (g3_nrows == 0)
-                    continue;
+            for (uint32_t i = 0; i < n_chunks; i++) {
+                uint32_t cs, cl;
+                compute_chunk(num_rows, n_chunks, i, &cs, &cl);
+                uint32_t pp       = i & 1u;
+                uint32_t has_next = (i + 1u < n_chunks);
 
-                /* Overlap between this tile's R1 rows and GEMM3 tile j's rows */
-                uint32_t ov_start = start_row > g3_start ? start_row : g3_start;
-                uint32_t ov_end   = (start_row + num_rows) < (g3_start + g3_nrows)
-                                        ? (start_row + num_rows)
-                                        : (g3_start + g3_nrows);
+                /* Kick off chunk i+1 load (overlaps with chunk i compute) */
+                if (has_next) {
+                    uint32_t ns, nl;
+                    compute_chunk(num_rows, n_chunks, i + 1, &ns, &nl);
+                    idma_memcpy_1d(&idma_ctrl,
+                                   0,
+                                   (uint32_t)m1_inp + (start_row + ns) * DIM_B * 2,
+                                   obi_m1[(i + 1) & 1u],
+                                   nl * DIM_B * 2);
+                }
 
-                if (ov_start >= ov_end)
-                    continue;
+                /* Compute R1 chunk i */
+                mem_set_zero(obi_r1[pp], cl * DIM_C);
+                redmule_gemm(&redmule_ctrl,
+                             obi_m1[pp],
+                             obi_m2,
+                             obi_r1[pp],
+                             (uint16_t)cl,
+                             (uint16_t)DIM_B,
+                             (uint16_t)DIM_C);
 
-                uint32_t g3_r1_batch = compute_batch(g3_nrows, FIFO_BATCH_FRAC);
-                for (uint32_t r = ov_start; r < ov_end; r += g3_r1_batch) {
-                    uint32_t batch   = (r + g3_r1_batch <= ov_end) ? g3_r1_batch : (ov_end - r);
-                    uint32_t src_off = (r - start_row) * DIM_C * 2;
+                if (has_next)
+                    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
 
-                    uint32_t slot_idx = r - g3_start;
-                    fifo_push_dma(gemm3_tiles[j],
-                                  slot_idx,
-                                  obi_r1 + src_off,
-                                  batch * DIM_C * 2,
-                                  MATRIX_R1,
-                                  r,
-                                  &idma_ctrl,
-                                  &eu_ctrl);
+                /*
+                 * Push this chunk's R1 rows to each GEMM3 tile that owns
+                 * overlapping rows. Producer-side window for the chunk is
+                 * [chunk_g_start, chunk_g_end).
+                 */
+                uint32_t chunk_g_start = start_row + cs;
+                uint32_t chunk_g_end   = chunk_g_start + cl;
+                for (uint32_t j = 0; j < GEMM3_N_TILES; j++) {
+                    uint32_t g3_start, g3_nrows;
+                    get_row_range(j, GEMM3_N_TILES, DIM_A, &g3_start, &g3_nrows);
+                    if (g3_nrows == 0)
+                        continue;
+
+                    uint32_t ov_start = chunk_g_start > g3_start ? chunk_g_start : g3_start;
+                    uint32_t ov_end   = chunk_g_end < (g3_start + g3_nrows)
+                                            ? chunk_g_end
+                                            : (g3_start + g3_nrows);
+                    if (ov_start >= ov_end)
+                        continue;
+
+                    uint32_t g3_r1_batch = compute_batch(g3_nrows, FIFO_BATCH_FRAC);
+                    for (uint32_t r = ov_start; r < ov_end; r += g3_r1_batch) {
+                        uint32_t batch   = (r + g3_r1_batch <= ov_end) ? g3_r1_batch : (ov_end - r);
+                        uint32_t src_off = (r - chunk_g_start) * DIM_C * 2;
+                        uint32_t slot_idx = r - g3_start;
+                        fifo_push_dma(gemm3_tiles[j],
+                                      slot_idx,
+                                      obi_r1[pp] + src_off,
+                                      batch * DIM_C * 2,
+                                      MATRIX_R1,
+                                      r,
+                                      &idma_ctrl,
+                                      &eu_ctrl);
+                    }
                 }
             }
         }
@@ -400,62 +448,93 @@ int main(void)
 
     /* ------------------------------------------------------------------ */
     /* GEMM2: R2 = M3 @ M4, push R2 rows to all GEMM3 FIFOs               */
+    /*                                                                    */
+    /* Double-buffered using the same chunk strategy as GEMM1. M4 is      */
+    /* loaded once; M3 chunks are ping-pong'd against RedMulE compute.    */
     /* ------------------------------------------------------------------ */
     if (gemm2_idx >= 0) {
         uint32_t start_row, num_rows;
         get_row_range((uint32_t)gemm2_idx, GEMM2_N_TILES, DIM_C, &start_row, &num_rows);
 
         if (num_rows > 0) {
-            /* Workspace layout: [M3_slice | M4 | R2_slice] */
-            uint32_t obi_m3 = ws;
-            uint32_t obi_m4 = obi_m3 + num_rows * DIM_D * 2;
-            uint32_t obi_r2 = obi_m4 + DIM_D * DIM_E * 2;
+            uint32_t chunk_max = compute_batch(num_rows, FIFO_BATCH_FRAC);
+            uint32_t n_chunks  = (num_rows + chunk_max - 1) / chunk_max;
 
-            /* Load M3 slice from L2 */
-            idma_memcpy_1d(&idma_ctrl,
-                           0,
-                           (uint32_t)m3_inp + start_row * DIM_D * 2,
-                           obi_m3,
-                           num_rows * DIM_D * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            /* Workspace: [M4 | M3_pp[0] | M3_pp[1] | R2_pp[0] | R2_pp[1]] */
+            uint32_t obi_m4    = ws;
+            uint32_t obi_m3[2] = {obi_m4 + DIM_D * DIM_E * 2,
+                                  obi_m4 + DIM_D * DIM_E * 2 + chunk_max * DIM_D * 2};
+            uint32_t obi_r2[2] = {obi_m3[1] + chunk_max * DIM_D * 2,
+                                  obi_m3[1] + chunk_max * DIM_D * 2 + chunk_max * DIM_E * 2};
 
             /* Load full M4 from L2 */
             idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m4_inp, obi_m4, DIM_D * DIM_E * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
-            /* Compute R2_slice = M3_slice @ M4 */
-            mem_set_zero(obi_r2, num_rows * DIM_E);
-            redmule_gemm(&redmule_ctrl,
-                         obi_m3,
-                         obi_m4,
-                         obi_r2,
-                         (uint16_t)num_rows,
-                         (uint16_t)DIM_D,
-                         (uint16_t)DIM_E);
-            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            /* Prime: load chunk 0 of M3 */
+            uint32_t c0s, c0l;
+            compute_chunk(num_rows, n_chunks, 0, &c0s, &c0l);
+            idma_memcpy_1d(&idma_ctrl,
+                           0,
+                           (uint32_t)m3_inp + (start_row + c0s) * DIM_D * 2,
+                           obi_m3[0],
+                           c0l * DIM_D * 2);
+            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
-            /*
-             * Push R2 rows to every GEMM3 tile (all need the full R2).
-             * row_index = global row in the full R2 matrix (0..DIM_C-1).
-             * Batch size is a fraction of DIM_C (the total R2 row count).
-             */
             uint32_t r2_batch = compute_batch(DIM_C, FIFO_BATCH_FRAC);
-            for (uint32_t r = 0; r < num_rows; r += r2_batch) {
-                uint32_t batch   = (r + r2_batch <= num_rows) ? r2_batch : (num_rows - r);
-                uint32_t src_off = r * DIM_E * 2;
-                for (uint32_t j = 0; j < GEMM3_N_TILES; j++) {
-                    /* R2 slots start after R1 slots in the consumer's FIFO */
-                    uint32_t g3s_j, g3n_j;
-                    get_row_range(j, GEMM3_N_TILES, DIM_A, &g3s_j, &g3n_j);
-                    uint32_t slot_idx = g3n_j + (start_row + r);
-                    fifo_push_dma(gemm3_tiles[j],
-                                  slot_idx,
-                                  obi_r2 + src_off,
-                                  batch * DIM_E * 2,
-                                  MATRIX_R2,
-                                  start_row + r,
-                                  &idma_ctrl,
-                                  &eu_ctrl);
+
+            for (uint32_t i = 0; i < n_chunks; i++) {
+                uint32_t cs, cl;
+                compute_chunk(num_rows, n_chunks, i, &cs, &cl);
+                uint32_t pp       = i & 1u;
+                uint32_t has_next = (i + 1u < n_chunks);
+
+                if (has_next) {
+                    uint32_t ns, nl;
+                    compute_chunk(num_rows, n_chunks, i + 1, &ns, &nl);
+                    idma_memcpy_1d(&idma_ctrl,
+                                   0,
+                                   (uint32_t)m3_inp + (start_row + ns) * DIM_D * 2,
+                                   obi_m3[(i + 1) & 1u],
+                                   nl * DIM_D * 2);
+                }
+
+                mem_set_zero(obi_r2[pp], cl * DIM_E);
+                redmule_gemm(&redmule_ctrl,
+                             obi_m3[pp],
+                             obi_m4,
+                             obi_r2[pp],
+                             (uint16_t)cl,
+                             (uint16_t)DIM_D,
+                             (uint16_t)DIM_E);
+
+                if (has_next)
+                    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+
+                /*
+                 * Push this chunk's R2 rows to every GEMM3 tile (all need
+                 * the full R2). row_index = global row in the full R2
+                 * matrix (0..DIM_C-1).
+                 */
+                for (uint32_t r = 0; r < cl; r += r2_batch) {
+                    uint32_t batch    = (r + r2_batch <= cl) ? r2_batch : (cl - r);
+                    uint32_t src_off  = r * DIM_E * 2;
+                    uint32_t global_r = start_row + cs + r;
+                    for (uint32_t j = 0; j < GEMM3_N_TILES; j++) {
+                        /* R2 slots start after R1 slots in the consumer's FIFO */
+                        uint32_t g3s_j, g3n_j;
+                        get_row_range(j, GEMM3_N_TILES, DIM_A, &g3s_j, &g3n_j);
+                        uint32_t slot_idx = g3n_j + global_r;
+                        fifo_push_dma(gemm3_tiles[j],
+                                      slot_idx,
+                                      obi_r2[pp] + src_off,
+                                      batch * DIM_E * 2,
+                                      MATRIX_R2,
+                                      global_r,
+                                      &idma_ctrl,
+                                      &eu_ctrl);
+                    }
                 }
             }
         }
