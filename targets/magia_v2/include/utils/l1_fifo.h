@@ -42,7 +42,7 @@ typedef struct {
     uint32_t row_index;
 } fifo_slot_t;
 
-#define FIFO_HEADER_SIZE (sizeof(fifo_header_t))
+#define FIFO_HEADER_SIZE    (sizeof(fifo_header_t))
 #define FIFO_SLOT_META_SIZE (sizeof(fifo_slot_t))
 
 /**

@@ -12,7 +12,7 @@
 #include "redmule.h"
 #include "eventunit.h"
 
-#define WAIT_MODE WFE
+#define WAIT_MODE            WFE
 
 /**
  * Tile group definitions for 8x8 mesh (64 tiles).
@@ -24,10 +24,10 @@
  * GEMM4 tiles: [20-23, 28-31, 36-39,
  *               44-47, 52-55, 60-63]   (24 tiles, rows 2-7 cols 4-7)
  */
-#define GEMM1_N_TILES 4
-#define GEMM2_N_TILES 24
-#define GEMM3_N_TILES 12
-#define GEMM4_N_TILES 24
+#define GEMM1_N_TILES        4
+#define GEMM2_N_TILES        24
+#define GEMM3_N_TILES        12
+#define GEMM4_N_TILES        24
 
 #define abs_threshold_millis 8 /* 0.008 expressed as integer millis */
 

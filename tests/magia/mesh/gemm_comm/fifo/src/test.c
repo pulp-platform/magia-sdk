@@ -9,7 +9,7 @@
 #include "eventunit.h"
 #include "utils/l1_fifo.h"
 
-#define WAIT_MODE WFE
+#define WAIT_MODE            WFE
 
 /**
  * Tile group definitions for 8x8 mesh (64 tiles).
@@ -21,23 +21,23 @@
  * GEMM4 tiles: [20-23, 28-31, 36-39,
  *               44-47, 52-55, 60-63]   (24 tiles, rows 2-7 cols 4-7)
  */
-#define GEMM1_N_TILES 4
-#define GEMM2_N_TILES 24
-#define GEMM3_N_TILES 12
-#define GEMM4_N_TILES 24
+#define GEMM1_N_TILES        4
+#define GEMM2_N_TILES        24
+#define GEMM3_N_TILES        12
+#define GEMM4_N_TILES        24
 
 #define abs_threshold_millis 8 /* 0.008 expressed as integer millis */
 
 /* FIFO message type tags */
-#define MATRIX_R1 0u
-#define MATRIX_R2 1u
-#define MATRIX_R3 2u
+#define MATRIX_R1            0u
+#define MATRIX_R2            1u
+#define MATRIX_R3            2u
 
 /*
  * 16 KB reserved at the start of each tile's L1 for the FIFO header,
  * linked-list nodes, and payload data. Workspace buffers follow after.
  */
-#define FIFO_RESERVE_SIZE 0x4000u
+#define FIFO_RESERVE_SIZE    0x4000u
 
 /*
  * Fraction of a tile's rows to push per fifo_push_dma() call.
@@ -125,10 +125,10 @@ static void fifo_push_dma(uint32_t target_hartid,
  * Push completed R3 rows to all overlapping GEMM4 tile FIFOs.
  */
 static void push_r3_to_gemm4(uint32_t global_row,
-                              uint32_t batch_rows,
-                              uint32_t obi_r3_batch,
-                              idma_controller_t *idma_ctrl,
-                              eu_controller_t *eu_ctrl)
+                             uint32_t batch_rows,
+                             uint32_t obi_r3_batch,
+                             idma_controller_t *idma_ctrl,
+                             eu_controller_t *eu_ctrl)
 {
     for (uint32_t k = 0; k < GEMM4_N_TILES; k++) {
         uint32_t g4_start, g4_nrows;
@@ -209,7 +209,7 @@ static uint32_t gemm3_partial_accum(uint32_t lr,
     r3_k_done[lr] += k_len;
 
     if (r3_k_done[lr] == DIM_C && !r3_pushed[lr]) {
-        r3_pushed[lr] = 1;
+        r3_pushed[lr]       = 1;
         uint32_t global_row = start_row + lr;
         push_r3_to_gemm4(global_row, r1_batch, obi_r3_batch, idma_ctrl, eu_ctrl);
         return r1_batch;
@@ -528,8 +528,8 @@ int main(void)
                  * Accumulate partial R3 for every contiguous group of R2
                  * rows that have already arrived.
                  */
-                uint32_t local_row  = row_index - start_row;
-                uint32_t batch_rows = data_size / (DIM_C * 2);
+                uint32_t local_row      = row_index - start_row;
+                uint32_t batch_rows     = data_size / (DIM_C * 2);
                 r1_data_ptrs[local_row] = data_ptr;
                 r1_received[local_row]  = 1;
 
@@ -544,11 +544,20 @@ int main(void)
                     while (k < DIM_C && r2_received[k])
                         k++;
 
-                    total_r3_done += gemm3_partial_accum(
-                        local_row, k_start, k - k_start, batch_rows,
-                        data_ptr, obi_r2, obi_r3, obi_r1_tmp,
-                        start_row, r3_k_done, r3_pushed,
-                        &redmule_ctrl, &eu_ctrl, &idma_ctrl);
+                    total_r3_done += gemm3_partial_accum(local_row,
+                                                         k_start,
+                                                         k - k_start,
+                                                         batch_rows,
+                                                         data_ptr,
+                                                         obi_r2,
+                                                         obi_r3,
+                                                         obi_r1_tmp,
+                                                         start_row,
+                                                         r3_k_done,
+                                                         r3_pushed,
+                                                         &redmule_ctrl,
+                                                         &eu_ctrl,
+                                                         &idma_ctrl);
                 }
 
             } else if (matrix_id == MATRIX_R2) {
@@ -571,11 +580,20 @@ int main(void)
                     uint32_t remaining = num_rows - lr;
                     uint32_t batch_r1  = (remaining < my_r1_batch) ? remaining : my_r1_batch;
 
-                    total_r3_done += gemm3_partial_accum(
-                        lr, row_index, batch_rows, batch_r1,
-                        r1_data_ptrs[lr], obi_r2, obi_r3, obi_r1_tmp,
-                        start_row, r3_k_done, r3_pushed,
-                        &redmule_ctrl, &eu_ctrl, &idma_ctrl);
+                    total_r3_done += gemm3_partial_accum(lr,
+                                                         row_index,
+                                                         batch_rows,
+                                                         batch_r1,
+                                                         r1_data_ptrs[lr],
+                                                         obi_r2,
+                                                         obi_r3,
+                                                         obi_r1_tmp,
+                                                         start_row,
+                                                         r3_k_done,
+                                                         r3_pushed,
+                                                         &redmule_ctrl,
+                                                         &eu_ctrl,
+                                                         &idma_ctrl);
                 }
             }
         }
