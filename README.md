@@ -174,39 +174,6 @@ When the GitLab pipeline fails, the workflow automatically:
 
 To read the full logs, download the `gitlab-logs` artifact from the failed GitHub Actions run — it contains the complete `.trace` files for all failed jobs, plus any job artifacts (e.g. build outputs) if the GitLab job uploaded them.
 
-## Code Style
-
-The repository ships a `.clang-format` file (LLVM-based, 100-column limit). Formatting is enforced in CI on the C/C++ files changed in your branch (vs. `main`); see [Format CI](#format-ci) below.
-
-### `make format`
-
-Run from the repo root to apply `.clang-format` to all C/C++ files (`*.c *.h *.cpp *.hpp *.cc *.hh`) changed on the current branch relative to its merge-base with `main`. This includes both committed changes and any local staged/unstaged edits, so it is safe to run while work is in progress:
-
-```bash
-make format
-```
-
-Files outside the branch's diff are never touched, avoiding noisy reformats of pre-existing code. The selection logic lives in `scripts/ci/format-changed.sh` and is shared with CI.
-
-### Format CI
-
-The `Format Check` GitHub Actions workflow (`.github/workflows/format-ci.yml`) runs on every push and pull request. It invokes `scripts/ci/format-changed.sh check --committed`, which runs `clang-format --dry-run --Werror` on the same set of changed files. The job fails if any of those files are not properly formatted — run `make format` locally and commit the result to fix it.
-
-### VS Code setup
-
-1. Install the [C/C++ extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools) (by Microsoft).
-2. Add the following to `.vscode/settings.json`:
-
-```json
-{
-  "editor.formatOnSave": true,
-  "C_Cpp.clang_format_style": "file",
-  "C_Cpp.clang_format_fallbackStyle": "LLVM"
-}
-```
-
-`"file"` instructs the extension to locate `.clang-format` by walking up from the file being edited, picking up the one at the repo root. With `formatOnSave` enabled, every C/C++ file is formatted automatically on save. You can also trigger formatting manually with `Shift+Alt+F`.
-
 ## GVSOC Regression Test
 
 It is possible to test the correctness of the repository by running the extensive regression test on the GVSoC simulator.
@@ -258,3 +225,4 @@ Contains utility files for *cmake* automatic compilation.
 
 ### gvsoc
 A submodule containing the Germain Virtual System on Chip, built to simulate MAGIA (and other PULP-related platforms).
+
