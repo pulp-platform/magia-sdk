@@ -65,11 +65,8 @@ static uint32_t compute_batch(uint32_t total, float frac)
  * Compute chunk i out of n_chunks for splitting `total` row count.
  * Distributes the remainder across the first chunks (mirrors get_row_range).
  */
-static void compute_chunk(uint32_t total,
-                          uint32_t n_chunks,
-                          uint32_t idx,
-                          uint32_t *start,
-                          uint32_t *len)
+static void
+compute_chunk(uint32_t total, uint32_t n_chunks, uint32_t idx, uint32_t *start, uint32_t *len)
 {
     uint32_t base = total / n_chunks;
     uint32_t rem  = total % n_chunks;
@@ -366,7 +363,7 @@ int main(void)
             idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m2_inp, obi_m2, DIM_B * DIM_C * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
-            /* Prime the pipeline: load chunk 0 of M1 */
+            /* Prime the pipeline: load M1_pp[0] */
             uint32_t c0s, c0l;
             compute_chunk(num_rows, n_chunks, 0, &c0s, &c0l);
             idma_memcpy_1d(&idma_ctrl,
@@ -405,6 +402,7 @@ int main(void)
 
                 if (has_next)
                     eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+
                 eu_redmule_wait(&eu_ctrl, WAIT_MODE);
 
                 /*
@@ -421,9 +419,8 @@ int main(void)
                         continue;
 
                     uint32_t ov_start = chunk_g_start > g3_start ? chunk_g_start : g3_start;
-                    uint32_t ov_end   = chunk_g_end < (g3_start + g3_nrows)
-                                            ? chunk_g_end
-                                            : (g3_start + g3_nrows);
+                    uint32_t ov_end =
+                        chunk_g_end < (g3_start + g3_nrows) ? chunk_g_end : (g3_start + g3_nrows);
                     if (ov_start >= ov_end)
                         continue;
 
@@ -559,8 +556,7 @@ int main(void)
 
         /* Batch size for R1/R3 rows owned by this tile */
         uint32_t my_r1_batch = compute_batch(num_rows, FIFO_BATCH_FRAC);
-
-        uint32_t obi_r1_tmp = obi_r3 + num_rows * DIM_E * 2;
+        uint32_t obi_r1_tmp  = obi_r3 + num_rows * DIM_E * 2;
 
         /*
          * Tracking state for incremental processing.
