@@ -186,4 +186,3 @@ gvsoc_venv:
 	python -m venv gvsoc_venv && \
 	source gvsoc_venv/bin/activate && \
 	pip install .
-

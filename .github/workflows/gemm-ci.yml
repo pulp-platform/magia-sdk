@@ -115,7 +115,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install -r requirements.txt
+          pip install .
           pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Cache RISC-V toolchain
@@ -209,7 +209,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install -r requirements.txt
+          pip install .
           pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Cache RISC-V toolchain
@@ -303,7 +303,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install -r requirements.txt
+          pip install .
           pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Cache RISC-V toolchain
@@ -397,7 +397,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install -r requirements.txt
+          pip install .
           pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Cache RISC-V toolchain
