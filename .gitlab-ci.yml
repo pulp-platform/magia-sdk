@@ -59,7 +59,9 @@ clone_magia:
   extends: .base
   stage: clone
   script:
+    - source scripts/deps.env
     - git clone https://github.com/pulp-platform/MAGIA.git
+    - cd MAGIA && git fetch origin "$MAGIA_COMMIT" && git checkout "$MAGIA_COMMIT"
   artifacts:
     paths: [ "MAGIA" ]
 
