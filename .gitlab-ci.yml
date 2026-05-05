@@ -38,12 +38,15 @@ stages:
 python_gvsoc:
   extends: [.base, .export_path]
   stage: python_setup
+  variables:
+    UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
   script:
     - eval "$(pyenv init -)"
     - pyenv local 3.12
     - python -m venv gvsoc_venv
-    - source gvsoc_venv/bin/activate && pip install .
-    - source gvsoc_venv/bin/activate && pip install torch --index-url https://download.pytorch.org/whl/cpu
+    - source gvsoc_venv/bin/activate && pip install uv
+    - source gvsoc_venv/bin/activate && uv pip install .
     - source gvsoc_venv/bin/activate && bash scripts/gemm/gemm-gen.sh
   artifacts:
     paths: [ "gvsoc_venv", "tests/magia/mesh/gemm/via_l2/include/test.h" ]
