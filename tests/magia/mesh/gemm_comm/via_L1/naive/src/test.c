@@ -152,6 +152,9 @@ int main(void)
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
+    perf_reset();
+    perf_start();
+
     /**
      * Phase 1: GEMM1 and GEMM2 in parallel (row-parallel within each group)
      *   GEMM1 group: R1 = M1 @ M2   → scatter R1 to GEMM3 tiles' L1
@@ -385,6 +388,8 @@ int main(void)
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
+    perf_stop();
+
     /**
      * Validation: Tile 0 checks O against golden
      */
@@ -421,6 +426,7 @@ int main(void)
         }
 
         printf("\nTest complete. Errors: %d / %d\n\n", errors, DIM_A * DIM_F);
+        printf("Cycles: %u\n", perf_get_cycles());
     }
 
     return errors;

@@ -329,6 +329,9 @@ int main(void)
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
+    perf_reset();
+    perf_start();
+
     /*
      * L1 workspace starts at FIFO_RESERVE_SIZE bytes past the tile base.
      * The first FIFO_RESERVE_SIZE bytes are reserved for the FIFO header
@@ -743,6 +746,8 @@ int main(void)
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
+    perf_stop();
+
     /* Validation: tile 0 checks O against golden */
     uint32_t errors = 0;
 
@@ -776,6 +781,7 @@ int main(void)
         }
 
         printf("\nTest complete. Errors: %d / %d\n\n", errors, DIM_A * DIM_F);
+        printf("Cycles: %u\n", perf_get_cycles());
     }
 
     return errors;

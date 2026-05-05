@@ -1,4 +1,4 @@
-set(TEST_NAME test_gemm_interlaced)
+set(TEST_NAME test_gemm_l2_interlaced)
 
 file(GLOB_RECURSE TEST_SRCS "src/*.c")
 
