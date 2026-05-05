@@ -17,7 +17,7 @@ variables:
   MAGIA: './MAGIA'
   RISCV_GCC_BINROOT: /usr/pack/pulpsdk-1.0-kgf/artifactory/pulp-sdk-release/pkg/pulp_riscv_gcc/1.0.16/bin
   PYENV_BINROOT: /home/adequi/.pyenv/bin
-  GIT_CLONE_PATH: "$CI_BUILDS_DIR/$CI_CONCURRENT_ID/$CI_JOB_ID"
+  GIT_CLONE_PATH: "$CI_BUILDS_DIR/$CI_CONCURRENT_ID/$CI_PIPELINE_ID/$CI_JOB_ID"
   GIT_STRATEGY: clone
   GIT_CLEAN_FLAGS: "-ffdx"
 
@@ -47,9 +47,8 @@ python_gvsoc:
     - python -m venv gvsoc_venv
     - source gvsoc_venv/bin/activate && pip install uv
     - source gvsoc_venv/bin/activate && uv pip install .
-    - source gvsoc_venv/bin/activate && bash scripts/gemm/gemm-gen.sh
   artifacts:
-    paths: [ "gvsoc_venv", "tests/magia/mesh/gemm/via_l2/include/test.h" ]
+    paths: [ "gvsoc_venv" ]
 
 
 .base:
@@ -247,6 +246,8 @@ magia_v2_tiles_1_gvsoc_sim:
 
 cleanup:
   stage: postscript
+  when: always
   script:
-    - rm -rf /scratch2/adequi/test_runner
+    - test -n "$CI_PIPELINE_ID"
+    - rm -rf "$CI_BUILDS_DIR"/*/"$CI_PIPELINE_ID" || true
 

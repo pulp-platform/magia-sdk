@@ -12,7 +12,6 @@ authors = [
 ]
 dependencies = [
     "numpy",
-    "torch",
     "prettytable",
     "pyelftools",
     "rich",
@@ -27,6 +26,9 @@ dependencies = [
 nb = [
     "jupyter",
     "ipykernel",
+]
+gemm = [
+    "torch",
 ]
 
 [tool.setuptools.packages.find]
