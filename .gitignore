@@ -5,6 +5,7 @@
 
 # IDE & editor
 .vscode/
+*.code-workspace
 
 # python
 __pycache__/
