@@ -12,6 +12,7 @@ authors = [
 ]
 dependencies = [
     "numpy",
+    "torch",
     "prettytable",
     "pyelftools",
     "rich",
