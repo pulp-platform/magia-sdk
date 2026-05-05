@@ -5,7 +5,7 @@ set(GEN_SCRIPT    ${CMAKE_CURRENT_SOURCE_DIR}/gen_golden.py)
 
 add_custom_command(
     OUTPUT  ${GEMM_TEST_HEADER}
-    COMMAND python3 ${GEN_SCRIPT}
+    COMMAND python3 ${GEN_SCRIPT} --output ${GEMM_TEST_HEADER}
     DEPENDS ${GEN_SCRIPT}
     COMMENT "Generating GEMM chain golden data (test.h)"
     VERBATIM)
