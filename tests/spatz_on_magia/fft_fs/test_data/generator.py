@@ -33,7 +33,7 @@ def generate_input_data(args):
     shape = args.N
 
     A = np.random.randn(shape).astype(np.float16)
-    W = np.zeroes(shape * np.log2(shape)).astype(np.float16)
+    W = np.zeros((int)((shape / 2) * np.log2(shape))).astype(np.float16)
     G = np.random.randn(shape).astype(np.float16)
 
     return A, W, G
@@ -43,14 +43,13 @@ def run_fft(A, W, G):
     #TODO: Do the FFT on ABW and save on G lmao
     G = np.fft.fft(A)
     n = len(A)
-    for s in range(1, np.log2(n)):
-        m = 2**s
-        w_m = np.exp((-2 * np.pi)j / m) 
-        for t in range(0, (n -1), m):
-            W[s * t] = 1
-            for b in range(0, (m/2) - 1):
-                W[s * t] = W[s * t] * w_m
 
+    for s in range((int)(np.log2(n))):
+        for b in range((int)(n/2)):
+            m = 2 ** (s + 1)
+            k = b % (2 ** s)
+            w = np.exp((-2 * np.pi) * 1j * (k / m))
+            W[(int)(s * (n/2) + b)] = w
 
 
 
@@ -58,7 +57,7 @@ def format_array(array):
     return "{ " + ", ".join(f"{x:f}f" for x in array.flatten()) + " }"
 
 
-def generate_header_file(args, A, B, W, G, filename="data.h"):
+def generate_header_file(args, A, W, G, filename="data.h"):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     filepath = os.path.join(script_dir, filename)
 
@@ -68,7 +67,7 @@ def generate_header_file(args, A, B, W, G, filename="data.h"):
         f.write("#define DATA_H_\n\n")
 
         f.write(f"#define N {args.N}\n")
-        f.write(f"#define TW {args.N - 1}\n")
+        f.write(f"#define TW {(args.N/2) * np.log2(args.N)}\n")
 
         f.write(f"static const float16 A[] = {format_array(A)};\n")
         f.write(f"static const float16 W[] = {format_array(W)};\n")
@@ -85,7 +84,7 @@ def main():
 
     generate_header_file(args, A, W, G)
 
-    print(f"File 'data.h' successfully generated with [N:{args.N}, C:{args.C}, H:{args.H}, W:{args.W}]")
+    print(f"File 'data.h' successfully generated with [N:{args.N}]")
 
 
 if __name__ == "__main__":
