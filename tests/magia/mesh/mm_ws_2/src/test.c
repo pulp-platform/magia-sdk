@@ -18,7 +18,7 @@
 
 /**
  * This test aims to verify the functionality of MAGIA as a systolic array for matrix multiplications,
- * following the iweight-static mechanism. 
+ * following the weight-static mechanism. 
  */
 int main(void){
     /** 
@@ -103,7 +103,7 @@ int main(void){
      * t_start is the first timeslot in which it is possible to elaborate the output.
      * t_end is the last timeslot.
      */
-    uint8_t timeslots = 16;
+    uint8_t timeslots = 4;
     uint8_t t_size = M_SIZE / timeslots;
     uint8_t t_start = y_id * 2;
     uint8_t t_end = t_start + timeslots;
@@ -180,7 +180,7 @@ int main(void){
              * 3a. Skip the timeslot if outside the range
              */
             if(t < t_start || t > t_end){
-                fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+                fsync_sync_global(&fsync_ctrl);
                 #if STALLING == 0
                 eu_fsync_wait(&eu_ctrl, WAIT_MODE);
                 #endif

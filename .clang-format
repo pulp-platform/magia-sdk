@@ -1,0 +1,41 @@
+BasedOnStyle: LLVM
+
+# Indentation
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+IndentPPDirectives: None
+
+# Braces: next line for functions, same line for control flow
+BreakBeforeBraces: Linux
+
+# Spaces
+SpaceAfterCStyleCast: false
+SpaceBeforeParens: ControlStatements
+SpacesInParentheses: false
+
+# Alignment
+AlignConsecutiveAssignments: Consecutive
+AlignConsecutiveDeclarations: false
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: true
+AlignOperands: Align
+AlignAfterOpenBracket: Align
+
+# Line wrapping
+ColumnLimit: 100
+BinPackArguments: false
+BinPackParameters: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+# Includes
+SortIncludes: Never
+
+# Other
+PointerAlignment: Right
+SpaceBeforeAssignmentOperators: true
+InsertNewlineAtEOF: true

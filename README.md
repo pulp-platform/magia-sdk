@@ -42,7 +42,7 @@ The following *optional* parameters can be specified when running the make comma
 
     Then modify the magia-sdk **Makefile** to point to the correct paths:
 
-        MAGIA_DIR ?= path/to/MAGIA/repository
+        MAGIA_RTL_DIR ?= path/to/MAGIA/repository
 
         BUILD_DIR ?= $(MAGIA_DIR)//work/sw/tests/$(test).c
 
@@ -69,6 +69,19 @@ The following *optional* parameters can be specified when running the make comma
 1. Initialize the GVSoC submodule:
 
     `make gvsoc_init`
+
+    Python 3.12 is *MANDATORY*.
+    
+    It is possible to create a python environment with the requirements by running:
+
+    `make gvsoc_venv`
+
+    Pyenv and a Python 3.12 installation are required, you can setup it by running:
+
+        curl https://pyenv.run | bash
+        bash
+        pyenv install 3.12
+    
     
 2. Build the Magia architecture (*this command may take time and return an error, please be patient.*):
         
@@ -86,17 +99,17 @@ The following *optional* parameters can be specified when running the make comma
 
 3. Make sure the RISC-V GCC compiler is installed and visible in the `$PATH` environment variable. You can check if and where the compiler is installed by running the following command on your root (`/`) directory:
 
-    `find . ! -readable -prune -o -name "riscv64-unknown-elf-gcc" -print`
-
-    Or (in case you want to use the 32-bit only PULP toolchain):
-
     `find . ! -readable -prune -o -name "riscv32-unknown-elf-gcc" -print`
 
+    It is possible to also use the PULP_MULTILIB toolchain from openhwgroup, which has a different name. However, do keep in mind its full operationality has **NOT** been tested:
+
+    `find . ! -readable -prune -o -name "riscv64-unknown-elf-gcc" -print`
+    
     Then add the compiler to the `$PATH` environment variable with:
 
     `export PATH=<absolute path to directory containing the compiler binary>:$PATH`
 
-    In case you don't have a toolchain, or the toolchain in your machine has compiler errors (such as requiring strange strange ISA extensions), you can build your own toolchain by following the steps listed [HERE](https://github.com/pulp-platform/pulp-riscv-gnu-toolchain). **Make sure you enable multilib to support 32-bit.** Despite having 64 in the name, the toolchain also supports 32-bit targets.
+    In case you don't have a toolchain, or the toolchain in your machine has compiler errors (such as requiring strange strange ISA extensions), you can build your own toolchain by following the steps listed [HERE](https://github.com/pulp-platform/pulp-riscv-gnu-toolchain).
 
     In case you want to use a different toolchain, or want to specify a particular toolchain installed in your filesystem, you can edit the file *magia-sdk/cmake/toolchain_gcc_multilib.cmake* to point to your desired toolchain binary file. Make sure the ILP and API extensions in *CMakeLists.txt* are supported by the toolchain.
 
@@ -165,6 +178,71 @@ To add your own test, you have to integrate a new test folder inside the **tests
 
     3. An **include** directory containing your test's header (.h) files
 
+## Continuous Integration
+
+CI runs via GitHub Actions (`.github/workflows/github-ci.yml`). It does **not** execute tests locally — instead it mirrors the branch to a GitLab instance at `iis-git.ee.ethz.ch/github-mirror/magia-sdk-mirror` and waits for that pipeline to complete. A `GITLAB_TOKEN` secret with `read_api` scope must be configured on the GitHub repository. CI is automatically skipped for forks.
+
+### Reading CI failure logs
+
+When the GitLab pipeline fails, the workflow automatically:
+
+1. Fetches the trace (console log) for every failed GitLab job via `scripts/ci/fetch_gitlab_logs.sh`.
+2. Saves each trace as `gitlab-logs/<stage>__<job>.trace`.
+3. Prints the **last 200 lines** of each trace in the **"🔶 Show error log"** GitHub Actions step (visible in the collapsible group labelled `FAILED: <job_name>`).
+
+To read the full logs, download the `gitlab-logs` artifact from the failed GitHub Actions run — it contains the complete `.trace` files for all failed jobs, plus any job artifacts (e.g. build outputs) if the GitLab job uploaded them.
+
+## Code Style
+
+The repository ships a `.clang-format` file (LLVM-based, 100-column limit). Formatting is enforced in CI on the C/C++ files changed in your branch (vs. `main`); see [Format CI](#format-ci) below.
+
+### `make format`
+
+Run from the repo root to apply `.clang-format` to all C/C++ files (`*.c *.h *.cpp *.hpp *.cc *.hh`) changed on the current branch relative to its merge-base with `main`. This includes both committed changes and any local staged/unstaged edits, so it is safe to run while work is in progress:
+
+```bash
+make format
+```
+
+Files outside the branch's diff are never touched, avoiding noisy reformats of pre-existing code. The selection logic lives in `scripts/ci/format-changed.sh` and is shared with CI.
+
+### Format CI
+
+The `Format Check` GitHub Actions workflow (`.github/workflows/format-ci.yml`) runs on every push and pull request. It invokes `scripts/ci/format-changed.sh check --committed`, which runs `clang-format --dry-run --Werror` on the same set of changed files. The job fails if any of those files are not properly formatted — run `make format` locally and commit the result to fix it.
+
+### VS Code setup
+
+1. Install the [C/C++ extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools) (by Microsoft).
+2. Add the following to `.vscode/settings.json`:
+
+```json
+{
+  "editor.formatOnSave": true,
+  "C_Cpp.clang_format_style": "file",
+  "C_Cpp.clang_format_fallbackStyle": "LLVM"
+}
+```
+
+`"file"` instructs the extension to locate `.clang-format` by walking up from the file being edited, picking up the one at the repo root. With `formatOnSave` enabled, every C/C++ file is formatted automatically on save. You can also trigger formatting manually with `Shift+Alt+F`.
+
+## GVSOC Regression Test
+
+It is possible to test the correctness of the repository by running the extensive regression test on the GVSoC simulator.
+
+To do so, you need pyenv, which can be enabled on your shell setup by running (in case you didn't do it before):
+
+    curl https://pyenv.run | bash
+    bash
+    pyenv install 3.12
+
+After doing that, you can run the entire testsuite on all the available mesh architectures (from 1x1 to 16x16) with:
+
+    source scripts/regression_gvsoc.sh
+
+**Must be run from the root directory of magia-sdk**.
+
+The test outputs are stored in the *scripts/regression_output_* folders.
+
 ## Folder Structure
 
 ### README.md
@@ -198,4 +276,3 @@ Contains utility files for *cmake* automatic compilation.
 
 ### gvsoc
 A submodule containing the Germain Virtual System on Chip, built to simulate MAGIA (and other PULP-related platforms).
-

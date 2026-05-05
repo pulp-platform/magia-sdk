@@ -40,7 +40,7 @@ void eu32_init(eu_controller_t *ctrl) {
  */
 void eu32_redmule_init(eu_controller_t *ctrl, uint32_t enable_irq) {
     // Enable RedMulE events in mask
-    eu_enable_events(EU_REDMULE_ALL_MASK);
+    eu_enable_events(EU_REDMULE_DONE_MASK);
     
     // Optionally enable IRQ for RedMulE completion
     if (enable_irq) {
@@ -234,7 +234,7 @@ uint32_t eu32_idma_o2a_is_busy(eu_controller_t *ctrl) {
  */
 void eu32_fsync_init(eu_controller_t *ctrl, uint32_t enable_irq) {
     // Enable FSync events in mask (bits 25:24)
-    eu_enable_events(EU_FSYNC_ALL_MASK);
+    eu_enable_events(EU_FSYNC_DONE_MASK);
     
     // Optionally enable IRQ for FSync completion (bit 24)
     if (enable_irq) {
