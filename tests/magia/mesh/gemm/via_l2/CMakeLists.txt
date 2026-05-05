@@ -1,8 +1,18 @@
 set(TEST_NAME test_gemm)
 
+set(GEMM_TEST_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/test.h)
+set(GEN_SCRIPT    ${CMAKE_CURRENT_SOURCE_DIR}/gen_golden.py)
+
+add_custom_command(
+    OUTPUT  ${GEMM_TEST_HEADER}
+    COMMAND python3 ${GEN_SCRIPT}
+    DEPENDS ${GEN_SCRIPT}
+    COMMENT "Generating GEMM chain golden data (test.h)"
+    VERBATIM)
+
 file(GLOB_RECURSE TEST_SRCS "src/*.c")
 
-add_executable(${TEST_NAME} ${TEST_SRCS})
+add_executable(${TEST_NAME} ${TEST_SRCS} ${GEMM_TEST_HEADER})
 target_include_directories(${TEST_NAME} PUBLIC include)
 target_compile_options(${TEST_NAME} PRIVATE -O2)
 target_link_libraries(${TEST_NAME} PUBLIC runtime hal)
