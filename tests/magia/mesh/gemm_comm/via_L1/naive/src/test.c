@@ -6,7 +6,7 @@
 #include "test.h"
 
 #include "tile.h"
-#include "utils/gemm_utils.h"
+#include "gemm_utils.h"
 #include "fsync.h"
 #include "idma.h"
 #include "redmule.h"
@@ -68,19 +68,29 @@ void mem_set_zero(uint32_t o, uint32_t dim)
 }
 
 /**
- * GEMM chain test with row-parallel data parallelism across tile groups.
+ * GEMM chain test with L1-to-L1 communication.
+ *
+ * Same 4-GEMM chain as the L2 naive variant, but intermediate results
+ * are DMA'd directly between tiles' L1 memories instead of going through L2.
+ * Only initial inputs (M1-M5) are loaded from L2, and the final output (O)
+ * is written back to L2 for validation.
  *
  * Phase 1 (parallel):
  *   GEMM1 group (4 tiles):  R1[AxC] = M1[AxB] @ M2[BxC]
+ *     → scatter R1 rows to GEMM3 tiles' L1
  *   GEMM2 group (24 tiles): R2[CxE] = M3[CxD] @ M4[DxE]
+ *     → scatter R2 rows to all GEMM3 tiles' L1
  *
  * Phase 2:
  *   GEMM3 group (12 tiles): R3[AxE] = R1[AxC] @ R2[CxE]
+ *     (R1, R2 already in L1 from Phase 1 scatter)
+ *     → scatter R3 rows to GEMM4 tiles' L1
  *
  * Phase 3:
  *   GEMM4 group (24 tiles): O[AxF]  = R3[AxE] @ M5[ExF]
+ *     (R3 already in L1 from Phase 2 scatter; M5 loaded from L2)
+ *     → write O back to L2
  *
- * Each group splits output rows across its tiles. Tiles with no rows idle.
  * Requires 8x8 mesh (64 tiles).
  */
 int main(void)
@@ -142,10 +152,13 @@ int main(void)
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
+    perf_reset();
+    perf_start();
+
     /**
      * Phase 1: GEMM1 and GEMM2 in parallel (row-parallel within each group)
-     *   GEMM1 group: R1 = M1 @ M2
-     *   GEMM2 group: R2 = M3 @ M4
+     *   GEMM1 group: R1 = M1 @ M2   → scatter R1 to GEMM3 tiles' L1
+     *   GEMM2 group: R2 = M3 @ M4   → scatter R2 to GEMM3 tiles' L1
      */
     int gemm1_idx = get_local_idx(hartid, gemm1_tiles, GEMM1_N_TILES);
     if (gemm1_idx >= 0) {
@@ -181,13 +194,32 @@ int main(void)
                          (uint16_t)DIM_C);
             eu_redmule_wait(&eu_ctrl, WAIT_MODE);
 
-            // Write R1 slice back to L2 at correct offset
-            idma_memcpy_1d(&idma_ctrl,
-                           1,
-                           (uint32_t)r1_out + start_row * DIM_C * 2,
-                           obi_r1,
-                           num_rows * DIM_C * 2);
-            eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+            // Scatter R1 rows directly to GEMM3 tiles' L1.
+            // GEMM3 tile j's L1 layout: [R1_slice | R2 | R3_slice]
+            for (uint32_t j = 0; j < GEMM3_N_TILES; j++) {
+                uint32_t g3_start, g3_nrows;
+                get_row_range(j, GEMM3_N_TILES, DIM_A, &g3_start, &g3_nrows);
+                if (g3_nrows == 0)
+                    continue;
+
+                // Overlap between this tile's R1 rows and GEMM3 tile j's needed rows
+                uint32_t ov_start = start_row > g3_start ? start_row : g3_start;
+                uint32_t ov_end_1 = start_row + num_rows;
+                uint32_t ov_end_3 = g3_start + g3_nrows;
+                uint32_t ov_end   = ov_end_1 < ov_end_3 ? ov_end_1 : ov_end_3;
+
+                if (ov_start >= ov_end)
+                    continue;
+                uint32_t ov_count = ov_end - ov_start;
+
+                uint32_t g3_l1   = get_l1_base(gemm3_tiles[j]);
+                uint32_t src_off = (ov_start - start_row) * DIM_C * 2;
+                uint32_t dst_off = (ov_start - g3_start) * DIM_C * 2;
+
+                idma_memcpy_1d(
+                    &idma_ctrl, 1, g3_l1 + dst_off, obi_r1 + src_off, ov_count * DIM_C * 2);
+                eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+            }
         }
     }
 
@@ -225,13 +257,23 @@ int main(void)
                          (uint16_t)DIM_E);
             eu_redmule_wait(&eu_ctrl, WAIT_MODE);
 
-            // Write R2 slice back to L2 at correct offset
-            idma_memcpy_1d(&idma_ctrl,
-                           1,
-                           (uint32_t)r2_out + start_row * DIM_E * 2,
-                           obi_r2,
-                           num_rows * DIM_E * 2);
-            eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+            // Scatter R2 rows to every GEMM3 tile's L1.
+            // Each GEMM3 tile needs the full R2, so every GEMM2 tile sends
+            // its slice to all GEMM3 tiles at the correct row offset.
+            // GEMM3 tile j's L1 layout: [R1_slice: g3_nrows*C*2 | R2: C*E*2 | ...]
+            for (uint32_t j = 0; j < GEMM3_N_TILES; j++) {
+                uint32_t g3_start, g3_nrows;
+                get_row_range(j, GEMM3_N_TILES, DIM_A, &g3_start, &g3_nrows);
+                if (g3_nrows == 0)
+                    continue;
+
+                uint32_t g3_l1   = get_l1_base(gemm3_tiles[j]);
+                uint32_t r2_base = g3_l1 + g3_nrows * DIM_C * 2;
+                uint32_t dst     = r2_base + start_row * DIM_E * 2;
+
+                idma_memcpy_1d(&idma_ctrl, 1, dst, obi_r2, num_rows * DIM_E * 2);
+                eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+            }
         }
     }
 
@@ -242,6 +284,8 @@ int main(void)
     /**
      * Phase 2: GEMM3 (row-parallel)
      *   GEMM3 group: R3 = R1 @ R2
+     *   R1 and R2 are already in this tile's L1 (placed by Phase 1 scatter).
+     *   After computing, scatter R3 rows to GEMM4 tiles' L1.
      */
     int gemm3_idx = get_local_idx(hartid, gemm3_tiles, GEMM3_N_TILES);
     if (gemm3_idx >= 0) {
@@ -249,22 +293,10 @@ int main(void)
         get_row_range(gemm3_idx, GEMM3_N_TILES, DIM_A, &start_row, &num_rows);
 
         if (num_rows > 0) {
-            // L1 layout: R1_slice, R2, R3_slice
+            // L1 layout (populated by Phase 1): [R1_slice | R2 | R3_slice]
             uint32_t obi_r1 = l1_tile_base;
             uint32_t obi_r2 = obi_r1 + (num_rows * DIM_C * 2);
             uint32_t obi_r3 = obi_r2 + (DIM_C * DIM_E * 2);
-
-            // Load slice of R1 [num_rows x C] from L2
-            idma_memcpy_1d(&idma_ctrl,
-                           0,
-                           (uint32_t)r1_out + start_row * DIM_C * 2,
-                           obi_r1,
-                           num_rows * DIM_C * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
-
-            // Load full R2 [CxE] from L2
-            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)r2_out, obi_r2, DIM_C * DIM_E * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
             // Zero accumulator and compute: R3_slice = R1_slice @ R2
             mem_set_zero(obi_r3, num_rows * DIM_E);
@@ -277,13 +309,32 @@ int main(void)
                          (uint16_t)DIM_E);
             eu_redmule_wait(&eu_ctrl, WAIT_MODE);
 
-            // Write R3 slice back to L2 at correct offset
-            idma_memcpy_1d(&idma_ctrl,
-                           1,
-                           (uint32_t)r3_out + start_row * DIM_E * 2,
-                           obi_r3,
-                           num_rows * DIM_E * 2);
-            eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+            // Scatter R3 rows to GEMM4 tiles' L1.
+            // GEMM4 tile k's L1 layout: [R3_slice | M5 | O_slice]
+            for (uint32_t k = 0; k < GEMM4_N_TILES; k++) {
+                uint32_t g4_start, g4_nrows;
+                get_row_range(k, GEMM4_N_TILES, DIM_A, &g4_start, &g4_nrows);
+                if (g4_nrows == 0)
+                    continue;
+
+                // Overlap between this tile's R3 rows and GEMM4 tile k's needed rows
+                uint32_t ov_start = start_row > g4_start ? start_row : g4_start;
+                uint32_t ov_end_3 = start_row + num_rows;
+                uint32_t ov_end_4 = g4_start + g4_nrows;
+                uint32_t ov_end   = ov_end_3 < ov_end_4 ? ov_end_3 : ov_end_4;
+
+                if (ov_start >= ov_end)
+                    continue;
+                uint32_t ov_count = ov_end - ov_start;
+
+                uint32_t g4_l1   = get_l1_base(gemm4_tiles[k]);
+                uint32_t src_off = (ov_start - start_row) * DIM_E * 2;
+                uint32_t dst_off = (ov_start - g4_start) * DIM_E * 2;
+
+                idma_memcpy_1d(
+                    &idma_ctrl, 1, g4_l1 + dst_off, obi_r3 + src_off, ov_count * DIM_E * 2);
+                eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+            }
         }
     }
 
@@ -294,6 +345,8 @@ int main(void)
     /**
      * Phase 3: GEMM4 (row-parallel)
      *   GEMM4 group: O = R3 @ M5
+     *   R3 is already in this tile's L1 (placed by Phase 2 scatter).
+     *   M5 is loaded from L2. O is written back to L2.
      */
     int gemm4_idx = get_local_idx(hartid, gemm4_tiles, GEMM4_N_TILES);
     if (gemm4_idx >= 0) {
@@ -301,18 +354,10 @@ int main(void)
         get_row_range(gemm4_idx, GEMM4_N_TILES, DIM_A, &start_row, &num_rows);
 
         if (num_rows > 0) {
-            // L1 layout: R3_slice, M5, O_slice
+            // L1 layout: [R3_slice (already here) | M5 | O_slice]
             uint32_t obi_r3 = l1_tile_base;
             uint32_t obi_m5 = obi_r3 + (num_rows * DIM_E * 2);
             uint32_t obi_o  = obi_m5 + (DIM_E * DIM_F * 2);
-
-            // Load slice of R3 [num_rows x E] from L2
-            idma_memcpy_1d(&idma_ctrl,
-                           0,
-                           (uint32_t)r3_out + start_row * DIM_E * 2,
-                           obi_r3,
-                           num_rows * DIM_E * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
             // Load full M5 [ExF] from L2
             idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m5_inp, obi_m5, DIM_E * DIM_F * 2);
@@ -342,6 +387,8 @@ int main(void)
     // Global barrier: wait for Phase 3 to complete
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+
+    perf_stop();
 
     /**
      * Validation: Tile 0 checks O against golden
@@ -379,6 +426,7 @@ int main(void)
         }
 
         printf("\nTest complete. Errors: %d / %d\n\n", errors, DIM_A * DIM_F);
+        printf("Cycles: %u\n", perf_get_cycles());
     }
 
     return errors;

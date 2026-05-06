@@ -43,6 +43,7 @@ profile_cmp		?= 0
 profile_cmi		?= 0
 profile_cmo		?= 0
 profile_snc		?= 0
+build_non_gitlab_tests	?= 1
 
 target_platform ?= magia_v2
 compiler 		?= GCC_PULP
@@ -78,7 +79,7 @@ endif
 ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -B $(CMAKE_BUILDDIR) --trace-expand
+	cmake -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DBUILD_NON_GITLAB_TESTS=$(build_non_gitlab_tests) -B $(CMAKE_BUILDDIR) --trace-expand
 	cmake --build $(CMAKE_BUILDDIR) --verbose
 
 set_mesh:

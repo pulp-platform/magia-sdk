@@ -9,8 +9,8 @@ Computes a 4-GEMM chain with task-level parallelism:
 All GEMMs use fp16 throughout (inputs, accumulation, outputs).
 
 Usage:
-  python3 tests/magia/mesh/gemm/via_l2/gen_golden.py
-  python3 tests/magia/mesh/gemm/via_l2/gen_golden.py --dim-a 8 --dim-b 12 --dim-c 16 --dim-d 8 --dim-e 8 --dim-f 12
+  python3 tests/magia/mesh/gemm_comm/gen_golden.py
+  python3 tests/magia/mesh/gemm_comm/gen_golden.py --dim-a 8 --dim-b 12 --dim-c 16 --dim-d 8 --dim-e 8 --dim-f 12
 """
 
 import argparse
@@ -19,9 +19,13 @@ import sys
 
 import torch
 
-DEFAULT_OUTPUT = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "include", "test.h"
-)
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+DEFAULT_OUTPUT = os.path.join(_SCRIPT_DIR, "via_L2", "naive", "include", "test.h")
+INTERLACED_OUTPUT = os.path.join(_SCRIPT_DIR, "via_L2", "interlaced", "include", "test.h")
+L1_NAIVE_OUTPUT = os.path.join(_SCRIPT_DIR, "via_L1", "naive", "include", "test.h")
+L1_INTERLACED_OUTPUT = os.path.join(_SCRIPT_DIR, "via_L1", "interlaced", "include", "test.h")
+FIFO_OUTPUT = os.path.join(_SCRIPT_DIR, "fifo", "include", "test.h")
 
 
 def parse_args():
@@ -203,7 +207,19 @@ def main():
     write_test_h(args.output, (a, b, c, d, e, f), args.seed,
                  m1, m2, m3, m4, m5, r1, r2, r3, o)
 
-    print(f"\nWrote {args.output}:")
+    # Also generate for the other variants (same golden data, different scheduling)
+    if args.output == DEFAULT_OUTPUT:
+        write_test_h(INTERLACED_OUTPUT, (a, b, c, d, e, f), args.seed,
+                     m1, m2, m3, m4, m5, r1, r2, r3, o)
+        write_test_h(L1_NAIVE_OUTPUT, (a, b, c, d, e, f), args.seed,
+                     m1, m2, m3, m4, m5, r1, r2, r3, o)
+        write_test_h(L1_INTERLACED_OUTPUT, (a, b, c, d, e, f), args.seed,
+                     m1, m2, m3, m4, m5, r1, r2, r3, o)
+        write_test_h(FIFO_OUTPUT, (a, b, c, d, e, f), args.seed,
+                     m1, m2, m3, m4, m5, r1, r2, r3, o)
+        print(f"\nWrote {args.output}, {INTERLACED_OUTPUT}, {L1_NAIVE_OUTPUT}, {L1_INTERLACED_OUTPUT}, and {FIFO_OUTPUT}:")
+    else:
+        print(f"\nWrote {args.output}:")
     print(f"  m1_inp:    {a*b} values ({a}x{b})")
     print(f"  m2_inp:    {b*c} values ({b}x{c})")
     print(f"  m3_inp:    {c*d} values ({c}x{d})")

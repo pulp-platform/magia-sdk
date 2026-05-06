@@ -1,4 +1,4 @@
-set(TEST_NAME test_gemm)
+set(TEST_NAME test_gemm_l2_naive)
 
 set(GEMM_TEST_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/test.h)
 set(GEN_SCRIPT    ${CMAKE_CURRENT_SOURCE_DIR}/gen_golden.py)
@@ -13,7 +13,7 @@ add_custom_command(
 file(GLOB_RECURSE TEST_SRCS "src/*.c")
 
 add_executable(${TEST_NAME} ${TEST_SRCS} ${GEMM_TEST_HEADER})
-target_include_directories(${TEST_NAME} PUBLIC include)
+target_include_directories(${TEST_NAME} PUBLIC include ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 target_compile_options(${TEST_NAME} PRIVATE -O2)
 target_link_libraries(${TEST_NAME} PUBLIC runtime hal)
 

@@ -16,140 +16,162 @@
  *
  * Authors: Victor Isachi <victor.isachi@unibo.it>
  * Alberto Dequino <alberto.dequino@unibo.it>
- * 
+ *
  * MAGIA Utils
  */
 
 #ifndef PERFORMANCE_UTILS_H
 #define PERFORMANCE_UTILS_H
 
-
 /**
  * @brief Starts all performance counters
  */
-static inline void perf_start(void) {
-    // enable all counters
-    asm volatile("csrw 0x7E0, %0" :: "r"(0x1));  // Enable PCCR[0]
-    asm volatile("csrw 0x7E1, %0" :: "r"(0x1));  // Enable counting, , no saturation
+static inline void perf_start(void)
+{
+    // GVSoC: mcycle count unconditionally; PULP PCER/PCMR (0x7E0/0x7E1) are unmodeled, so do not
+    // touch them here.
+    asm volatile("csrw 0xB00, %0" : : "r"(0)); // mcycle
 }
 
 /**
  * @brief Stops all performance counters
  */
-static inline void perf_stop(void) {
-    asm volatile("csrw 0x320, %0" : : "r"(0xffffffff));
+static inline void perf_stop(void)
+{
+    asm volatile("csrw 0x320, %0" : : "r"(0xffffffff)); // mcountinhibit: stop standard counters
 }
 
 /**
  * @brief Resets all performance counters to 0 without stopping them
  */
-static inline void perf_reset(void) {
-    asm volatile("csrw 0x780, %0" : : "r"(0));
+static inline void perf_reset(void)
+{
+    asm volatile("csrw 0xB00, %0" : : "r"(0));
 }
 
 /**
  * @brief Returns the cycles of the performance counter
  */
-static inline unsigned int perf_get_cycles(){
+static inline unsigned int perf_get_cycles()
+{
     unsigned int value = 0;
-    asm volatile("csrr %0, 0x780" : "=r"(value));
+    asm volatile("csrr %0, 0xB00" : "=r"(value));
     return value;
 }
 
 /**
  * @brief Returns the n. instructions of the performance counter
  */
-static inline unsigned int perf_get_instr(){
+static inline unsigned int perf_get_instr()
+{
     unsigned int value = 0;
-    asm volatile ("csrr %0, 0xB02" : "=r" (value));
+    asm volatile("csrr %0, 0xB02" : "=r"(value));
     return value;
 }
 
-static inline void sentinel_start(){
+static inline void sentinel_start()
+{
     asm volatile("addi x0, x0, 0x5AA" ::);
 }
 
-static inline void sentinel_end(){
+static inline void sentinel_end()
+{
     asm volatile("addi x0, x0, 0x5FF" ::);
 }
 
 // Start input communication sentinel accumulator
-static inline void stnl_cmi_s(){
+static inline void stnl_cmi_s()
+{
     asm volatile("addi x0, x0, 0x50B" ::);
 }
 
 // Start output communication sentinel accumulator
-static inline void stnl_cmo_s(){
+static inline void stnl_cmo_s()
+{
     asm volatile("addi x0, x0, 0x51B" ::);
 }
 
 // Start computation sentinel accumulator
-static inline void stnl_cmp_s(){
+static inline void stnl_cmp_s()
+{
     asm volatile("addi x0, x0, 0x52B" ::);
 }
 
 // Start synchronization sentinel accumulator
-static inline void stnl_snc_s(){
+static inline void stnl_snc_s()
+{
     asm volatile("addi x0, x0, 0x53B" ::);
 }
 
 // Start timeslot sentinel accumulator
-static inline void stnl_ts_s(){
+static inline void stnl_ts_s()
+{
     asm volatile("addi x0, x0, 0x5FB" ::);
 }
 
 // Finish (record) input communication sentinel accumulator
-static inline void stnl_cmi_f(){
+static inline void stnl_cmi_f()
+{
     asm volatile("addi x0, x0, 0x50C" ::);
 }
 
 // Finish (record) output communication sentinel accumulator
-static inline void stnl_cmo_f(){
+static inline void stnl_cmo_f()
+{
     asm volatile("addi x0, x0, 0x51C" ::);
 }
 
 // Finish (record) computation sentinel accumulator
-static inline void stnl_cmp_f(){
+static inline void stnl_cmp_f()
+{
     asm volatile("addi x0, x0, 0x52C" ::);
 }
 
 // Finish (record) synchronization sentinel accumulator
-static inline void stnl_snc_f(){
+static inline void stnl_snc_f()
+{
     asm volatile("addi x0, x0, 0x53C" ::);
 }
 
 // Finish (record) timeslot sentinel accumulator
-static inline void stnl_ts_f(){
+static inline void stnl_ts_f()
+{
     asm volatile("addi x0, x0, 0x5FC" ::);
 }
 
 // Report input communication sentinel accumulator
-static inline void stnl_cmi_r(){
+static inline void stnl_cmi_r()
+{
     asm volatile("addi x0, x0, 0x50D" ::);
 }
 
 // Report output communication sentinel accumulator
-static inline void stnl_cmo_r(){
+static inline void stnl_cmo_r()
+{
     asm volatile("addi x0, x0, 0x51D" ::);
 }
 
 // Report computation sentinel accumulator
-static inline void stnl_cmp_r(){
+static inline void stnl_cmp_r()
+{
     asm volatile("addi x0, x0, 0x52D" ::);
 }
 
 // Report synchronization sentinel accumulator
-static inline void stnl_snc_r(){
+static inline void stnl_snc_r()
+{
     asm volatile("addi x0, x0, 0x53D" ::);
 }
 
 // Report timeslot sentinel accumulator
-static inline void stnl_ts_r(){
+static inline void stnl_ts_r()
+{
     asm volatile("addi x0, x0, 0x5FD" ::);
 }
 
 // Report global input communication, output communication and computation overheads
-static inline void stnl_r(){
+static inline void stnl_r()
+{
     asm volatile("addi x0, x0, 0x5EE" ::);
 }
 
