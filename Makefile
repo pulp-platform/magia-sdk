@@ -20,6 +20,8 @@
 
 SHELL 			:= /bin/bash
 
+include scripts/deps.env
+
 CMAKE_BUILDDIR  	?= $(CURR_DIR)/build
 MAGIA_RTL_DIR 		?= ..
 BUILD_DIR 		?= $(MAGIA_RTL_DIR)/sw/tests/$(test)
@@ -76,7 +78,7 @@ endif
 ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -B $(CMAKE_BUILDDIR) --trace-expand
+	cmake -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -B $(CMAKE_BUILDDIR) --trace-expand
 	cmake --build $(CMAKE_BUILDDIR) --verbose
 
 set_mesh:
@@ -164,21 +166,19 @@ endif
 	cd $(GVSOC_DIR)	&& \
 	make build TARGETS=magia_v2
 
-# github.com/gvsoc/gvsoc: 5f91fcc commit - master on 24/04/2026
-# github.com/gvsoc/gvsoc-core: 760f25e commit - master on 24/04/2026
-# github.com/gvsoc/gvsoc-pulp: 17f9e7a commit - master on 24/04/2026
+# Pinned commits for gvsoc/gvsoc-core/gvsoc-pulp live in scripts/deps.env.
 gvsoc_init:
 	git clone https://github.com/gvsoc/gvsoc.git || true
 	cd $(GVSOC_DIR) && \
-	git fetch origin 5f91fcc2e5923993adaaf5aad3365b690da19da2 && \
-	git checkout 5f91fcc2e5923993adaaf5aad3365b690da19da2 && \
+	git fetch origin $(GVSOC_COMMIT) && \
+	git checkout $(GVSOC_COMMIT) && \
 	git submodule update --init --recursive && \
 	cd core && \
-	git fetch origin 760f25eacb135dac60acd61eea5d6f1e3611192d && \
-	git checkout 760f25eacb135dac60acd61eea5d6f1e3611192d && \
+	git fetch origin $(GVSOC_CORE_COMMIT) && \
+	git checkout $(GVSOC_CORE_COMMIT) && \
 	cd ../pulp && \
-	git fetch origin 17f9e7a56f7ccf0bf7d13af0e68b6c0c129f8555 && \
-	git checkout 17f9e7a56f7ccf0bf7d13af0e68b6c0c129f8555
+	git fetch origin $(GVSOC_PULP_COMMIT) && \
+	git checkout $(GVSOC_PULP_COMMIT)
 
 gvsoc_venv:
 	eval "$(pyenv init -)" && \
