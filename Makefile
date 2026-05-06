@@ -120,7 +120,6 @@ else
 endif
 
 MAGIA: set_mesh
-	sed -i 's/ QUESTA ?= questa-2025.1/ QUESTA ?= questa-2023.4/' $(MAGIA_DIR)/Makefile
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
 	$(eval tiles_2=256)
 endif

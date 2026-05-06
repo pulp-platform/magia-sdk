@@ -178,6 +178,30 @@ To add your own test, you have to integrate a new test folder inside the **tests
 
     3. An **include** directory containing your test's header (.h) files
 
+## Profiling
+
+If you wish to profile your code in terms of cycles, it is possible to do it on both GVSoC and RTL.
+
+However, be aware that the utilities are different based on the simulation platform you want to use.
+
+In case you are simulating on GVSoC, please use the `perf_get_cycles()` utility:
+
+    int start = perf_get_cycles();
+
+    // CODE YOU WANT TO PROFILE //
+
+    int end = perf_get_cycles();
+
+    printf("Cycles: %d\n", (int) (end - start));
+
+In case you are working on RTL, please use the sentinel utilities:
+
+    sentinel_start();
+
+    // CODE YOU WANT TO PROFILE //
+
+    sentinel_end();
+
 ## Continuous Integration
 
 CI runs via GitHub Actions (`.github/workflows/github-ci.yml`). It does **not** execute tests locally — instead it mirrors the branch to a GitLab instance at `iis-git.ee.ethz.ch/github-mirror/magia-sdk-mirror` and waits for that pipeline to complete. A `GITLAB_TOKEN` secret with `read_api` scope must be configured on the GitHub repository. CI is automatically skipped for forks.
