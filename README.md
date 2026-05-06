@@ -48,6 +48,24 @@ The following *optional* parameters can be specified when running the make comma
 
     It is also required to have a cmake version >= 3.13.
 
+    In case you are NOT interested in the RTL and only want to simulate the architecture on GVSoC, you can ignore the previous command.
+
+    ***IT IS STRONGLY SUGGEST YOU CREATE A NEW PYENV ENVIRONMENT FOR RUNNING GVSOC***
+
+    You can build a new environment by first installing pyenv by running the following command. FOLLOW THE INSTRUCTIONS GIVE BY THE TERMINAL TO THE LETTER (including updating the PATH environment variable)
+
+    `curl https://pyenv.run | bash`
+
+    After you have done that, you can install a python environment with all the necessary requirements by running:
+
+    `make gvsoc_pyenv`
+
+    To activate the generated environment, run:
+
+    `source ./gvsoc_venv/bin/activate`
+
+    From the SDK's root directory. If you have done it correctly, you'll see a "(gvsoc_venv)" preceding your terminal command line.
+
 1. Initialize the GVSoC submodule:
 
     `make gvsoc_init`
@@ -159,6 +177,30 @@ To add your own test, you have to integrate a new test folder inside the **tests
     2. An **src** directory containing your test's source (.c) files
 
     3. An **include** directory containing your test's header (.h) files
+
+## Profiling
+
+If you wish to profile your code in terms of cycles, it is possible to do it on both GVSoC and RTL.
+
+However, be aware that the utilities are different based on the simulation platform you want to use.
+
+In case you are simulating on GVSoC, please use the `perf_get_cycles()` utility:
+
+    int start = perf_get_cycles();
+
+    // CODE YOU WANT TO PROFILE //
+
+    int end = perf_get_cycles();
+
+    printf("Cycles: %d\n", (int) (end - start));
+
+In case you are working on RTL, please use the sentinel utilities:
+
+    sentinel_start();
+
+    // CODE YOU WANT TO PROFILE //
+
+    sentinel_end();
 
 ## Continuous Integration
 
