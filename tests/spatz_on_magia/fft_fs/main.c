@@ -20,31 +20,58 @@ static int init_data(void *params)
 
     fft_fs_params = (volatile fft_fs_params_t *) params;
 
-    chunk = TENSOR_LEN / NUM_HARTS;
-    left = TENSOR_LEN % NUM_HARTS;
-    start = HID * chunk + (HID < left ? HID : left);
-    end = start + chunk + (HID < left ? 1 : 0);
-    len = end - start;
+    // chunk = TENSOR_LEN / NUM_HARTS;
+    // left = TENSOR_LEN % NUM_HARTS;
+    // start = HID * chunk + (HID < left ? HID : left);
+    // end = start + chunk + (HID < left ? 1 : 0);
+    // len = end - start;
 
-    for (int i = 0; i < len; i++) {
-        int global_idx;
-        uint32_t offset;
+    //chunk = TENSOR_LEN;
+    start = HID * chunk;
+    end = start + chunk;
+    len = chunk;
 
-        global_idx = start + i;
-        offset =  i * sizeof(float16);
+    // for (int i = 0; i < len; i++) {
+    //     int global_idx;
+    //     uint32_t offset;
 
-        mmio_fp16(CHUNK_A_BASE + offset) = A[global_idx];
-        mmio_fp16(CHUNK_B_BASE + offset) = B[gloabl_idx];
-        mmio_fp16(CHUNK_W_BASE + offset) = W[global_idx];
-        mmio_fp16(CHUNK_G_BASE + offset) = G[global_idx];
-        mmio_fp16(CHUNK_C_BASE + offset) = 0;
+    //     global_idx = start + i;
+    //     offset =  i * sizeof(float16);
+
+    //     mmio_fp16(CHUNK_AR_BASE + offset)    =  AR[global_idx];
+    //     mmio_fp16(CHUNK_BR_BASE + offset)    =   B[gloabl_idx];
+    //     mmio_fp16(CHUNK_AI_BASE + offset)    =   A[global_idx];
+    //     mmio_fp16(CHUNK_BI_BASE + offset)    =   B[gloabl_idx];
+    //     mmio_fp16(CHUNK_WR_BASE + offset)   =   WR[global_idx];
+    //     mmio_fp16(CHUNK_GR_BASE + offset)   =   GR[global_idx];
+    //     mmio_fp16(CHUNK_WI_BASE + offset)   =   WI[global_idx];
+    //     mmio_fp16(CHUNK_GI_BASE + offset)   =   GI[global_idx];
+    //     mmio_fp16(CHUNK_CR_BASE + offset)   =   0;
+    //     mmio_fp16(CHUNK_CI_BASE + offset)   =   0;
+    // }
+
+    for(int i = 0; i < (VEC_LEN / 2); i++){
+        mmio_fp16(CHUNK_AR_BASE + (i * sizeof(float16))) = IR[i * 2];
+        mmio_fp16(CHUNK_BR_BASE + (i * sizeof(float16))) = IR[i * 2 + 1];
+        mmio_fp16(CHUNK_AI_BASE + (i * sizeof(float16))) = II[i * 2];
+        mmio_fp16(CHUNK_BI_BASE + (i * sizeof(float16))) = II[i * 2 + 1];
     }
 
-    fft_params->chunk_A = CHUNK_A_BASE;
-    fft_params->chunk_B = CHUNK_B_BASE;
-    fft_params->chunk_W = CHUNK_W_BASE;
-    fft_params->chunk_C = CHUNK_C_BASE;
-    fft_params->chunk_G = CHUNK_G_BASE;
+    for(int i = 0; i < TW_LEN; i++){
+        mmio_fp16(CHUNK_WR_BASE + (i * sizeof(float16))) = WR[i];
+        mmio_fp16(CHUNK_WI_BASE + (i * sizeof(float16))) = WI[i];
+    }
+
+    fft_params->chunk_AR = CHUNK_AR_BASE;
+    fft_params->chunk_AI = CHUNK_AI_BASE;
+    fft_params->chunk_BR = CHUNK_BR_BASE;
+    fft_params->chunk_BI = CHUNK_BI_BASE;
+    fft_params->chunk_WR = CHUNK_WR_BASE;
+    fft_params->chunk_WI = CHUNK_WI_BASE;
+    fft_params->chunk_CR = CHUNK_CR_BASE;
+    fft_params->chunk_CI = CHUNK_CI_BASE;
+    fft_params->chunk_DR = CHUNK_DR_BASE;
+    fft_params->chunk_DI = CHUNK_DI_BASE;
     fft_params->start = start;
     fft_params->len = len;
     fft_params->end = end;
@@ -82,7 +109,7 @@ static bool check_result(void *params)
 {
     volatile fft_params_t *fft_params;
     fft_params = (volatile fft_params_t *) params;
-    return chunk_compare_fp16_bitwise(fft_params->chunk_C, fft_params->chunk_G, fft_params->start, fft_params->len);
+    return chunk_compare_fp16_bitwise(fft_params->chunk_CR, fft_params->chunk_GR, fft_params->chunk_CI, fft_params->chunk_GI, fft_params->start, fft_params->len);
 }
 
 static bool run_test()
