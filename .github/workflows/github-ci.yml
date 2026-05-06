@@ -8,13 +8,19 @@
 
 name: gitlab-ci
 
-"on": [push, pull_request, workflow_dispatch]
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   gitlab-ci:
     runs-on: ubuntu-latest
     steps:
-      - name: Check Gitlab CI
+      - name: Gitlab CI Runner
+        id: gitlab_ci
         uses: pulp-platform/pulp-actions/gitlab-ci@v2.4.1 # update version as needed, not auto-updated
         # Check if GITLAB_TOKEN is set to avoid running on forks.
         if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
@@ -22,3 +28,33 @@ jobs:
           domain: iis-git.ee.ethz.ch
           repo: github-mirror/magia-sdk-mirror
           token: ${{ secrets.GITLAB_TOKEN }}
+
+      - name: Checkout log-fetch script
+        if: failure() && steps.gitlab_ci.conclusion == 'failure' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/checkout@v4
+        with:
+          path: _ci_tools
+          sparse-checkout: scripts/ci
+          sparse-checkout-cone-mode: false
+
+      - name: Fetch GitLab CI logs on failure
+        if: failure() && steps.gitlab_ci.conclusion == 'failure' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_DOMAIN: iis-git.ee.ethz.ch
+          GITLAB_REPO: github-mirror/magia-sdk-mirror
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          OUT_DIR: gitlab-logs
+        run: bash _ci_tools/scripts/ci/fetch_gitlab_logs.sh
+
+      - name: 🔶 Show error log
+        if: failure() && steps.gitlab_ci.conclusion == 'failure' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        run: |
+          shopt -s nullglob
+          for trace in gitlab-logs/*.trace; do
+            job=$(basename "$trace" .trace)
+            echo "::group:: FAILED: ${job}"
+            tail -n 200 "$trace"
+            echo "::endgroup::"
+          done
+

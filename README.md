@@ -48,6 +48,24 @@ The following *optional* parameters can be specified when running the make comma
 
     It is also required to have a cmake version >= 3.13.
 
+    In case you are NOT interested in the RTL and only want to simulate the architecture on GVSoC, you can ignore the previous command.
+
+    ***IT IS STRONGLY SUGGEST YOU CREATE A NEW PYENV ENVIRONMENT FOR RUNNING GVSOC***
+
+    You can build a new environment by first installing pyenv by running the following command. FOLLOW THE INSTRUCTIONS GIVE BY THE TERMINAL TO THE LETTER (including updating the PATH environment variable)
+
+    `curl https://pyenv.run | bash`
+
+    After you have done that, you can install a python environment with all the necessary requirements by running:
+
+    `make gvsoc_pyenv`
+
+    To activate the generated environment, run:
+
+    `source ./gvsoc_venv/bin/activate`
+
+    From the SDK's root directory. If you have done it correctly, you'll see a "(gvsoc_venv)" preceding your terminal command line.
+
 1. Initialize the GVSoC submodule:
 
     `make gvsoc_init`
@@ -160,6 +178,77 @@ To add your own test, you have to integrate a new test folder inside the **tests
 
     3. An **include** directory containing your test's header (.h) files
 
+## Profiling
+
+If you wish to profile your code in terms of cycles, it is possible to do it on both GVSoC and RTL.
+
+However, be aware that the utilities are different based on the simulation platform you want to use.
+
+In case you are simulating on GVSoC, please use the `perf_get_cycles()` utility:
+
+    int start = perf_get_cycles();
+
+    // CODE YOU WANT TO PROFILE //
+
+    int end = perf_get_cycles();
+
+    printf("Cycles: %d\n", (int) (end - start));
+
+In case you are working on RTL, please use the sentinel utilities:
+
+    sentinel_start();
+
+    // CODE YOU WANT TO PROFILE //
+
+    sentinel_end();
+
+## Continuous Integration
+
+CI runs via GitHub Actions (`.github/workflows/github-ci.yml`). It does **not** execute tests locally — instead it mirrors the branch to a GitLab instance at `iis-git.ee.ethz.ch/github-mirror/magia-sdk-mirror` and waits for that pipeline to complete. A `GITLAB_TOKEN` secret with `read_api` scope must be configured on the GitHub repository. CI is automatically skipped for forks.
+
+### Reading CI failure logs
+
+When the GitLab pipeline fails, the workflow automatically:
+
+1. Fetches the trace (console log) for every failed GitLab job via `scripts/ci/fetch_gitlab_logs.sh`.
+2. Saves each trace as `gitlab-logs/<stage>__<job>.trace`.
+3. Prints the **last 200 lines** of each trace in the **"🔶 Show error log"** GitHub Actions step (visible in the collapsible group labelled `FAILED: <job_name>`).
+
+To read the full logs, download the `gitlab-logs` artifact from the failed GitHub Actions run — it contains the complete `.trace` files for all failed jobs, plus any job artifacts (e.g. build outputs) if the GitLab job uploaded them.
+
+## Code Style
+
+The repository ships a `.clang-format` file (LLVM-based, 100-column limit). Formatting is enforced in CI on the C/C++ files changed in your branch (vs. `main`); see [Format CI](#format-ci) below.
+
+### `make format`
+
+Run from the repo root to apply `.clang-format` to all C/C++ files (`*.c *.h *.cpp *.hpp *.cc *.hh`) changed on the current branch relative to its merge-base with `main`. This includes both committed changes and any local staged/unstaged edits, so it is safe to run while work is in progress:
+
+```bash
+make format
+```
+
+Files outside the branch's diff are never touched, avoiding noisy reformats of pre-existing code. The selection logic lives in `scripts/ci/format-changed.sh` and is shared with CI.
+
+### Format CI
+
+The `Format Check` GitHub Actions workflow (`.github/workflows/format-ci.yml`) runs on every push and pull request. It invokes `scripts/ci/format-changed.sh check --committed`, which runs `clang-format --dry-run --Werror` on the same set of changed files. The job fails if any of those files are not properly formatted — run `make format` locally and commit the result to fix it.
+
+### VS Code setup
+
+1. Install the [C/C++ extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools) (by Microsoft).
+2. Add the following to `.vscode/settings.json`:
+
+```json
+{
+  "editor.formatOnSave": true,
+  "C_Cpp.clang_format_style": "file",
+  "C_Cpp.clang_format_fallbackStyle": "LLVM"
+}
+```
+
+`"file"` instructs the extension to locate `.clang-format` by walking up from the file being edited, picking up the one at the repo root. With `formatOnSave` enabled, every C/C++ file is formatted automatically on save. You can also trigger formatting manually with `Shift+Alt+F`.
+
 ## GVSOC Regression Test
 
 It is possible to test the correctness of the repository by running the extensive regression test on the GVSoC simulator.
@@ -211,4 +300,3 @@ Contains utility files for *cmake* automatic compilation.
 
 ### gvsoc
 A submodule containing the Germain Virtual System on Chip, built to simulate MAGIA (and other PULP-related platforms).
-

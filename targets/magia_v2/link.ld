@@ -33,13 +33,19 @@ _stack_start   = ORIGIN(stack) + LENGTH(stack);
 /* We have to align each sector to word boundaries as our current s19->slm
  * conversion scripts are not able to handle non-word aligned sections. */
 
+PHDRS
+{
+    text PT_LOAD;
+    data PT_LOAD;
+}
+
 SECTIONS
 {
     .vectors :
     {
         . = ALIGN(4);
         KEEP(*(.vectors))
-    } > instrram
+    } > instrram :text
 
     .text : {
         . = ALIGN(4);
@@ -59,7 +65,7 @@ SECTIONS
         *(.lit)
         *(.shdata)
         _endtext = .;
-    }  > instrram
+    }  > instrram :text
 
     /*--------------------------------------------------------------------*/
     /* Global constructor/destructor segment                              */
@@ -70,7 +76,7 @@ SECTIONS
       PROVIDE_HIDDEN (__preinit_array_start = .);
       KEEP (*(.preinit_array))
       PROVIDE_HIDDEN (__preinit_array_end = .);
-    } > dataram
+    } > dataram :data
 
     .init_array     :
     {
@@ -78,7 +84,7 @@ SECTIONS
       KEEP (*(SORT(.init_array.*)))
       KEEP (*(.init_array ))
       PROVIDE_HIDDEN (__init_array_end = .);
-    } > dataram
+    } > dataram :data
 
     .fini_array     :
     {
@@ -86,7 +92,7 @@ SECTIONS
       KEEP (*(SORT(.fini_array.*)))
       KEEP (*(.fini_array ))
       PROVIDE_HIDDEN (__fini_array_end = .);
-    } > dataram
+    } > dataram :data
 
     .data : {
         . = ALIGN(4);
@@ -96,19 +102,19 @@ SECTIONS
         *(.data.*)
         edata  =  .;
         _edata  =  .;
-    } > dataram
+    } > dataram :data
 
     .rodata : {
         . = ALIGN(4);
         *(.rodata);
         *(.rodata.*)
-    } > dataram
+    } > dataram :data
 
     .shbss :
     {
         . = ALIGN(4);
         *(.shbss)
-    } > dataram
+    } > dataram :data
 
     .bss :
     {
@@ -120,7 +126,7 @@ SECTIONS
         *(.sbss.*)
         *(COMMON)
         _bss_end = .;
-    } > dataram
+    } > dataram :data
 
     /* ensure there is enough room for stack */
     .stack (NOLOAD): {
@@ -129,6 +135,6 @@ SECTIONS
         . = ALIGN(4);
         stack = . ;
         _stack = . ;
-    } > stack
+    } > stack :NONE
 
 }
