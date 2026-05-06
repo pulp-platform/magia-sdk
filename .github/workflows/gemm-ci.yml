@@ -24,8 +24,8 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install .
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install uv
+          uv pip install --system ".[gemm]"
 
       - name: Cache RISC-V toolchain
         id: cache-riscv
@@ -74,9 +74,6 @@ jobs:
 
       - name: Build GVSoC
         run: make gvsoc tiles=8
-
-      - name: Generate golden data
-        run: bash scripts/gemm/gemm-gen.sh
 
       - name: Build GEMM test
         run: TILES=8 COMPILER=GCC_PULP bash scripts/gemm/gemm-build.sh
