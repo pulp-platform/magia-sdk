@@ -4,10 +4,11 @@
 
 
 from Deeploy.AbstractDataTypes import PointerClass
-from Deeploy.CommonExtensions.DataTypes import int8_t, int32_t
+from Deeploy.CommonExtensions.DataTypes import float16_t, int8_t, int32_t
 from Deeploy.DeeployTypes import CodeTransformation, NodeBinding
 from Deeploy.Targets.Generic.TypeCheckers import AddChecker
 from MagiaDeeployTarget.Templates import AddTemplate
+from MagiaDeeployTarget.Templates import OnnxAddTemplate
 
 BasicTransformer = CodeTransformation([])
 
@@ -18,6 +19,17 @@ MagiaAddBindings = [
             [PointerClass(int32_t)]
         ),
         AddTemplate.referenceTemplate,
+        BasicTransformer,
+    ),
+]
+
+MagiaOnnxAddBindings = [
+    NodeBinding(
+        AddChecker(
+            [PointerClass(float16_t), PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        OnnxAddTemplate.referenceTemplate,
         BasicTransformer,
     ),
 ]
