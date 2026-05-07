@@ -3,6 +3,7 @@ set(TEST_NAME test_gemm_fifo)
 set(FIFO_BATCH_ROWS "1" CACHE STRING "Rows per FIFO push (default 1)")
 
 file(GLOB_RECURSE TEST_SRCS "src/*.c")
+list(FILTER TEST_SRCS EXCLUDE REGEX ".*/test_with_prints\\.c$")
 
 add_executable(${TEST_NAME} ${TEST_SRCS})
 target_include_directories(${TEST_NAME} PUBLIC include ${CMAKE_CURRENT_SOURCE_DIR}/..)

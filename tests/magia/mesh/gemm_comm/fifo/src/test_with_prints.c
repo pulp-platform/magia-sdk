@@ -358,6 +358,7 @@ int main(void)
      */
     uint32_t ws = l1_tile_base + FIFO_RESERVE_SIZE;
 
+    printf("Tile %u: Initialization completed.", hartid);
     _t0 = perf_get_cycles();
 
     /* ------------------------------------------------------------------ */
@@ -370,16 +371,19 @@ int main(void)
     /* ------------------------------------------------------------------ */
     if (gemm1_idx >= 0) {
         PERF_DELTA(cyc_preamble, _t0);
+        printf("Tile %u: Starting GEMM1...\n", hartid);
         _t0 = perf_get_cycles();
 
         uint32_t start_row, num_rows;
         get_row_range((uint32_t)gemm1_idx, GEMM1_N_TILES, DIM_A, &start_row, &num_rows);
 
         PERF_DELTA(cyc_preamble, _t0);
+        printf("Tile %u: GEMM1 computed rows [%u, %u)\n", hartid, start_row, start_row + num_rows);
         _t0 = perf_get_cycles();
 
         if (num_rows > 0) {
             PERF_DELTA(cyc_preamble, _t0);
+            printf("Tile %u: GEMM1 splitting into batches\n", hartid);
             _t0 = perf_get_cycles();
 
             uint32_t chunk_max = compute_batch(num_rows, FIFO_BATCH_FRAC);
@@ -393,19 +397,35 @@ int main(void)
                                   obi_m1[1] + chunk_max * DIM_B * 2 + chunk_max * DIM_C * 2};
 
             PERF_DELTA(cyc_preamble, _t0);
+            printf(
+                "Tile %u GEMM1: Workspace prepared. Working on %u batches (preamble: %u cycles)\n ",
+                hartid,
+                n_chunks,
+                cyc_preamble);
 
             /* Load full M2 from L2 */
+            printf("Tile %u GEMM1: Loading M2[%d x %d]...\n", hartid, DIM_B, DIM_C);
             _t0 = perf_get_cycles();
             idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m2_inp, obi_m2, DIM_B * DIM_C * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
             PERF_DELTA(cyc_cmi, _t0);
+            printf(
+                "Tile %u GEMM1: M2[%d x %d] loaded (cycles: %u)\n", hartid, DIM_B, DIM_C, cyc_cmi);
 
             /* Prime the pipeline: load M1_pp[0] */
+            printf("Tile %u GEMM1: Priming pipeline with M1 chunk 0...\n", hartid);
             uint32_t c0s, c0l;
             compute_chunk(num_rows, n_chunks, 0, &c0s, &c0l);
 
             uint32_t cyc_cmi_pre_prime = cyc_cmi;
+            printf("Tile %u GEMM1: priming load preamble completed (cycles: %u)\n",
+                   hartid,
+                   cyc_cmi_pre_prime);
 
+            printf("Tile %u GEMM1: Loading M1 rows [%u, %u)...\n",
+                   hartid,
+                   start_row + c0s,
+                   start_row + c0s + c0l);
             _t0 = perf_get_cycles();
             idma_memcpy_1d(&idma_ctrl,
                            0,
@@ -414,8 +434,11 @@ int main(void)
                            c0l * DIM_B * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
             PERF_DELTA(cyc_cmi, _t0);
+            printf("Tile %u GEMM1: M1 chunk 0 loaded (cycles: %u)\n", hartid, cyc_cmi);
 
             for (uint32_t i = 0; i < n_chunks; i++) {
+                printf("Tile %u GEMM1: Starting batch %u/%u...\n", hartid, i + 1, n_chunks);
+
                 uint32_t cs, cl;
                 compute_chunk(num_rows, n_chunks, i, &cs, &cl);
                 uint32_t pp       = i & 1u;
@@ -433,6 +456,12 @@ int main(void)
                                    obi_m1[(i + 1) & 1u],
                                    nl * DIM_B * 2);
                     PERF_DELTA(cyc_cmi, _t0);
+
+                    printf("Tile %u GEMM1: chunk %u/%u prefetch issue cycles: %u\n",
+                           hartid,
+                           i + 1,
+                           n_chunks,
+                           cyc_cmi - cyc_cmi_before);
                 }
 
                 /* Compute R1 chunk i (zero-init + GEMM issue + wait) */
@@ -449,11 +478,23 @@ int main(void)
                 eu_redmule_wait(&eu_ctrl, WAIT_MODE);
                 PERF_DELTA(cyc_compute, _t0);
 
+                printf("Tile %u GEMM1: chunk %u/%u compute cycles: %u\n",
+                       hartid,
+                       i + 1,
+                       n_chunks,
+                       cyc_compute - cyc_compute_before);
+
                 if (has_next) {
                     uint32_t cyc_cmi_wait_before = cyc_cmi;
                     _t0                          = perf_get_cycles();
                     eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
                     PERF_DELTA(cyc_cmi, _t0);
+
+                    printf("Tile %u GEMM1: chunk %u/%u prefetch wait cycles: %u\n",
+                           hartid,
+                           i + 1,
+                           n_chunks,
+                           cyc_cmi - cyc_cmi_wait_before);
                 }
 
                 /*
@@ -491,6 +532,14 @@ int main(void)
                                       &idma_ctrl,
                                       &eu_ctrl,
                                       &cyc_push);
+
+                        printf("Tile %u GEMM1: chunk %u/%u push to tile %u row %u cycles: %u\n",
+                               hartid,
+                               i + 1,
+                               n_chunks,
+                               gemm3_tiles[j],
+                               r,
+                               cyc_push - cyc_push_before);
                     }
                 }
             }
@@ -505,16 +554,19 @@ int main(void)
     /* ------------------------------------------------------------------ */
     if (gemm2_idx >= 0) {
         PERF_DELTA(cyc_preamble, _t0);
+        printf("Tile %u: Starting GEMM2...\n", hartid);
         _t0 = perf_get_cycles();
 
         uint32_t start_row, num_rows;
         get_row_range((uint32_t)gemm2_idx, GEMM2_N_TILES, DIM_C, &start_row, &num_rows);
 
         PERF_DELTA(cyc_preamble, _t0);
+        printf("Tile %u: GEMM2 computed rows [%u, %u)\n", hartid, start_row, start_row + num_rows);
         _t0 = perf_get_cycles();
 
         if (num_rows > 0) {
             PERF_DELTA(cyc_preamble, _t0);
+            printf("Tile %u: GEMM2 splitting into batches\n", hartid);
             _t0 = perf_get_cycles();
 
             uint32_t chunk_max = compute_batch(num_rows, FIFO_BATCH_FRAC);
@@ -528,19 +580,35 @@ int main(void)
                                   obi_m3[1] + chunk_max * DIM_D * 2 + chunk_max * DIM_E * 2};
 
             PERF_DELTA(cyc_preamble, _t0);
+            printf(
+                "Tile %u GEMM2: Workspace prepared. Working on %u batches (preamble: %u cycles)\n ",
+                hartid,
+                n_chunks,
+                cyc_preamble);
 
             /* Load full M4 from L2 */
+            printf("Tile %u GEMM2: Loading M4[%d x %d]...\n", hartid, DIM_D, DIM_E);
             _t0 = perf_get_cycles();
             idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m4_inp, obi_m4, DIM_D * DIM_E * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
             PERF_DELTA(cyc_cmi, _t0);
+            printf(
+                "Tile %u GEMM2: M4[%d x %d] loaded (cycles: %u)\n", hartid, DIM_D, DIM_E, cyc_cmi);
 
             /* Prime: load chunk 0 of M3 */
+            printf("Tile %u GEMM2: Priming pipeline with M3 chunk 0...\n", hartid);
             uint32_t c0s, c0l;
             compute_chunk(num_rows, n_chunks, 0, &c0s, &c0l);
 
             uint32_t cyc_cmi_pre_prime = cyc_cmi;
+            printf("Tile %u GEMM2: priming load preamble completed (cycles: %u)\n",
+                   hartid,
+                   cyc_cmi_pre_prime);
 
+            printf("Tile %u GEMM2: Loading M3 rows [%u, %u)...\n",
+                   hartid,
+                   start_row + c0s,
+                   start_row + c0s + c0l);
             _t0 = perf_get_cycles();
             idma_memcpy_1d(&idma_ctrl,
                            0,
@@ -549,10 +617,13 @@ int main(void)
                            c0l * DIM_D * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
             PERF_DELTA(cyc_cmi, _t0);
+            printf("Tile %u GEMM2: M3 chunk 0 loaded (cycles: %u)\n", hartid, cyc_cmi);
 
             uint32_t r2_batch = compute_batch(DIM_C, FIFO_BATCH_FRAC);
 
             for (uint32_t i = 0; i < n_chunks; i++) {
+                printf("Tile %u GEMM2: Starting batch %u/%u...\n", hartid, i + 1, n_chunks);
+
                 uint32_t cs, cl;
                 compute_chunk(num_rows, n_chunks, i, &cs, &cl);
                 uint32_t pp       = i & 1u;
@@ -569,6 +640,12 @@ int main(void)
                                    obi_m3[(i + 1) & 1u],
                                    nl * DIM_D * 2);
                     PERF_DELTA(cyc_cmi, _t0);
+
+                    printf("Tile %u GEMM2: chunk %u/%u prefetch issue cycles: %u\n",
+                           hartid,
+                           i + 1,
+                           n_chunks,
+                           cyc_cmi - cyc_cmi_before);
                 }
 
                 /* Compute R2 chunk i (zero-init + GEMM issue + wait) */
@@ -585,11 +662,23 @@ int main(void)
                 eu_redmule_wait(&eu_ctrl, WAIT_MODE);
                 PERF_DELTA(cyc_compute, _t0);
 
+                printf("Tile %u GEMM2: chunk %u/%u compute cycles: %u\n",
+                       hartid,
+                       i + 1,
+                       n_chunks,
+                       cyc_compute - cyc_compute_before);
+
                 if (has_next) {
                     uint32_t cyc_cmi_wait_before = cyc_cmi;
                     _t0                          = perf_get_cycles();
                     eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
                     PERF_DELTA(cyc_cmi, _t0);
+
+                    printf("Tile %u GEMM2: chunk %u/%u prefetch wait cycles: %u\n",
+                           hartid,
+                           i + 1,
+                           n_chunks,
+                           cyc_cmi - cyc_cmi_wait_before);
                 }
 
                 /*
@@ -617,6 +706,14 @@ int main(void)
                                       &idma_ctrl,
                                       &eu_ctrl,
                                       &cyc_push);
+
+                        printf("Tile %u GEMM2: chunk %u/%u push to tile %u row %u cycles: %u\n",
+                               hartid,
+                               i + 1,
+                               n_chunks,
+                               gemm3_tiles[j],
+                               global_r,
+                               cyc_push - cyc_push_before);
                     }
                 }
             }
@@ -628,13 +725,14 @@ int main(void)
     /* ------------------------------------------------------------------ */
     if (gemm3_idx >= 0) {
         PERF_DELTA(cyc_preamble, _t0);
+        printf("Tile %u: Starting GEMM3...\n", hartid);
         _t0 = perf_get_cycles();
 
         uint32_t start_row, num_rows;
         get_row_range((uint32_t)gemm3_idx, GEMM3_N_TILES, DIM_A, &start_row, &num_rows);
 
         PERF_DELTA(cyc_preamble, _t0);
-
+        printf("Tile %u: GEMM3 computed rows [%u, %u)\n", hartid, start_row, start_row + num_rows);
         _t0 = perf_get_cycles();
 
         /*
@@ -675,6 +773,10 @@ int main(void)
             r2_received[i] = 0;
 
         PERF_DELTA(cyc_preamble, _t0);
+        printf("Tile %u GEMM3: Workspace prepared. Expecting %u R3 rows (preamble: %u cycles)\n",
+               hartid,
+               num_rows,
+               cyc_preamble);
 
         uint32_t total_r3_done = 0;
 
@@ -683,6 +785,9 @@ int main(void)
         _t0                              = perf_get_cycles();
         mem_set_zero(obi_r3, num_rows * DIM_E);
         PERF_DELTA(cyc_compute, _t0);
+        printf("Tile %u GEMM3: R3 zero-init compute cycles: %u\n",
+               hartid,
+               cyc_compute - cyc_compute_zero_before);
 
         /*
          * Spin until all R3 rows for this tile have been computed and pushed.
@@ -699,6 +804,12 @@ int main(void)
                 ;
             PERF_DELTA(cyc_spin, _t0);
 
+            printf("Tile %u GEMM3: spin cycles: %u (matrix_id=%u row_index=%u)\n",
+                   hartid,
+                   cyc_spin - cyc_spin_before,
+                   matrix_id,
+                   row_index);
+
             if (matrix_id == MATRIX_R1) {
                 uint32_t cyc_compute_r1_before = cyc_compute;
                 uint32_t cyc_push_r1_before    = cyc_push;
@@ -713,6 +824,13 @@ int main(void)
                 r1_data_ptrs[local_row] = data_ptr;
                 r1_received[local_row]  = 1;
 
+                printf("Tile %u GEMM3: Received R1 batch for local row %u (global row %u, batch "
+                       "rows %u)\n",
+                       hartid,
+                       local_row,
+                       row_index,
+                       batch_rows);
+
                 /* Scan r2_received[] for contiguous groups */
                 uint32_t k = 0;
                 while (k < DIM_C) {
@@ -723,6 +841,15 @@ int main(void)
                     uint32_t k_start = k;
                     while (k < DIM_C && r2_received[k])
                         k++;
+
+                    printf("Tile %u GEMM3: Accumulating R1 batch into R3 for local row %u (global"
+                           "row %u, "
+                           "R2 global rows [%u, %u))\n",
+                           hartid,
+                           local_row,
+                           row_index,
+                           k_start,
+                           k);
 
                     total_r3_done += gemm3_partial_accum(local_row,
                                                          k_start,
@@ -742,6 +869,11 @@ int main(void)
                                                          &cyc_push);
                 }
 
+                printf("Tile %u GEMM3: R1 path compute cycles: %u, push cycles: %u\n",
+                       hartid,
+                       cyc_compute - cyc_compute_r1_before,
+                       cyc_push - cyc_push_r1_before);
+
             } else if (matrix_id == MATRIX_R2) {
                 uint32_t cyc_cmi_r2_before     = cyc_cmi;
                 uint32_t cyc_compute_r2_before = cyc_compute;
@@ -760,6 +892,13 @@ int main(void)
                 for (uint32_t i = 0; i < batch_rows; i++)
                     r2_received[row_index + i] = 1;
 
+                printf("Tile %u GEMM3: Received R2 batch for global row %u (batch rows %u, cycles "
+                       "to DMA %u)\n ",
+                       hartid,
+                       row_index,
+                       batch_rows,
+                       cyc_cmi);
+
                 /* Accumulate this R2 batch against all received R1 batches */
                 for (uint32_t lr = 0; lr < num_rows; lr += my_r1_batch) {
                     if (!r1_received[lr] || r3_pushed[lr])
@@ -767,6 +906,14 @@ int main(void)
 
                     uint32_t remaining = num_rows - lr;
                     uint32_t batch_r1  = (remaining < my_r1_batch) ? remaining : my_r1_batch;
+
+                    printf(
+                        "Tile %u GEMM3: Accumulating R2 batch into R3 for local row %u (global row "
+                        "%u, R1 batch rows %u)\n",
+                        hartid,
+                        lr,
+                        row_index,
+                        batch_r1);
 
                     total_r3_done += gemm3_partial_accum(lr,
                                                          row_index,
@@ -785,6 +932,13 @@ int main(void)
                                                          &cyc_compute,
                                                          &cyc_push);
                 }
+
+                printf("Tile %u GEMM3: R2 path cmi cycles: %u, compute cycles: %u, push cycles: % "
+                       "u\n ",
+                       hartid,
+                       cyc_cmi - cyc_cmi_r2_before,
+                       cyc_compute - cyc_compute_r2_before,
+                       cyc_push - cyc_push_r2_before);
             }
         }
     }
@@ -799,16 +953,22 @@ int main(void)
     /* ------------------------------------------------------------------ */
     if (gemm4_idx >= 0) {
         PERF_DELTA(cyc_preamble, _t0);
+        printf("Tile %u: Starting GEMM4...\n", hartid);
         _t0 = perf_get_cycles();
 
         uint32_t start_row, num_rows;
         get_row_range((uint32_t)gemm4_idx, GEMM4_N_TILES, DIM_A, &start_row, &num_rows);
 
         PERF_DELTA(cyc_preamble, _t0);
+        printf("Tile %u: GEMM4 computed rows [%u, %u)\n", hartid, start_row, start_row + num_rows);
         _t0 = perf_get_cycles();
 
         if (num_rows > 0) {
             PERF_DELTA(cyc_preamble, _t0);
+            printf("Tile %u GEMM4: Workspace prepared. Expecting %u O rows (preamble: %u cycles)\n",
+                   hartid,
+                   num_rows,
+                   cyc_preamble);
             _t0 = perf_get_cycles();
             /*
              * Workspace layout: [M5 | O_slice]
@@ -819,10 +979,16 @@ int main(void)
 
             uint32_t cyc_cmi_m5_before = cyc_cmi;
             /* Prefetch full M5 from L2 */
+            printf("Tile %u GEMM4: Loading M5[%d x %d]...\n", hartid, DIM_E, DIM_F);
             _t0 = perf_get_cycles();
             idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m5_inp, obi_m5, DIM_E * DIM_F * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
             PERF_DELTA(cyc_cmi, _t0);
+            printf("Tile %u GEMM4: M5[%d x %d] loaded (cycles: %u)\n",
+                   hartid,
+                   DIM_E,
+                   DIM_F,
+                   cyc_cmi - cyc_cmi_m5_before);
 
             /*
              * FIFO consumer loop (Phase 3, data-driven, no explicit barrier).
@@ -840,6 +1006,11 @@ int main(void)
                 while (!fifo_pop(hartid, &data_ptr, &data_size, &matrix_id, &row_index))
                     ;
                 PERF_DELTA(cyc_spin, _t0);
+                printf("Tile %u GEMM4: spin cycles: %u (matrix_id=%u row_index=%u)\n",
+                       hartid,
+                       cyc_spin - cyc_spin_before,
+                       matrix_id,
+                       row_index);
 
                 uint32_t batch_rows  = data_size / (DIM_E * 2);
                 uint32_t local_row   = row_index - start_row;
@@ -858,6 +1029,11 @@ int main(void)
                              (uint16_t)DIM_F);
                 eu_redmule_wait(&eu_ctrl, WAIT_MODE);
                 PERF_DELTA(cyc_compute, _t0);
+                printf("Tile %u GEMM4: O batch (row %u, %u rows) compute cycles: %u\n",
+                       hartid,
+                       row_index,
+                       batch_rows,
+                       cyc_compute - cyc_compute_before);
 
                 /* Wait for previous O write to complete before issuing the next */
                 uint32_t cyc_cmo_wait_before = cyc_cmo;
@@ -867,6 +1043,9 @@ int main(void)
                     PERF_DELTA(cyc_cmo, _t0);
                     out_inflight = 0;
                 }
+                printf("Tile %u GEMM4: prev O write wait cycles: %u\n",
+                       hartid,
+                       cyc_cmo - cyc_cmo_wait_before);
 
                 uint32_t cyc_cmo_issue_before = cyc_cmo;
                 /* Issue O batch write to L2 (non-blocking; overlaps with next compute) */
@@ -880,6 +1059,11 @@ int main(void)
                 out_inflight = 1;
 
                 total_o_done += batch_rows;
+                printf("Tile %u GEMM4: O write issue cycles: %u (total_o_done=%u/%u)\n",
+                       hartid,
+                       cyc_cmo - cyc_cmo_issue_before,
+                       total_o_done,
+                       num_rows);
             }
 
             uint32_t cyc_cmo_drain_before = cyc_cmo;
@@ -889,6 +1073,9 @@ int main(void)
                 eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
                 PERF_DELTA(cyc_cmo, _t0);
             }
+            printf("Tile %u GEMM4: final O drain cycles: %u\n",
+                   hartid,
+                   cyc_cmo - cyc_cmo_drain_before);
         }
     }
 
@@ -900,13 +1087,9 @@ int main(void)
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     PERF_DELTA(cyc_barrier, _t0);
+    printf("Tile %u: final barrier cycles: %u\n", hartid, cyc_barrier - cyc_barrier_final_before);
 
     perf_stop();
-
-    if (hartid == 0) {
-        printf("====================== TOTAL CYCLES: %u ======================\n",
-               perf_get_cycles());
-    }
 
     /* Validation: tile 0 checks O against golden */
     uint32_t errors = 0;
@@ -941,6 +1124,27 @@ int main(void)
         }
 
         printf("\nTest complete. Errors: %d / %d\n\n", errors, DIM_A * DIM_F);
+        printf("Cycles: %u\n", perf_get_cycles());
+    }
+
+    /* Per-tile breakdown: print for one representative per GEMM group.
+     * GEMM1→tile 0, GEMM2→tile 16, GEMM3→tile 2, GEMM4→tile 20.
+     * Fields not used by a tile's role are zero. */
+    if (hartid == 0 || hartid == 16 || hartid == 2 || hartid == 20) {
+        const char *role = (gemm1_idx >= 0)   ? "GEMM1"
+                           : (gemm2_idx >= 0) ? "GEMM2"
+                           : (gemm3_idx >= 0) ? "GEMM3"
+                           : (gemm4_idx >= 0) ? "GEMM4"
+                                              : "idle";
+        printf("[tile %2u %s] barrier=%u cmi=%u compute=%u push=%u spin=%u cmo=%u\n",
+               hartid,
+               role,
+               cyc_barrier,
+               cyc_cmi,
+               cyc_compute,
+               cyc_push,
+               cyc_spin,
+               cyc_cmo);
     }
 
     return errors;
