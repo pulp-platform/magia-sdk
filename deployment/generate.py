@@ -80,7 +80,7 @@ def generate_array(array: NDArray, name: Optional[str] = None) -> str:
     _str = f"{array.dtype}_t {name}[{name.upper()}_SIZE] = " + "{"
     if np.issubdtype(array.dtype, np.integer):  # integers
         _str += ", ".join([str(x) for x in array_flat])
-    elif np.issubdtype(array.dtype, np.float):  # floats
+    elif np.issubdtype(array.dtype, np.floating):  # floats
         _str += ", ".join(
             [f'{x}f' if np.isfinite(x) else str(x) for x in array_flat])
     else:
