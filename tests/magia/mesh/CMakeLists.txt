@@ -3,7 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Alberto Dequino <alberto.dequino@unibo.it>
-add_subdirectory(hello_world)
+#add_subdirectory(hello_world)
+#add_subdirectory(pouya_mat_mul)
+#add_subdirectory(pouya_spmv_simple)
+#add_subdirectory(pouya_spmv_compression)
+add_subdirectory(pouya_spmv_idma)
+add_subdirectory(pouya_spmv_bcsr)
 # add_subdirectory(fsync_levels)
 # add_subdirectory(fsync_rc)
 # add_subdirectory(fsync_diag)
@@ -21,7 +26,7 @@ add_subdirectory(hello_world)
 # add_subdirectory(mm_ws_2)
 # add_subdirectory(brah)
 # add_subdirectory(fsync_lr)
-# add_subdirectory(gemv)
+add_subdirectory(gemv)
 if (TARGET_PLATFORM STREQUAL "magia_v1")
     add_subdirectory(amo)
     add_subdirectory(amo_lock_global)
