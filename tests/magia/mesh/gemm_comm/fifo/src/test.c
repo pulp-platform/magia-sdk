@@ -120,18 +120,21 @@ static void fifo_push_dma(uint32_t target_hartid,
                           uint32_t matrix_id,
                           uint32_t row_index,
                           idma_controller_t *idma_ctrl,
-                          eu_controller_t *eu_ctrl)
+                          eu_controller_t *eu_ctrl,
+                          uint32_t *cyc_push)
 {
     fifo_header_t *hdr = fifo_get_header(target_hartid);
     fifo_slot_t *slot  = fifo_get_slot(hdr, slot_idx);
     uint32_t dst       = (uint32_t)fifo_slot_data(slot);
 
+    uint32_t t0 = perf_get_cycles();
     /* DMA payload: local L1 (OBI) → remote L1 (AXI) */
     idma_memcpy_1d(idma_ctrl, 1, dst, src_addr, size_bytes);
     eu_idma_wait_o2a(eu_ctrl, WAIT_MODE);
 
     /* Publish metadata + valid flag */
     fifo_slot_publish(target_hartid, slot_idx, size_bytes, matrix_id, row_index);
+    PERF_DELTA(*cyc_push, t0);
 }
 
 /*
@@ -141,7 +144,8 @@ static void push_r3_to_gemm4(uint32_t global_row,
                              uint32_t batch_rows,
                              uint32_t obi_r3_batch,
                              idma_controller_t *idma_ctrl,
-                             eu_controller_t *eu_ctrl)
+                             eu_controller_t *eu_ctrl,
+                             uint32_t *cyc_push)
 {
     for (uint32_t k = 0; k < GEMM4_N_TILES; k++) {
         uint32_t g4_start, g4_nrows;
@@ -166,7 +170,8 @@ static void push_r3_to_gemm4(uint32_t global_row,
                       MATRIX_R3,
                       ov_start,
                       idma_ctrl,
-                      eu_ctrl);
+                      eu_ctrl,
+                      cyc_push);
     }
 }
 
@@ -189,7 +194,9 @@ static uint32_t gemm3_partial_accum(uint32_t lr,
                                     uint8_t *r3_pushed,
                                     redmule_controller_t *redmule_ctrl,
                                     eu_controller_t *eu_ctrl,
-                                    idma_controller_t *idma_ctrl)
+                                    idma_controller_t *idma_ctrl,
+                                    uint32_t *cyc_compute,
+                                    uint32_t *cyc_push)
 {
     uint32_t A_ptr;
 
@@ -210,6 +217,7 @@ static uint32_t gemm3_partial_accum(uint32_t lr,
     uint32_t B_ptr        = obi_r2 + k_start * DIM_E * 2;
     uint32_t obi_r3_batch = obi_r3 + lr * DIM_E * 2;
 
+    uint32_t t0 = perf_get_cycles();
     redmule_gemm(redmule_ctrl,
                  A_ptr,
                  B_ptr,
@@ -218,13 +226,14 @@ static uint32_t gemm3_partial_accum(uint32_t lr,
                  (uint16_t)k_len,
                  (uint16_t)DIM_E);
     eu_redmule_wait(eu_ctrl, WAIT_MODE);
+    PERF_DELTA(*cyc_compute, t0);
 
     r3_k_done[lr] += k_len;
 
     if (r3_k_done[lr] == DIM_C && !r3_pushed[lr]) {
         r3_pushed[lr]       = 1;
         uint32_t global_row = start_row + lr;
-        push_r3_to_gemm4(global_row, r1_batch, obi_r3_batch, idma_ctrl, eu_ctrl);
+        push_r3_to_gemm4(global_row, r1_batch, obi_r3_batch, idma_ctrl, eu_ctrl, cyc_push);
         return r1_batch;
     }
 
@@ -280,6 +289,15 @@ int main(void)
     eu_redmule_init(&eu_ctrl, 0);
 #endif
 
+    /* Per-tile cycle-count breakdown (accumulated across phases) */
+    uint32_t cyc_barrier = 0; /* fsync barrier wait */
+    uint32_t cyc_cmi     = 0; /* input DMA: L2→L1 matrix loads + GEMM3 R2 workspace copy */
+    uint32_t cyc_compute = 0; /* RedMulE GEMM time */
+    uint32_t cyc_push    = 0; /* fifo_push_dma: DMA + publish */
+    uint32_t cyc_spin    = 0; /* fifo_pop spin (consumer idle) */
+    uint32_t cyc_cmo     = 0; /* output DMA: L1→L2 (GEMM4 only) */
+    uint32_t _t0;
+
     /* Determine group membership for this tile (needed to size the FIFO) */
     int gemm1_idx = get_local_idx(hartid, gemm1_tiles, GEMM1_N_TILES);
     int gemm2_idx = get_local_idx(hartid, gemm2_tiles, GEMM2_N_TILES);
@@ -326,8 +344,10 @@ int main(void)
      * touches global output buffers) and FIFO initialization before any
      * tile begins pushing into another tile's FIFO.
      */
+    _t0 = perf_get_cycles();
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    PERF_DELTA(cyc_barrier, _t0);
 
     perf_reset();
     perf_start();
@@ -363,18 +383,22 @@ int main(void)
                                   obi_m1[1] + chunk_max * DIM_B * 2 + chunk_max * DIM_C * 2};
 
             /* Load full M2 from L2 */
+            _t0 = perf_get_cycles();
             idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m2_inp, obi_m2, DIM_B * DIM_C * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            PERF_DELTA(cyc_cmi, _t0);
 
             /* Prime the pipeline: load M1_pp[0] */
             uint32_t c0s, c0l;
             compute_chunk(num_rows, n_chunks, 0, &c0s, &c0l);
+            _t0 = perf_get_cycles();
             idma_memcpy_1d(&idma_ctrl,
                            0,
                            (uint32_t)m1_inp + (start_row + c0s) * DIM_B * 2,
                            obi_m1[0],
                            c0l * DIM_B * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            PERF_DELTA(cyc_cmi, _t0);
 
             for (uint32_t i = 0; i < n_chunks; i++) {
                 uint32_t cs, cl;
@@ -386,14 +410,17 @@ int main(void)
                 if (has_next) {
                     uint32_t ns, nl;
                     compute_chunk(num_rows, n_chunks, i + 1, &ns, &nl);
+                    _t0 = perf_get_cycles();
                     idma_memcpy_1d(&idma_ctrl,
                                    0,
                                    (uint32_t)m1_inp + (start_row + ns) * DIM_B * 2,
                                    obi_m1[(i + 1) & 1u],
                                    nl * DIM_B * 2);
+                    PERF_DELTA(cyc_cmi, _t0);
                 }
 
-                /* Compute R1 chunk i */
+                /* Compute R1 chunk i (zero-init + GEMM issue + wait) */
+                _t0 = perf_get_cycles();
                 mem_set_zero(obi_r1[pp], cl * DIM_C);
                 redmule_gemm(&redmule_ctrl,
                              obi_m1[pp],
@@ -402,11 +429,14 @@ int main(void)
                              (uint16_t)cl,
                              (uint16_t)DIM_B,
                              (uint16_t)DIM_C);
-
-                if (has_next)
-                    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
-
                 eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                PERF_DELTA(cyc_compute, _t0);
+
+                if (has_next) {
+                    _t0 = perf_get_cycles();
+                    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                    PERF_DELTA(cyc_cmi, _t0);
+                }
 
                 /*
                  * Push this chunk's R1 rows to each GEMM3 tile that owns
@@ -439,7 +469,8 @@ int main(void)
                                       MATRIX_R1,
                                       r,
                                       &idma_ctrl,
-                                      &eu_ctrl);
+                                      &eu_ctrl,
+                                      &cyc_push);
                     }
                 }
             }
@@ -468,18 +499,22 @@ int main(void)
                                   obi_m3[1] + chunk_max * DIM_D * 2 + chunk_max * DIM_E * 2};
 
             /* Load full M4 from L2 */
+            _t0 = perf_get_cycles();
             idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m4_inp, obi_m4, DIM_D * DIM_E * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            PERF_DELTA(cyc_cmi, _t0);
 
             /* Prime: load chunk 0 of M3 */
             uint32_t c0s, c0l;
             compute_chunk(num_rows, n_chunks, 0, &c0s, &c0l);
+            _t0 = perf_get_cycles();
             idma_memcpy_1d(&idma_ctrl,
                            0,
                            (uint32_t)m3_inp + (start_row + c0s) * DIM_D * 2,
                            obi_m3[0],
                            c0l * DIM_D * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            PERF_DELTA(cyc_cmi, _t0);
 
             uint32_t r2_batch = compute_batch(DIM_C, FIFO_BATCH_FRAC);
 
@@ -492,13 +527,17 @@ int main(void)
                 if (has_next) {
                     uint32_t ns, nl;
                     compute_chunk(num_rows, n_chunks, i + 1, &ns, &nl);
+                    _t0 = perf_get_cycles();
                     idma_memcpy_1d(&idma_ctrl,
                                    0,
                                    (uint32_t)m3_inp + (start_row + ns) * DIM_D * 2,
                                    obi_m3[(i + 1) & 1u],
                                    nl * DIM_D * 2);
+                    PERF_DELTA(cyc_cmi, _t0);
                 }
 
+                /* Compute R2 chunk i (zero-init + GEMM issue + wait) */
+                _t0 = perf_get_cycles();
                 mem_set_zero(obi_r2[pp], cl * DIM_E);
                 redmule_gemm(&redmule_ctrl,
                              obi_m3[pp],
@@ -507,10 +546,14 @@ int main(void)
                              (uint16_t)cl,
                              (uint16_t)DIM_D,
                              (uint16_t)DIM_E);
-
-                if (has_next)
-                    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
                 eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                PERF_DELTA(cyc_compute, _t0);
+
+                if (has_next) {
+                    _t0 = perf_get_cycles();
+                    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                    PERF_DELTA(cyc_cmi, _t0);
+                }
 
                 /*
                  * Push this chunk's R2 rows to every GEMM3 tile (all need
@@ -533,7 +576,8 @@ int main(void)
                                       MATRIX_R2,
                                       global_r,
                                       &idma_ctrl,
-                                      &eu_ctrl);
+                                      &eu_ctrl,
+                                      &cyc_push);
                     }
                 }
             }
@@ -587,7 +631,9 @@ int main(void)
         uint32_t total_r3_done = 0;
 
         /* Zero R3 once; redmule_gemm accumulates (Y = X*W + Y) */
+        _t0 = perf_get_cycles();
         mem_set_zero(obi_r3, num_rows * DIM_E);
+        PERF_DELTA(cyc_compute, _t0);
 
         /*
          * Spin until all R3 rows for this tile have been computed and pushed.
@@ -597,8 +643,10 @@ int main(void)
             uint32_t data_ptr, data_size, matrix_id, row_index;
 
             /* Spin until a FIFO message arrives */
+            _t0 = perf_get_cycles();
             while (!fifo_pop(hartid, &data_ptr, &data_size, &matrix_id, &row_index))
                 ;
+            PERF_DELTA(cyc_spin, _t0);
 
             if (matrix_id == MATRIX_R1) {
                 /*
@@ -635,7 +683,9 @@ int main(void)
                                                          r3_pushed,
                                                          &redmule_ctrl,
                                                          &eu_ctrl,
-                                                         &idma_ctrl);
+                                                         &idma_ctrl,
+                                                         &cyc_compute,
+                                                         &cyc_push);
                 }
 
             } else if (matrix_id == MATRIX_R2) {
@@ -644,8 +694,10 @@ int main(void)
                  * immediately accumulate against every R1 batch already present.
                  */
                 uint32_t batch_rows = data_size / (DIM_E * 2);
+                _t0                 = perf_get_cycles();
                 idma_memcpy_1d(&idma_ctrl, 1, obi_r2 + row_index * DIM_E * 2, data_ptr, data_size);
                 eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                PERF_DELTA(cyc_cmi, _t0);
 
                 for (uint32_t i = 0; i < batch_rows; i++)
                     r2_received[row_index + i] = 1;
@@ -671,7 +723,9 @@ int main(void)
                                                          r3_pushed,
                                                          &redmule_ctrl,
                                                          &eu_ctrl,
-                                                         &idma_ctrl);
+                                                         &idma_ctrl,
+                                                         &cyc_compute,
+                                                         &cyc_push);
                 }
             }
         }
@@ -693,8 +747,10 @@ int main(void)
             uint32_t obi_o  = obi_m5 + DIM_E * DIM_F * 2;
 
             /* Prefetch full M5 from L2 */
+            _t0 = perf_get_cycles();
             idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m5_inp, obi_m5, DIM_E * DIM_F * 2);
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            PERF_DELTA(cyc_cmi, _t0);
 
             /*
              * FIFO consumer loop (Phase 3, data-driven, no explicit barrier).
@@ -705,8 +761,10 @@ int main(void)
                 uint32_t data_ptr, data_size, matrix_id, row_index;
 
                 /* Spin until a message arrives */
+                _t0 = perf_get_cycles();
                 while (!fifo_pop(hartid, &data_ptr, &data_size, &matrix_id, &row_index))
                     ;
+                PERF_DELTA(cyc_spin, _t0);
 
                 /* Only MATRIX_R3 messages are expected by GEMM4 tiles */
                 if (matrix_id != MATRIX_R3)
@@ -717,6 +775,7 @@ int main(void)
                 uint32_t obi_o_batch = obi_o + local_row * DIM_F * 2;
 
                 /* Compute O_batch = R3_batch @ M5; use payload directly as R3 input */
+                _t0 = perf_get_cycles();
                 mem_set_zero(obi_o_batch, batch_rows * DIM_F);
                 redmule_gemm(&redmule_ctrl,
                              data_ptr,
@@ -726,14 +785,17 @@ int main(void)
                              (uint16_t)DIM_E,
                              (uint16_t)DIM_F);
                 eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                PERF_DELTA(cyc_compute, _t0);
 
                 /* Write O batch to L2 */
+                _t0 = perf_get_cycles();
                 idma_memcpy_1d(&idma_ctrl,
                                1,
                                (uint32_t)o_out + row_index * DIM_F * 2,
                                obi_o_batch,
                                batch_rows * DIM_F * 2);
                 eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                PERF_DELTA(cyc_cmo, _t0);
 
                 total_o_done += batch_rows;
             }
@@ -743,8 +805,10 @@ int main(void)
     /* ------------------------------------------------------------------ */
     /* Final barrier: wait for all tiles to finish before validation       */
     /* ------------------------------------------------------------------ */
+    _t0 = perf_get_cycles();
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    PERF_DELTA(cyc_barrier, _t0);
 
     perf_stop();
 
@@ -782,6 +846,26 @@ int main(void)
 
         printf("\nTest complete. Errors: %d / %d\n\n", errors, DIM_A * DIM_F);
         printf("Cycles: %u\n", perf_get_cycles());
+    }
+
+    /* Per-tile breakdown: print for one representative per GEMM group.
+     * GEMM1→tile 0, GEMM2→tile 16, GEMM3→tile 2, GEMM4→tile 20.
+     * Fields not used by a tile's role are zero. */
+    if (hartid == 0 || hartid == 16 || hartid == 2 || hartid == 20) {
+        const char *role = (gemm1_idx >= 0)   ? "GEMM1"
+                           : (gemm2_idx >= 0) ? "GEMM2"
+                           : (gemm3_idx >= 0) ? "GEMM3"
+                           : (gemm4_idx >= 0) ? "GEMM4"
+                                              : "idle";
+        printf("[tile %2u %s] barrier=%u cmi=%u compute=%u push=%u spin=%u cmo=%u\n",
+               hartid,
+               role,
+               cyc_barrier,
+               cyc_cmi,
+               cyc_compute,
+               cyc_push,
+               cyc_spin,
+               cyc_cmo);
     }
 
     return errors;

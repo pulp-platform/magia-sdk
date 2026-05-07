@@ -25,6 +25,7 @@
 #include <stddef.h>
 #include "addr_map/tile_addr_map.h"
 
+__attribute__((optimize("no-tree-loop-distribute-patterns")))
 void *memset(void *m, int c, size_t n)
 {
     char *s = (char *)m;

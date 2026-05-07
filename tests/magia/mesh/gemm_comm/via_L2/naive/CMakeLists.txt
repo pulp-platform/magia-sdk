@@ -1,7 +1,7 @@
 set(TEST_NAME test_gemm_l2_naive)
 
 set(GEMM_TEST_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/test.h)
-set(GEN_SCRIPT    ${CMAKE_CURRENT_SOURCE_DIR}/gen_golden.py)
+set(GEN_SCRIPT    ${CMAKE_CURRENT_SOURCE_DIR}/../../gen_golden.py)
 
 add_custom_command(
     OUTPUT  ${GEMM_TEST_HEADER}

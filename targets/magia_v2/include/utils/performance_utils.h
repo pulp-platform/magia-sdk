@@ -175,4 +175,7 @@ static inline void stnl_r()
     asm volatile("addi x0, x0, 0x5EE" ::);
 }
 
+/* Accumulate elapsed cycles since t0 into acc. */
+#define PERF_DELTA(acc, t0) ((acc) += perf_get_cycles() - (t0))
+
 #endif
