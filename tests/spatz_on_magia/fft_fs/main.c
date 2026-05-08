@@ -155,28 +155,28 @@ static bool run_test()
         return ret;
     }
 
-    printf("AR VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_AR, (size_t) params->len);
-    printf("AI VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_AI, (size_t) params->len);
-    printf("BR VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_BR, (size_t) params->len);
-    printf("BI VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_BI, (size_t) params->len);
+    // printf("AR VECTOR:\n");
+    // print_vector_raw((const float16*) params->chunk_AR, (size_t) params->len);
+    // printf("AI VECTOR:\n");
+    // print_vector_raw((const float16*) params->chunk_AI, (size_t) params->len);
+    // printf("BR VECTOR:\n");
+    // print_vector_raw((const float16*) params->chunk_BR, (size_t) params->len);
+    // printf("BI VECTOR:\n");
+    // print_vector_raw((const float16*) params->chunk_BI, (size_t) params->len);
 
-    printf("WR VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_WR, (size_t) params->len);
-    printf("WI VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_WI, (size_t) params->len);
+    // printf("WR VECTOR:\n");
+    // print_vector_raw((const float16*) params->chunk_WR, (size_t) params->len);
+    // printf("WI VECTOR:\n");
+    // print_vector_raw((const float16*) params->chunk_WI, (size_t) params->len);
 
-    printf("CR VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_CR, (size_t) params->len);
-    printf("CI VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_CI, (size_t) params->len);
-    printf("DR VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_DR, (size_t) params->len);
-    printf("DI VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_DI, (size_t) params->len);
+    // printf("CR VECTOR:\n");
+    // print_vector_raw((const float16*) params->chunk_CR, (size_t) params->len);
+    // printf("CI VECTOR:\n");
+    // print_vector_raw((const float16*) params->chunk_CI, (size_t) params->len);
+    // printf("DR VECTOR:\n");
+    // print_vector_raw((const float16*) params->chunk_DR, (size_t) params->len);
+    // printf("DI VECTOR:\n");
+    // print_vector_raw((const float16*) params->chunk_DI, (size_t) params->len);
 
     ret = run_spatz_task();
     if (ret != 0) {
