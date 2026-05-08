@@ -55,8 +55,8 @@ LLVM_CMAKE			?= cmake
 LLVM_DIR			?= llvm
 LLVM_REPO			?= git@github.com:pulp-platform/llvm-project.git
 LLVM_COMMIT			?= b494f2d8dde88723026db8ec16ac6c7ee1e140ca
-LLVM_INSTALL_DIR	?= $(CURR_DIR)/llvm/install
-LLVM_BUILD_DIR		?= $(LLVM_DIR)/llvm-project/build
+LLVM_INSTALL_DIR	?= /srv/home/alberto.dequino/MAGIA_2/magia-sdk/llvm/install
+LLVM_BUILD_DIR		?= /srv/home/alberto.dequino/MAGIA_2/magia-sdk/llvm/llvm-project/build
 LLVM_JOBS			?= 8
 
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
@@ -139,7 +139,7 @@ ifndef platform
 	$(error Proper formatting is: make run_with_spatz test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin
+	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
