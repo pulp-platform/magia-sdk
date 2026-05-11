@@ -55,3 +55,6 @@ power_report.csv
 list/
 transcript
 states/
+
+# Deeploy generated code
+tests/spatz_on_magia/deeploy_*
