@@ -3,7 +3,7 @@
 
 int add_fp16_spatz_task(void)
 {
-    volatile onnx_add_params_t *params;
+    volatile add_fp16_spatz_params_t *params;
     uintptr_t params_addr;
     _Float16 *A;
     _Float16 *B;
@@ -12,7 +12,7 @@ int add_fp16_spatz_task(void)
     size_t vl;
 
     params_addr = mmio32(SPATZ_DATA);
-    params = (volatile onnx_add_params_t *) params_addr;
+    params = (volatile add_fp16_spatz_params_t *) params_addr;
 
     A = (_Float16 *)params->shard_A;
     B = (_Float16 *)params->shard_B;

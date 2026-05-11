@@ -12,7 +12,7 @@
 
 static int init_input_params(void *params, const float16 *A, const float16 *B, uint32_t size)
 {
-    volatile onnx_add_params_t *add_params;
+    volatile add_fp16_spatz_params_t *add_params;
     uint32_t shard;
     uint32_t start;
     uint32_t left;
@@ -20,7 +20,7 @@ static int init_input_params(void *params, const float16 *A, const float16 *B, u
     uint32_t len;
     uint32_t hid;
 
-    add_params = (volatile onnx_add_params_t *) params;
+    add_params = (volatile add_fp16_spatz_params_t *) params;
 
     shard = size / NUM_HARTS;
     left  = size % NUM_HARTS;
@@ -59,7 +59,7 @@ static int offload_spatz_task()
     eu_ctrl.api = &eu_api;
 
     spatz_init(SPATZ_BINARY_START);
-    spatz_run_task_with_params(ADD_FP16_SPATZ_TASK, ONNX_ADD_PARAMS_BASE);
+    spatz_run_task_with_params(ADD_FP16_SPATZ_TASK, ADD_FP16_SPATZ_PARAMS_BASE);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
@@ -76,12 +76,12 @@ exit:
 
 static int store_result(void* params, float16 *dst)
 {
-    volatile onnx_add_params_t *add_params;
+    volatile add_fp16_spatz_params_t *add_params;
     uint32_t shard_C_base;
     uint32_t start;
     uint32_t len;
 
-    add_params = (volatile onnx_add_params_t *) params;
+    add_params = (volatile add_fp16_spatz_params_t *) params;
     shard_C_base = add_params->shard_C;
     start = add_params->start;
     len = add_params->len;
@@ -98,9 +98,9 @@ static int store_result(void* params, float16 *dst)
 void MAGIA_add_fp16_spatz(const float16 *A, const float16 *B, float16 *C, uint32_t size)
 {
     int ret;
-    volatile onnx_add_params_t *params;
+    volatile add_fp16_spatz_params_t *params;
 
-    params = (volatile onnx_add_params_t *) ONNX_ADD_PARAMS_BASE;
+    params = (volatile add_fp16_spatz_params_t *) ADD_FP16_SPATZ_PARAMS_BASE;
 
     ret = init_input_params(params, A, B, size);
     if (ret != 0) {
