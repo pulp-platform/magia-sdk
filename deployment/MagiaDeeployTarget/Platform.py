@@ -10,14 +10,13 @@ from Deeploy.DeeployTypes import ConstantBuffer, DeploymentEngine, DeploymentPla
 from Deeploy.Targets.Generic.Layers import AddLayer
 from Deeploy.Targets.Generic.Parsers import AddParser
 from Deeploy.Targets.Generic.Templates import AllocateTemplate as BasicAllocateTemplate
-from MagiaDeeployTarget.Bindings import MagiaAddBindings, MagiaOnnxAddBindings
+from MagiaDeeployTarget.Bindings import MagiaAddBindings, MagiaAddFp16Bindings
 from MagiaDeeployTarget.Templates import AllocateTemplate, FreeTemplate
 
 
-AddMapper = NodeMapper(AddParser(), MagiaAddBindings + MagiaOnnxAddBindings)
+AddMapper = NodeMapper(AddParser(), MagiaAddBindings + MagiaAddFp16Bindings)
 
 MagiaMapping = {'Add': AddLayer([AddMapper])}
-
 
 class MagiaVariableBuffer(VariableBuffer):
 

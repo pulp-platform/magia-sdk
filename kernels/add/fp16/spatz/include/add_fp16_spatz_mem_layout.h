@@ -1,11 +1,11 @@
-#ifndef ONNX_ADD_MEM_LAYOUT_H_
-#define ONNX_ADD_MEM_LAYOUT_H_
+#ifndef ADD_FP16_MEM_LAYOUT_H_
+#define ADD_FP16_MEM_LAYOUT_H_
 
 #include "data.h"
 #include "kernels_mem_layout_utils.h"
 #include "magia_tile_utils.h"
 #include "magia_utils.h"
-#include "onnx_add_params.h"
+#include "add_fp16_spatz_params.h"
 
 #define L1_BASE_TILE    (L1_BASE + (get_hartid() * L1_TILE_OFFSET))
 #define TENSOR_LEN      (INPUT0_SIZE)
@@ -25,4 +25,4 @@
 #define SHARD_C_BASE    ALIGN_4B(SHARD_B_BASE + SHARD_B_SIZE)
 #define SHARD_C_SIZE    ALIGN_4B(OUT_SHARD_SIZE)
 
-#endif  /* ONNX_ADD_MEM_LAYOUT_H_ */
+#endif  /* ADD_FP16_MEM_LAYOUT_H_ */

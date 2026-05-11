@@ -39,24 +39,25 @@ def split_test_header_definitions(header: str) -> tuple[str, str]:
 
     return "\n".join(header_lines) + "\n", "\n".join(source_lines) + "\n"
 
-def generate_cmakelist_with_spatz(test: str, operator_name: str) -> str:
+def generate_cmakelist_with_spatz(test: str, operand: str, format: str, arch: str) -> str:
     text = copyright_comment('#')
     text += "\n"
     text += f"set(TEST_NAME {test})\n"
     text += "\n"
 
-    kernel_root = f"${{CMAKE_CURRENT_SOURCE_DIR}}/../../../kernels/{operator_name}"
-    kernel_task_path = f"{kernel_root}/spatz_task/{operator_name}_task.c"
-    kernel_source_path = f"{kernel_root}/src/{operator_name}.c"
+    kernel_root = f"${{CMAKE_CURRENT_SOURCE_DIR}}/../../../kernels/{operand}/{format}/{arch}"
+    kernel_task_path = f"{kernel_root}/spatz_task/{test}_task.c"
+    kernel_source_path = f"{kernel_root}/src/{test}.c"
     kernel_include_path = f"{kernel_root}/include"
-    kernel_common_path = f"{kernel_root}/../common"
+    kernel_common_path = f"${{CMAKE_CURRENT_SOURCE_DIR}}/../../../kernels/common"
 
     text += "# Step 1: Compile the Spatz task and generate the C header\n"
     text += "add_spatz_task(\n"
     text += f"    TEST_NAME ${{TEST_NAME}}\n"
     text += f"    TASK_SOURCES {kernel_task_path}\n"
-    text += f"    FIRST_TASK_NAME {operator_name}_task\n"
+    text += f"    FIRST_TASK_NAME {test}_task\n"
     text += "    INCLUDE_DIRS\n"
+    text += f"        {kernel_common_path}\n"
     text += f"        {kernel_include_path}\n"
     text += "        ${CMAKE_CURRENT_SOURCE_DIR}/include\n"
     text += ")\n\n"
@@ -64,6 +65,7 @@ def generate_cmakelist_with_spatz(test: str, operator_name: str) -> str:
     text += "# Step 2: Compile the CV32 executable and embed the Spatz binary\n"
     text += "add_cv32_executable_with_spatz(\n"
     text += "    TARGET_NAME ${TEST_NAME}\n"
+    text += "    SPATZ_HEADER ${SPATZ_HEADER}\n"
     text += f"    SOURCES {kernel_source_path} src/network.c src/main.c src/data.c\n"
     text += "    INCLUDE_DIRS\n"
     text += f"        {kernel_include_path}\n"
@@ -73,23 +75,13 @@ def generate_cmakelist_with_spatz(test: str, operator_name: str) -> str:
 
     return text
 
-def main(src_dir: Path, dst_dir: Path) -> None:
-    """
-    src_dir
-    ├── inputs.npz
-    ├── outputs.npz
-    └── network.onnx
+def main(test) -> None:
 
-    dst_dir
-    ├── include
-    |   ├── network.h
-    │   └── data.h
-    ├── src
-    |   ├── network.c
-    |   ├── data.c
-    │   └── main.c
-    └── CMakeLists.txt
-    """
+    print(f"test: {test}")
+
+    operand, format, arch = test.split("_")
+    src_dir = Path("deployment") / "tests" / operand / format / arch
+    dst_dir = Path("tests") / "spatz_on_magia" / ("deeploy_" + test)
 
     # load inputs, outputs, and network
     logger.debug("loading inputs and outputs data")
@@ -173,19 +165,17 @@ def main(src_dir: Path, dst_dir: Path) -> None:
     shutil.copyfile(main_src_path, main_dst_path)
     os.system(clang_cmd(main_dst_path))
 
-    # CMakeLists
-    operator_name = src_dir.name
+    # CMakeLilsts.txt
     cmakelists_path = dst_dir / 'CMakeLists.txt'
     logger.debug(f"generating {cmakelists_path}")
-    cmakelist = generate_cmakelist_with_spatz(dst_dir.name, operator_name)
+    cmakelist = generate_cmakelist_with_spatz(test, operand, format, arch)
     with open(cmakelists_path, "w") as f:
         f.write(cmakelist)
 
 if __name__ == "__main__":
 
     parser = ArgumentParser()
-    parser.add_argument('-s', '--source', type=str, required=True)
-    parser.add_argument('-d', '--destination', type=str, required=True)
+    parser.add_argument('-t', '--test', type=str, required=True)
     parser.add_argument('-v', '--verbose', action='count', default=0)
 
     args = parser.parse_args()
@@ -208,4 +198,4 @@ if __name__ == "__main__":
     logger.addHandler(stream_handler)
 
     logger.debug(f"args: {args}")
-    main(Path(args.source), Path(args.destination))
+    main(args.test)

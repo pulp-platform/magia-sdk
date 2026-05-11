@@ -1,7 +1,7 @@
 #include "tile.h"
-#include "onnx_add_params.h"
+#include "add_fp16_spatz_params.h"
 
-int onnx_add_task(void)
+int add_fp16_spatz_task(void)
 {
     volatile onnx_add_params_t *params;
     uintptr_t params_addr;

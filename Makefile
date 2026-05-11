@@ -281,8 +281,6 @@ endif
 ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
-	python3 deployment/generate_with_spatz.py \
-		-s ./deployment/tests/$(test) \
-		-d ./tests/spatz_on_magia/deeploy_$(test) -vv
+	python3 deployment/generate_with_spatz.py -t $(test) -vv
 	make clean build tiles=$(tiles) compiler=$(compiler) eval=$(eval) target_platform=magia_v2 spatz_tests=1
-	make run_with_spatz test=deeploy_$(test) platform=$(platform) tiles=$(tiles)
+	make run_with_spatz test=$(test) platform=$(platform) tiles=$(tiles)

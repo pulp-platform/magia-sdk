@@ -3,10 +3,10 @@
 #include "eventunit.h"
 #include "tile.h"
 
-#include "onnx_add.h"
-#include "onnx_add_mem_layout.h"
-#include "onnx_add_params.h"
-#include "deeploy_onnx_add_task_bin.h"
+#include "add_fp16_spatz.h"
+#include "add_fp16_spatz_mem_layout.h"
+#include "add_fp16_spatz_params.h"
+#include "add_fp16_spatz_task_bin.h"
 
 #define HID get_hartid()
 
@@ -59,7 +59,7 @@ static int offload_spatz_task()
     eu_ctrl.api = &eu_api;
 
     spatz_init(SPATZ_BINARY_START);
-    spatz_run_task_with_params(ONNX_ADD_TASK, ONNX_ADD_PARAMS_BASE);
+    spatz_run_task_with_params(ADD_FP16_SPATZ_TASK, ONNX_ADD_PARAMS_BASE);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
@@ -95,7 +95,7 @@ static int store_result(void* params, float16 *dst)
     return 0;
 }
 
-void MAGIA_onnx_add(const float16 *A, const float16 *B, float16 *C, uint32_t size)
+void MAGIA_add_fp16_spatz(const float16 *A, const float16 *B, float16 *C, uint32_t size)
 {
     int ret;
     volatile onnx_add_params_t *params;
