@@ -7,18 +7,19 @@ import onnx_graphsurgeon as gs
 
 from Deeploy.DeeployTypes import ConstantBuffer, DeploymentEngine, DeploymentPlatform, NetworkContext, NodeMapper, \
     NodeTemplate, StructBuffer, TopologyOptimizer, TransientBuffer, VariableBuffer
-from Deeploy.Targets.Generic.Layers import AddLayer, DivLayer, GELULayer
-from Deeploy.Targets.Generic.Parsers import AddParser, DivParser, GELUParser
+from Deeploy.Targets.Generic.Layers import AddLayer, DivLayer, GELULayer, ReluLayer
+from Deeploy.Targets.Generic.Parsers import AddParser, DivParser, GELUParser, ReluParser
 from Deeploy.Targets.Generic.Templates import AllocateTemplate as BasicAllocateTemplate
-from MagiaDeeployTarget.Bindings import MagiaAddBindings, MagiaAddFp16Bindings, MagiaDivFp16Bindings, MagiaGeluFp16Bindings
+from MagiaDeeployTarget.Bindings import MagiaAddBindings, MagiaAddFp16Bindings, MagiaDivFp16Bindings, MagiaGeluFp16Bindings, MagiaReluFp16Bindings
 from MagiaDeeployTarget.Templates import AllocateTemplate, FreeTemplate
 
 
 AddMapper = NodeMapper(AddParser(), MagiaAddBindings + MagiaAddFp16Bindings)
 DivMapper = NodeMapper(DivParser(), MagiaDivFp16Bindings)
 GeluMapper = NodeMapper(GELUParser(), MagiaGeluFp16Bindings)
+ReluMapper = NodeMapper(ReluParser(), MagiaReluFp16Bindings)
 
-MagiaMapping = {'Add': AddLayer([AddMapper]), 'Div': DivLayer([DivMapper]), 'Gelu': GELULayer([GeluMapper])}
+MagiaMapping = {'Add': AddLayer([AddMapper]), 'Div': DivLayer([DivMapper]), 'Gelu': GELULayer([GeluMapper]), 'Relu': ReluLayer([ReluMapper])}
 
 class MagiaVariableBuffer(VariableBuffer):
 

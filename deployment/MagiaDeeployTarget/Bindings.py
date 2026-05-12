@@ -6,11 +6,12 @@
 from Deeploy.AbstractDataTypes import PointerClass
 from Deeploy.CommonExtensions.DataTypes import float16_t, int8_t, int32_t
 from Deeploy.DeeployTypes import CodeTransformation, NodeBinding
-from Deeploy.Targets.Generic.TypeCheckers import AddChecker, DivChecker, GELUChecker
+from Deeploy.Targets.Generic.TypeCheckers import AddChecker, DivChecker, GELUChecker, ReluChecker
 from MagiaDeeployTarget.Templates import AddTemplate
 from MagiaDeeployTarget.Templates import AddFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import DivFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GeluFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import ReluFP16SpatzTemplate
 
 BasicTransformer = CodeTransformation([])
 
@@ -54,6 +55,17 @@ MagiaGeluFp16Bindings = [
             [PointerClass(float16_t)]
         ),
         GeluFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    ),
+]
+
+MagiaReluFp16Bindings = [
+    NodeBinding(
+        ReluChecker(
+            [PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        ReluFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     ),
 ]
