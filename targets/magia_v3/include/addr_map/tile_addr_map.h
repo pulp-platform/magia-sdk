@@ -43,6 +43,25 @@
 #define SPATZ_CTRL_END  (0x0000173C)
 #define PULP_CTRL_BASE (0x00001740)
 #define PULP_CTRL_END  (0x000017FF)
+
+// PULP cluster configuration
+#define PULP_CORE_COUNT       (8)
+#define PULP_STACK_SLICE_SIZE (0x800)     /* 2 KB per hart */
+#define PULP_STACK_MAX_CORES  (16)
+
+#if (PULP_CORE_COUNT < 1) || (PULP_CORE_COUNT > PULP_STACK_MAX_CORES)
+#error "PULP_CORE_COUNT must be between 1 and 16"
+#endif
+
+// PULP hart ID mapping (CV32 tiles occupy [0, NUM_HARTS), PULP starts after)
+#define NUM_PULP_CORES    (PULP_CORE_COUNT)
+#define PULP_HARTID_BASE  (2 * NUM_HARTS)
+#define TOTAL_PULP_HARTS  (NUM_HARTS * NUM_PULP_CORES)
+
+// PULP hart ID helpers
+#define GET_PULP_GLOBAL_ID(mhartid) ((mhartid) - PULP_HARTID_BASE)
+#define GET_PULP_LOCAL_ID(mhartid)  (GET_PULP_GLOBAL_ID(mhartid) % NUM_PULP_CORES)
+#define GET_PULP_TILE_ID(mhartid)   (GET_PULP_GLOBAL_ID(mhartid) / NUM_PULP_CORES)
 #define RESERVED_START (0x00001800)
 #define RESERVED_END   (0x0000FFFF)
 #define STACK_START    (0x00010000)
