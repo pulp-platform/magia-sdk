@@ -66,6 +66,10 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/spatz_config.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/spatz_helpers.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/bootrom_helpers.cmake)
 
+# PULP cluster support
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/pulp_config.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/pulp_helpers.cmake)
+
 ################################################################################
 # Add subdirectories                                                           #
 ################################################################################

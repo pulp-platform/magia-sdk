@@ -11,14 +11,13 @@ if(SPATZ_TESTS)
     set(TEST_MAPPINGS
         magia_v1:magia
         magia_v2:magia,spatz_on_magia
-        magia_v3:spatz_pulp_on_magia
-        pulp:pulp
+        magia_v3:pulp_on_magia,spatz_on_magia,spatz_pulp_on_magia
     )
 else()
     set(TEST_MAPPINGS
         magia_v1:magia
         magia_v2:magia
-        pulp:pulp
+        magia_v3:pulp_on_magia
     )
 endif()
 

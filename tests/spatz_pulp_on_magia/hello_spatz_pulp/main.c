@@ -1,47 +1,45 @@
 #include "tile.h"
 #include "eventunit.h"
 
-#include "hello_spatz_pulp_task_bin.h"
+#include "hello_spatz_pulp_task_bin.h"  /* Spatz: SPATZ_BINARY_START, HELLO_TASK */
+#include "hello_spatz_pulp_bin.h"       /* PULP:  PULP_BINARY_START              */
 
 int main(void) {
-    int errors;
     eu_config_t eu_cfg;
     eu_controller_t eu_ctrl;
+    int errors = 0;
 
-    printf("[CV32] Hello Spatz Test\n");
+    printf("[CV32] Hello Spatz+PULP Test\n");
 
-    errors = 0;
     eu_cfg.hartid = get_hartid();
-    eu_ctrl.base = NULL,
-    eu_ctrl.cfg = &eu_cfg,
-    eu_ctrl.api = &eu_api,
+    eu_ctrl.base  = NULL;
+    eu_ctrl.cfg   = &eu_cfg;
+    eu_ctrl.api   = &eu_api;
 
-    printf("[CV32] Initializing Event Unit\n");
     eu_init(&eu_ctrl);
     eu_pulp_init(&eu_ctrl, 0);
-
-    printf("[CV32] Initializing Spatz Event Unit\n");
     eu_spatz_init(&eu_ctrl, 0);
 
     printf("[CV32] Initializing Spatz\n");
     spatz_init(SPATZ_BINARY_START);
 
-    printf("[CV32] Launching SPATZ Task\n");
+    printf("[CV32] Launching Spatz task\n");
     spatz_run_task(HELLO_TASK);
 
-    eu_spatz_wait(&eu_ctrl, WFE);
+    printf("[CV32] Starting PULP cluster\n");
+    pulp_init(PULP_BINARY_START);
 
-    if(spatz_get_exit_code() != 0) {
-        printf("[CV32] SPATZ TASK ENDED with exit code: 0x%03x\n", spatz_get_exit_code());
+    eu_spatz_wait(&eu_ctrl, WFE);
+    if (spatz_get_exit_code() != 0) {
+        printf("[CV32] Spatz FAILED (exit code 0x%03x)\n", spatz_get_exit_code());
         errors++;
     } else {
-        printf("[CV32] SPATZ TASK ENDED successfully\n");
+        printf("[CV32] Spatz done\n");
     }
-
     spatz_clk_dis();
 
-    mmio32(PULP_CTRL_BASE) = 0x1;
     eu_pulp_wait(&eu_ctrl, WFE);
+    printf("[CV32] PULP cluster done\n");
 
     return errors;
 }

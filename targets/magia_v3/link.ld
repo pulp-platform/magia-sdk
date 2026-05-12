@@ -78,8 +78,21 @@ SECTIONS
     } > instrram :text
 
     _spatz_binary_end = .;
-    _spatz_binary_size = _spatz_binary_end - _spatz_binary_start;											  															 
-	
+    _spatz_binary_size = _spatz_binary_end - _spatz_binary_start;
+
+    /* PULP embedded binary - inlined from header file */
+    /* Positioned right after Spatz binary in instrram */
+
+    . = ALIGN(4);
+    _pulp_binary_start = .;
+
+    .pulp_binary : {
+        KEEP(*(.pulp_binary))
+    } > instrram :text
+
+    _pulp_binary_end = .;
+    _pulp_binary_size = _pulp_binary_end - _pulp_binary_start;
+
     /*--------------------------------------------------------------------*/
     /* Global constructor/destructor segment                              */
     /*--------------------------------------------------------------------*/

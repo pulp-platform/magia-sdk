@@ -1,0 +1,10 @@
+#include "tile.h"
+
+int main(void) {
+    uint32_t hartid   = get_hartid();
+    uint32_t local_id = GET_PULP_LOCAL_ID(hartid);
+    uint32_t tile_id  = GET_PULP_TILE_ID(hartid);
+    wait_nop((tile_id+1)*hartid*2000);
+    printf("[PULP][tile-id=%u local-core-id=%u global-hartid=%u] Hello from PULP!\n", tile_id, local_id, hartid);
+    return 0;
+}

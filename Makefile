@@ -84,6 +84,9 @@ ifeq ($(target_platform), pulp)
 	sed -i -E 's/^(#define PULP_CORE_COUNT[[:space:]]*)\([0-9]+\)/\1($(pulp_cores))/' ./targets/$(target_platform)/include/addr_map/tile_addr_map.h
 	sed -i -E 's/^(_stack_hart_count[[:space:]]*=[[:space:]]*)[0-9]+/\1$(pulp_cores)/' ./targets/$(target_platform)/link.ld
 endif
+ifeq ($(target_platform), magia_v3)
+	sed -i -E 's/^(#define PULP_CORE_COUNT[[:space:]]*)\([0-9]+\)/\1($(pulp_cores))/' ./targets/$(target_platform)/include/addr_map/tile_addr_map.h
+endif
 ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
 endif
@@ -95,7 +98,7 @@ ifeq ($(compiler), GCC_MULTILIB)
 	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/$(target_platform)/include/tile.h
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz_tests) -DSPATZ_LLVM_PATH=$(LLVM_INSTALL_DIR) -B build --trace-expand
+	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz_tests) -DSPATZ_LLVM_PATH=$(LLVM_INSTALL_DIR) -DPULP_CORE_COUNT=$(pulp_cores) -B build --trace-expand
 	cmake --build build --verbose
 
 set_mesh:
@@ -166,6 +169,66 @@ else
 	$(error Only rtl and gvsoc are supported as platforms.)
 endif
 
+run_with_pulp: set_mesh
+ifndef test
+	$(error Proper formatting is: make run_with_pulp test=<test_name> platform=<rtl|gvsoc>)
+endif
+ifeq (,$(wildcard ./build/bin/$(test)))
+	$(error No test found with name: $(test))
+endif
+ifndef platform
+	$(error Proper formatting is: make run_with_pulp test=<test_name> platform=rtl|gvsoc)
+endif
+ifeq ($(platform), gvsoc)
+	$(GVSOC_DIR)/install/bin/gvrun --target magia_v3 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --attr magia_v3/nb_pulp_cores=$(pulp_cores)
+else ifeq ($(platform), rtl)
+	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
+	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
+	objcopy --srec-len 1 --output-target=srec $(BUILD_DIR_ABS)/build/verif $(BUILD_DIR_ABS)/build/verif.s19
+	scripts/parse_s19.pl $(BUILD_DIR_ABS)/build/verif.s19 > $(BUILD_DIR_ABS)/build/verif.txt
+	python3 scripts/s19tomem.py $(BUILD_DIR_ABS)/build/verif.txt $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
+	cd $(BUILD_DIR_ABS)													&& \
+	cp -sf "$(MAGIA_DIR_ABS)/sim/modelsim.ini" modelsim.ini    				&& \
+	ln -sfn "$(MAGIA_DIR_ABS)/sim/work" work
+	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BUILD_DIR_ABS)/build/verif > $(BUILD_DIR_ABS)/build/verif.dump
+	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BUILD_DIR_ABS)/build/verif > $(BUILD_DIR_ABS)/build/verif.objdump
+	python3 scripts/objdump2itb.py $(BUILD_DIR_ABS)/build/verif.objdump > $(BUILD_DIR_ABS)/build/verif.itb
+	cd $(MAGIA_DIR_ABS) 												&& \
+	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv)
+else
+	$(error Only rtl and gvsoc are supported as platforms.)
+endif
+
+run_with_spatz_and_pulp: set_mesh
+ifndef test
+	$(error Proper formatting is: make run_with_spatz_and_pulp test=<test_name> platform=<rtl|gvsoc>)
+endif
+ifeq (,$(wildcard ./build/bin/$(test)))
+	$(error No test found with name: $(test))
+endif
+ifndef platform
+	$(error Proper formatting is: make run_with_spatz_and_pulp test=<test_name> platform=rtl|gvsoc)
+endif
+ifeq ($(platform), gvsoc)
+	$(GVSOC_DIR)/install/bin/gvrun --target magia_v3 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --attr magia_v3/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --attr magia_v3/nb_pulp_cores=$(pulp_cores)
+else ifeq ($(platform), rtl)
+	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
+	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
+	objcopy --srec-len 1 --output-target=srec $(BUILD_DIR_ABS)/build/verif $(BUILD_DIR_ABS)/build/verif.s19
+	scripts/parse_s19.pl $(BUILD_DIR_ABS)/build/verif.s19 > $(BUILD_DIR_ABS)/build/verif.txt
+	python3 scripts/s19tomem.py $(BUILD_DIR_ABS)/build/verif.txt $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
+	cd $(BUILD_DIR_ABS)													&& \
+	cp -sf "$(MAGIA_DIR_ABS)/sim/modelsim.ini" modelsim.ini    				&& \
+	ln -sfn "$(MAGIA_DIR_ABS)/sim/work" work
+	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BUILD_DIR_ABS)/build/verif > $(BUILD_DIR_ABS)/build/verif.dump
+	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BUILD_DIR_ABS)/build/verif > $(BUILD_DIR_ABS)/build/verif.objdump
+	python3 scripts/objdump2itb.py $(BUILD_DIR_ABS)/build/verif.objdump > $(BUILD_DIR_ABS)/build/verif.itb
+	cd $(MAGIA_DIR_ABS) 												&& \
+	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv)
+else
+	$(error Only rtl and gvsoc are supported as platforms.)
+endif
+
 MAGIA: set_mesh
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
 	$(eval tiles_2=256)
@@ -209,11 +272,17 @@ gvsoc:
 ifeq ($(target_platform), magia_v2)
 	sed -i -E "s/^[[:space:]]*N_TILES_X[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_X           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v2/arch.py
 	sed -i -E "s/^[[:space:]]*N_TILES_Y[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_Y           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v2/arch.py
-else
-	$(error unrecognized platform (acceptable platform: magia_v2).)
-endif
 	cd $(GVSOC_DIR)	&& \
 	make build TARGETS=magia_v2
+else ifeq ($(target_platform), magia_v3)
+	sed -i -E "s/^[[:space:]]*N_TILES_X[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_X           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
+	sed -i -E "s/^[[:space:]]*N_TILES_Y[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_Y           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
+	sed -i -E "s/^[[:space:]]*NB_PULP_CORES[[:space:]]*=[[:space:]]*[0-9]+/    NB_PULP_CORES       = $(pulp_cores)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
+	cd $(GVSOC_DIR)	&& \
+	make build TARGETS=magia_v3
+else
+	$(error unrecognized platform (acceptable platforms: magia_v2, magia_v3).)
+endif
 
 gvsoc_init:
 	git clone https://github.com/FondazioneChipsIT/gvsoc
