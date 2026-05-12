@@ -180,110 +180,123 @@ int main(void){
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
     /**
-    * 4. Reduce partial GeMV.
-    */
-    uint32_t log_tree_mask = 1;
-    uint32_t log_tree_bit  = 1;
-    for (int i = 0; i < reduce_phases; i++){
-    #if defined(BASELINE_K2)
-        if (i == 0) {   // First level of the tree
-            if (x_id % reduce_degree == 0) {  // Tile is this phase's group leader.
-                fsync_sync_row(&fsync_ctrl);
-                eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+     * 4. Reduce partial GeMV.
+     */
+    if(MESH_2_POWER == 0){
+        /**
+         * Store the computed gemv in memory, in case we are in a single MAGIA tile.   
+         */
+        axi_addr_y = (uint32_t) y_out;
+        idma_memcpy_1d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y);
+        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+    }
+    axi_addr_y = (uint32_t) y_out + (y_id*tile_w*2);
+    idma_memcpy_1d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y);
+    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+    if(MESH_2_POWER != 0){
+        uint32_t log_tree_mask = 1;
+        uint32_t log_tree_bit  = 1;
+        for (int i = 0; i < reduce_phases; i++){
+        #if defined(BASELINE_K2)
+            if (i == 0) {   // First level of the tree
+                if (x_id % reduce_degree == 0) {  // Tile is this phase's group leader.
+                    fsync_sync_row(&fsync_ctrl);
+                    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
-                /**
-                * 4b. Sum partial GeMV on the phases group leader.
-                */
-                for (int j = 0; j < (reduce_degree - 1); j++){
-                    if ((x_id + 1 + j) <= (MESH_X_TILES - 1)){
-                        uint32_t partial_gemv_addr = obi_addr_x + (j * len_y);
-                        redmule_gemm(&redmule_ctrl, partial_gemv_addr, obi_addr_id, obi_addr_y, tile_m, tile_w, tile_w);
-                        eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                    /**
+                    * 4b. Sum partial GeMV on the phases group leader.
+                    */
+                    for (int j = 0; j < (reduce_degree - 1); j++){
+                        if ((x_id + 1 + j) <= (MESH_X_TILES - 1)){
+                            uint32_t partial_gemv_addr = obi_addr_x + (j * len_y);
+                            redmule_gemm(&redmule_ctrl, partial_gemv_addr, obi_addr_id, obi_addr_y, tile_m, tile_w, tile_w);
+                            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                        }
                     }
-                }
-            } else {    // The non-leader tiles write on the L1 of their group leader.
-                /**
-                * 4a. Scatter partial GeMV.
-                */
-                uint32_t group_id = reduce_degree * (x_id / reduce_degree);
-                //printf("Group id: %d\n", group_id);
-                uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, group_id)) + (tile_w * tile_w * 2) + (tile_w * tile_h * 2) + (tile_w * 2) + (((x_id % reduce_degree) - 1) * len_y);
+                } else {    // The non-leader tiles write on the L1 of their group leader.
+                    /**
+                    * 4a. Scatter partial GeMV.
+                    */
+                    uint32_t group_id = reduce_degree * (x_id / reduce_degree);
+                    //printf("Group id: %d\n", group_id);
+                    uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, group_id)) + (tile_w * tile_w * 2) + (tile_w * tile_h * 2) + (tile_w * 2) + (((x_id % reduce_degree) - 1) * len_y);
 
-                idma_memcpy_1d(&idma_ctrl, 1, partial_gemv_addr, obi_addr_y, len_y);
-                eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                    idma_memcpy_1d(&idma_ctrl, 1, partial_gemv_addr, obi_addr_y, len_y);
+                    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
 
-                fsync_sync_row(&fsync_ctrl);
-                eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-            }
-        } 
-        else {    // Second level of the tree
-            if (x_id == 0) {    // Leftmost tile
-                fsync_sync_row(&fsync_ctrl);
-                eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-
-                /**
-                * 4b. Sum partial GeMV on leftmost tile.
-                */
-                for (int j = 0; j < (reduce_degree - 1); j++){
-                    if ((x_id + 1 + j) <= (MESH_X_TILES - 1)){
-                        uint32_t partial_gemv_addr = obi_addr_x + (j * len_y);
-                        redmule_gemm(&redmule_ctrl, partial_gemv_addr, obi_addr_id, obi_addr_y, tile_m, tile_w, tile_w);
-                        eu_redmule_wait(&eu_ctrl, WAIT_MODE);
-                    }
+                    fsync_sync_row(&fsync_ctrl);
+                    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
                 }
             } 
-            else if (x_id % reduce_degree == 0) {    // Previous phase leaders write on leftmost tile's L1
-                /**
-                * 4a. Scatter partial GeMV.
-                */
-                uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, 0)) + (tile_w * tile_w * 2) + (tile_w * tile_h * 2) + (tile_w * 2) + (((x_id / reduce_degree)-1) * len_y);
-                
-                idma_memcpy_1d(&idma_ctrl, 1, partial_gemv_addr, obi_addr_y, len_y);
-                eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+            else {    // Second level of the tree
+                if (x_id == 0) {    // Leftmost tile
+                    fsync_sync_row(&fsync_ctrl);
+                    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
-                fsync_sync_row(&fsync_ctrl);
-                eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-            } 
-            else {
-                fsync_sync_row(&fsync_ctrl);
-                eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-            }
-        }
-    #elif defined(K_LOGN)
-        if ((x_id & log_tree_mask) == 0){ // Current phase leader
-            /**
-            * 4a. Calculate the tile from which add the partial gemv
-            */
-            uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, x_id^log_tree_bit)) + (tile_w*tile_h*2);
-            idma_memcpy_1d(&idma_ctrl, 0, partial_gemv_addr, obi_addr_x, len_y);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                    /**
+                    * 4b. Sum partial GeMV on leftmost tile.
+                    */
+                    for (int j = 0; j < (reduce_degree - 1); j++){
+                        if ((x_id + 1 + j) <= (MESH_X_TILES - 1)){
+                            uint32_t partial_gemv_addr = obi_addr_x + (j * len_y);
+                            redmule_gemm(&redmule_ctrl, partial_gemv_addr, obi_addr_id, obi_addr_y, tile_m, tile_w, tile_w);
+                            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                        }
+                    }
+                } 
+                else if (x_id % reduce_degree == 0) {    // Previous phase leaders write on leftmost tile's L1
+                    /**
+                    * 4a. Scatter partial GeMV.
+                    */
+                    uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, 0)) + (tile_w * tile_w * 2) + (tile_w * tile_h * 2) + (tile_w * 2) + (((x_id / reduce_degree)-1) * len_y);
+                    
+                    idma_memcpy_1d(&idma_ctrl, 1, partial_gemv_addr, obi_addr_y, len_y);
+                    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
 
-            /**
-            * 4b. Sum partial GeMV.
-            */
-            redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_id, obi_addr_y, tile_m, tile_w, tile_w);
-            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
-        }
-        log_tree_mask = (log_tree_mask << 1) | 1;
-        log_tree_bit <<= 1;
-    #endif
-        if (i == (reduce_phases-1)){
-            if (x_id == 0){
-                /**
-                * 5. Store result in memory.
-                */
-                axi_addr_y = (uint32_t) y_out + (y_id*tile_w*2);
-                idma_memcpy_1d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y);
-                eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                    fsync_sync_row(&fsync_ctrl);
+                    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+                } 
+                else {
+                    fsync_sync_row(&fsync_ctrl);
+                    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+                }
             }
+        #elif defined(K_LOGN)
+            if ((x_id & log_tree_mask) == 0){ // Current phase leader
+                /**
+                * 4a. Calculate the tile from which add the partial gemv
+                */
+                uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, x_id^log_tree_bit)) + (tile_w*tile_h*2);
+                idma_memcpy_1d(&idma_ctrl, 0, partial_gemv_addr, obi_addr_x, len_y);
+                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+
+                /**
+                * 4b. Sum partial GeMV.
+                */
+                redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_id, obi_addr_y, tile_m, tile_w, tile_w);
+                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            }
+            log_tree_mask = (log_tree_mask << 1) | 1;
+            log_tree_bit <<= 1;
+        #endif
+            if (i == (reduce_phases-1)){
+                if (x_id == 0){
+                    /**
+                    * 5. Store result in memory.
+                    */
+                    axi_addr_y = (uint32_t) y_out + (y_id*tile_w*2);
+                    idma_memcpy_1d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y);
+                    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                }
+            }
+            fsync_sync_row(&fsync_ctrl);
+            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
         }
-        fsync_sync_row(&fsync_ctrl);
+
+        //printf("I'm done dog\n");
+        fsync_sync_global(&fsync_ctrl);
         eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     }
-
-    //printf("I'm done dog\n");
-    fsync_sync_global(&fsync_ctrl);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
     /**
     * 7. Check results.

@@ -5,22 +5,20 @@ int onnx_clip_task(void)
 {
     volatile onnx_clip_params_t *params;
     uintptr_t params_addr;
-
     _Float16 *result;
     _Float16 *input;
     _Float16 min;
     _Float16 max;
-
     size_t avl;
     size_t vl;
 
     params_addr = mmio32(SPATZ_DATA);
     params = (volatile onnx_clip_params_t *) params_addr;
 
-    input = (_Float16 *)params->addr_input;
-    result = (_Float16 *)params->addr_res;
-    min = *(_Float16 *)params->addr_min;
-    max = *(_Float16 *)params->addr_max;
+    input = (_Float16 *)params->chunk_input;
+    result = (_Float16 *)params->chunk_res;
+    min = *(_Float16 *)params->min;
+    max = *(_Float16 *)params->max;
     avl = params->len;
 
     for (; avl > 0; avl -= vl) {

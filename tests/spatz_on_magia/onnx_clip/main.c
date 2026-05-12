@@ -7,29 +7,48 @@
 #include "onnx_clip_params.h"
 #include "onnx_clip_task_bin.h"
 
+#define HID get_hartid()
+
 static int init_data(void *params)
 {
-    uint32_t offset;
     volatile onnx_clip_params_t *clip_params;
+    uint32_t start;
+    uint32_t chunk;
+    uint32_t left;
+    uint32_t len;
+    uint32_t end;
 
     clip_params = (volatile onnx_clip_params_t *) params;
-    for (int i = 0; i < LEN; i++) {
-        offset = i * sizeof(float16);
 
-        mmio_fp16(INPUT_VEC_BASE + offset) = input_vec[i];
-        mmio_fp16(EXP_BASE + offset) = expected[i];
+    chunk = TENSOR_LEN / NUM_HARTS;
+    left = TENSOR_LEN % NUM_HARTS;
+    start = HID * chunk + (HID < left ? HID : left);
+    end = start + chunk + (HID < left ? 1 : 0);
+    len = end - start;
+
+    for (int i = 0; i < len; i++) {
+        int global_idx;
+        uint32_t offset;
+
+        global_idx = start + i;
+        offset =  i * sizeof(float16);
+
+        mmio_fp16(INPUT_BASE + offset) = input[i];
+        mmio_fp16(EXP_BASE + offset) = golden[i];
         mmio_fp16(RES_BASE + offset) = 0;
     }
 
-    mmio_fp16(MIN_VAL_BASE) = min_val;
-    mmio_fp16(MAX_VAL_BASE) = max_val;
+    mmio_fp16(MIN_BASE) = min;
+    mmio_fp16(MAX_BASE) = max;
 
-    clip_params->addr_input = INPUT_VEC_BASE;
-    clip_params->addr_min = MIN_VAL_BASE;
-    clip_params->addr_max = MAX_VAL_BASE;
-    clip_params->addr_exp = EXP_BASE;
-    clip_params->addr_res = RES_BASE;
-    clip_params->len = LEN;
+    clip_params->chunk_input = INPUT_BASE;
+    clip_params->chunk_exp = EXP_BASE;
+    clip_params->chunk_res = RES_BASE;
+    clip_params->min = MIN_BASE;
+    clip_params->max = MAX_BASE;
+    clip_params->start = start;
+    clip_params->end = end;
+    clip_params->len = len;
 
     return 0;
 }
@@ -64,7 +83,7 @@ static bool check_result(void *params)
 {
     volatile onnx_clip_params_t *clip_params;
     clip_params = (volatile onnx_clip_params_t *) params;
-    return vector_compare_fp16_bitwise(clip_params->addr_res, clip_params->addr_exp, clip_params->len);
+    return chunk_compare_fp16_bitwise(clip_params->chunk_res, clip_params->chunk_exp, clip_params->start, clip_params->len);
 }
 
 static int run_test()
@@ -77,21 +96,21 @@ static int run_test()
 
     ret = init_data(params);
     if (ret != 0) {
-        printf("[CV32] Params initialization failed with error: %d\n", ret);
+        printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
         return ret;
     }
 
     ret = run_spatz_task();
     if (ret != 0) {
-        printf("[CV32] Spatz task FAILED with error: %d\n", ret);
+        printf("[CV32 (%d)] Spatz task FAILED with error: %d", HID, ret);
         return ret;
     }
 
     check = check_result(params);
     if (check) {
-        printf("[CV32] Test SUCCESS\n");
+        printf("[CV32 (%d)] Test SUCCESS\n", HID);
     } else {
-        printf("[CV32] Test FAILED\n");
+        printf("[CV32 (%d)] Test FAILED\n", HID);
         ret = -1;
     }
 
@@ -102,11 +121,11 @@ int main(void)
 {
     int ret;
 
-    printf("\n##################################### ONNX_CLIP TEST #####################################\n\n");
+    if (HID == 0) printf("\n############################### ONNX_CLIP TEST on %d Tiles ################################\n\n", NUM_HARTS);
 
     ret = run_test();
 
-    printf("\n##########################################################################################\n\n");
+    if (HID == 0) printf("\n##########################################################################################\n\n");
 
     return ret;
 }

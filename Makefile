@@ -20,16 +20,17 @@
 
 SHELL 			:= /bin/bash
 
-BUILD_DIR 		?= ../sw/tests/$(test)
-MAGIA_DIR 		?= ../
-MAGIA_DIR_ABS	?= $(abspath $(MAGIA_DIR))
+CMAKE_BUILDDIR  ?= $(CURR_DIR)/build
+MAGIA_RTL_DIR 	?= ..
+BUILD_DIR 		?= $(MAGIA_RTL_DIR)/sw/tests/$(test)
+MAGIA_DIR_ABS	?= $(abspath $(MAGIA_RTL_DIR))
 BUILD_DIR_ABS	?= $(MAGIA_DIR_ABS)/sw/tests/$(test)
 GVSOC_DIR 		?= ./gvsoc
 CURR_DIR		?= $(shell pwd)
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
-BIN_ABS_PATH	?= $(CURR_DIR)/build/bin
+BIN_ABS_PATH	?= $(CMAKE_BUILDDIR)/bin
 BIN 			?= $(BUILD_DIR)/build/verif
-build_mode		?= profile
+build_mode		?= update
 fsync_mode		?= stall
 mesh_dv			?= 1
 fast_sim		?= 0
@@ -63,15 +64,18 @@ tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
-.PHONY: gvsoc
+GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
+GVRUN_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --trace-level=trace run --trace=kill-module
+
+.PHONY: gvsoc build
 
 clean:
 	rm -rf build/
 
 rtl-clean:
-	cd $(MAGIA_DIR) 		&& \
+	cd $(MAGIA_RTL_DIR) 		&& \
 	make hw-clean-all
-	rm -rf $(MAGIA_DIR)/sw/tests/test_*
+	rm -rf $(MAGIA_RTL_DIR)/sw/tests/test_*
 
 build:
 ifeq ($(tiles), )
@@ -113,14 +117,14 @@ run: set_mesh
 ifndef test
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
-ifeq (,$(wildcard ./build/bin/$(test)))
+ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
 	$(error No test found with name: $(test))
 endif
 ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles)
+	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
@@ -133,7 +137,7 @@ else ifeq ($(platform), rtl)
 	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
-	cd $(MAGIA_DIR) 												&& \
+	cd $(MAGIA_RTL_DIR) 												&& \
 	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv)
 else
 	$(error Only rtl and gvsoc are supported as platforms.)
@@ -234,8 +238,8 @@ ifeq ($(shell expr $(tiles_2) \> 256), 1)
 	$(eval tiles_2=256)
 endif
 ifeq ($(target_platform), magia_v1)
-	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_DIR)/Makefile
-	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40P/\1CV32E40X/' $(MAGIA_DIR)/Makefile
+	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_RTL_DIR)/Makefile
+	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40P/\1CV32E40X/' $(MAGIA_RTL_DIR)/Makefile
 else ifeq ($(target_platform), magia_v2)
 	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_DIR)/Makefile
 	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40X/\1CV32E40P/' $(MAGIA_DIR)/Makefile
@@ -246,20 +250,21 @@ else
 	$(error unrecognized platform (acceptable platform: magia).)
 endif
 ifneq ($(tiles), 1)
-	sed -i -E 's/^(  localparam int unsigned N_TILES_[XY][[:space:]]*=[[:space:]]*)[0-9]+;/\1$(tiles);/' $(MAGIA_DIR)/hw/mesh/magia_pkg.sv
+	sed -i -E 's/^(  localparam int unsigned N_TILES_[XY][[:space:]]*=[[:space:]]*)[0-9]+;/\1$(tiles);/' $(MAGIA_RTL_DIR)/hw/mesh/magia_pkg.sv
 endif
 ifeq ($(fsync_mode), stall)
-	sed -i -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\11/' $(MAGIA_DIR)/hw/tile/magia_tile_pkg.sv
+	sed -i -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\11/' $(MAGIA_RTL_DIR)/hw/tile/magia_tile_pkg.sv
 else ifeq ($(fsync_mode), interrupt)
-	sed -i -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\10/' $(MAGIA_DIR)/hw/tile/magia_tile_pkg.sv
+	sed -i -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\10/' $(MAGIA_RTL_DIR)/hw/tile/magia_tile_pkg.sv
 else
 	$(error unrecognized fractal sync mode (acceptable modes: stall|interrupt).)
 endif
 ifneq (,$(filter $(build_mode), update synth profile))
-	cd $(MAGIA_DIR)														&& \
+	cd $(MAGIA_RTL_DIR)														&& \
 	make python_venv || true											&& \
 	source setup_env.sh 												&& \
 	make python_deps || true											&& \
+	python -m pip install --upgrade "setuptools<81"						&& \
 	make bender															&& \
 	make $(build_mode)-ips > $(build_mode)-ips.log mesh_dv=$(mesh_dv)	&& \
 	make floonoc-patch || true											&& \
@@ -284,14 +289,28 @@ else
 	$(error unrecognized platform (acceptable platforms: magia_v2, magia_v3).)
 endif
 
+# github.com/gvsoc/gvsoc: 5f91fcc commit - master on 24/04/2026
+# github.com/gvsoc/gvsoc-core: 760f25e commit - master on 24/04/2026
+# github.com/gvsoc/gvsoc-pulp: 17f9e7a commit - master on 24/04/2026
 gvsoc_init:
-	git clone https://github.com/FondazioneChipsIT/gvsoc
+	git clone https://github.com/gvsoc/gvsoc.git || true
 	cd $(GVSOC_DIR) && \
+	git fetch origin 5f91fcc2e5923993adaaf5aad3365b690da19da2 && \
+	git checkout 5f91fcc2e5923993adaaf5aad3365b690da19da2 && \
 	git submodule update --init --recursive && \
 	cd core && \
-	git checkout lz/magia-v2-core && \
+	git fetch origin 760f25eacb135dac60acd61eea5d6f1e3611192d && \
+	git checkout 760f25eacb135dac60acd61eea5d6f1e3611192d && \
 	cd ../pulp && \
-	git checkout lz/magia-v2-pulp
+	git fetch origin 17f9e7a56f7ccf0bf7d13af0e68b6c0c129f8555 && \
+	git checkout 17f9e7a56f7ccf0bf7d13af0e68b6c0c129f8555
+
+gvsoc_venv:
+	eval "$(pyenv init -)" && \
+	pyenv local 3.12 && \
+	python -m venv gvsoc_venv && \
+	source gvsoc_venv/bin/activate && \
+	pip install .
 
 llvm:
 	mkdir -p $(LLVM_DIR)

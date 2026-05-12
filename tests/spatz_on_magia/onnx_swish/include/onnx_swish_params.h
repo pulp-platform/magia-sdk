@@ -1,0 +1,16 @@
+#ifndef ONNX_SWISH_PARAMS_H_
+#define ONNX_SWISH_PARAMS_H_
+
+#include <stdint.h>
+
+typedef struct {
+    uintptr_t chunk_X;      /* Tile's input chunk               */
+    uintptr_t chunk_Y;      /* Tile's computed result chunk     */
+    uintptr_t chunk_G;      /* Tile's golden model chunk        */
+    uintptr_t alpha;        /* Value of alpha                   */
+    uint32_t start;         /* Tile's chunk global start index  */
+    uint32_t end;           /* Tile's chunk global end index    */
+    uint32_t len;           /* Tile's chunk len                 */
+} onnx_swish_params_t;
+
+#endif  /* ONNX_SWISH_PARAMS_H_ */
