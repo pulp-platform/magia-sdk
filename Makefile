@@ -22,18 +22,12 @@ SHELL 			:= /bin/bash
 
 include scripts/deps.env
 
+CURR_DIR		?= $(shell pwd)
 CMAKE_BUILDDIR  ?= $(CURR_DIR)/build
 MAGIA_RTL_DIR 	?= ..
 BUILD_DIR 		?= $(MAGIA_RTL_DIR)/sw/tests/$(test)
 MAGIA_DIR 		?= ../
 MAGIA_DIR_ABS	?= $(abspath $(MAGIA_DIR))
-BUILD_DIR_ABS	?= $(MAGIA_DIR_ABS)/sw/tests/$(test)
-GVSOC_DIR 		?= ./gvsoc
-CURR_DIR		?= $(shell pwd)
-CMAKE_BUILDDIR  ?= $(CURR_DIR)/build
-MAGIA_RTL_DIR 	?= ..
-BUILD_DIR 		?= $(MAGIA_RTL_DIR)/sw/tests/$(test)
-MAGIA_DIR_ABS	?= $(abspath $(MAGIA_RTL_DIR))
 BUILD_DIR_ABS	?= $(MAGIA_DIR_ABS)/sw/tests/$(test)
 GVSOC_DIR 		?= ./gvsoc
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
