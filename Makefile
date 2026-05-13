@@ -20,13 +20,13 @@
 
 SHELL 			:= /bin/bash
 
+CURR_DIR		?= $(shell pwd)
 CMAKE_BUILDDIR  ?= $(CURR_DIR)/build
 MAGIA_RTL_DIR 	?= ..
 BUILD_DIR 		?= $(MAGIA_RTL_DIR)/sw/tests/$(test)
 MAGIA_DIR_ABS	?= $(abspath $(MAGIA_RTL_DIR))
 BUILD_DIR_ABS	?= $(MAGIA_DIR_ABS)/sw/tests/$(test)
 GVSOC_DIR 		?= ./gvsoc
-CURR_DIR		?= $(shell pwd)
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
 BIN_ABS_PATH	?= $(CMAKE_BUILDDIR)/bin
 BIN 			?= $(BUILD_DIR)/build/verif
@@ -208,6 +208,11 @@ ifeq ($(target_platform), magia_v2)
 	sed -i -E "s/^[[:space:]]*N_TILES_Y[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_Y           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v2/arch.py
 else
 	$(error unrecognized platform (acceptable platform: magia_v2).)
+endif
+ifeq ($(spatz_tests), 1)
+	sed -i 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)False/\1True/' $(GVSOC_DIR)/pulp/pulp/chips/magia_v2/arch.py
+else
+	sed -i 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)True/\1False/' "$(GVSOC_DIR)/pulp/pulp/chips/magia_v2/arch.py"
 endif
 	cd $(GVSOC_DIR)	&& \
 	make build TARGETS=magia_v2
