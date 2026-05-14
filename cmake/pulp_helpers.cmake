@@ -27,14 +27,12 @@ function(add_pulp_task)
     set(PULP_OUTPUT_DIR "${PULP_TASK_OUTPUT_ROOT}/${ARG_TEST_NAME}/pulp_task")
     file(MAKE_DIRECTORY "${PULP_OUTPUT_DIR}")
 
-    # PULP header is named <name>_bin.h (not <name>_task_bin.h like Spatz) to
-    # avoid filename collision when both are embedded in the same CV32 executable.
-    set(FILE_PREFIX "${ARG_TEST_NAME}")
+    set(FILE_PREFIX "${ARG_TEST_NAME}_task")
 
-    set(TASK_CRT0_OBJ "${PULP_OUTPUT_DIR}/${FILE_PREFIX}_crt0.o")
-    set(TASK_ELF      "${PULP_OUTPUT_DIR}/${FILE_PREFIX}.elf")
-    set(TASK_BIN      "${PULP_OUTPUT_DIR}/${FILE_PREFIX}.bin")
-    set(TASK_DUMP     "${PULP_OUTPUT_DIR}/${FILE_PREFIX}.dump")
+    set(TASK_CRT0_OBJ "${PULP_OUTPUT_DIR}/${ARG_TEST_NAME}_crt0.o")
+    set(TASK_ELF      "${PULP_OUTPUT_DIR}/${ARG_TEST_NAME}.elf")
+    set(TASK_BIN      "${PULP_OUTPUT_DIR}/${ARG_TEST_NAME}.bin")
+    set(TASK_DUMP     "${PULP_OUTPUT_DIR}/${ARG_TEST_NAME}.dump")
     set(TASK_HEADER   "${PULP_OUTPUT_DIR}/${FILE_PREFIX}_bin.h")
 
     set(TASK_INCLUDE_FLAGS "")
@@ -108,7 +106,7 @@ function(add_pulp_task)
         OUTPUT ${TASK_HEADER}
         COMMAND python3 ${PULP_TASK_BIN2HEADER_SCRIPT}
             ${TASK_BIN} ${TASK_HEADER}
-            --name ${ARG_TEST_NAME}_bin
+            --name ${ARG_TEST_NAME}_task_bin
             --section ${PULP_TASK_HEADER_SECTION}
             --address "${PULP_TASK_HEADER_ADDRESS}"
         COMMAND bash ${PULP_TASK_EXTRACT_SYMBOLS_SCRIPT}
@@ -125,16 +123,21 @@ function(add_pulp_task)
     # --------------------------------------------------------------------------
     # Target and exported variables
     # --------------------------------------------------------------------------
-    add_custom_target(${ARG_TEST_NAME}_pulp_header ALL
+    string(MD5 _pulp_scope_hash "${CMAKE_CURRENT_SOURCE_DIR}_${ARG_TEST_NAME}")
+    string(SUBSTRING "${_pulp_scope_hash}" 0 8 _pulp_scope_hash)
+    set(_pulp_header_target "pulp_header_${ARG_TEST_NAME}_${_pulp_scope_hash}")
+
+    add_custom_target(${_pulp_header_target} ALL
         DEPENDS
             ${TASK_HEADER}
             ${TASK_BIN}
             ${TASK_DUMP}
     )
 
-    set(${ARG_TEST_NAME}_PULP_HEADER     ${TASK_HEADER}     PARENT_SCOPE)
-    set(${ARG_TEST_NAME}_PULP_TASK_BIN   ${TASK_BIN}        PARENT_SCOPE)
-    set(${ARG_TEST_NAME}_PULP_OUTPUT_DIR ${PULP_OUTPUT_DIR} PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_PULP_HEADER      ${TASK_HEADER}         PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_PULP_TARGET      ${_pulp_header_target} PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_PULP_TASK_BIN    ${TASK_BIN}            PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_PULP_OUTPUT_DIR  ${PULP_OUTPUT_DIR}     PARENT_SCOPE)
 endfunction()
 
 # add_cv32_executable_with_pulp(
@@ -184,7 +187,7 @@ function(add_cv32_executable_with_pulp)
     target_link_options(${ARG_TARGET_NAME} PRIVATE ${CV32_LINK_FLAGS})
     target_link_libraries(${ARG_TARGET_NAME} PUBLIC runtime hal)
 
-    add_dependencies(${ARG_TARGET_NAME} ${ARG_TARGET_NAME}_pulp_header)
+    add_dependencies(${ARG_TARGET_NAME} ${${ARG_TARGET_NAME}_PULP_TARGET})
 
     # --------------------------------------------------------------------------
     # Post-build dump
@@ -199,14 +202,17 @@ endfunction()
 # add_cv32_executable_with_pulp_and_spatz(
 #   TARGET_NAME <name>
 #   SOURCES <src...>
+#   [SPATZ_TEST_NAME <name>]   # defaults to TARGET_NAME
+#   [PULP_TEST_NAME  <name>]   # defaults to TARGET_NAME
 #   [INCLUDE_DIRS <dirs...>]
 # )
 # Builds a CV32 executable embedding both a Spatz task binary and a PULP task
-# binary.  Requires add_spatz_task() and add_pulp_task() called first with the
-# same TEST_NAME.
+# binary.  Requires add_spatz_task() and add_pulp_task() to be called first.
+# Use SPATZ_TEST_NAME / PULP_TEST_NAME when the task TEST_NAMEs differ from
+# the overall TARGET_NAME (e.g. hello_spatz / hello_pulp inside hello_spatz_pulp).
 function(add_cv32_executable_with_pulp_and_spatz)
     set(options)
-    set(oneValueArgs TARGET_NAME)
+    set(oneValueArgs TARGET_NAME SPATZ_TEST_NAME PULP_TEST_NAME)
     set(multiValueArgs SOURCES INCLUDE_DIRS)
     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -216,11 +222,19 @@ function(add_cv32_executable_with_pulp_and_spatz)
     if(NOT ARG_SOURCES)
         message(FATAL_ERROR "add_cv32_executable_with_pulp_and_spatz(${ARG_TARGET_NAME}) requires SOURCES")
     endif()
-    if(NOT DEFINED ${ARG_TARGET_NAME}_SPATZ_HEADER)
-        message(FATAL_ERROR "add_cv32_executable_with_pulp_and_spatz(${ARG_TARGET_NAME}) requires add_spatz_task(TEST_NAME ${ARG_TARGET_NAME}) first.")
+
+    if(NOT ARG_SPATZ_TEST_NAME)
+        set(ARG_SPATZ_TEST_NAME ${ARG_TARGET_NAME})
     endif()
-    if(NOT DEFINED ${ARG_TARGET_NAME}_PULP_HEADER)
-        message(FATAL_ERROR "add_cv32_executable_with_pulp_and_spatz(${ARG_TARGET_NAME}) requires add_pulp_task(TEST_NAME ${ARG_TARGET_NAME}) first.")
+    if(NOT ARG_PULP_TEST_NAME)
+        set(ARG_PULP_TEST_NAME ${ARG_TARGET_NAME})
+    endif()
+
+    if(NOT DEFINED ${ARG_SPATZ_TEST_NAME}_SPATZ_HEADER)
+        message(FATAL_ERROR "add_cv32_executable_with_pulp_and_spatz(${ARG_TARGET_NAME}) requires add_spatz_task(TEST_NAME ${ARG_SPATZ_TEST_NAME}) first.")
+    endif()
+    if(NOT DEFINED ${ARG_PULP_TEST_NAME}_PULP_HEADER)
+        message(FATAL_ERROR "add_cv32_executable_with_pulp_and_spatz(${ARG_TARGET_NAME}) requires add_pulp_task(TEST_NAME ${ARG_PULP_TEST_NAME}) first.")
     endif()
 
     # --------------------------------------------------------------------------
@@ -232,8 +246,8 @@ function(add_cv32_executable_with_pulp_and_spatz)
         ${MAGIA_IO_SRC}
     )
 
-    get_filename_component(SPATZ_HEADER_DIR "${${ARG_TARGET_NAME}_SPATZ_HEADER}" DIRECTORY)
-    get_filename_component(PULP_HEADER_DIR  "${${ARG_TARGET_NAME}_PULP_HEADER}"  DIRECTORY)
+    get_filename_component(SPATZ_HEADER_DIR "${${ARG_SPATZ_TEST_NAME}_SPATZ_HEADER}" DIRECTORY)
+    get_filename_component(PULP_HEADER_DIR  "${${ARG_PULP_TEST_NAME}_PULP_HEADER}"  DIRECTORY)
     target_include_directories(${ARG_TARGET_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/inc
@@ -249,8 +263,8 @@ function(add_cv32_executable_with_pulp_and_spatz)
     target_link_libraries(${ARG_TARGET_NAME} PUBLIC runtime hal)
 
     add_dependencies(${ARG_TARGET_NAME}
-        ${ARG_TARGET_NAME}_spatz_header
-        ${ARG_TARGET_NAME}_pulp_header
+        ${${ARG_SPATZ_TEST_NAME}_SPATZ_TARGET}
+        ${${ARG_PULP_TEST_NAME}_PULP_TARGET}
     )
 
     # --------------------------------------------------------------------------

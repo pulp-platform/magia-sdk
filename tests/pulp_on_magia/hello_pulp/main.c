@@ -1,7 +1,7 @@
 #include "tile.h"
 #include "eventunit.h"
 
-#include "hello_pulp_bin.h"
+#include "hello_pulp_task_bin.h"
 
 int main(void) {
     eu_config_t eu_cfg;
