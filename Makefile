@@ -50,6 +50,7 @@ ISA				?= rv32imcxgap9
 gui 			?= 0
 tiles 			?= 2
 pulp_cores		?= 1
+pulp_tests		:= $(shell [ $(pulp_cores) -gt 1 ] && echo 1 || echo 0)
 spatz_tests		?= 1
 
 LLVM_CMAKE			?= cmake
@@ -102,7 +103,7 @@ ifeq ($(compiler), GCC_MULTILIB)
 	sed -i -E 's/^#add_subdirectory\(flatatt\)/add_subdirectory\(flatatt\)/' ./tests/magia/mesh/CMakeLists.txt
 	sed -i -E 's/^\/\/#include "utils\/attention_utils.h"/#include "utils\/attention_utils.h"/' ./targets/$(target_platform)/include/tile.h
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz_tests) -DSPATZ_LLVM_PATH=$(LLVM_INSTALL_DIR) -DPULP_CORE_COUNT=$(pulp_cores) -B build --trace-expand
+	cmake -DTARGET_PLATFORM=$(target_platform) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz_tests) -DPULP_TESTS=$(pulp_tests) -DSPATZ_LLVM_PATH=$(LLVM_INSTALL_DIR) -DPULP_CORE_COUNT=$(pulp_cores) -B build --trace-expand
 	cmake --build build --verbose
 
 set_mesh:
