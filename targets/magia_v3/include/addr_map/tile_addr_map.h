@@ -45,7 +45,7 @@
 #define PULP_CTRL_END  (0x000017FF)
 
 // PULP cluster configuration
-#define PULP_CORE_COUNT       (8)
+#define PULP_CORE_COUNT       (1)
 #define PULP_STACK_SLICE_SIZE (0x800)     /* 2 KB per hart */
 #define PULP_STACK_MAX_CORES  (16)
 
