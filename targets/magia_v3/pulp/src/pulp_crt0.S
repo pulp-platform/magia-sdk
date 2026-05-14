@@ -41,7 +41,7 @@
 #define PULP_CORE_COUNT  8
 #endif
 
-#define PULP_DONE_ADDR   0x00001748   /* PULP_CTRL_BASE + 0x08 */
+#define PULP_DONE_ADDR   0x0000174C   /* PULP_CTRL_BASE + 0x0C */
 #define STACK_TOP        0x0001C000   /* top of PULP stack area */
 #define LOG2_SLICE       11           /* log2(2 KB) — each hart gets 2 KB */
 

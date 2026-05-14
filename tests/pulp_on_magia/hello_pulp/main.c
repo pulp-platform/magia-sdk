@@ -18,8 +18,9 @@ int main(void) {
     eu_init(&eu_ctrl);
     eu_pulp_init(&eu_ctrl, 0);
 
-    printf("[CV32] Starting PULP cluster (binary @ 0x%08x)\n", PULP_BINARY_START);
-    pulp_init(PULP_BINARY_START);
+    uint32_t pulp_core_mask = 0x91; /* one-hot bitmask: which PULP cores to enable */
+    printf("[CV32] Starting PULP cluster (binary @ 0x%08x mask=0x%02x)\n", PULP_BINARY_START, pulp_core_mask);
+    pulp_init(PULP_BINARY_START, pulp_core_mask);
 
     eu_pulp_wait(&eu_ctrl, WFE);
 

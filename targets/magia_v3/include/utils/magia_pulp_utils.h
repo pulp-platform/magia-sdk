@@ -25,13 +25,20 @@
 #include "magia_tile_utils.h"
 #include "addr_map/tile_addr_map.h"
 
-/* ClusterRegs offsets from PULP_CTRL_BASE (0x1740) */
-#define PULP_CLK_EN  (PULP_CTRL_BASE + 0x00)  /* W: 1=enable PULP cluster clock */
-#define PULP_BINARY  (PULP_CTRL_BASE + 0x04)  /* W: binary entry point address   */
-#define PULP_DONE    (PULP_CTRL_BASE + 0x08)  /* W: each PULP hart writes 1 here */
+/* ClusterRegs PULP offsets from PULP_CTRL_BASE (0x1740)
+ *   0x00: PULP_CLK_EN           — one-hot bitmask; bit N enables PULP core N
+ *   0x04: PULP_BINARY           — binary entry point address
+ *   0x08: PULP_NB_CORES_TO_WAIT — number of PULP harts to wait for
+ *   0x0C: PULP_DONE             — each PULP hart writes 1 here on completion
+ */
+#define PULP_CLK_EN           (PULP_CTRL_BASE + 0x00)
+#define PULP_BINARY           (PULP_CTRL_BASE + 0x04)
+#define PULP_NB_CORES_TO_WAIT (PULP_CTRL_BASE + 0x08)
+#define PULP_DONE             (PULP_CTRL_BASE + 0x0C)
 
-static inline void pulp_clk_en(void) {
-    mmio32(PULP_CLK_EN) = 1;
+/* Enable cores selected by one-hot mask (e.g. 0xFF to start all 8 cores) */
+static inline void pulp_clk_en(uint32_t core_mask) {
+    mmio32(PULP_CLK_EN) = core_mask;
 }
 
 static inline void pulp_clk_dis(void) {
@@ -42,10 +49,15 @@ static inline void pulp_set_binary(uint32_t addr) {
     mmio32(PULP_BINARY) = addr;
 }
 
-/* Write entry point then enable clock — PULP harts boot immediately */
-static inline void pulp_init(uint32_t binary_start) {
+static inline void pulp_set_nb_cores_to_wait(uint32_t nb_cores) {
+    mmio32(PULP_NB_CORES_TO_WAIT) = nb_cores;
+}
+
+/* Write entry point, set number of cores to wait for, then enable selected cores */
+static inline void pulp_init(uint32_t binary_start, uint32_t core_mask) {
     pulp_set_binary(binary_start);
-    pulp_clk_en();
+    pulp_set_nb_cores_to_wait(__builtin_popcount(core_mask));
+    pulp_clk_en(core_mask);
 }
 
 #endif /* MAGIA_PULP_UTILS_H */
