@@ -52,7 +52,7 @@ static inline void perf_reset(void) {
  */
 static inline unsigned int perf_get_cycles(){
     unsigned int value = 0;
-    asm volatile("csrr %0, 0xB00" : "=r"(value));
+    asm volatile("csrr %0, 0x780" : "=r"(value));
     return value;
 }
 
