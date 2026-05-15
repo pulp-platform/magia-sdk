@@ -25,22 +25,11 @@ elseif(PULP_TESTS)
         magia_v2:magia
         magia_v3:magia,pulp_on_magia
     )
-elseif(SPATZ_TESTS)
-    set(TEST_MAPPINGS
-        magia_v1:magia
-        magia_v2:magia,spatz_on_magia
-        magia_v3:spatz_on_magia
-    )
-elseif(PULP_TESTS)
-    set(TEST_MAPPINGS
-        magia_v1:magia
-        magia_v2:magia
-        magia_v3:magia
-    )
 else()
     set(TEST_MAPPINGS
         magia_v1:magia
         magia_v2:magia
+        magia_v3:magia
     )
 endif()
 
