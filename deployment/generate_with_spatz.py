@@ -20,6 +20,8 @@ from Deeploy.CommonExtensions import DataTypes
 def normalize_spatz_types(code: str) -> str:
     return code.replace("float16_t", "float16")
 
+def add_kernel_include(code: str, test: str) -> str:
+    return code.replace('#include <stdint.h>\n', f'#include <stdint.h>\n#include "{test}.h"\n', 1)
 
 def split_test_header_definitions(header: str) -> tuple[str, str]:
     header_lines = []
@@ -142,6 +144,7 @@ def main(test) -> None:
     network_header_path = dst_inc_dir / 'network.h'
     logger.debug(f"generating {network_header_path}")
     network_header = generate_network_header(deployer)
+    network_header = add_kernel_include(network_header, test)
     network_header = allocator_patch(network_header, inputs, outputs)
     network_header = normalize_spatz_types(network_header)
     with open(network_header_path, "w") as f:
