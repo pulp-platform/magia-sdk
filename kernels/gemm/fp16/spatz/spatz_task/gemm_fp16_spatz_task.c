@@ -453,7 +453,7 @@ static void gemm_ABtrans(const _Float16 *A, const _Float16 *B, const _Float16 *C
 
                 if (dim_K % 2) {
                     B_col1 = B + (n * dim_K + (dim_K - 1));
-                    A_row1_elem1 = A + ((dim_M - 1) * dim_K + (dim_K - 1));
+                    A_row1_elem1 = A + ((dim_K - 1) * dim_M + (dim_M - 1));
 
                     asm volatile ("vlse16.v v16, (%0), %1" :: "r"(B_col1), "r"(stride));
                     asm volatile ("vfmacc.vf v0, %0, v16" :: "f"(*A_row1_elem1));

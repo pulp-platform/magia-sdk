@@ -22,8 +22,8 @@ static int init_input_params(void *params, const float16 *A, const float16 *B, c
 
     gemm_params = (volatile gemm_fp16_spatz_params_t *) params;
 
-    shard = INPUT0_DIM0 / NUM_HARTS;
-    left  = INPUT0_DIM0 % NUM_HARTS;
+    shard = OUTPUT0_DIM0 / NUM_HARTS;
+    left  = OUTPUT0_DIM0 % NUM_HARTS;
 
     m_start = HID * shard + (HID < left ? HID : left);
     m_end   = m_start + shard + (HID < left ? 1 : 0);
@@ -49,17 +49,12 @@ static int init_input_params(void *params, const float16 *A, const float16 *B, c
             }
         }
     } else {
-        for (int k = 0; k < INPUT0_DIM1; k++) {
-            uint32_t row_base;
-            row_base = k * INPUT0_DIM0;
+        for (int k = 0; k < INPUT0_DIM0; k++) {
+            for (int m = 0; m < m_len; m++) {
+                uint32_t m_global = m_start + m;
+                uint32_t global_idx = k * INPUT0_DIM1 + m_global;
 
-            for (int m = m_start; m < m_end; m++) {
-                uint32_t global_idx;
-                uint32_t offset;
-
-                global_idx = row_base + m;
-                offset = local_idx * sizeof(float16);
-
+                uint32_t offset = local_idx * sizeof(float16);
                 mmio_fp16(SHARD_A_BASE + offset) = A[global_idx];
 
                 local_idx++;
@@ -67,18 +62,10 @@ static int init_input_params(void *params, const float16 *A, const float16 *B, c
         }
     }
 
-    if (!transB) {
-        for (int i = 0; i < INPUT1_SIZE; i++) {
-            uint32_t offset;
-            offset = i * sizeof(float16);
-            mmio_fp16(SHARD_B_BASE + offset) = B[i];
-        }
-    } else {
-        for (int i = 0; i < INPUT1_SIZE; i++) {
-            uint32_t offset;
-            offset = i * sizeof(float16);
-            mmio_fp16(SHARD_B_BASE + offset) = B[i];
-        }
+    for (int i = 0; i < INPUT1_SIZE; i++) {
+        uint32_t offset;
+        offset = i * sizeof(float16);
+        mmio_fp16(SHARD_B_BASE + offset) = B[i];
     }
 
 
@@ -113,9 +100,9 @@ static int init_input_params(void *params, const float16 *A, const float16 *B, c
     gemm_params->transB = transB;
     gemm_params->m_start = m_start;
     gemm_params->m_len   = m_len;
-    gemm_params->M = INPUT0_DIM0;
-    gemm_params->N = INPUT1_DIM0;
-    gemm_params->K = INPUT0_DIM1;
+    gemm_params->M = OUTPUT0_DIM0;
+    gemm_params->N = OUTPUT0_DIM1;
+    gemm_params->K = (!transA) ? INPUT0_DIM1 : INPUT0_DIM0;
 
     return 0;
 }
