@@ -320,18 +320,28 @@ extern void eu_redmule_init(eu_controller_t *ctrl, uint32_t enable_irq)
     __attribute__((alias("eu32_redmule_init"), used, visibility("default")));
 extern uint32_t eu_redmule_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
     __attribute__((alias("eu32_redmule_wait"), used, visibility("default")));
-extern uint32_t eu_redmule_is_busy(eu_controller_t *ctrl)
-    __attribute__((alias("eu32_redmule_is_busy"), used, visibility("default")));
-extern uint32_t eu_redmule_is_done(eu_controller_t *ctrl)
-    __attribute__((alias("eu32_redmule_is_done"), used, visibility("default")));
 extern void eu_idma_init(eu_controller_t *ctrl, uint32_t enable_irq)
     __attribute__((alias("eu32_idma_init"), used, visibility("default")));
-extern uint32_t eu_idma_wait_direction(eu_controller_t *ctrl, uint32_t direction, eu_wait_mode_t mode)
-    __attribute__((alias("eu32_idma_wait_direction"), used, visibility("default")));
 extern uint32_t eu_idma_wait_a2o(eu_controller_t *ctrl, eu_wait_mode_t mode)
     __attribute__((alias("eu32_idma_wait_a2o"), used, visibility("default")));
 extern uint32_t eu_idma_wait_o2a(eu_controller_t *ctrl, eu_wait_mode_t mode)
     __attribute__((alias("eu32_idma_wait_o2a"), used, visibility("default")));
+extern void eu_fsync_init(eu_controller_t *ctrl, uint32_t enable_irq)
+    __attribute__((alias("eu32_fsync_init"), used, visibility("default")));
+extern uint32_t eu_fsync_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
+    __attribute__((alias("eu32_fsync_wait"), used, visibility("default")));
+extern void eu_spatz_init(eu_controller_t *ctrl, uint32_t enable_irq)
+    __attribute__((alias("eu32_spatz_init"), used, visibility("default")));
+extern uint32_t eu_spatz_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
+    __attribute__((alias("eu32_spatz_wait"), used, visibility("default")));
+
+// LEGACY APIs, DO NOT USE!!!!!
+extern uint32_t eu_redmule_is_busy(eu_controller_t *ctrl)
+    __attribute__((alias("eu32_redmule_is_busy"), used, visibility("default")));
+extern uint32_t eu_redmule_is_done(eu_controller_t *ctrl)
+    __attribute__((alias("eu32_redmule_is_done"), used, visibility("default")));
+extern uint32_t eu_idma_wait_direction(eu_controller_t *ctrl, uint32_t direction, eu_wait_mode_t mode)
+    __attribute__((alias("eu32_idma_wait_direction"), used, visibility("default")));
 extern uint32_t eu_idma_is_done(eu_controller_t *ctrl)
     __attribute__((alias("eu32_idma_is_done"), used, visibility("default")));
 extern uint32_t eu_idma_a2o_is_done(eu_controller_t *ctrl)
@@ -350,18 +360,10 @@ extern uint32_t eu_idma_a2o_is_busy(eu_controller_t *ctrl)
     __attribute__((alias("eu32_idma_a2o_is_busy"), used, visibility("default")));
 extern uint32_t eu_idma_o2a_is_busy(eu_controller_t *ctrl)
     __attribute__((alias("eu32_idma_o2a_is_busy"), used, visibility("default")));
-extern void eu_fsync_init(eu_controller_t *ctrl, uint32_t enable_irq)
-    __attribute__((alias("eu32_fsync_init"), used, visibility("default")));
-extern uint32_t eu_fsync_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
-    __attribute__((alias("eu32_fsync_wait"), used, visibility("default")));
 extern uint32_t eu_fsync_is_done(eu_controller_t *ctrl)
     __attribute__((alias("eu32_fsync_is_done"), used, visibility("default")));
 extern uint32_t eu_fsync_has_error(eu_controller_t *ctrl)
     __attribute__((alias("eu32_fsync_has_error"), used, visibility("default")));
-extern void eu_spatz_init(eu_controller_t *ctrl, uint32_t enable_irq)
-    __attribute__((alias("eu32_spatz_init"), used, visibility("default")));
-extern uint32_t eu_spatz_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
-    __attribute__((alias("eu32_spatz_wait"), used, visibility("default")));
 extern uint32_t eu_spatz_is_done(eu_controller_t *ctrl)
     __attribute__((alias("eu32_spatz_is_done"), used, visibility("default")));
 

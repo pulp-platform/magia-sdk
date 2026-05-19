@@ -15,6 +15,11 @@ static inline void print_vector_raw(const _Float16 *vec, size_t len)
     }
 }
 
+// static inline void permute_vector(_Float16* vec, size_t len)
+// {
+
+// }
+
 int fft_fs_task(void)
 {
     volatile fft_fs_params_t *params;
@@ -31,6 +36,7 @@ int fft_fs_task(void)
     _Float16 *DI;
     size_t avl;
     size_t vl;
+    uint32_t permute;
 
     params_addr = mmio32(SPATZ_DATA);
     params = (volatile fft_fs_params_t *) params_addr;
@@ -47,6 +53,8 @@ int fft_fs_task(void)
     DI = (_Float16 *)params->chunk_DI;
     
     avl = params->len;
+    permute = params->permute;
+
 
     for (; avl > 0; avl -= vl) {
         //TODO: lol
@@ -107,29 +115,6 @@ int fft_fs_task(void)
         DI += vl;
 
     }
-
-    // printf("AR VECTOR:\n");
-    // print_vector_raw((const _Float16*) params->chunk_AR, (size_t) params->len);
-    // printf("AI VECTOR:\n");
-    // print_vector_raw((const _Float16*) params->chunk_AI, (size_t) params->len);
-    // printf("BR VECTOR:\n");
-    // print_vector_raw((const _Float16*) params->chunk_BR, (size_t) params->len);
-    // printf("BI VECTOR:\n");
-    // print_vector_raw((const _Float16*) params->chunk_BI, (size_t) params->len);
-
-    // printf("WR VECTOR:\n");
-    // print_vector_raw((const _Float16*) params->chunk_WR, (size_t) params->len);
-    // printf("WI VECTOR:\n");
-    // print_vector_raw((const _Float16*) params->chunk_WI, (size_t) params->len);
-
-    // printf("CR VECTOR:\n");
-    // print_vector_raw((const _Float16*) params->chunk_CR, (size_t) params->len);
-    // printf("CI VECTOR:\n");
-    // print_vector_raw((const _Float16*) params->chunk_CI, (size_t) params->len);
-    // printf("DR VECTOR:\n");
-    // print_vector_raw((const _Float16*) params->chunk_DR, (size_t) params->len);
-    // printf("DI VECTOR:\n");
-    // print_vector_raw((const _Float16*) params->chunk_DI, (size_t) params->len);
 
     return 0;
 }
