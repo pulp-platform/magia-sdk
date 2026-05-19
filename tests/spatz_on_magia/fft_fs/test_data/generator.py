@@ -76,8 +76,9 @@ def generate_header_file(args, IR, II, WR, WI, GR, GI, filename="data.h"):
         f.write("#ifndef DATA_H_\n")
         f.write("#define DATA_H_\n\n")
 
-        f.write(f"#define VEC_LEN {args.N}\n")
-        f.write(f"#define TW_LEN {int((args.N/2) * np.log2(args.N))}\n")
+        f.write(f"#define VEC_LEN   {args.N}\n")
+        f.write(f"#define TW_LEN    {int((args.N/2) * np.log2(args.N))}\n")
+        f.write(f"#define LOG2_LEN  {int(np.log2(args.N))}\n")
 
         f.write(f"static const float16 IR[]      =   {format_array(IR)};\n")
         f.write(f"static const float16 II[]      =   {format_array(II)};\n")

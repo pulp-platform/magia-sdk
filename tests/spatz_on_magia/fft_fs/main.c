@@ -24,6 +24,18 @@ static inline void print_vector_raw(const float16 *vec, size_t len)
     }
 }
 
+static size_t bit_reverse(size_t x, size_t bits)
+{
+    size_t y = 0;
+
+    for (size_t i = 0; i < bits; i++) {
+        y = (y << 1) | (x & 1u);
+        x >>= 1;
+    }
+
+    return y;
+}
+
 static int init_data(void *params)
 {
     volatile fft_fs_params_t *fft_fs_params;
@@ -35,55 +47,15 @@ static int init_data(void *params)
 
     fft_fs_params = (volatile fft_fs_params_t *) params;
 
-    // chunk = TENSOR_LEN / NUM_HARTS;
-    // left = TENSOR_LEN % NUM_HARTS;
-    // start = HID * chunk + (HID < left ? HID : left);
-    // end = start + chunk + (HID < left ? 1 : 0);
-    // len = end - start;
-
-    //chunk = TENSOR_LEN;
     start = HID * chunk;
     end = start + chunk;
     len = chunk;
 
-    // for (int i = 0; i < len; i++) {
-    //     int global_idx;
-    //     uint32_t offset;
-
-    //     global_idx = start + i;
-    //     offset =  i * sizeof(float16);
-
-    //     mmio_fp16(CHUNK_AR_BASE + offset)    =  AR[global_idx];
-    //     mmio_fp16(CHUNK_BR_BASE + offset)    =   B[gloabl_idx];
-    //     mmio_fp16(CHUNK_AI_BASE + offset)    =   A[global_idx];
-    //     mmio_fp16(CHUNK_BI_BASE + offset)    =   B[gloabl_idx];
-    //     mmio_fp16(CHUNK_WR_BASE + offset)   =   WR[global_idx];
-    //     mmio_fp16(CHUNK_GR_BASE + offset)   =   GR[global_idx];
-    //     mmio_fp16(CHUNK_WI_BASE + offset)   =   WI[global_idx];
-    //     mmio_fp16(CHUNK_GI_BASE + offset)   =   GI[global_idx];
-    //     mmio_fp16(CHUNK_CR_BASE + offset)   =   0;
-    //     mmio_fp16(CHUNK_CI_BASE + offset)   =   0;
-    // }
-
-    printf("IR vector:\n");
-    print_vector_raw(IR, VEC_LEN);
-    printf("II vector:\n");
-    print_vector_raw(II, VEC_LEN);
-    printf("WR vector:\n");
-    print_vector_raw(WR, TW_LEN);
-    printf("WI vector:\n");
-    print_vector_raw(WI, TW_LEN);
-
-    printf("CHUNK_AR_BASE: %d\n", CHUNK_AR_BASE);
-    printf("CHUNK_AR_SIZE: %d\n", CHUNK_AR_SIZE);
-    printf("CHUNK_AI_BASE: %d\n", CHUNK_AI_BASE);
-    printf("CHUNK_AI_SIZE: %d\n", CHUNK_AI_SIZE);
-
     for(int i = 0; i < (VEC_LEN / 2); i++){
-        mmio_fp16(CHUNK_AR_BASE + (i * sizeof(float16))) = IR[i * 2];
-        mmio_fp16(CHUNK_BR_BASE + (i * sizeof(float16))) = IR[((i * 2) + 1)];
-        mmio_fp16(CHUNK_AI_BASE + (i * sizeof(float16))) = II[i * 2];
-        mmio_fp16(CHUNK_BI_BASE + (i * sizeof(float16))) = II[((i * 2) + 1)];
+        mmio_fp16(CHUNK_AR_BASE + (i * sizeof(float16))) = IR[bit_reverse(i * 2, LOG2_LEN)];
+        mmio_fp16(CHUNK_BR_BASE + (i * sizeof(float16))) = IR[bit_reverse(((i * 2) + 1), LOG2_LEN)];
+        mmio_fp16(CHUNK_AI_BASE + (i * sizeof(float16))) = II[bit_reverse(i * 2, LOG2_LEN)];
+        mmio_fp16(CHUNK_BI_BASE + (i * sizeof(float16))) = II[bit_reverse(((i * 2) + 1), LOG2_LEN)];
     }
 
     for(int i = 0; i < TW_LEN; i++){
@@ -104,32 +76,61 @@ static int init_data(void *params)
     fft_fs_params->start = start;
     fft_fs_params->len = (VEC_LEN / 2);
     fft_fs_params->end = end;
+    fft_fs_params->permute = 0;
 
     return 0;
 }
 
-static int run_spatz_task()
+static int reinit_data(void *params, int stage)
+{
+    int i, j, k;
+    int prev_stage = (1 << (stage - 1));
+    // Number of different butterfly groups and number of elements
+    int n_groups = (VEC_LEN >> (stage + 1));
+    int group_len = (1 << stage);
+    for(j = 0; j < n_groups; j++){
+        for(i = 0; i < group_len; i++){
+            if(!((i / prev_stage) % 2)){
+                mmio_fp16(CHUNK_AR_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_CR_BASE + (2 * j * prev_stage + (i % prev_stage)) * sizeof(float16));
+                mmio_fp16(CHUNK_AI_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_CI_BASE + (2 * j * prev_stage + (i % prev_stage)) * sizeof(float16));
+                mmio_fp16(CHUNK_BR_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_CR_BASE + (((2 * j) + 1) * prev_stage + (i % prev_stage)) * sizeof(float16));
+                mmio_fp16(CHUNK_BI_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_CI_BASE + (((2 * j) + 1) * prev_stage + (i % prev_stage)) * sizeof(float16));
+            }
+            else{
+                mmio_fp16(CHUNK_AR_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_DR_BASE + (2 * j * prev_stage + (i % prev_stage)) * sizeof(float16));
+                mmio_fp16(CHUNK_AI_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_DI_BASE + (2 * j * prev_stage + (i % prev_stage)) * sizeof(float16));
+                mmio_fp16(CHUNK_BR_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_DR_BASE + (((2 * j) + 1) * prev_stage + (i % prev_stage)) * sizeof(float16));
+                mmio_fp16(CHUNK_BI_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_DI_BASE + (((2 * j) + 1) * prev_stage + (i % prev_stage)) * sizeof(float16));
+            }
+        }
+    }
+
+    volatile fft_fs_params_t *fft_fs_params;
+    fft_fs_params = (volatile fft_fs_params_t *) params;
+
+    fft_fs_params->chunk_WR = fft_fs_params->chunk_WR + (VEC_LEN);
+    fft_fs_params->chunk_WI = fft_fs_params->chunk_WI + (VEC_LEN);
+
+    return 0;
+}
+
+
+
+static int run_spatz_task(eu_controller_t* eu_ctrl, int init)
 {
     int ret;
-    eu_config_t eu_cfg;
-    eu_controller_t eu_ctrl;
 
-    eu_cfg.hartid = get_hartid();
-    eu_ctrl.base = NULL,
-    eu_ctrl.cfg = &eu_cfg,
-    eu_ctrl.api = &eu_api,
-
-    eu_init(&eu_ctrl);
-    eu_spatz_init(&eu_ctrl, 0);
-
-    spatz_init(SPATZ_BINARY_START);
+    if(!init)
+        spatz_init(SPATZ_BINARY_START);
+    // else
+    //     spatz_clk_en();
     spatz_run_task_with_params(FFT_FS_TASK, FFT_PARAMS_BASE);
 
-    eu_spatz_wait(&eu_ctrl, WFE);
+    eu_spatz_wait(eu_ctrl, WFE);
 
     ret = spatz_get_exit_code();
 
-    spatz_clk_dis();
+    //spatz_clk_dis();
 
     return ret;
 }
@@ -149,40 +150,50 @@ static bool run_test()
 
     params = (volatile fft_fs_params_t *) FFT_PARAMS_BASE;
 
-    ret = init_data(params);
+    eu_config_t eu_cfg;
+    eu_controller_t eu_ctrl;
+
+    eu_cfg.hartid = get_hartid();
+    eu_ctrl.base = NULL,
+    eu_ctrl.cfg = &eu_cfg,
+    eu_ctrl.api = &eu_api,
+
+    eu_init(&eu_ctrl);
+    eu_spatz_init(&eu_ctrl, 0);
+
+    ret = init_data((void *)params);
     if (ret != 0) {
         printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
         return ret;
     }
 
-    // printf("AR VECTOR:\n");
-    // print_vector_raw((const float16*) params->chunk_AR, (size_t) params->len);
-    // printf("AI VECTOR:\n");
-    // print_vector_raw((const float16*) params->chunk_AI, (size_t) params->len);
-    // printf("BR VECTOR:\n");
-    // print_vector_raw((const float16*) params->chunk_BR, (size_t) params->len);
-    // printf("BI VECTOR:\n");
-    // print_vector_raw((const float16*) params->chunk_BI, (size_t) params->len);
+    for(int i = 0; i < LOG2_LEN; i++){
+        printf("Complex mul number %d\n", i);
+        ret = run_spatz_task(&eu_ctrl, i);
+        if (ret != 0) {
+            printf("[CV32 (%d)] Spatz task FAILED with error: %d", HID, ret);
+            return ret;
+        }
 
-    // printf("WR VECTOR:\n");
-    // print_vector_raw((const float16*) params->chunk_WR, (size_t) params->len);
-    // printf("WI VECTOR:\n");
-    // print_vector_raw((const float16*) params->chunk_WI, (size_t) params->len);
-
-    // printf("CR VECTOR:\n");
-    // print_vector_raw((const float16*) params->chunk_CR, (size_t) params->len);
-    // printf("CI VECTOR:\n");
-    // print_vector_raw((const float16*) params->chunk_CI, (size_t) params->len);
-    // printf("DR VECTOR:\n");
-    // print_vector_raw((const float16*) params->chunk_DR, (size_t) params->len);
-    // printf("DI VECTOR:\n");
-    // print_vector_raw((const float16*) params->chunk_DI, (size_t) params->len);
-
-    ret = run_spatz_task();
-    if (ret != 0) {
-        printf("[CV32 (%d)] Spatz task FAILED with error: %d", HID, ret);
-        return ret;
+        if(i != (LOG2_LEN - 1)){
+            printf("Swapping at i=%d\n", i);
+            ret = reinit_data((void *)params, (i + 1));
+            if (ret != 0) {
+                printf("[CV32 (%d)] Params swapping failed with error: %d\n", HID, ret);
+                return ret;
+            }
+        }
     }
+
+    printf("CR VECTOR:\n");
+    print_vector_raw((const float16*) params->chunk_CR, (size_t) params->len);
+    printf("CI VECTOR:\n");
+    print_vector_raw((const float16*) params->chunk_CI, (size_t) params->len);
+    printf("DR VECTOR:\n");
+    print_vector_raw((const float16*) params->chunk_DR, (size_t) params->len);
+    printf("DI VECTOR:\n");
+    print_vector_raw((const float16*) params->chunk_DI, (size_t) params->len);
+    
 
     // check = check_result(params);
     // if (check) {
