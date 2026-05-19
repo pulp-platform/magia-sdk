@@ -7,10 +7,10 @@ import onnx_graphsurgeon as gs
 
 from Deeploy.DeeployTypes import ConstantBuffer, DeploymentEngine, DeploymentPlatform, NetworkContext, NodeMapper, \
     NodeTemplate, StructBuffer, TopologyOptimizer, TransientBuffer, VariableBuffer
-from Deeploy.Targets.Generic.Layers import AddLayer, DivLayer, GELULayer, ReluLayer, BatchNormalizationLayer, GEMMLayer
-from Deeploy.Targets.Generic.Parsers import AddParser, DivParser, GELUParser, ReluParser, BatchNormParser, GEMMParser
+from Deeploy.Targets.Generic.Layers import AddLayer, DivLayer, GELULayer, ReluLayer, BatchNormalizationLayer, GEMMLayer, MaxPoolLayer
+from Deeploy.Targets.Generic.Parsers import AddParser, DivParser, GELUParser, ReluParser, BatchNormParser, GEMMParser, MaxPool2DParser
 from Deeploy.Targets.Generic.Templates import AllocateTemplate as BasicAllocateTemplate
-from MagiaDeeployTarget.Bindings import MagiaAddBindings, MagiaAddFp16Bindings, MagiaDivFp16Bindings, MagiaGeluFp16Bindings, MagiaReluFp16Bindings, MagiaBatchNormFp16Bindings, MagiaGemmFp16Bindings
+from MagiaDeeployTarget.Bindings import MagiaAddBindings, MagiaAddFp16Bindings, MagiaDivFp16Bindings, MagiaGeluFp16Bindings, MagiaReluFp16Bindings, MagiaBatchNormFp16Bindings, MagiaGemmFp16Bindings, MagiaMaxPool2DFp16Bindings
 from MagiaDeeployTarget.Templates import AllocateTemplate, FreeTemplate
 
 
@@ -20,10 +20,11 @@ GeluMapper = NodeMapper(GELUParser(), MagiaGeluFp16Bindings)
 ReluMapper = NodeMapper(ReluParser(), MagiaReluFp16Bindings)
 BatchNormMapper = NodeMapper(BatchNormParser(), MagiaBatchNormFp16Bindings)
 GemmMapper = NodeMapper(GEMMParser(), MagiaGemmFp16Bindings)
+MaxPool2DMapper = NodeMapper(MaxPool2DParser(), MagiaMaxPool2DFp16Bindings)
 
 MagiaMapping = {'Add': AddLayer([AddMapper]), 'Div': DivLayer([DivMapper]), 'Gelu': GELULayer([GeluMapper]),
                 'Relu': ReluLayer([ReluMapper]), 'BatchNormalization': BatchNormalizationLayer([BatchNormMapper]),
-                'Gemm': GEMMLayer([GemmMapper])}
+                'Gemm': GEMMLayer([GemmMapper]), 'MaxPool': MaxPoolLayer([MaxPool2DMapper])}
 
 class MagiaVariableBuffer(VariableBuffer):
 
