@@ -4,7 +4,6 @@ set(TEST_NAME hello_spatz_pulp)
 add_spatz_task(
     TEST_NAME hello_spatz
     TASK_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/spatz_task/hello_task.c
-    FIRST_TASK_NAME hello_task
 )
 
 # Compile PULP task (generates hello_pulp_task_bin.h)
