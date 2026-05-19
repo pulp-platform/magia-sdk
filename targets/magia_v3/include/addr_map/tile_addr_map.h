@@ -45,7 +45,7 @@
 #define PULP_CTRL_END  (0x000017FF)
 
 // PULP cluster configuration
-#define PULP_CORE_COUNT       (1)
+#define PULP_CORE_COUNT       (8)
 #define PULP_STACK_SLICE_SIZE (0x800)     /* 2 KB per hart */
 #define PULP_STACK_MAX_CORES  (16)
 
@@ -77,11 +77,11 @@
 #define IDMA_BASE_AXI2OBI (IDMA_BASE)           // direction=0, L2 to L1
 #define IDMA_BASE_OBI2AXI (IDMA_BASE + 0x200)   // direction=1, L1 to L2
 
-#define MESH_X_TILES 2
-#define MESH_Y_TILES 2
+#define MESH_X_TILES 1
+#define MESH_Y_TILES 1
 #define NUM_HARTS    (MESH_X_TILES*MESH_Y_TILES)
-#define MAX_SYNC_LVL 2
-#define MESH_2_POWER 1
+#define MAX_SYNC_LVL 0
+#define MESH_2_POWER 0
 
 #define STR_OFFSET  (0x00000000)
 #define STR_BASE    (RESERVED_START + STR_OFFSET)

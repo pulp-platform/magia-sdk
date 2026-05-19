@@ -26,7 +26,7 @@ int main(void) {
     spatz_init(SPATZ_BINARY_START);
 
     printf("[CV32] Launching SPATZ Task\n");
-    spatz_run_task(HELLO_TASK);
+    spatz_run_task(HELLO_SPATZ_TASK);
 
     eu_spatz_wait(&eu_ctrl, WFE);
 

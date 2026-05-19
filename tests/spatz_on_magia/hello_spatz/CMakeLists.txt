@@ -4,7 +4,6 @@ set(TEST_NAME hello_spatz)
 add_spatz_task(
     TEST_NAME ${TEST_NAME}
     TASK_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/spatz_task/hello_task.c
-    FIRST_TASK_NAME hello_task
 )
 
 # Compile CV32 executable with embedded Spatz binary

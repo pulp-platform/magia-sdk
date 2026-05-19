@@ -45,7 +45,6 @@ set(PULP_CFLAGS_DEFINES
 set(PULP_LINK_FLAGS
     "-nostartfiles"
     "-nostdlib"
-    "-Wl,--gc-sections"
     "-Wl,-z,norelro"
     "-Wl,--allow-multiple-definition"
 )

@@ -18,9 +18,12 @@ int main(void) {
     eu_init(&eu_ctrl);
     eu_pulp_init(&eu_ctrl, 0);
 
-    uint32_t pulp_core_mask = 0x91; /* one-hot bitmask: which PULP cores to enable */
-    printf("[CV32] Starting PULP cluster (binary @ 0x%08x mask=0x%02x)\n", PULP_BINARY_START, pulp_core_mask);
-    pulp_init(PULP_BINARY_START, pulp_core_mask);
+    uint32_t pulp_core_mask = 0x91; /* one-hot bitmask: which PULP cores to run the task on */
+    printf("[CV32] Initializing PULP cluster (binary @ 0x%08x)\n", PULP_BINARY_START);
+    pulp_init(PULP_BINARY_START);
+
+    printf("[CV32] Dispatching HELLO_TASK to PULP cluster (mask=0x%02x)\n", pulp_core_mask);
+    pulp_run_task(HELLO_PULP_TASK, pulp_core_mask);
 
     eu_pulp_wait(&eu_ctrl, WFE);
 

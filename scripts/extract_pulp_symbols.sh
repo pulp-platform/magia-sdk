@@ -23,6 +23,14 @@ echo "/* Binary start address - defined by CV32 linker */" >> "${TASK_HEADER}"
 echo "extern uint32_t _pulp_binary_start;" >> "${TASK_HEADER}"
 echo "#define PULP_BINARY_START ((uint32_t)&_pulp_binary_start)" >> "${TASK_HEADER}"
 
+# Add task function entry points (all global functions with 'task' in their name)
+echo "" >> "${TASK_HEADER}"
+echo "/* Task function entry points - OFFSETS from PULP_BINARY_START */" >> "${TASK_HEADER}"
+"${OBJDUMP}" -t "${TASK_ELF}" | grep -E "F .text.*task" | awk '{print $1, $NF}' | while read addr name; do
+    TASK_NAME=$(echo "$name" | tr 'a-z' 'A-Z')
+    echo "#define ${TASK_NAME} (PULP_BINARY_START + 0x${addr})" >> "${TASK_HEADER}"
+done
+
 # Close header guard
 echo "" >> "${TASK_HEADER}"
 echo "#endif /* __${GUARD_NAME}_H__ */" >> "${TASK_HEADER}"
