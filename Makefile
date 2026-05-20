@@ -52,15 +52,7 @@ compiler 		?= GCC_PULP
 ISA				?= rv32imcxgap9
 gui 			?= 0
 tiles 			?= 2
-spatz_tests		?= 0
-
-LLVM_CMAKE			?= cmake
-LLVM_DIR			?= llvm
-LLVM_REPO			?= git@github.com:pulp-platform/llvm-project.git
-LLVM_COMMIT			?= b494f2d8dde88723026db8ec16ac6c7ee1e140ca
-LLVM_INSTALL_DIR	?= /srv/home/alberto.dequino/MAGIA_2/magia-sdk/llvm/install
-LLVM_BUILD_DIR		?= /srv/home/alberto.dequino/MAGIA_2/magia-sdk/llvm/llvm-project/build
-LLVM_JOBS			?= 8
+spatz			?= 0
 
 LLVM_CMAKE			?= cmake
 LLVM_DIR			?= llvm
@@ -75,7 +67,7 @@ tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
 GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
-GVRUN_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --trace-level=trace run --trace=kill-module
+GVRUN_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace run --trace=kill-module
 
 .PHONY: gvsoc build format
 
@@ -98,7 +90,7 @@ endif
 ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz_tests) -B $(CMAKE_BUILDDIR) --trace-expand
+	cmake -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz) -B $(CMAKE_BUILDDIR) --trace-expand
 	cmake --build $(CMAKE_BUILDDIR) --verbose
 
 set_mesh:
@@ -150,7 +142,7 @@ ifndef platform
 	$(error Proper formatting is: make run_with_spatz test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) run --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin
+	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
@@ -213,7 +205,7 @@ ifeq ($(target_platform), magia_v2)
 else
 	$(error unrecognized platform (acceptable platform: magia_v2).)
 endif
-ifeq ($(spatz_tests), 1)
+ifeq ($(spatz), 1)
 	sed -i 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)False/\1True/' $(GVSOC_DIR)/pulp/pulp/chips/magia_v2/arch.py
 else
 	sed -i 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)True/\1False/' "$(GVSOC_DIR)/pulp/pulp/chips/magia_v2/arch.py"

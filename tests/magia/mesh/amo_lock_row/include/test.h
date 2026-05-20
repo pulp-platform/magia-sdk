@@ -9,7 +9,7 @@
 
 #include "utils/amo_utils.h"
 
-extern uint32_t lock = 0x12345678;
-extern uint32_t value [MESH_X_TILES] = {0};
+uint32_t lock = 0x12345678;
+uint32_t value [MESH_X_TILES] = {0};
 
 #endif //_TEST_AMO_LOCK_ROW_INCLUDE_GUARD_

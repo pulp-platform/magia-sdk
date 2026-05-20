@@ -35,24 +35,6 @@ static void pputc(char c)
 
 void *memset(void *m, int c, size_t n);
 
-static int puts(const char *s)
-{
-    char c;
-    do
-    {
-        c = *s;
-        if (c == 0)
-        {
-            pputc('\n');
-            break;
-        }
-        pputc(c);
-        s++;
-    } while(1);
-
-    return 0;
-}
-
 char *strchr(const char *s, int c);
 
 static inline int isdigit(int a)
