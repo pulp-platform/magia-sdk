@@ -137,6 +137,8 @@
 #define IDMA_DST_STRIDE_3_LOW_OFFSET    (0x100)
 #define IDMA_SRC_STRIDE_3_LOW_OFFSET    (0x108)
 #define IDMA_REPS_3_LOW_OFFSET          (0x110)
+#define IDMA_CONF_DST_PROTOCOL_OFFSET   (0x0F)
+#define IDMA_CONF_SRC_PROTOCOL_OFFSET   (0x0C)
 
 // Register Addresses - now direction-aware
 #define IDMA_CONF_ADDR(is_l1_to_l2)             ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_CONF_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_CONF_OFFSET))
@@ -154,7 +156,20 @@
 #define IDMA_REPS_3_LOW_ADDR(is_l1_to_l2)       ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_REPS_3_LOW_OFFSET) : (IDMA_BASE_AXI2OBI + IDMA_REPS_3_LOW_OFFSET))
 
 // Status Register Bit Fields
+#define IDMA_CONF_DECOUPLE_AW_BIT    (0)
+#define IDMA_CONF_DECOUPLE_RW_BIT    (1)
+#define IDMA_CONF_SRC_REDUCE_LEN_BIT (2)
+#define IDMA_CONF_DST_REDUCE_LEN_BIT (3)
+#define IDMA_CONF_SRC_MAX_LLEN_SHIFT (4)
+#define IDMA_CONF_DST_MAX_LLEN_SHIFT (7)
+#define IDMA_CONF_ENABLE_ND_SHIFT    (10)
 #define IDMA_STATUS_BUSY_MASK        (0x3FF) // bits 9:0
+
+// Enum IDMA Transfer protocols
+typedef enum {
+  IDMA_PROT_AXI = 0, // AXI protocol: L2 memory
+  IDMA_PROT_OBI = 1, // OBI protocol: L1 memory
+} idma_prot_t;
 
 //=============================================================================
 // RedMule Register Addresses

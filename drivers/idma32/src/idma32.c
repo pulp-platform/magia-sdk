@@ -56,7 +56,7 @@ int idma32_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
     }
     return 0;
     #else
-    idma_mm_conf(dir);
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
     if(dir){
         idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
     }
@@ -100,7 +100,7 @@ int idma32_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, ui
     }
     #else
     //printf("IDMA Transfer! Direction: %d\n", dir);
-    idma_mm_conf(dir);
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
     if(dir){
         idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
         idma_mm_set_std2_rep2(dir, std, len, reps);

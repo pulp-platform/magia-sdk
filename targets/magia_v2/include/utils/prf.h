@@ -288,6 +288,18 @@ static int to_float(char *buf, uint64_t double_temp, int c,
     return buf - start;
 }
 
+static int to_bin(char *buf, uint32_t value, int alt_form, int precision)
+{
+    char *buf0 = buf;
+
+    if (alt_form) {
+        *buf++ = '0';
+        *buf++ = 'b';
+    }
+
+    return (buf - buf0) + to_x(buf, value, 2, precision);
+}
+
 static int to_octal(char *buf, uint32_t value, int alt_form, int precision)
 {
     char *buf0 = buf;
@@ -453,6 +465,14 @@ static int prf(void (*func)(char), const char *format, va_list vargs)
             need_justifying = 0;
             prefix = 0;
             switch (c) {
+            case 'b':
+                uint32_temp = (uint32_t) va_arg(vargs, uint32_t);
+                c = to_bin(buf, uint32_temp, falt, precision);
+                need_justifying = 1;
+                if (precision != -1)
+                    pad = ' ';
+                break;
+
             case 'c':
                 buf[0] = (char) ((int32_t) va_arg(vargs, int32_t));
                 buf[1] = '\0';

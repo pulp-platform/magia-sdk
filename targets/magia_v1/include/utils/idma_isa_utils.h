@@ -305,8 +305,29 @@ inline void idma_start_out(){
 // Memory Mapped IDMA ISAs
 //=============================================================================
 
-inline void idma_mm_conf(uint32_t dir){
-  mmio32(IDMA_CONF_ADDR(dir)) = 0x3 << 10;
+inline void idma_mm_conf(uint32_t dir, uint32_t decouple_aw, uint32_t decouple_rw, 
+                         uint32_t src_reduce_len, uint32_t dst_reduce_len, uint32_t src_max_llen, 
+                         uint32_t dst_max_llen, uint32_t enable_nd){
+  uint32_t conf_val = 0;
+  if(dir){
+    conf_val |= (1 << 12);
+    conf_val |= (0 << 15);
+  }
+  else{
+    conf_val |= (0 << 12);
+    conf_val |= (1 << 15);
+  }
+
+  if (decouple_aw) conf_val |= (1 << IDMA_CONF_DECOUPLE_AW_BIT);
+  if (decouple_rw) conf_val |= (1 << IDMA_CONF_DECOUPLE_RW_BIT);
+  if (src_reduce_len) conf_val |= (1 << IDMA_CONF_SRC_REDUCE_LEN_BIT);
+  if (dst_reduce_len) conf_val |= (1 << IDMA_CONF_DST_REDUCE_LEN_BIT);
+  
+  conf_val |= ((src_max_llen & 0x7) << IDMA_CONF_SRC_MAX_LLEN_SHIFT);
+  conf_val |= ((dst_max_llen & 0x7) << IDMA_CONF_DST_MAX_LLEN_SHIFT);
+  conf_val |= ((enable_nd & 0x3) << IDMA_CONF_ENABLE_ND_SHIFT);
+
+  mmio32(IDMA_CONF_ADDR(dir)) = conf_val;
   return;
 }
 
