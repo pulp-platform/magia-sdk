@@ -6,7 +6,7 @@
 from Deeploy.AbstractDataTypes import PointerClass
 from Deeploy.CommonExtensions.DataTypes import float16_t, int8_t, int32_t
 from Deeploy.DeeployTypes import CodeTransformation, NodeBinding
-from Deeploy.Targets.Generic.TypeCheckers import AddChecker, DivChecker, GELUChecker, ReluChecker, BatchNormChecker, GEMMChecker, MaxPoolChecker
+from Deeploy.Targets.Generic.TypeCheckers import AddChecker, DivChecker, GELUChecker, ReluChecker, BatchNormChecker, GEMMChecker, MaxPoolChecker, LayerNormChecker
 from MagiaDeeployTarget.Templates import AddTemplate
 from MagiaDeeployTarget.Templates import AddFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import DivFP16SpatzTemplate
@@ -15,6 +15,7 @@ from MagiaDeeployTarget.Templates import ReluFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import BatchNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GemmFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import MaxPool2DFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import LayerNormFP16SpatzTemplate
 
 BasicTransformer = CodeTransformation([])
 
@@ -102,6 +103,17 @@ MagiaMaxPool2DFp16Bindings = [
             [PointerClass(float16_t)]
         ),
         MaxPool2DFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    )
+]
+
+MagiaLayerNormFp16Bindings = [
+    NodeBinding(
+        LayerNormChecker(
+            [PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        LayerNormFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     )
 ]
