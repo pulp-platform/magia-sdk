@@ -5,7 +5,7 @@
 # ==============================================================================
 set(SPATZ_LLVM_PATH "$ENV{LLVM_INSTALL_DIR}" CACHE PATH "Path to Spatz LLVM installation")
 if(NOT SPATZ_LLVM_PATH)
-    set(SPATZ_LLVM_PATH "${CMAKE_SOURCE_DIR}/../llvm/install" CACHE PATH "Path to Spatz LLVM installation" FORCE)
+    set(SPATZ_LLVM_PATH "${CMAKE_SOURCE_DIR}/llvm/install" CACHE PATH "Path to Spatz LLVM installation" FORCE)
 endif()
 set(SPATZ_CLANG "${SPATZ_LLVM_PATH}/bin/clang" CACHE PATH "Path to Spatz clang")
 set(SPATZ_OBJCOPY "${SPATZ_LLVM_PATH}/bin/llvm-objcopy" CACHE PATH "Path to Spatz llvm-objcopy")

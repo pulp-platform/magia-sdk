@@ -95,7 +95,6 @@ _start:
     li      t0, MSTATUS_MIE
     csrs    mstatus, t0
 
-<<<<<<< HEAD
     /* Signal ready to CV32 - now ready to receive interrupts */
     li      t0, READY_ADDR
     li      t1, 1
@@ -109,9 +108,6 @@ _start:
     sw      zero, 0(t0)
 
     /* Fall through to main dispatcher loop */
-=======
-    /* Fall through to dispatcher loop */
->>>>>>> 3639f0e ([targets/magia_v2] Add spatz as sub-target for magia_v2)
 
 dispatcher_loop:
     /* Wait for interrupt from CV32 */
@@ -126,11 +122,7 @@ _trap_handler:
     csrr    t0, mcause
     bltz    t0, _handle_interrupt   // mcause[31]=1 → interrupt
 
-<<<<<<< HEAD
     /* EXCEPTION: Write error code to RETURN_ADDR, signal DONE, halt */
-=======
-    /* EXCEPTION: Write error code to EXCHANGE_REG, signal DONE, halt */
->>>>>>> 3639f0e ([targets/magia_v2] Add spatz as sub-target for magia_v2)
 _handle_exception:
     csrr    t1, mcause      // Read full mcause
     andi    t1, t1, 0xFF    // Extract exception code [7:0]
@@ -152,11 +144,7 @@ _handle_interrupt:
     li      t1, 11
     bne     t0, t1, _trap_ret
 
-<<<<<<< HEAD
     /* Read task address from TASKBIN_ADDR and save it in t1 */
-=======
-    /* Read task address from EXCHANGE_REG and save it in t1 */
->>>>>>> 3639f0e ([targets/magia_v2] Add spatz as sub-target for magia_v2)
     li      t0, TASKBIN_ADDR
     lw      t1, 0(t0)
     beqz    t1, _trap_ret

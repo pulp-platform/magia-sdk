@@ -71,7 +71,7 @@ static bool run_test()
 
     params = (volatile onnx_globalaveragepool_params_t *) ONNX_GLOBALAVERAGEPOOL_PARAMS_BASE;
 
-    ret = init_data(params);
+    ret = init_data((void *) params);
     if (ret != 0) {
         printf("[CV32] Params initialization failed with error: %d\n", ret);
         return ret;
@@ -83,7 +83,7 @@ static bool run_test()
         return ret;
     }
 
-    check = check_result(params);
+    check = check_result((void *) params);
     if (check) {
         printf("[CV32] Test SUCCESS\n");
     } else {

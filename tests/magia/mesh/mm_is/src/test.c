@@ -72,8 +72,8 @@ int main(void){
      * 1. Calculate the static input data-tile dimensions.
      * If M and N are perfect multiples of the number of mesh-tiles in their respective axis, 
      * tile_h and tile_w will be the same for each mesh-tile.
-     * Otherwise, these dimensions will be smaller for the mesh-tiles closer to the right and lower 
-     * border of the mesh. 
+     * Otherwise, these dimensions will be smaller for the mesh-tiles closer to the right and 
+     * lower border of the mesh. 
      */
     uint32_t tile_h_max = ((M_SIZE + MESH_Y_TILES - 1) /  MESH_Y_TILES);
     uint32_t tile_w_max = ((N_SIZE + MESH_X_TILES - 1) /  MESH_X_TILES);

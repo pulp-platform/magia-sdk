@@ -1,6 +1,5 @@
 add_subdirectory(hello_spatz)
 add_subdirectory(fft_fs)
-
 add_subdirectory(onnx_add)
 add_subdirectory(onnx_averagepool)
 add_subdirectory(onnx_batchnorm)
@@ -24,3 +23,4 @@ add_subdirectory(onnx_sigmoid)
 add_subdirectory(onnx_softmax)
 add_subdirectory(onnx_sub)
 add_subdirectory(onnx_swish)
+
