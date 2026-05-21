@@ -6,17 +6,18 @@
 from Deeploy.AbstractDataTypes import PointerClass
 from Deeploy.CommonExtensions.DataTypes import float16_t, int8_t, int32_t
 from Deeploy.DeeployTypes import CodeTransformation, NodeBinding
-from Deeploy.Targets.Generic.TypeCheckers import DummyChecker, AddChecker, DivChecker, GELUChecker, ReluChecker, BatchNormChecker, GEMMChecker, MaxPoolChecker, LayerNormChecker
-from MagiaDeeployTarget.Templates import AddTemplate
+from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, DivChecker, DummyChecker, GELUChecker, GEMMChecker, LayerNormChecker, MaxPoolChecker, ReluChecker
 from MagiaDeeployTarget.Templates import AddFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import AddTemplate
+from MagiaDeeployTarget.Templates import BatchNormFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import CeilFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import DivFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GeluFP16SpatzTemplate
-from MagiaDeeployTarget.Templates import ReluFP16SpatzTemplate
-from MagiaDeeployTarget.Templates import BatchNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GemmFP16SpatzTemplate
-from MagiaDeeployTarget.Templates import MaxPool2DFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import GroupNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import LayerNormFP16SpatzTemplate
-from MagiaDeeployTarget.Templates import CeilFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import MaxPool2DFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import ReluFP16SpatzTemplate
 
 BasicTransformer = CodeTransformation([])
 
@@ -42,6 +43,27 @@ MagiaAddFp16Bindings = [
     ),
 ]
 
+MagiaBatchNormFp16Bindings = [
+    NodeBinding(
+        BatchNormChecker(
+            [PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        BatchNormFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    ),
+]
+
+MagiaCeilFp16Bindings = [
+    NodeBinding(
+        DummyChecker(
+            [PointerClass(float16_t)],
+            [PointerClass(float16_t)]),
+            CeilFP16SpatzTemplate.referenceTemplate,
+            BasicTransformer,
+        )
+]
+
 MagiaDivFp16Bindings = [
     NodeBinding(
         DivChecker(
@@ -64,28 +86,6 @@ MagiaGeluFp16Bindings = [
     ),
 ]
 
-MagiaReluFp16Bindings = [
-    NodeBinding(
-        ReluChecker(
-            [PointerClass(float16_t)],
-            [PointerClass(float16_t)]
-        ),
-        ReluFP16SpatzTemplate.referenceTemplate,
-        BasicTransformer,
-    ),
-]
-
-MagiaBatchNormFp16Bindings = [
-    NodeBinding(
-        BatchNormChecker(
-            [PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t)],
-            [PointerClass(float16_t)]
-        ),
-        BatchNormFP16SpatzTemplate.referenceTemplate,
-        BasicTransformer,
-    ),
-]
-
 MagiaGemmFp16Bindings = [
     NodeBinding(
         GEMMChecker(
@@ -93,6 +93,27 @@ MagiaGemmFp16Bindings = [
             [PointerClass(float16_t)]
         ),
         GemmFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    )
+]
+
+MagiaGroupNormFp16Bindings = [
+    NodeBinding(
+        DummyChecker(
+            [PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t)],
+            [PointerClass(float16_t)]),
+            GroupNormFP16SpatzTemplate.referenceTemplate,
+            BasicTransformer,
+    )
+]
+
+MagiaLayerNormFp16Bindings = [
+    NodeBinding(
+        LayerNormChecker(
+            [PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        LayerNormFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     )
 ]
@@ -108,23 +129,13 @@ MagiaMaxPool2DFp16Bindings = [
     )
 ]
 
-MagiaLayerNormFp16Bindings = [
+MagiaReluFp16Bindings = [
     NodeBinding(
-        LayerNormChecker(
-            [PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t)],
+        ReluChecker(
+            [PointerClass(float16_t)],
             [PointerClass(float16_t)]
         ),
-        LayerNormFP16SpatzTemplate.referenceTemplate,
+        ReluFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
-    )
-]
-
-MagiaCeilFp16Bindings = [
-    NodeBinding(
-        DummyChecker(
-            [PointerClass(float16_t)],
-            [PointerClass(float16_t)]),
-            CeilFP16SpatzTemplate.referenceTemplate,
-            BasicTransformer,
-        )
+    ),
 ]

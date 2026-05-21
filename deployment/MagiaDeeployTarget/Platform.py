@@ -7,27 +7,36 @@ import onnx_graphsurgeon as gs
 
 from Deeploy.DeeployTypes import ConstantBuffer, DeploymentEngine, DeploymentPlatform, NetworkContext, NodeMapper, \
     NodeTemplate, StructBuffer, TopologyOptimizer, TransientBuffer, VariableBuffer
-from Deeploy.Targets.Generic.Layers import AddLayer, DivLayer, GELULayer, ReluLayer, BatchNormalizationLayer, GEMMLayer, MaxPoolLayer, LayerNormLayer, CeilLayer
-from Deeploy.Targets.Generic.Parsers import AddParser, DivParser, GELUParser, ReluParser, BatchNormParser, GEMMParser, MaxPool2DParser, LayerNormParser, CeilParser
+from Deeploy.Targets.Generic.Layers import AddLayer, BatchNormalizationLayer, CeilLayer, DivLayer, GELULayer, GEMMLayer, GroupNormLayer, LayerNormLayer, MaxPoolLayer, ReluLayer
+from Deeploy.Targets.Generic.Parsers import AddParser, BatchNormParser, CeilParser, DivParser, GELUParser, GEMMParser, GroupNormParser, LayerNormParser, MaxPool2DParser, ReluParser
 from Deeploy.Targets.Generic.Templates import AllocateTemplate as BasicAllocateTemplate
-from MagiaDeeployTarget.Bindings import MagiaAddBindings, MagiaAddFp16Bindings, MagiaDivFp16Bindings, MagiaGeluFp16Bindings, MagiaReluFp16Bindings, MagiaBatchNormFp16Bindings, MagiaGemmFp16Bindings, MagiaMaxPool2DFp16Bindings, MagiaLayerNormFp16Bindings, MagiaCeilFp16Bindings
+from MagiaDeeployTarget.Bindings import MagiaAddBindings, MagiaAddFp16Bindings, MagiaBatchNormFp16Bindings, MagiaCeilFp16Bindings, MagiaDivFp16Bindings, MagiaGeluFp16Bindings, MagiaGemmFp16Bindings, MagiaGroupNormFp16Bindings, MagiaLayerNormFp16Bindings, MagiaMaxPool2DFp16Bindings, MagiaReluFp16Bindings
 from MagiaDeeployTarget.Templates import AllocateTemplate, FreeTemplate
 
 
 AddMapper = NodeMapper(AddParser(), MagiaAddBindings + MagiaAddFp16Bindings)
+BatchNormMapper = NodeMapper(BatchNormParser(), MagiaBatchNormFp16Bindings)
+CeilMapper = NodeMapper(CeilParser(), MagiaCeilFp16Bindings)
 DivMapper = NodeMapper(DivParser(), MagiaDivFp16Bindings)
 GeluMapper = NodeMapper(GELUParser(), MagiaGeluFp16Bindings)
-ReluMapper = NodeMapper(ReluParser(), MagiaReluFp16Bindings)
-BatchNormMapper = NodeMapper(BatchNormParser(), MagiaBatchNormFp16Bindings)
 GemmMapper = NodeMapper(GEMMParser(), MagiaGemmFp16Bindings)
-MaxPool2DMapper = NodeMapper(MaxPool2DParser(), MagiaMaxPool2DFp16Bindings)
+GroupNormMapper = NodeMapper(GroupNormParser(), MagiaGroupNormFp16Bindings)
 LayerNormMapper = NodeMapper(LayerNormParser(), MagiaLayerNormFp16Bindings)
-CeilMapper = NodeMapper(CeilParser(), MagiaCeilFp16Bindings)
+MaxPool2DMapper = NodeMapper(MaxPool2DParser(), MagiaMaxPool2DFp16Bindings)
+ReluMapper = NodeMapper(ReluParser(), MagiaReluFp16Bindings)
 
-MagiaMapping = {'Add': AddLayer([AddMapper]), 'Div': DivLayer([DivMapper]), 'Gelu': GELULayer([GeluMapper]),
-                'Relu': ReluLayer([ReluMapper]), 'BatchNormalization': BatchNormalizationLayer([BatchNormMapper]),
-                'Gemm': GEMMLayer([GemmMapper]), 'MaxPool': MaxPoolLayer([MaxPool2DMapper]),
-                'LayerNormalization': LayerNormLayer([LayerNormMapper]), 'Ceil': CeilLayer([CeilMapper])}
+MagiaMapping = {
+    'Add': AddLayer([AddMapper]),
+    'BatchNormalization': BatchNormalizationLayer([BatchNormMapper]),
+    'Ceil': CeilLayer([CeilMapper]),
+    'Div': DivLayer([DivMapper]),
+    'Gelu': GELULayer([GeluMapper]),
+    'Gemm': GEMMLayer([GemmMapper]),
+    'GroupNormalization': GroupNormLayer([GroupNormMapper]),
+    'LayerNormalization': LayerNormLayer([LayerNormMapper]),
+    'MaxPool': MaxPoolLayer([MaxPool2DMapper]),
+    'Relu': ReluLayer([ReluMapper]),
+}
 
 class MagiaVariableBuffer(VariableBuffer):
 
