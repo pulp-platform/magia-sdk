@@ -3,6 +3,6 @@
 
 #include <stdint.h>
 
-void MAGIA_groupnorm_fp16_spatz(const float16 *X, const float16 *Y, const float16 *scale, const float16 *B, uint32_t batch_size, uint32_t num_channels, uint32_t spatial, uint32_t num_groups, float16 epsilon);
+void MAGIA_groupnorm_fp16_spatz(const float16 *X, const float16 *Y, const float16 *scale, const float16 *B, uint32_t num_groups, float16 epsilon);
 
 #endif  /* GROUPNORM_FP16_SPATZ_H_ */

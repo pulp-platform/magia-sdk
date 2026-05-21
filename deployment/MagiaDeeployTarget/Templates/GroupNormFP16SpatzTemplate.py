@@ -12,5 +12,5 @@ class _MagiaGroupNormFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaGroupNormFP16Spatz("""
 // Magia GroupNorm FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
-MAGIA_groupnorm_fp16_spatz(${data_in}, ${data_out}, ${scale}, ${bias}, ${batch_size}, ${num_channels}, ${spatial}, ${num_groups}, ${epsilon});
+MAGIA_groupnorm_fp16_spatz(${data_in}, ${data_out}, ${scale}, ${bias}, ${num_groups}, ${epsilon});
 """)
