@@ -182,14 +182,14 @@ endif
 gvsoc_init:
 	git clone https://github.com/gvsoc/gvsoc.git || true
 	cd $(GVSOC_DIR) && \
-	git fetch origin $(GVSOC_COMMIT) && \
+	git fetch origin && \
 	git checkout $(GVSOC_COMMIT) && \
 	git submodule update --init --recursive && \
 	cd core && \
-	git fetch origin $(GVSOC_CORE_COMMIT) && \
+	git fetch origin && \
 	git checkout $(GVSOC_CORE_COMMIT) && \
 	cd ../pulp && \
-	git fetch origin $(GVSOC_PULP_COMMIT) && \
+	git fetch origin && \
 	git checkout $(GVSOC_PULP_COMMIT)
 
 gvsoc_venv:
