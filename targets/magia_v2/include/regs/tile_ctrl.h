@@ -144,14 +144,14 @@
     ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_CONF_OFFSET)                                        \
                    : (IDMA_BASE_AXI2OBI + IDMA_CONF_OFFSET))
 #define IDMA_STATUS_ADDR(is_l1_to_l2, id)                                                          \
-    ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_STATUS_OFFSET + ((id)*4))                           \
-                   : (IDMA_BASE_AXI2OBI + IDMA_STATUS_OFFSET + ((id)*4)))
+    ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_STATUS_OFFSET + ((id) * 4))                         \
+                   : (IDMA_BASE_AXI2OBI + IDMA_STATUS_OFFSET + ((id) * 4)))
 #define IDMA_NEXT_ID_ADDR(is_l1_to_l2, id)                                                         \
-    ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_NEXT_ID_OFFSET + ((id)*4))                          \
-                   : (IDMA_BASE_AXI2OBI + IDMA_NEXT_ID_OFFSET + ((id)*4)))
+    ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_NEXT_ID_OFFSET + ((id) * 4))                        \
+                   : (IDMA_BASE_AXI2OBI + IDMA_NEXT_ID_OFFSET + ((id) * 4)))
 #define IDMA_DONE_ID_ADDR(is_l1_to_l2, id)                                                         \
-    ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_DONE_ID_OFFSET + ((id)*4))                          \
-                   : (IDMA_BASE_AXI2OBI + IDMA_DONE_ID_OFFSET + ((id)*4)))
+    ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_DONE_ID_OFFSET + ((id) * 4))                        \
+                   : (IDMA_BASE_AXI2OBI + IDMA_DONE_ID_OFFSET + ((id) * 4)))
 #define IDMA_DST_ADDR_LOW_ADDR(is_l1_to_l2)                                                        \
     ((is_l1_to_l2) ? (IDMA_BASE_OBI2AXI + IDMA_DST_ADDR_LOW_OFFSET)                                \
                    : (IDMA_BASE_AXI2OBI + IDMA_DST_ADDR_LOW_OFFSET))
