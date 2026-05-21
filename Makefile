@@ -55,8 +55,9 @@ tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
 GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
-GVRUN_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --trace-level=trace run
-GVRUN_PROFILE_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --trace-level=trace --vcd --event=.* run
+GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --trace-level=trace
+GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
+GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 profile_tile		?=
 PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=tile-$(profile_tile)-idma-ctrl-mm,)
 
