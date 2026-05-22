@@ -12,6 +12,7 @@ from MagiaDeeployTarget.Templates import AddTemplate
 from MagiaDeeployTarget.Templates import AveragePool2DFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import BatchNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import CeilFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import ClipFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import DivFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GeluFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GemmFP16SpatzTemplate
@@ -74,6 +75,17 @@ MagiaCeilFp16Bindings = [
             CeilFP16SpatzTemplate.referenceTemplate,
             BasicTransformer,
         )
+]
+
+MagiaClipFp16Bindings = [
+    NodeBinding(
+        DummyChecker(
+            [PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        ClipFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    )
 ]
 
 MagiaDivFp16Bindings = [
