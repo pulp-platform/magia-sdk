@@ -21,6 +21,7 @@ from MagiaDeeployTarget.Templates import GroupNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import LayerNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import MaxPool2DFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ReluFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import SubFP16SpatzTemplate
 
 BasicTransformer = CodeTransformation([])
 
@@ -171,6 +172,17 @@ MagiaReluFp16Bindings = [
             [PointerClass(float16_t)]
         ),
         ReluFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    ),
+]
+
+MagiaSubFp16Bindings = [
+    NodeBinding(
+        AddChecker(
+            [PointerClass(float16_t), PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        SubFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     ),
 ]
