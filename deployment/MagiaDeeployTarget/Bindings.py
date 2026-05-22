@@ -9,6 +9,7 @@ from Deeploy.DeeployTypes import CodeTransformation, NodeBinding
 from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, DivChecker, DummyChecker, GELUChecker, GEMMChecker, LayerNormChecker, MaxPoolChecker, ReluChecker
 from MagiaDeeployTarget.Templates import AddFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import AddTemplate
+from MagiaDeeployTarget.Templates import AveragePool2DFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import BatchNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import CeilFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import DivFP16SpatzTemplate
@@ -39,6 +40,17 @@ MagiaAddFp16Bindings = [
             [PointerClass(float16_t)]
         ),
         AddFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    ),
+]
+
+MagiaAveragePool2DFp16Bindings = [
+    NodeBinding(
+        DummyChecker(
+            [PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        AveragePool2DFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     ),
 ]
