@@ -14,6 +14,7 @@ from MagiaDeeployTarget.Templates import BatchNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import CeilFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ClipFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import DivFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import ExpFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import FloorFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GeluFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GemmFP16SpatzTemplate
@@ -100,6 +101,17 @@ MagiaDivFp16Bindings = [
             [PointerClass(float16_t)]
         ),
         DivFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    ),
+]
+
+MagiaExpFp16Bindings = [
+    NodeBinding(
+        DummyChecker(
+            [PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        ExpFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     ),
 ]
