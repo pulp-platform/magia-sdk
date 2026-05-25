@@ -7,10 +7,10 @@ import onnx_graphsurgeon as gs
 
 from Deeploy.DeeployTypes import ConstantBuffer, DeploymentEngine, DeploymentPlatform, NetworkContext, NodeMapper, \
     NodeTemplate, StructBuffer, TopologyOptimizer, TransientBuffer, VariableBuffer
-from Deeploy.Targets.Generic.Layers import AddLayer, AveragePoolLayer, BatchNormalizationLayer, CeilLayer, ClipLayer, DivLayer, FloorLayer, GELULayer, GEMMLayer, GroupNormLayer, InstanceNormLayer, LayerNormLayer, MaxPoolLayer, ReluLayer, SubLayer
-from Deeploy.Targets.Generic.Parsers import AddParser, AveragePool2DParser, BatchNormParser, CeilParser, ClipParser, DivParser, FloorParser, GELUParser, GEMMParser, GroupNormParser, InstanceNormParser, LayerNormParser, MaxPool2DParser, ReluParser, SubParser
+from Deeploy.Targets.Generic.Layers import AddLayer, AveragePoolLayer, BatchNormalizationLayer, CeilLayer, ClipLayer, DivLayer, FloorLayer, GELULayer, GEMMLayer, GlobalAveragePoolLayer, GroupNormLayer, InstanceNormLayer, LayerNormLayer, MaxPoolLayer, ReluLayer, SubLayer
+from Deeploy.Targets.Generic.Parsers import AddParser, AveragePool2DParser, BatchNormParser, CeilParser, ClipParser, DivParser, FloorParser, GELUParser, GEMMParser, GlobalAveragePoolParser, GroupNormParser, InstanceNormParser, LayerNormParser, MaxPool2DParser, ReluParser, SubParser
 from Deeploy.Targets.Generic.Templates import AllocateTemplate as BasicAllocateTemplate
-from MagiaDeeployTarget.Bindings import MagiaAddBindings, MagiaAddFp16Bindings, MagiaAveragePool2DFp16Bindings, MagiaBatchNormFp16Bindings, MagiaCeilFp16Bindings, MagiaClipFp16Bindings, MagiaDivFp16Bindings, MagiaFloorFp16Bindings, MagiaGeluFp16Bindings, MagiaGemmFp16Bindings, MagiaGroupNormFp16Bindings, MagiaInstanceNormFp16Bindings, MagiaLayerNormFp16Bindings, MagiaMaxPool2DFp16Bindings, MagiaReluFp16Bindings, MagiaSubFp16Bindings
+from MagiaDeeployTarget.Bindings import MagiaAddBindings, MagiaAddFp16Bindings, MagiaAveragePool2DFp16Bindings, MagiaBatchNormFp16Bindings, MagiaCeilFp16Bindings, MagiaClipFp16Bindings, MagiaDivFp16Bindings, MagiaFloorFp16Bindings, MagiaGeluFp16Bindings, MagiaGemmFp16Bindings, MagiaGlobalAveragePoolFp16Bindings, MagiaGroupNormFp16Bindings, MagiaInstanceNormFp16Bindings, MagiaLayerNormFp16Bindings, MagiaMaxPool2DFp16Bindings, MagiaReluFp16Bindings, MagiaSubFp16Bindings
 from MagiaDeeployTarget.Templates import AllocateTemplate, FreeTemplate
 
 
@@ -23,6 +23,7 @@ DivMapper = NodeMapper(DivParser(), MagiaDivFp16Bindings)
 FloorMapper = NodeMapper(FloorParser(), MagiaFloorFp16Bindings)
 GeluMapper = NodeMapper(GELUParser(), MagiaGeluFp16Bindings)
 GemmMapper = NodeMapper(GEMMParser(), MagiaGemmFp16Bindings)
+GlobalAveragePoolMapper = NodeMapper(GlobalAveragePoolParser(), MagiaGlobalAveragePoolFp16Bindings)
 GroupNormMapper = NodeMapper(GroupNormParser(), MagiaGroupNormFp16Bindings)
 InstanceNormMapper = NodeMapper(InstanceNormParser(), MagiaInstanceNormFp16Bindings)
 LayerNormMapper = NodeMapper(LayerNormParser(), MagiaLayerNormFp16Bindings)
@@ -40,6 +41,7 @@ MagiaMapping = {
     'Floor': FloorLayer([FloorMapper]),
     'Gelu': GELULayer([GeluMapper]),
     'Gemm': GEMMLayer([GemmMapper]),
+    'GlobalAveragePool': GlobalAveragePoolLayer([GlobalAveragePoolMapper]),
     'GroupNormalization': GroupNormLayer([GroupNormMapper]),
     'InstanceNormalization': InstanceNormLayer([InstanceNormMapper]),
     'LayerNormalization': LayerNormLayer([LayerNormMapper]),
