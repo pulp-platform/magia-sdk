@@ -1,19 +1,19 @@
 #include "tile.h"
 #include "fft_fs_params.h"
 
-static inline uint16_t get_raw(const _Float16 val)
-{
-    uint16_t raw;
-    memcpy(&raw, &val, sizeof(raw));
-    return raw;
-}
+// static inline uint16_t get_raw(const _Float16 val)
+// {
+//     uint16_t raw;
+//     memcpy(&raw, &val, sizeof(raw));
+//     return raw;
+// }
  
-static inline void print_vector_raw(const _Float16 *vec, size_t len)
-{
-    for (size_t i = 0; i < len; i++) {
-        printf("%d) %x\n", i, get_raw(vec[i]));
-    }
-}
+// static inline void print_vector_raw(const _Float16 *vec, size_t len)
+// {
+//     for (size_t i = 0; i < len; i++) {
+//         printf("%d) %x\n", i, get_raw(vec[i]));
+//     }
+// }
 
 // static inline void permute_vector(_Float16* vec, size_t len)
 // {
@@ -36,7 +36,6 @@ int fft_fs_task(void)
     _Float16 *DI;
     size_t avl;
     size_t vl;
-    uint32_t permute;
 
     params_addr = mmio32(SPATZ_DATA);
     params = (volatile fft_fs_params_t *) params_addr;
@@ -53,8 +52,6 @@ int fft_fs_task(void)
     DI = (_Float16 *)params->chunk_DI;
     
     avl = params->len;
-    permute = params->permute;
-
 
     for (; avl > 0; avl -= vl) {
         //TODO: lol

@@ -78,22 +78,26 @@ int fsync32_getgroup_level(fsync_controller_t *ctrl, uint32_t level, uint32_t id
  * It just works - Todd howard
  */
 int fsync32_sync_row(fsync_controller_t *ctrl) {
-    if(MESH_2_POWER == 0)
+    if(MESH_Y_TILES == 0)
         return 0;
-    uint32_t y_id = GET_Y_ID(get_hartid()) % (MESH_Y_TILES/2);
-    fsync(y_id * 2, (0b101010101 >> ((5 - MESH_2_POWER) * 2)));
-    return 0;
+    else{
+        uint32_t y_id = GET_Y_ID(get_hartid()) % (MESH_Y_TILES/2);
+        fsync(y_id * 2, (0b101010101 >> ((5 - MESH_2_POWER) * 2)));
+        return 0;
+    }
 }
 
 /**
  * Synchronize the tile with the others of the same mesh column.
  */
 int fsync32_sync_col(fsync_controller_t *ctrl) {
-    if(MESH_2_POWER == 0)
+    if(MESH_X_TILES == 0)
         return 0;
-    uint32_t x_id = GET_X_ID(get_hartid()) % (MESH_X_TILES/2);
-    fsync(((x_id * 2) + 1), (0b101010101 >> ((5 - MESH_2_POWER) * 2)));
-    return 0;
+    else{
+        uint32_t x_id = GET_X_ID(get_hartid()) % (MESH_X_TILES/2);
+        fsync(((x_id * 2) + 1), (0b101010101 >> ((5 - MESH_2_POWER) * 2)));
+        return 0;
+    }
 }
 
 /**
@@ -235,9 +239,10 @@ int fsync32_sync_down(fsync_controller_t *ctrl){
  * Synchronizes the entire mesh.
  */
 int fsync32_sync_global(fsync_controller_t *ctrl){
-    if(MESH_2_POWER == 0)
+    if(MAX_SYNC_LVL == 0)
         return 0;
-    fsync(0, (uint32_t) (0xFFFFFFFF >> (32 - MAX_SYNC_LVL)));
+    else
+        fsync(0, (uint32_t) (0xFFFFFFFF >> (32 - MAX_SYNC_LVL)));
     return 0;
 }
 

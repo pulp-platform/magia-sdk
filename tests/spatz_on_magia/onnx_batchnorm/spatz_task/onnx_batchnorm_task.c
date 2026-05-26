@@ -55,14 +55,6 @@ static inline void batchnorm(const _Float16 *src, const _Float16 *mean, const _F
 
 }
 
-// TODO: remove me :)
-static inline _Float16 sqrtf_hp(_Float16 x)
-{
-    _Float16 out;
-    asm volatile ("fsqrt.h %0, %1" : "=f"(out) : "f"(x));
-    return out;
-}
-
 int onnx_batchnorm_task(void)
 {
     volatile onnx_batchnorm_params_t *params;

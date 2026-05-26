@@ -38,7 +38,7 @@
 #define _FS_HRING_ID    (2)
 #define _FS_VRING_AGGR  (0x1)
 #define _FS_VRING_ID    (3)
-#define _FS_RC_LVL      (0x1 << (29-__builtin_clz(NUM_HARTS)))
+#define _FS_RC_LVL      (NUM_HARTS == 1) ? (0) : (0x1 << (29-__builtin_clz(NUM_HARTS)))
 #define _FS_RC_AGGR     (0x155 >> (__builtin_clz(NUM_HARTS)-21))
 
 

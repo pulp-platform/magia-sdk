@@ -85,12 +85,10 @@ int main(void){
         #endif
         if(!flag){
             printf("No errors detected in diagonal!\n");
-            magia_return(hartid, 0);
             return 0;
         }
         else{
             printf("Errors detected in diagonal!\n");
-            magia_return(hartid, 1);
             return 1;
         }        
     }

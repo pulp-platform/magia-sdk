@@ -39,17 +39,6 @@
 #define addr16(x) (*(uint16_t *)(&x))
 #define addr8(x)  (*(uint8_t  *)(&x))
 
-static void wait_print(unsigned int cycles){
-    for(int i = 0; i <= cycles; i++){
-        printf("Waiting: [");
-        for(int j = 0; j < i; j++)
-            printf("+");
-        for(int j = 0; j < cycles - i; j++)
-            printf("-");
-        printf("]\n");
-    }
-}
-
 inline void irq_en(volatile uint32_t index_oh){
     asm volatile("addi t0, %0, 0\n\t"
                  "csrrs zero, mie, t0"
@@ -64,7 +53,7 @@ inline uint32_t irq_st(){
 }
 
 inline void wait_nop(uint32_t nops){
-    for (int i = 0; i < nops; i++) asm volatile("addi x0, x0, 0" ::);
+    for (unsigned i = 0; i < nops; i++) asm volatile("addi x0, x0, 0" ::);
 }
 
 inline void sentinel_instr_id(){
@@ -81,48 +70,6 @@ inline void ccount_en(){
 
 inline void ccount_dis(){
     asm volatile("csrrsi zero, 0x320, 0x1" ::);
-}
-
-static inline uint32_t get_cyclel(){
-    uint32_t cyclel;
-    asm volatile("csrr %0, cycle"
-                 :"=r"(cyclel):);
-    return cyclel;
-}
-
-inline uint32_t get_cycleh(){
-    uint32_t cycleh;
-    asm volatile("csrr %0, cycleh"
-                 :"=r"(cycleh):);
-    return cycleh;
-}
-
-static uint32_t get_cycle(){
-    uint32_t cyclel = get_cyclel();
-    uint32_t cycleh = get_cycleh();
-    if (cycleh) return 0;
-    return cyclel;
-}
-
-inline uint32_t get_timel(){
-    uint32_t timel;
-    asm volatile("csrr %0, time"
-                 :"=r"(timel):);
-    return timel;
-}
-
-inline uint32_t get_timeh(){
-    uint32_t timeh;
-    asm volatile("csrr %0, timeh"
-                 :"=r"(timeh):);
-    return timeh;
-}
-
-static uint32_t get_time(){
-    uint32_t timel = get_timel();
-    uint32_t timeh = get_timeh();
-    if (timeh) return 0;
-    return timel;
 }
 
 #endif /* MAGIA_TILE_UTILS_H */

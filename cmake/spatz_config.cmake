@@ -75,7 +75,6 @@ set(CV32_LINK_FLAGS
     "-D__riscv__"
     "-MMD"
     "-MP"
-    "-nostartfiles"
     "-nostdlib"
     "-Wl,--gc-sections"
 )
@@ -134,7 +133,6 @@ set(SPATZ_ARCH_FLAGS
 set(SPATZ_COMPILE_FLAGS
     ${SPATZ_ARCH_FLAGS}
     "-static"
-    "-nostartfiles"
     "-nostdlib"
     "-O3"
     "-g"
@@ -159,7 +157,7 @@ set(SPATZ_CFLAGS_DEFINES
     "-DSPATZ_RVV=${SPATZ_RVV}"
 )
 set(SPATZ_LINK_FLAGS
-    "-fuse-ld=${SPATZ_LLVM_PATH}/bin/ld.lld"
+    "--ld-path=${SPATZ_LLVM_PATH}/bin/ld.lld"
     "-Wl,-z,norelro"
     "-Wl,--allow-multiple-definition"
 )

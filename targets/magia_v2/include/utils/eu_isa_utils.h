@@ -159,8 +159,6 @@ static inline unsigned int evt_read32(unsigned int addr) {
  * @return Non-zero if events detected
  */
 static inline uint32_t eu_wait_events_wfe(uint32_t event_mask) {
-    uint32_t detected_events;
-
     while(eu_check_events(event_mask) == 0){
         evt_read32(EU_CORE_EVENT_WAIT);
     }

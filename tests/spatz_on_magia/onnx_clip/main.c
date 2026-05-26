@@ -26,11 +26,9 @@ static int init_data(void *params)
     end = start + chunk + (HID < left ? 1 : 0);
     len = end - start;
 
-    for (int i = 0; i < len; i++) {
-        int global_idx;
+    for (unsigned int i = 0; i < len; i++) {
         uint32_t offset;
 
-        global_idx = start + i;
         offset =  i * sizeof(float16);
 
         mmio_fp16(INPUT_BASE + offset) = input[i];
