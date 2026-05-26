@@ -1,0 +1,122 @@
+#include <stdint.h>
+
+#include "eventunit.h"
+#include "tile.h"
+
+#include "swish_fp16_spatz.h"
+#include "swish_fp16_spatz_mem_layout.h"
+#include "swish_fp16_spatz_params.h"
+#include "swish_fp16_spatz_task_bin.h"
+
+#define HID get_hartid()
+
+static int init_input_params(void *params, const float16 *X, const float16 alpha, uint32_t size)
+{
+    volatile swish_fp16_spatz_params_t *swish_params;
+    uint32_t shard;
+    uint32_t start;
+    uint32_t left;
+    uint32_t end;
+    uint32_t len;
+    uint32_t hid;
+
+    swish_params = (volatile swish_fp16_spatz_params_t *) params;
+
+    shard = size / NUM_HARTS;
+    left  = size % NUM_HARTS;
+    start = HID * shard + (HID < left ? HID : left);
+    end   = start + shard + (HID < left ? 1 : 0);
+    len   = end - start;
+
+    for (int i = 0; i < len; i++) {
+        uint32_t global_idx = start + i;
+        uint32_t offset = i * sizeof(float16);
+
+        mmio_fp16(SHARD_X_BASE + offset) = X[global_idx];
+        mmio_fp16(SHARD_Y_BASE + offset) = 0;
+    }
+
+    mmio_fp16(ALPHA_BASE) = alpha;
+
+    swish_params->shard_X = SHARD_X_BASE;
+    swish_params->shard_Y = SHARD_Y_BASE;
+    swish_params->alpha = ALPHA_BASE;
+    swish_params->start   = start;
+    swish_params->len     = len;
+    swish_params->end     = end;
+
+    return 0;
+}
+
+static int offload_spatz_task()
+{
+    eu_controller_t eu_ctrl;
+    eu_config_t eu_cfg;
+    int ret;
+
+    eu_cfg.hartid = HID;
+    eu_ctrl.base = NULL;
+    eu_ctrl.cfg = &eu_cfg;
+    eu_ctrl.api = &eu_api;
+
+    spatz_init(SPATZ_BINARY_START);
+    spatz_run_task_with_params(SWISH_FP16_SPATZ_TASK, SWISH_FP16_SPATZ_PARAMS_BASE);
+
+    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    if (ret == 0) {
+        printf("[CV32 (%d)] Wait on Spatz task completion failed with error: %d\n", HID, ret);
+        goto exit;
+    }
+
+    ret = spatz_get_exit_code();
+    spatz_clk_dis();
+
+exit:
+    return ret;
+}
+
+static int store_result(void* params, float16 *dst)
+{
+    volatile swish_fp16_spatz_params_t *swish_params;
+    uint32_t shard_Y_base;
+    uint32_t start;
+    uint32_t len;
+
+    swish_params = (volatile swish_fp16_spatz_params_t *) params;
+    shard_Y_base = swish_params->shard_Y;
+    start = swish_params->start;
+    len = swish_params->len;
+
+    for (int i = 0; i < len; i++) {
+        uint32_t global_idx = start + i;
+        uint32_t offset = i * sizeof(float16);
+        dst[global_idx] = mmio_fp16(shard_Y_base + offset);
+    }
+
+    return 0;
+}
+
+void MAGIA_swish_fp16_spatz(const float16 *X, float16 *Y, const float16 alpha, uint32_t size)
+{
+    int ret;
+    volatile swish_fp16_spatz_params_t *params;
+
+    params = (volatile swish_fp16_spatz_params_t *) SWISH_FP16_SPATZ_PARAMS_BASE;
+
+    ret = init_input_params(params, X, alpha, size);
+    if (ret != 0) {
+        printf("[CV32 (%d) Params initialization failed with error: %d\n]", HID, ret);
+        return;
+    }
+
+    ret = offload_spatz_task();
+    if (ret != 0) {
+        printf("[CV32 (%d)] Spatz task offloading failed with error: %d\n", HID, ret);
+        return;
+    }
+
+    ret = store_result(params, Y);
+    if (ret != 0) {
+        printf("[CV32 (%d)] Result write back failed with error: %d\n", HID, ret);
+    }
+}

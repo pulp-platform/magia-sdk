@@ -28,6 +28,7 @@ from MagiaDeeployTarget.Templates import MaxPool2DFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ReluFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SigmoidFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SubFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import SwishFP16SpatzTemplate
 
 BasicTransformer = CodeTransformation([])
 
@@ -254,6 +255,17 @@ MagiaSubFp16Bindings = [
             [PointerClass(float16_t)]
         ),
         SubFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    ),
+]
+
+MagiaSwishFp16Bindings = [
+    NodeBinding(
+        DummyChecker(
+            [PointerClass(float16_t)],
+            [PointerClass(float16_t)],
+        ),
+        SwishFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     ),
 ]
