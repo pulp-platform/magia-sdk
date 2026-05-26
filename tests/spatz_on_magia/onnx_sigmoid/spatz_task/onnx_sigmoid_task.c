@@ -5,9 +5,7 @@ static inline void sigmoid(const _Float16 *src, _Float16 *dst, const size_t len)
 {
     register _Float16 BIAS asm ("fs0") = 15360.0f;
     register _Float16 COEF asm ("fs1") = 1477.0f;
-    register _Float16 ZERO asm ("fs2") = 0.0f;
     register _Float16 ONE  asm ("fs3") = 1.0f;
-    register _Float16 MIN  asm ("fs4") = -5.0f;
     const _Float16 *p_src;
     _Float16 *p_dst;
     size_t avl;

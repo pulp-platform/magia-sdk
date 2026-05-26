@@ -172,7 +172,7 @@ int onnx_groupnorm_task(void)
     len = params->len;
 
     group_size = len / num_groups;
-    for (int g = 0; g < num_groups; g++) {
+    for (unsigned int g = 0; g < num_groups; g++) {
         int offset;
 
         offset = g * group_size;

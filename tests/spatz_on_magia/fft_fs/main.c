@@ -39,17 +39,8 @@ static size_t bit_reverse(size_t x, size_t bits)
 static int init_data(void *params)
 {
     volatile fft_fs_params_t *fft_fs_params;
-    uint32_t start;
-    uint32_t chunk;
-    uint32_t left;
-    uint32_t len;
-    uint32_t end;
 
     fft_fs_params = (volatile fft_fs_params_t *) params;
-
-    start = HID * chunk;
-    end = start + chunk;
-    len = chunk;
 
     for(int i = 0; i < (VEC_LEN / 2); i++){
         mmio_fp16(CHUNK_AR_BASE + (i * sizeof(float16))) = IR[bit_reverse(i * 2, LOG2_LEN)];
@@ -73,10 +64,7 @@ static int init_data(void *params)
     fft_fs_params->chunk_CI = CHUNK_CI_BASE;
     fft_fs_params->chunk_DR = CHUNK_DR_BASE;
     fft_fs_params->chunk_DI = CHUNK_DI_BASE;
-    fft_fs_params->start = start;
     fft_fs_params->len = (VEC_LEN / 2);
-    fft_fs_params->end = end;
-    fft_fs_params->permute = 0;
 
     return 0;
 }
@@ -185,14 +173,17 @@ static bool run_test()
         }
     }
 
-    printf("CR VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_CR, (size_t) params->len);
-    printf("CI VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_CI, (size_t) params->len);
-    printf("DR VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_DR, (size_t) params->len);
-    printf("DI VECTOR:\n");
-    print_vector_raw((const float16*) params->chunk_DI, (size_t) params->len);
+    if(HID == 0){
+        printf("CR VECTOR:\n");
+        print_vector_raw((const float16*) params->chunk_CR, (size_t) params->len);
+        printf("CI VECTOR:\n");
+        print_vector_raw((const float16*) params->chunk_CI, (size_t) params->len);
+        printf("DR VECTOR:\n");
+        print_vector_raw((const float16*) params->chunk_DR, (size_t) params->len);
+        printf("DI VECTOR:\n");
+        print_vector_raw((const float16*) params->chunk_DI, (size_t) params->len);
+    }
+    
     
 
     // check = check_result(params);
@@ -208,7 +199,7 @@ static bool run_test()
 
 int main(void)
 {
-
+    int ret = 0;
     fsync_config_t fsync_cfg = {.hartid = HID};
     fsync_controller_t fsync_ctrl = {
         .base = NULL,
@@ -230,7 +221,7 @@ int main(void)
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     eu_fsync_wait(&eu_ctrl, WFE);
 
-    int ret;
+    
 
     if (HID == 0) {printf("\n############################### FFT_FS TEST on %d Tiles ################################\n\n", NUM_HARTS);
 

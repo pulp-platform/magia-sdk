@@ -26,7 +26,7 @@ static int init_data(void *params)
     end = start + chunk + (HID < left ? 1 : 0);
     len = end - start;
 
-    for (int i = 0; i < len; i++) {
+    for (unsigned int i = 0; i < len; i++) {
         int global_idx;
         uint32_t offset;
 

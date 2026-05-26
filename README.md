@@ -36,7 +36,7 @@ The following *optional* parameters can be specified when running the make comma
 
 `profile_cmp|cmi|cmo|snc`: **0**|**1** (**Default**: 0). Activates the profiling utilities for computing|comunication(input line)|comunication(output line)|synchronization
 
-`spatz`: **0**|**1** (**Default**: 0). Enable compilation of GVSoC and tests with Spatz enabled
+`spatz`: **0**|**1** (**Default**: 1). Enable compilation of GVSoC and tests with Spatz enabled
 
 0. In case you are using this SDK as non-submodule: Clone the [MAGIA](https://github.com/pulp-platform/MAGIA/tree/main) repository:
 
@@ -335,7 +335,7 @@ add_cv32_executable_with_spatz(
 ```
 
 ### Run Tests
-To run test a special Makefile rule can be used: `make run_with_spatz test=<test_name> platform=<rtl|gvsoc>`.
+To run test a special Makefile rule can be used: `make run test=<test_name> platform=<rtl|gvsoc>`.
 
 ## Spatz integration in MAGIA
 
@@ -407,7 +407,7 @@ add_cv32_executable_with_spatz(
 ```
 
 ### Run Tests
-To run test a special Makefile rule can be used: `make run_with_spatz test=<test_name> platform=<rtl|gvsoc>`.
+To run test a special Makefile rule can be used: `make run test=<test_name> platform=<rtl|gvsoc>`.
 
 ## Folder Structure
 

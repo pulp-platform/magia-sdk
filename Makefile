@@ -52,7 +52,7 @@ compiler 		?= GCC_PULP
 ISA				?= rv32imcxgap9
 gui 			?= 0
 tiles 			?= 2
-spatz			?= 0
+spatz			?= 1
 
 LLVM_CMAKE			?= cmake
 LLVM_DIR			?= llvm
@@ -114,48 +114,18 @@ endif
 ifeq ($(platform), gvsoc)
 	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
 else ifeq ($(platform), rtl)
-	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
-	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
+	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
+	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
 	objcopy --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
 	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
-	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/build/stim_instr.txt $(BUILD_DIR)/build/stim_data.txt
-	cd $(BUILD_DIR)													&& \
-	cp -sf ../../../sim/modelsim.ini modelsim.ini    				&& \
-	ln -sfn ../../../sim/work work
+	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
+	cd $(BUILD_DIR_ABS)													&& \
+	cp -sf "$(MAGIA_DIR_ABS)/sim/modelsim.ini" modelsim.ini    			&& \
+	ln -sfn "$(MAGIA_DIR_ABS)/sim/work" work
 	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
 	cd $(MAGIA_RTL_DIR) 												&& \
-	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv)
-else
-	$(error Only rtl and gvsoc are supported as platforms.)
-endif
-
-run_with_spatz: set_mesh
-ifndef test
-	$(error Proper formatting is: make run_with_spatz test=<test_name> platform=<rtl|gvsoc>)
-endif
-ifeq (,$(wildcard ./build/bin/$(test)))
-	$(error No test found with name: $(test))
-endif
-ifndef platform
-	$(error Proper formatting is: make run_with_spatz test=<test_name> platform=rtl|gvsoc)
-endif
-ifeq ($(platform), gvsoc)
-	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
-else ifeq ($(platform), rtl)
-	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
-	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
-	objcopy --srec-len 1 --output-target=srec $(BUILD_DIR_ABS)/build/verif $(BUILD_DIR_ABS)/build/verif.s19
-	scripts/parse_s19.pl $(BUILD_DIR_ABS)/build/verif.s19 > $(BUILD_DIR_ABS)/build/verif.txt
-	python3 scripts/s19tomem.py $(BUILD_DIR_ABS)/build/verif.txt $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
-	cd $(BUILD_DIR_ABS)													&& \
-	cp -sf "$(MAGIA_DIR_ABS)/sim/modelsim.ini" modelsim.ini    				&& \
-	ln -sfn "$(MAGIA_DIR_ABS)/sim/work" work
-	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BUILD_DIR_ABS)/build/verif > $(BUILD_DIR_ABS)/build/verif.dump
-	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BUILD_DIR_ABS)/build/verif > $(BUILD_DIR_ABS)/build/verif.objdump
-	python3 scripts/objdump2itb.py $(BUILD_DIR_ABS)/build/verif.objdump > $(BUILD_DIR_ABS)/build/verif.itb
-	cd $(MAGIA_DIR_ABS) 												&& \
 	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv)
 else
 	$(error Only rtl and gvsoc are supported as platforms.)

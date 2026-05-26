@@ -6,8 +6,8 @@ static inline void compute_window_boundaries( const int out_idx, const uint32_t 
     int logical_start;
     int logical_end;
     int offset;
-    int first;
-    int last;
+    unsigned int first;
+    unsigned int last;
 
     logical_start = (out_idx * stride) - pad;
     logical_end = logical_start + (shape - 1) * dilation + 1;
@@ -40,7 +40,7 @@ static inline void maxpool(const _Float16 *src, const uint32_t dilation, const u
     size_t avl;
     size_t vl;
 
-    for (int out_idx = 0; out_idx < out_len; out_idx++) {
+    for (unsigned int out_idx = 0; out_idx < out_len; out_idx++) {
         compute_window_boundaries(out_idx, stride, pad, shape, dilation, in_len, &win_start, &win_len);
         strides_bytes = dilation * sizeof(_Float16);
         p_src = src + win_start;
@@ -75,7 +75,6 @@ int onnx_maxpool_task(void)
     _Float16 *src;
     _Float16 *dst;
 
-    uint32_t cnt_include_pad;
     uint32_t dilation;
     uint32_t stride;
     uint32_t shape;

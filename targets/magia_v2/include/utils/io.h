@@ -44,7 +44,7 @@ static inline int isdigit(int a)
 
 static int atoi(const char **sptr)
 {
-    const register char *p;
+    register const char *p;
     register int   i;
 
     i = 0;

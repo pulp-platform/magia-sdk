@@ -6,7 +6,6 @@ static inline void globalmaxpool(const _Float16 *src, _Float16 *dst, const uint3
     register _Float16 ZERO asm ("fs0") = 0.0f;
     const _Float16 *p_src;
     size_t original_avl;
-    _Float16 sum;
     size_t avl;
     size_t vl;
 
