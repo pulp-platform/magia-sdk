@@ -64,10 +64,13 @@ tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
 GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
-GVRUN_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace run --trace=kill-module
+GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --trace-level=trace --trace=kill-module
+GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
+GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
+profile_tile		?=
+PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=tile-$(profile_tile)-idma-ctrl-mm,)
 
-CMAKE ?= cmake
-.PHONY: gvsoc build format
+.PHONY: gvsoc build format run_profiling
 
 format:
 	@bash scripts/ci/format-changed.sh apply
@@ -128,6 +131,15 @@ else ifeq ($(platform), rtl)
 else
 	$(error Only rtl and gvsoc are supported as platforms.)
 endif
+
+run_profiling: set_mesh
+ifndef test
+	$(error Proper formatting is: make run_profiling test=<test_name>)
+endif
+ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
+	$(error No test found with name: $(test))
+endif
+	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG)
 
 MAGIA: set_mesh
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
