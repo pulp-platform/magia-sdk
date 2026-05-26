@@ -17,7 +17,7 @@ target_include_directories(${TEST_NAME} PUBLIC include)
 
 target_compile_options(${TEST_NAME}
   PRIVATE
-  -O3
+  -O2
 )
 target_link_libraries(${TEST_NAME} PUBLIC runtime hal)
 
