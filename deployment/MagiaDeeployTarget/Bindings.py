@@ -22,6 +22,7 @@ from MagiaDeeployTarget.Templates import GlobalAveragePoolFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GlobalMaxPoolFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GroupNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import HardSigmoidFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import HardSwishFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import InstanceNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import LayerNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import MaxPool2DFP16SpatzTemplate
@@ -190,6 +191,17 @@ MagiaHardSigmoidFp16Bindings = [
             [PointerClass(float16_t)]
         ),
         HardSigmoidFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    ),
+]
+
+MagiaHardSwishFp16Bindings = [
+    NodeBinding(
+        DummyChecker(
+            [PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        HardSwishFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     ),
 ]
