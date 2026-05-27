@@ -136,7 +136,7 @@ magia_v2_tiles_1:
 .build:
   extends: [.base, .export_path]
   script:
-    - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler} CMAKE=$(CMAKE)
+    - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler} CMAKE=${CMAKE}
   artifacts:
     paths: [ "build", "targets/${target_platform}/include/addr_map/tile_addr_map.h" ]
 
