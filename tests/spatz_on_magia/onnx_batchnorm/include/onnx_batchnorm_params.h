@@ -15,4 +15,4 @@ typedef struct {
     uint32_t len;
 } onnx_batchnorm_params_t;
 
-#endif  /* ONNX_BATCHNORM_PARAMS_H */
+#endif /* ONNX_BATCHNORM_PARAMS_H */

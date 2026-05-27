@@ -18,4 +18,4 @@ typedef struct {
     uint32_t len_in;
 } onnx_averagepool_params_t;
 
-#endif  /* ONNX_AVERAGEPOOL_PARAMS_H_ */
+#endif /* ONNX_AVERAGEPOOL_PARAMS_H_ */

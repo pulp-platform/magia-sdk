@@ -10,4 +10,4 @@ typedef struct {
     uint32_t len;
 } onnx_softmax_params_t;
 
-#endif  /* ONNX_SOFTMAX_PARAMS_H */
+#endif /* ONNX_SOFTMAX_PARAMS_H */

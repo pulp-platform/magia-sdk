@@ -16,7 +16,7 @@ static inline uint16_t get_raw(const float16 val)
     memcpy(&raw, &val, sizeof(raw));
     return raw;
 }
- 
+
 static inline void print_vector_raw(const float16 *vec, size_t len)
 {
     for (size_t i = 0; i < len; i++) {
@@ -40,16 +40,16 @@ static int init_data(void *params)
 {
     volatile fft_fs_params_t *fft_fs_params;
 
-    fft_fs_params = (volatile fft_fs_params_t *) params;
+    fft_fs_params = (volatile fft_fs_params_t *)params;
 
-    for(int i = 0; i < (VEC_LEN / 2); i++){
+    for (int i = 0; i < (VEC_LEN / 2); i++) {
         mmio_fp16(CHUNK_AR_BASE + (i * sizeof(float16))) = IR[bit_reverse(i * 2, LOG2_LEN)];
         mmio_fp16(CHUNK_BR_BASE + (i * sizeof(float16))) = IR[bit_reverse(((i * 2) + 1), LOG2_LEN)];
         mmio_fp16(CHUNK_AI_BASE + (i * sizeof(float16))) = II[bit_reverse(i * 2, LOG2_LEN)];
         mmio_fp16(CHUNK_BI_BASE + (i * sizeof(float16))) = II[bit_reverse(((i * 2) + 1), LOG2_LEN)];
     }
 
-    for(int i = 0; i < TW_LEN; i++){
+    for (int i = 0; i < TW_LEN; i++) {
         mmio_fp16(CHUNK_WR_BASE + (i * sizeof(float16))) = WR[i];
         mmio_fp16(CHUNK_WI_BASE + (i * sizeof(float16))) = WI[i];
     }
@@ -64,7 +64,7 @@ static int init_data(void *params)
     fft_fs_params->chunk_CI = CHUNK_CI_BASE;
     fft_fs_params->chunk_DR = CHUNK_DR_BASE;
     fft_fs_params->chunk_DI = CHUNK_DI_BASE;
-    fft_fs_params->len = (VEC_LEN / 2);
+    fft_fs_params->len      = (VEC_LEN / 2);
 
     return 0;
 }
@@ -74,27 +74,38 @@ static int reinit_data(void *params, int stage)
     int i, j, k;
     int prev_stage = (1 << (stage - 1));
     // Number of different butterfly groups and number of elements
-    int n_groups = (VEC_LEN >> (stage + 1));
+    int n_groups  = (VEC_LEN >> (stage + 1));
     int group_len = (1 << stage);
-    for(j = 0; j < n_groups; j++){
-        for(i = 0; i < group_len; i++){
-            if(!((i / prev_stage) % 2)){
-                mmio_fp16(CHUNK_AR_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_CR_BASE + (2 * j * prev_stage + (i % prev_stage)) * sizeof(float16));
-                mmio_fp16(CHUNK_AI_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_CI_BASE + (2 * j * prev_stage + (i % prev_stage)) * sizeof(float16));
-                mmio_fp16(CHUNK_BR_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_CR_BASE + (((2 * j) + 1) * prev_stage + (i % prev_stage)) * sizeof(float16));
-                mmio_fp16(CHUNK_BI_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_CI_BASE + (((2 * j) + 1) * prev_stage + (i % prev_stage)) * sizeof(float16));
-            }
-            else{
-                mmio_fp16(CHUNK_AR_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_DR_BASE + (2 * j * prev_stage + (i % prev_stage)) * sizeof(float16));
-                mmio_fp16(CHUNK_AI_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_DI_BASE + (2 * j * prev_stage + (i % prev_stage)) * sizeof(float16));
-                mmio_fp16(CHUNK_BR_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_DR_BASE + (((2 * j) + 1) * prev_stage + (i % prev_stage)) * sizeof(float16));
-                mmio_fp16(CHUNK_BI_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(CHUNK_DI_BASE + (((2 * j) + 1) * prev_stage + (i % prev_stage)) * sizeof(float16));
+    for (j = 0; j < n_groups; j++) {
+        for (i = 0; i < group_len; i++) {
+            if (!((i / prev_stage) % 2)) {
+                mmio_fp16(CHUNK_AR_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(
+                    CHUNK_CR_BASE + (2 * j * prev_stage + (i % prev_stage)) * sizeof(float16));
+                mmio_fp16(CHUNK_AI_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(
+                    CHUNK_CI_BASE + (2 * j * prev_stage + (i % prev_stage)) * sizeof(float16));
+                mmio_fp16(CHUNK_BR_BASE + (((j * group_len) + i) * sizeof(float16))) =
+                    mmio_fp16(CHUNK_CR_BASE +
+                              (((2 * j) + 1) * prev_stage + (i % prev_stage)) * sizeof(float16));
+                mmio_fp16(CHUNK_BI_BASE + (((j * group_len) + i) * sizeof(float16))) =
+                    mmio_fp16(CHUNK_CI_BASE +
+                              (((2 * j) + 1) * prev_stage + (i % prev_stage)) * sizeof(float16));
+            } else {
+                mmio_fp16(CHUNK_AR_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(
+                    CHUNK_DR_BASE + (2 * j * prev_stage + (i % prev_stage)) * sizeof(float16));
+                mmio_fp16(CHUNK_AI_BASE + (((j * group_len) + i) * sizeof(float16))) = mmio_fp16(
+                    CHUNK_DI_BASE + (2 * j * prev_stage + (i % prev_stage)) * sizeof(float16));
+                mmio_fp16(CHUNK_BR_BASE + (((j * group_len) + i) * sizeof(float16))) =
+                    mmio_fp16(CHUNK_DR_BASE +
+                              (((2 * j) + 1) * prev_stage + (i % prev_stage)) * sizeof(float16));
+                mmio_fp16(CHUNK_BI_BASE + (((j * group_len) + i) * sizeof(float16))) =
+                    mmio_fp16(CHUNK_DI_BASE +
+                              (((2 * j) + 1) * prev_stage + (i % prev_stage)) * sizeof(float16));
             }
         }
     }
 
     volatile fft_fs_params_t *fft_fs_params;
-    fft_fs_params = (volatile fft_fs_params_t *) params;
+    fft_fs_params = (volatile fft_fs_params_t *)params;
 
     fft_fs_params->chunk_WR = fft_fs_params->chunk_WR + (VEC_LEN);
     fft_fs_params->chunk_WI = fft_fs_params->chunk_WI + (VEC_LEN);
@@ -102,13 +113,11 @@ static int reinit_data(void *params, int stage)
     return 0;
 }
 
-
-
-static int run_spatz_task(eu_controller_t* eu_ctrl, int init)
+static int run_spatz_task(eu_controller_t *eu_ctrl, int init)
 {
     int ret;
 
-    if(!init)
+    if (!init)
         spatz_init(SPATZ_BINARY_START);
     // else
     //     spatz_clk_en();
@@ -118,7 +127,7 @@ static int run_spatz_task(eu_controller_t* eu_ctrl, int init)
 
     ret = spatz_get_exit_code();
 
-    //spatz_clk_dis();
+    // spatz_clk_dis();
 
     return ret;
 }
@@ -127,7 +136,8 @@ static int run_spatz_task(eu_controller_t* eu_ctrl, int init)
 // {
 //     volatile fft_fparams_t *fft_params;
 //     fft_params = (volatile fft_params_t *) params;
-//     return chunk_compare_fp16_bitwise(fft_params->chunk_CR, fft_params->chunk_GR, fft_params->chunk_CI, fft_params->chunk_GI, fft_params->start, fft_params->len);
+//     return chunk_compare_fp16_bitwise(fft_params->chunk_CR, fft_params->chunk_GR,
+//     fft_params->chunk_CI, fft_params->chunk_GI, fft_params->start, fft_params->len);
 // }
 
 static bool run_test()
@@ -136,15 +146,13 @@ static bool run_test()
     bool check;
     volatile fft_fs_params_t *params;
 
-    params = (volatile fft_fs_params_t *) FFT_PARAMS_BASE;
+    params = (volatile fft_fs_params_t *)FFT_PARAMS_BASE;
 
     eu_config_t eu_cfg;
     eu_controller_t eu_ctrl;
 
     eu_cfg.hartid = get_hartid();
-    eu_ctrl.base = NULL,
-    eu_ctrl.cfg = &eu_cfg,
-    eu_ctrl.api = &eu_api,
+    eu_ctrl.base = NULL, eu_ctrl.cfg = &eu_cfg, eu_ctrl.api = &eu_api,
 
     eu_init(&eu_ctrl);
     eu_spatz_init(&eu_ctrl, 0);
@@ -155,7 +163,7 @@ static bool run_test()
         return ret;
     }
 
-    for(int i = 0; i < LOG2_LEN; i++){
+    for (int i = 0; i < LOG2_LEN; i++) {
         printf("Complex mul number %d\n", i);
         ret = run_spatz_task(&eu_ctrl, i);
         if (ret != 0) {
@@ -163,7 +171,7 @@ static bool run_test()
             return ret;
         }
 
-        if(i != (LOG2_LEN - 1)){
+        if (i != (LOG2_LEN - 1)) {
             printf("Swapping at i=%d\n", i);
             ret = reinit_data((void *)params, (i + 1));
             if (ret != 0) {
@@ -173,18 +181,16 @@ static bool run_test()
         }
     }
 
-    if(HID == 0){
+    if (HID == 0) {
         printf("CR VECTOR:\n");
-        print_vector_raw((const float16*) params->chunk_CR, (size_t) params->len);
+        print_vector_raw((const float16 *)params->chunk_CR, (size_t)params->len);
         printf("CI VECTOR:\n");
-        print_vector_raw((const float16*) params->chunk_CI, (size_t) params->len);
+        print_vector_raw((const float16 *)params->chunk_CI, (size_t)params->len);
         printf("DR VECTOR:\n");
-        print_vector_raw((const float16*) params->chunk_DR, (size_t) params->len);
+        print_vector_raw((const float16 *)params->chunk_DR, (size_t)params->len);
         printf("DI VECTOR:\n");
-        print_vector_raw((const float16*) params->chunk_DI, (size_t) params->len);
+        print_vector_raw((const float16 *)params->chunk_DI, (size_t)params->len);
     }
-    
-    
 
     // check = check_result(params);
     // if (check) {
@@ -199,21 +205,21 @@ static bool run_test()
 
 int main(void)
 {
-    int ret = 0;
-    fsync_config_t fsync_cfg = {.hartid = HID};
+    int ret                       = 0;
+    fsync_config_t fsync_cfg      = {.hartid = HID};
     fsync_controller_t fsync_ctrl = {
         .base = NULL,
-        .cfg = &fsync_cfg,
-        .api = &fsync_api,
+        .cfg  = &fsync_cfg,
+        .api  = &fsync_api,
     };
 
     fsync_init(&fsync_ctrl);
 
-    eu_config_t eu_cfg = {.hartid = HID};
+    eu_config_t eu_cfg      = {.hartid = HID};
     eu_controller_t eu_ctrl = {
         .base = NULL,
-        .cfg = &eu_cfg,
-        .api = &eu_api,
+        .cfg  = &eu_cfg,
+        .api  = &eu_api,
     };
     eu_init(&eu_ctrl);
     eu_fsync_init(&eu_ctrl, 0);
@@ -221,13 +227,16 @@ int main(void)
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
     eu_fsync_wait(&eu_ctrl, WFE);
 
-    
+    if (HID == 0) {
+        printf("\n############################### FFT_FS TEST on %d Tiles "
+               "################################\n\n",
+               NUM_HARTS);
 
-    if (HID == 0) {printf("\n############################### FFT_FS TEST on %d Tiles ################################\n\n", NUM_HARTS);
+        ret = run_test();
 
-    ret = run_test();
-
-    if (HID == 0) printf("\n##########################################################################################\n\n");
+        if (HID == 0)
+            printf("\n#############################################################################"
+                   "#############\n\n");
     }
     return ret;
 }

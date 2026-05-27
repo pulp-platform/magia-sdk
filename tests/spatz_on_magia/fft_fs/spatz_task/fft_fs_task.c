@@ -7,7 +7,7 @@
 //     memcpy(&raw, &val, sizeof(raw));
 //     return raw;
 // }
- 
+
 // static inline void print_vector_raw(const _Float16 *vec, size_t len)
 // {
 //     for (size_t i = 0; i < len; i++) {
@@ -38,7 +38,7 @@ int fft_fs_task(void)
     size_t vl;
 
     params_addr = mmio32(SPATZ_DATA);
-    params = (volatile fft_fs_params_t *) params_addr;
+    params      = (volatile fft_fs_params_t *)params_addr;
 
     AR = (_Float16 *)params->chunk_AR;
     AI = (_Float16 *)params->chunk_AI;
@@ -50,55 +50,55 @@ int fft_fs_task(void)
     CI = (_Float16 *)params->chunk_CI;
     DR = (_Float16 *)params->chunk_DR;
     DI = (_Float16 *)params->chunk_DI;
-    
+
     avl = params->len;
 
     for (; avl > 0; avl -= vl) {
-        //TODO: lol
-        asm volatile ("vsetvli %0, %1, e16, m1, ta, ma" : "=r"(vl) : "r"(avl));
+        // TODO: lol
+        asm volatile("vsetvli %0, %1, e16, m1, ta, ma" : "=r"(vl) : "r"(avl));
 
         // W*B -> (WR*BR - WI*BI) + i(BI*WR + WI*BR) = PR + iPI
         // A + WB -> (AR + PR) + i(AI + PI)
         // A - WB -> (AR - PR) + i(AI - PI)
 
-        asm volatile ("vle16.v v0, (%0)" :: "r"(WR));
-        asm volatile ("vle16.v v1, (%0)" :: "r"(WI));
-        asm volatile ("vle16.v v2, (%0)" :: "r"(BR));
-        asm volatile ("vle16.v v3, (%0)" :: "r"(BI));
+        asm volatile("vle16.v v0, (%0)" ::"r"(WR));
+        asm volatile("vle16.v v1, (%0)" ::"r"(WI));
+        asm volatile("vle16.v v2, (%0)" ::"r"(BR));
+        asm volatile("vle16.v v3, (%0)" ::"r"(BI));
 
         // PR = WR*BR - WI*BI (saved in v4)
-        asm volatile ("vfmul.vv v4, v0, v2");
-        asm volatile ("vfmul.vv v5, v1, v3");
-        asm volatile ("vfsub.vv v4, v4, v5");
+        asm volatile("vfmul.vv v4, v0, v2");
+        asm volatile("vfmul.vv v5, v1, v3");
+        asm volatile("vfsub.vv v4, v4, v5");
 
         // PI = BI*WR + WI*BR (saved in v5)
-        asm volatile ("vfmul.vv v5, v3, v0");
-        asm volatile ("vfmul.vv v6, v1, v2");
-        asm volatile ("vfadd.vv v5, v5, v6");
+        asm volatile("vfmul.vv v5, v3, v0");
+        asm volatile("vfmul.vv v6, v1, v2");
+        asm volatile("vfadd.vv v5, v5, v6");
 
         // Load A
-        asm volatile ("vle16.v v2, (%0)" :: "r"(AR));
-        asm volatile ("vle16.v v3, (%0)" :: "r"(AI));
+        asm volatile("vle16.v v2, (%0)" ::"r"(AR));
+        asm volatile("vle16.v v3, (%0)" ::"r"(AI));
 
         // CR = AR + PR
-        asm volatile ("vfadd.vv v0, v2, v4");
+        asm volatile("vfadd.vv v0, v2, v4");
 
         // CI = AI + PI
-        asm volatile ("vfadd.vv v1, v3, v5");
+        asm volatile("vfadd.vv v1, v3, v5");
 
         // Store C vector
-        asm volatile ("vse16.v v0, (%0)" :: "r"(CR));
-        asm volatile ("vse16.v v1, (%0)" :: "r"(CI));
+        asm volatile("vse16.v v0, (%0)" ::"r"(CR));
+        asm volatile("vse16.v v1, (%0)" ::"r"(CI));
 
         // DR = AR - PR
-        asm volatile ("vfsub.vv v0, v2, v4");
+        asm volatile("vfsub.vv v0, v2, v4");
 
         // DI = AI - PI
-        asm volatile ("vfsub.vv v1, v3, v5");
+        asm volatile("vfsub.vv v1, v3, v5");
 
         // Store D vector
-        asm volatile ("vse16.v v0, (%0)" :: "r"(DR));
-        asm volatile ("vse16.v v1, (%0)" :: "r"(DI));
+        asm volatile("vse16.v v0, (%0)" ::"r"(DR));
+        asm volatile("vse16.v v1, (%0)" ::"r"(DI));
 
         AR += vl;
         AI += vl;
@@ -110,7 +110,6 @@ int fft_fs_task(void)
         CI += vl;
         DR += vl;
         DI += vl;
-
     }
 
     return 0;

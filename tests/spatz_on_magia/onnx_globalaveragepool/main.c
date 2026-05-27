@@ -12,10 +12,10 @@ static int init_data(void *params)
     uint32_t offset;
     volatile onnx_globalaveragepool_params_t *avgpool_params;
 
-    avgpool_params = (volatile onnx_globalaveragepool_params_t *) params;
+    avgpool_params = (volatile onnx_globalaveragepool_params_t *)params;
 
     for (int i = 0; i < LEN; i++) {
-        offset = i * sizeof(float16);
+        offset                         = i * sizeof(float16);
         mmio_fp16(INPUT_BASE + offset) = input_vec[i];
     }
 
@@ -23,9 +23,9 @@ static int init_data(void *params)
     mmio_fp16(RES_BASE) = 0;
 
     avgpool_params->addr_input = INPUT_BASE;
-    avgpool_params->addr_res = RES_BASE;
-    avgpool_params->addr_exp = EXP_BASE;
-    avgpool_params->len = LEN;
+    avgpool_params->addr_res   = RES_BASE;
+    avgpool_params->addr_exp   = EXP_BASE;
+    avgpool_params->len        = LEN;
 
     return 0;
 }
@@ -37,9 +37,9 @@ static int run_spatz_task()
     eu_controller_t eu_ctrl;
 
     eu_cfg.hartid = get_hartid();
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
+    eu_ctrl.base  = NULL;
+    eu_ctrl.cfg   = &eu_cfg;
+    eu_ctrl.api   = &eu_api;
 
     eu_init(&eu_ctrl);
     eu_spatz_init(&eu_ctrl, 0);
@@ -59,7 +59,7 @@ static int run_spatz_task()
 static bool check_result(void *params)
 {
     volatile onnx_globalaveragepool_params_t *avgpool_params;
-    avgpool_params = (volatile onnx_globalaveragepool_params_t *) params;
+    avgpool_params = (volatile onnx_globalaveragepool_params_t *)params;
     return vector_compare_fp16_bitwise(avgpool_params->addr_res, avgpool_params->addr_exp, 1);
 }
 
@@ -69,9 +69,9 @@ static bool run_test()
     bool check;
     volatile onnx_globalaveragepool_params_t *params;
 
-    params = (volatile onnx_globalaveragepool_params_t *) ONNX_GLOBALAVERAGEPOOL_PARAMS_BASE;
+    params = (volatile onnx_globalaveragepool_params_t *)ONNX_GLOBALAVERAGEPOOL_PARAMS_BASE;
 
-    ret = init_data((void *) params);
+    ret = init_data((void *)params);
     if (ret != 0) {
         printf("[CV32] Params initialization failed with error: %d\n", ret);
         return ret;
@@ -83,7 +83,7 @@ static bool run_test()
         return ret;
     }
 
-    check = check_result((void *) params);
+    check = check_result((void *)params);
     if (check) {
         printf("[CV32] Test SUCCESS\n");
     } else {
@@ -98,11 +98,13 @@ int main(void)
 {
     int ret;
 
-    printf("\n################################### ONNX_GLOBALAVERAGEPOOL TEST ###################################\n\n");
+    printf("\n################################### ONNX_GLOBALAVERAGEPOOL TEST "
+           "###################################\n\n");
 
     ret = run_test();
 
-    printf("\n##########################################################################################\n\n");
+    printf("\n#####################################################################################"
+           "#####\n\n");
 
     return ret;
 }

@@ -17,7 +17,7 @@
  *
  * Authors:
  * Alberto Dequino <alberto.dequino@unibo.it>
- * 
+ *
  * IO
  */
 #ifndef IO_H
@@ -27,10 +27,9 @@
 #include <stddef.h>
 #include "addr_map/tile_addr_map.h"
 
-
 static void pputc(char c)
 {
-    *(volatile uint8_t *) (PRINT_ADDR) = (uint8_t)c;
+    *(volatile uint8_t *)(PRINT_ADDR) = (uint8_t)c;
 }
 
 void *memset(void *m, int c, size_t n);
@@ -39,18 +38,18 @@ char *strchr(const char *s, int c);
 
 static inline int isdigit(int a)
 {
-	return (((unsigned)(a)-'0') < 10);
+    return (((unsigned)(a) - '0') < 10);
 }
 
 static int atoi(const char **sptr)
 {
     const register char *p;
-    register int   i;
+    register int i;
 
     i = 0;
     p = *sptr;
     p--;
-    while (isdigit(((int) *p)))
+    while (isdigit(((int)*p)))
         i = 10 * i + *p++ - '0';
     *sptr = p;
     return i;
@@ -58,10 +57,10 @@ static int atoi(const char **sptr)
 
 static inline int isupper(int a)
 {
-	return ((unsigned)(a)-'A') < 26;
+    return ((unsigned)(a) - 'A') < 26;
 }
 
-static  void rlrshift(uint64_t *v)
+static void rlrshift(uint64_t *v)
 {
     *v = (*v & 1) + (*v >> 1);
 }
@@ -85,7 +84,7 @@ static void ldiv5(uint64_t *v)
 {
     uint32_t i, hi;
     uint64_t rem = *v, quot = 0, q;
-    static const char shifts[] = { 32, 3, 0 };
+    static const char shifts[] = {32, 3, 0};
 
     /* Usage in this file wants rounded behavior, not truncation.  So add
      * two to get the threshold right.
@@ -94,7 +93,7 @@ static void ldiv5(uint64_t *v)
 
     for (i = 0; i < 3; i++) {
         hi = rem >> shifts[i];
-        q = (uint64_t)(hi / 5) << shifts[i];
+        q  = (uint64_t)(hi / 5) << shifts[i];
         rem -= q * 5;
         quot += q;
     }
@@ -102,18 +101,18 @@ static void ldiv5(uint64_t *v)
     *v = quot;
 }
 
-static  char get_digit(uint64_t *fr, int *digit_count)
+static char get_digit(uint64_t *fr, int *digit_count)
 {
-    int     rval;
+    int rval;
 
     if (*digit_count > 0) {
         *digit_count -= 1;
-        *fr = *fr * 10;
+        *fr  = *fr * 10;
         rval = ((*fr >> 60) & 0xF) + '0';
         *fr &= 0x0FFFFFFFFFFFFFFFull;
     } else
         rval = '0';
-    return (char) (rval);
+    return (char)(rval);
 }
 
 static void uc(char *buf)
@@ -128,6 +127,5 @@ static void uc(char *buf)
 void *memcpy(void *dst0, const void *src0, size_t len0);
 
 void *memmove(void *d, const void *s, size_t n);
-
 
 #endif // IO_H

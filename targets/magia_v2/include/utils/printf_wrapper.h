@@ -8,4 +8,4 @@
 #include "printf.h"
 #endif
 
-#endif  /* PRINTF_WRAPPER_H_ */
+#endif /* PRINTF_WRAPPER_H_ */

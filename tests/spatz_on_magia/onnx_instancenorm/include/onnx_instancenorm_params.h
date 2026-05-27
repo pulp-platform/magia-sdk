@@ -13,4 +13,4 @@ typedef struct {
     uint32_t len;
 } onnx_instancenorm_params_t;
 
-#endif  /* ONNX_INSTANCENORM_PARAMS_H */
+#endif /* ONNX_INSTANCENORM_PARAMS_H */

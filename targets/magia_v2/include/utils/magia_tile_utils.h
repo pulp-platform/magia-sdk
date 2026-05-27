@@ -25,50 +25,56 @@
 
 #include "printf.h"
 
-#define mmio64(x) (*(volatile uint64_t *)(x))
-#define mmio32(x) (*(volatile uint32_t *)(x))
-#define mmio16(x) (*(volatile uint16_t *)(x))
-#define mmio8(x)  (*(volatile uint8_t  *)(x))
+#define mmio64(x)    (*(volatile uint64_t *)(x))
+#define mmio32(x)    (*(volatile uint32_t *)(x))
+#define mmio16(x)    (*(volatile uint16_t *)(x))
+#define mmio8(x)     (*(volatile uint8_t *)(x))
 
 #define mmio_fp64(x) (*(volatile float64 *)(x))
 #define mmio_fp32(x) (*(volatile float32 *)(x))
 #define mmio_fp16(x) (*(volatile float16 *)(x))
 
-#define addr64(x) (*(uint64_t *)(&x))
-#define addr32(x) (*(uint32_t *)(&x))
-#define addr16(x) (*(uint16_t *)(&x))
-#define addr8(x)  (*(uint8_t  *)(&x))
+#define addr64(x)    (*(uint64_t *)(&x))
+#define addr32(x)    (*(uint32_t *)(&x))
+#define addr16(x)    (*(uint16_t *)(&x))
+#define addr8(x)     (*(uint8_t *)(&x))
 
-inline void irq_en(volatile uint32_t index_oh){
+inline void irq_en(volatile uint32_t index_oh)
+{
     asm volatile("addi t0, %0, 0\n\t"
-                 "csrrs zero, mie, t0"
-                 ::"r"(index_oh));
+                 "csrrs zero, mie, t0" ::"r"(index_oh));
 }
 
-inline uint32_t irq_st(){
+inline uint32_t irq_st()
+{
     uint32_t irq_status;
-    asm volatile("csrr %0, mip"
-                 :"=r"(irq_status):);
+    asm volatile("csrr %0, mip" : "=r"(irq_status) :);
     return irq_status;
 }
 
-inline void wait_nop(uint32_t nops){
-    for (unsigned i = 0; i < nops; i++) asm volatile("addi x0, x0, 0" ::);
+inline void wait_nop(uint32_t nops)
+{
+    for (unsigned i = 0; i < nops; i++)
+        asm volatile("addi x0, x0, 0" ::);
 }
 
-inline void sentinel_instr_id(){
+inline void sentinel_instr_id()
+{
     asm volatile("addi x0, x0, 0x404" ::);
 }
 
-inline void sentinel_instr_ex(){
+inline void sentinel_instr_ex()
+{
     asm volatile("addi x0, x0, 0x505" ::);
 }
 
-inline void ccount_en(){
+inline void ccount_en()
+{
     asm volatile("csrrci zero, 0x320, 0x1" ::);
 }
 
-inline void ccount_dis(){
+inline void ccount_dis()
+{
     asm volatile("csrrsi zero, 0x320, 0x1" ::);
 }
 

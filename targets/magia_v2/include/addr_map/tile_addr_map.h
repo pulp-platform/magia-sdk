@@ -37,7 +37,9 @@
 #define FSYNC_END         (0x000006FF)
 #define EU_BASE           (0x00000700)
 #define EU_END            (0x000016FF)
-#define RESERVED_START    (0x00001700)
+#define SPATZ_CTRL_BASE   (0x00001700)
+#define SPATZ_CTRL_END    (0x000017FF)
+#define RESERVED_START    (0x00001800)
 #define RESERVED_END      (0x0000FFFF)
 #define STACK_START       (0x00010000)
 #define STACK_END         (0x0001FFFF)
@@ -65,11 +67,11 @@
 #define GET_Y_ID(mhartid)                 ((mhartid) / MESH_Y_TILES)
 #define GET_ID(y_id, x_id)                (((y_id) * MESH_Y_TILES) + (x_id))
 
-#define STR_OFFSET  (0x00000000)
-#define STR_BASE    (RESERVED_START + STR_OFFSET)
-#define SYNC_OFFSET (0x0000F000)
-#define SYNC_BASE   (RESERVED_START + SYNC_OFFSET)
-#define SYNC_EN     (SYNC_BASE + 0x4)
+#define STR_OFFSET                        (0x00000000)
+#define STR_BASE                          (RESERVED_START + STR_OFFSET)
+#define SYNC_OFFSET                       (0x0000F000)
+#define SYNC_BASE                         (RESERVED_START + SYNC_OFFSET)
+#define SYNC_EN                           (SYNC_BASE + 0x4)
 
 //=============================================================================
 // Event Unit Register Map - Base addresses and offsets
