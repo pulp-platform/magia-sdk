@@ -147,7 +147,7 @@ build_test_magia_v2_tiles_4:
     tiles: 4
     target_platform: magia_v2
     compiler: GCC_PULP
-    CMAKE: cmake-3.18.1
+    CMAKE: cmake-3.28.3
   dependencies:
     - python_gvsoc
 
@@ -159,7 +159,7 @@ build_test_magia_v2_tiles_1:
     tiles: 1
     target_platform: magia_v2
     compiler: GCC_PULP
-    CMAKE: cmake-3.18.1
+    CMAKE: cmake-3.28.3
   dependencies:
     - python_gvsoc
 
