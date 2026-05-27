@@ -58,9 +58,11 @@ endif()
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 
 # Spatz support
+if (SPATZ_TESTS STREQUAL "1")
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/spatz_config.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/spatz_helpers.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/bootrom_helpers.cmake)
+endif()
 
 ################################################################################
 # Add subdirectories                                                           #

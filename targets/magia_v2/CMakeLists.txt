@@ -72,7 +72,7 @@ target_link_options(runtime
 # ==================== SPATZ INTEGRATION ====================
 
 # Include Spatz configuration and helpers if Spatz is available
-if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/spatz")
+if(SPATZ_TESTS STREQUAL "1")
     include(${CMAKE_SOURCE_DIR}/cmake/spatz_config.cmake)
     include(${CMAKE_SOURCE_DIR}/cmake/spatz_helpers.cmake)
     include(${CMAKE_SOURCE_DIR}/cmake/bootrom_helpers.cmake)
