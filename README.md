@@ -203,6 +203,24 @@ In case you are working on RTL, please use the sentinel utilities:
 
     sentinel_end();
 
+### GVSoC VCD Profiling
+
+To generate a VCD waveform dump for post-simulation analysis, use the `run_profiling` target instead of `run`:
+
+`make run_profiling test=<test_name> tiles=<N>`
+
+This is equivalent to `make run platform=gvsoc` but adds `--vcd --event=.*` to the GVSoC invocation, capturing all signal events.
+
+To restrict the trace to a specific tile, pass `profile_tile=<tile_id>`:
+
+`make run_profiling test=<test_name> tiles=<N> profile_tile=<tile_id>`
+
+This appends `--trace=tile-<tile_id>-idma-ctrl-mm` to the GVSoC command. For example, to profile tile 12:
+
+`make run_profiling test=my_test tiles=4 profile_tile=12`
+
+If `profile_tile` is not specified, no tile-specific trace filter is applied.
+
 ## Continuous Integration
 
 CI runs via GitHub Actions (`.github/workflows/github-ci.yml`). It does **not** execute tests locally — instead it mirrors the branch to a GitLab instance at `iis-git.ee.ethz.ch/github-mirror/magia-sdk-mirror` and waits for that pipeline to complete. A `GITLAB_TOKEN` secret with `read_api` scope must be configured on the GitHub repository. CI is automatically skipped for forks.
