@@ -13,4 +13,4 @@ typedef struct {
     uint32_t len;
 } onnx_layernorm_params_t;
 
-#endif  /* ONNX_LAYERNORM_PARAMS_H */
+#endif /* ONNX_LAYERNORM_PARAMS_H */

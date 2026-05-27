@@ -14,4 +14,4 @@ typedef struct {
     uint32_t len;
 } onnx_groupnorm_params_t;
 
-#endif  /* ONNX_GROUPNORM_PARAMS_H */
+#endif /* ONNX_GROUPNORM_PARAMS_H */

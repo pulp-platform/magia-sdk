@@ -16,11 +16,12 @@ static inline uint32_t get_raw(const float val)
 /**
  * This test aims to verify the functionality of _Float16 operations.
  */
-int main(void){
+int main(void)
+{
     uint32_t hartid = get_hartid();
 
-    volatile float a =  0.235f;
-    volatile float b =  -4.04f;
+    volatile float a = 0.235f;
+    volatile float b = -4.04f;
 
     printf("a: %x\n", get_raw(a));
     printf("b: %x\n", get_raw(b));
@@ -29,13 +30,12 @@ int main(void){
 
     printf("a + b: %x\n", get_raw(c));
 
-    if(hartid==0){
-        if(b < a)
+    if (hartid == 0) {
+        if (b < a)
             printf("%x is bigger than %x\n", get_raw(a), get_raw(b));
         else
             printf("%x is smaller than %x\n", get_raw(a), get_raw(b));
     }
-    
 
-    return 0;  
+    return 0;
 }

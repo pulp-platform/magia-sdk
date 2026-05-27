@@ -29,29 +29,36 @@
 
 #define h_pprintf(x) (h_psprint(get_hartid(), x))
 #define n_pprintf(x) (n_psprint(get_hartid(), x))
-#define   pprintf(x) (  psprint(get_hartid(), x))
-#define   pprintln   (  pprintf("\n"))
+#define pprintf(x)   (psprint(get_hartid(), x))
+#define pprintln     (pprintf("\n"))
 
-inline uint32_t get_hartid(){
+inline uint32_t get_hartid()
+{
     uint32_t hartid;
-    asm volatile("csrr %0, mhartid"
-                 :"=r"(hartid):);
+    asm volatile("csrr %0, mhartid" : "=r"(hartid) :);
     return hartid;
 }
 
 // Lookup table indicating the id of row synchronization
-inline uint32_t row_id_lookup(volatile uint32_t hartid_y){
-  if (hartid_y < MESH_Y_TILES/2) return 2*hartid_y;
-  else                           return 2*(hartid_y-MESH_Y_TILES/2);
+inline uint32_t row_id_lookup(volatile uint32_t hartid_y)
+{
+    if (hartid_y < MESH_Y_TILES / 2)
+        return 2 * hartid_y;
+    else
+        return 2 * (hartid_y - MESH_Y_TILES / 2);
 }
 
 // Lookup table indicating the id of column synchronization
-inline uint32_t col_id_lookup(volatile uint32_t hartid_x){
-  if (hartid_x < MESH_X_TILES/2) return 2*hartid_x+1;
-  else                           return 2*(hartid_x-MESH_X_TILES/2)+1;
+inline uint32_t col_id_lookup(volatile uint32_t hartid_x)
+{
+    if (hartid_x < MESH_X_TILES / 2)
+        return 2 * hartid_x + 1;
+    else
+        return 2 * (hartid_x - MESH_X_TILES / 2) + 1;
 }
 
-inline uint32_t get_l1_base(uint32_t hartid){
+inline uint32_t get_l1_base(uint32_t hartid)
+{
     return L1_BASE + hartid * L1_TILE_OFFSET;
 }
 

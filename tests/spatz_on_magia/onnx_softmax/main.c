@@ -12,19 +12,19 @@ static int init_data(void *params)
     uint32_t offset;
     volatile onnx_softmax_params_t *softmax_params;
 
-    softmax_params = (volatile onnx_softmax_params_t *) params;
+    softmax_params = (volatile onnx_softmax_params_t *)params;
     for (int i = 0; i < LEN; i++) {
         offset = i * sizeof(float16);
 
-        mmio_fp16(EXP_BASE + offset) = expected_vec[i];
+        mmio_fp16(EXP_BASE + offset)   = expected_vec[i];
         mmio_fp16(INPUT_BASE + offset) = input_vec[i];
-        mmio_fp16(RES_BASE + offset) = 0;
+        mmio_fp16(RES_BASE + offset)   = 0;
     }
 
     softmax_params->addr_src = INPUT_BASE;
     softmax_params->addr_res = RES_BASE;
     softmax_params->addr_exp = EXP_BASE;
-    softmax_params->len = LEN;
+    softmax_params->len      = LEN;
 
     return 0;
 }
@@ -36,10 +36,9 @@ static int run_spatz_task()
     eu_controller_t eu_ctrl;
 
     eu_cfg.hartid = get_hartid();
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
-
+    eu_ctrl.base  = NULL;
+    eu_ctrl.cfg   = &eu_cfg;
+    eu_ctrl.api   = &eu_api;
 
     eu_init(&eu_ctrl);
     eu_spatz_init(&eu_ctrl, 0);
@@ -59,8 +58,9 @@ static int run_spatz_task()
 static bool check_result(void *params)
 {
     volatile onnx_softmax_params_t *softmax_params;
-    softmax_params = (volatile onnx_softmax_params_t *) params;
-    return vector_compare_fp16_bitwise(softmax_params->addr_res, softmax_params->addr_exp, softmax_params->len);
+    softmax_params = (volatile onnx_softmax_params_t *)params;
+    return vector_compare_fp16_bitwise(
+        softmax_params->addr_res, softmax_params->addr_exp, softmax_params->len);
 }
 
 static bool run_test()
@@ -69,9 +69,9 @@ static bool run_test()
     bool check;
     volatile onnx_softmax_params_t *params;
 
-    params = (volatile onnx_softmax_params_t *) ONNX_SOFTMAX_PARAMS_BASE;
+    params = (volatile onnx_softmax_params_t *)ONNX_SOFTMAX_PARAMS_BASE;
 
-    ret = init_data((void *) params);
+    ret = init_data((void *)params);
     if (ret != 0) {
         printf("[CV32] Params initialization failed with error: %d\n", ret);
         return ret;
@@ -83,7 +83,7 @@ static bool run_test()
         return ret;
     }
 
-    check = check_result((void *) params);
+    check = check_result((void *)params);
     if (check) {
         printf("[CV32] Test SUCCESS\n");
     } else {
@@ -98,11 +98,13 @@ int main(void)
 {
     int ret;
 
-    printf("\n################################### ONNX_SOFTMAX TEST ###################################\n\n");
+    printf("\n################################### ONNX_SOFTMAX TEST "
+           "###################################\n\n");
 
     ret = run_test();
 
-    printf("\n##########################################################################################\n\n");
+    printf("\n#####################################################################################"
+           "#####\n\n");
 
     return ret;
 }
