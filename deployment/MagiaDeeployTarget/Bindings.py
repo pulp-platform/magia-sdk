@@ -6,13 +6,14 @@
 from Deeploy.AbstractDataTypes import PointerClass
 from Deeploy.CommonExtensions.DataTypes import float16_t, int8_t, int32_t
 from Deeploy.DeeployTypes import CodeTransformation, NodeBinding
-from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, DivChecker, DummyChecker, GELUChecker, GEMMChecker, LayerNormChecker, MatMulChecker, MaxPoolChecker, ReluChecker
+from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, ConvChecker, DivChecker, DummyChecker, GELUChecker, GEMMChecker, LayerNormChecker, MatMulChecker, MaxPoolChecker, ReluChecker
 from MagiaDeeployTarget.Templates import AddFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import AddTemplate
 from MagiaDeeployTarget.Templates import AveragePool2DFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import BatchNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import CeilFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ClipFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import ConvTransposeFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import DivFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ExpFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import FloorFP16SpatzTemplate
@@ -96,6 +97,17 @@ MagiaClipFp16Bindings = [
             [PointerClass(float16_t)]
         ),
         ClipFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    )
+]
+
+MagiaConvTransposeBindings = [
+    NodeBinding(
+        ConvChecker(
+            [PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t)],
+            [PointerClass(float16_t)],
+        ),
+        ConvTransposeFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     )
 ]
