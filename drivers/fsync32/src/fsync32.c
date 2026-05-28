@@ -87,7 +87,7 @@ int fsync32_getgroup_level(fsync_controller_t *ctrl, uint32_t level, uint32_t id
  */
 int fsync32_sync_row(fsync_controller_t *ctrl)
 {
-    if (MESH_Y_TILES == 0)
+    if (MESH_Y_TILES == 1)
         return 0;
     else {
         uint32_t y_id = GET_Y_ID(get_hartid()) % (MESH_Y_TILES / 2);
@@ -101,7 +101,7 @@ int fsync32_sync_row(fsync_controller_t *ctrl)
  */
 int fsync32_sync_col(fsync_controller_t *ctrl)
 {
-    if (MESH_X_TILES == 0)
+    if (MESH_X_TILES == 1)
         return 0;
     else {
         uint32_t x_id = GET_X_ID(get_hartid()) % (MESH_X_TILES / 2);
