@@ -26,6 +26,7 @@
  */
 int main(void){
     // sentinel_start();   // Total execution
+    perf_start();
 
     /** 
      * 0. Get the mesh-tile's hartid, mesh-tile coordinates and define its L1 base. 
@@ -40,6 +41,7 @@ int main(void){
         .cfg = &idma_cfg,
         .api = &idma_api,
     };
+    
     idma_init(&idma_ctrl);
 
     redmule_config_t redmule_cfg = {.hartid = hartid};
@@ -121,7 +123,7 @@ int main(void){
     uint32_t tile_m = M_SIZE;
 
     // printf("Blocking dimensions: height %0d, width %0d\n", tile_h, tile_w);
-
+    int start = perf_get_cycles();
     /**
      * 2. Use iDMA to transfer indentity matrix.
      */
@@ -285,6 +287,9 @@ int main(void){
     fsync_sync_global(&fsync_ctrl);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
+    int end = perf_get_cycles();
+    printf("[tile %d]Cycles: %d\n", hartid, end - start);
+
     /**
     * 7. Check results.
     */
@@ -303,7 +308,9 @@ int main(void){
             }
         }
         printf("Finished test with %0d errors\n", num_errors);
+        
     }
 
     return num_errors;
+    
 }

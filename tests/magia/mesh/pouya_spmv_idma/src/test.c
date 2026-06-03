@@ -1,3 +1,16 @@
+/*
+    This code is the implementation of SpMV multiplication on MAGIA architecture by using IDMA. Data in this code is given in normal format and 
+    during the first step of the code they convert to compressed CSR format. Then they are transfered to L2 memory. Now everything is ready for
+    starting SpMV multiplication in CSR format. the number of cycles are counted only for bringing data into L1 and applying the SpMV operation.
+    
+    Using this code is free by citing the name author:
+    Pouya Shirinshahrakfard
+    Email: pouyashirinfard@gmail.com
+    
+    for more info, please contact the author.
+*/   
+
+
 #include <stdint.h>
 
 #include "tile.h"
@@ -9,14 +22,22 @@
 #define WAIT_MODE WFE
 #define NUM_CORES 4
 
+#define ROWS_PER_CORE ((M + NUM_CORES - 1) / NUM_CORES)
+
+/*
+--------------------------------------------------
+L2 buffers for compressed data
+(shared across cores)
+--------------------------------------------------
+*/
+static uint16_t values_l2[M * N] __attribute__((section(".l2")));
+static uint16_t colidx_l2[M * N] __attribute__((section(".l2")));
+static uint16_t rowptr_l2[NUM_CORES * (ROWS_PER_CORE + 1)] __attribute__((section(".l2")));
+
 int main(void)
 {
-    perf_start();
-    int start = perf_get_cycles();
-
     uint32_t hartid = get_hartid();
 
-    /* use cores */
     if (hartid >= NUM_CORES) {
         return 0;
     }
@@ -80,7 +101,7 @@ int main(void)
     Row partition
     --------------------------------------------------
     */
-    uint32_t rows_per_core = M / NUM_CORES;
+    uint32_t rows_per_core = (M + NUM_CORES - 1) / NUM_CORES;
 
     uint32_t start_row = hartid * rows_per_core;
     uint32_t end_row   = start_row + rows_per_core;
@@ -128,21 +149,6 @@ int main(void)
 
     /*
     --------------------------------------------------
-    DMA vector x into L1
-    --------------------------------------------------
-    */
-    idma_memcpy_1d(
-        &idma_ctrl,
-        0,
-        (uint32_t)x,
-        addr_x,
-        N * 2
-    );
-
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
-
-    /*
-    --------------------------------------------------
     Local pointers
     --------------------------------------------------
     */
@@ -163,9 +169,10 @@ int main(void)
 
     for (uint32_t i = 0; i < local_rows; i++) {
 
-        uint16_t *row = &local_A[i * N];
-        
-        for (int32_t j = 0; j < N; j++) {
+        uint16_t *row = (uint16_t*)&local_A[i * N];
+
+        for (uint32_t j = 0; j < N; j++) {
+
             uint16_t v = row[j];
 
             if (v != 0) {
@@ -179,10 +186,109 @@ int main(void)
     }
 
     /*
+    --------------------------------------------------
+    Store compressed CSR in L2
+    --------------------------------------------------
+    */
+    uint32_t l2_offset = start_row * N;
+
+    uint32_t addr_values_l2 =
+        (uint32_t)&values_l2[l2_offset];
+
+    uint32_t addr_colidx_l2 =
+        (uint32_t)&colidx_l2[l2_offset];
+
+    uint32_t addr_rowptr_l2 =
+        (uint32_t)&rowptr_l2[hartid * (ROWS_PER_CORE + 1)];
+
+    idma_memcpy_1d(
+        &idma_ctrl,
+        1,
+        addr_values_l2,
+        addr_values,
+        nnz * 2
+    );
+    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+
+    idma_memcpy_1d(
+        &idma_ctrl,
+        1,
+        addr_colidx_l2,
+        addr_colidx,
+        nnz * 2
+    );
+    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+
+    idma_memcpy_1d(
+        &idma_ctrl,
+        1,
+        addr_rowptr_l2,
+        addr_rowptr,
+        (local_rows + 1) * 2
+    );
+    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+
+    /*
     Barrier
     */
     fsync_sync_global(&fsync_ctrl);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+
+    /*
+    ==================================================
+    Start measurement:
+    compressed invoke -> x invoke -> SpMV
+    ==================================================
+    */
+    perf_start();
+    int start = perf_get_cycles();
+
+    /*
+    --------------------------------------------------
+    Bring compressed CSR from L2 -> L1
+    --------------------------------------------------
+    */
+    idma_memcpy_1d(
+        &idma_ctrl,
+        0,
+        addr_values_l2,
+        addr_values,
+        nnz * 2
+    );
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+
+    idma_memcpy_1d(
+        &idma_ctrl,
+        0,
+        addr_colidx_l2,
+        addr_colidx,
+        nnz * 2
+    );
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+
+    idma_memcpy_1d(
+        &idma_ctrl,
+        0,
+        addr_rowptr_l2,
+        addr_rowptr,
+        (local_rows + 1) * 2
+    );
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+
+    /*
+    --------------------------------------------------
+    Invoke vector x into L1
+    --------------------------------------------------
+    */
+    idma_memcpy_1d(
+        &idma_ctrl,
+        0,
+        (uint32_t)x,
+        addr_x,
+        N * 2
+    );
+
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
     /*
     ==================================================
@@ -203,6 +309,9 @@ int main(void)
 
         local_y[i] = (uint16_t)sum;
     }
+
+    int end = perf_get_cycles();
+    printf("Core[%d] Cycles: %d\n", hartid, end - start);
 
     /*
     --------------------------------------------------
@@ -225,9 +334,6 @@ int main(void)
     fsync_sync_global(&fsync_ctrl);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
-    int end = perf_get_cycles();
-    printf("Core[%d] Cycles: %d\n", hartid, end - start);
-
     /*
     --------------------------------------------------
     Verify
@@ -238,13 +344,14 @@ int main(void)
         int errors = 0;
 
         for (int i = 0; i < M; i++) {
+            printf("y[%d] = %d | y_expected[%d] = %d\n", i, y[i], i, y_expected[i]);
             if (y[i] != y_expected[i]) {
+                printf("Mismatch at index %d: got %d, expected %d\n", i, y[i], y_expected[i]);
                 errors++;
             }
         }
 
         printf("Errors: %d\n", errors);
-
         return errors;
     }
 

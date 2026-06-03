@@ -26,3 +26,4 @@ testlogs/
 magia_deployment.egg-info/
 targets/magia_v1/include/utils/cache_fill.h
 .python-version
+*.Identifier

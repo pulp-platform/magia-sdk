@@ -11,6 +11,9 @@
  * This test gently asks for each tile to say hello world.
  */
 int main(void){
+    perf_start();
+    int start = perf_get_cycles();
+
     uint32_t hartid = get_hartid();
 
     int test = NULL;
@@ -20,6 +23,7 @@ int main(void){
     
     printf("Hello world! %f\n", test_float);
     //printf("Hello world! %d\n", test_integer);
-
+    int end = perf_get_cycles();
+    printf("[tile %d]Cycles: %d\n", hartid, end - start);
     return 0;
 }
