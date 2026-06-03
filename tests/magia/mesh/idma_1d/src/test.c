@@ -134,24 +134,22 @@ int main(void){
      * 5. Check results
      */
     uint32_t errors=0;
-    if(hartid==0){
-        uint16_t computed, expected, diff = 0;
-        for(uint8_t i = 0; i < M_SIZE; i++){
-            for(uint8_t j = 0; j < K_SIZE; j++){
-                computed = *(volatile uint16_t*)(y_inp + (i * K_SIZE + j));
-                expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
-                diff = (computed > expected) ? (computed - expected) : (expected - computed);
-                if(diff > 0x0011){
-                    #if EVAL == 1
-                    if(y_id == 0)
-                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
-                    #endif    
-                    errors++;
-                }       
-            }
+    uint16_t computed, expected, diff = 0;
+    for(int i = (y_id * tile_h_max); i < (y_id * tile_h_max + tile_h); i++){
+        for(int j = (x_id * tile_w_max); j < (x_id * tile_w_max) + tile_w; j++){
+            computed = *(volatile uint16_t*)(y_inp + (i * K_SIZE + j));
+            expected = *(volatile uint16_t*)(z_out + (i * K_SIZE + j));
+            diff = (computed > expected) ? (computed - expected) : (expected - computed);
+            if(diff > 0x0011){
+                #if EVAL == 1
+                if(y_id == 0)
+                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x", i, j, *(volatile uint16_t*)(y_inp+ (i * K_SIZE + j)), *(volatile uint16_t*)(z_out + (i * K_SIZE + j)));
+                #endif    
+                errors++;
+            }       
         }
-        printf("Number of errors: %d\n", errors);
     }
+    printf("Number of errors: %d\n", errors);
     
     return errors;  
 }
