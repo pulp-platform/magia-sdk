@@ -6,7 +6,7 @@
 from Deeploy.AbstractDataTypes import PointerClass
 from Deeploy.CommonExtensions.DataTypes import float16_t, int8_t, int32_t
 from Deeploy.DeeployTypes import CodeTransformation, NodeBinding
-from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, ConcatChecker, ConvChecker, DivChecker, DummyChecker, GELUChecker, GEMMChecker, LayerNormChecker, MatMulChecker, MaxPoolChecker, ReluChecker
+from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, ConcatChecker, ConvChecker, DivChecker, DummyChecker, GatherChecker, GELUChecker, GEMMChecker, LayerNormChecker, MatMulChecker, MaxPoolChecker, ReluChecker
 from MagiaDeeployTarget.Templates import AddFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import AddTemplate
 from MagiaDeeployTarget.Templates import AveragePool2DFP16SpatzTemplate
@@ -18,6 +18,7 @@ from MagiaDeeployTarget.Templates import ConvTransposeFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import DivFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ExpFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import FloorFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import GatherFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GeluFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GemmFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import GlobalAveragePoolFP16SpatzTemplate
@@ -154,6 +155,17 @@ MagiaFloorFp16Bindings = [
             FloorFP16SpatzTemplate.referenceTemplate,
             BasicTransformer,
         )
+]
+
+MagiaGatherFp16Bindings = [
+    NodeBinding(
+        GatherChecker(
+            [PointerClass(float16_t), PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        GatherFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    )
 ]
 
 MagiaGeluFp16Bindings = [
