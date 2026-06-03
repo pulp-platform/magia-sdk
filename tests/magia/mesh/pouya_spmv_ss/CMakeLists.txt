@@ -6,7 +6,7 @@
 # Philip Wiese <wiesep@iis.ee.ethz.ch>
 # Alberto Dequino <alberto.dequino@unibo.it>
 
-set(TEST_NAME pouya_mat_mul)
+set(TEST_NAME spmv_ss)
 
 file(GLOB_RECURSE TEST_SRCS
   "src/*.c"
@@ -17,7 +17,7 @@ target_include_directories(${TEST_NAME} PUBLIC include)
 
 target_compile_options(${TEST_NAME}
   PRIVATE
-  -O2
+  -O3 -funroll-loops
 )
 target_link_libraries(${TEST_NAME} PUBLIC runtime hal)
 

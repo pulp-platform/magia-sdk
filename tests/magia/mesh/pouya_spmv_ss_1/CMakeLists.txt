@@ -6,7 +6,7 @@
 # Philip Wiese <wiesep@iis.ee.ethz.ch>
 # Alberto Dequino <alberto.dequino@unibo.it>
 
-set(TEST_NAME spmv_bcsr)
+set(TEST_NAME spmv_ss_1)
 
 file(GLOB_RECURSE TEST_SRCS
   "src/*.c"

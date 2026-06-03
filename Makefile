@@ -87,6 +87,10 @@ ifeq ($(tiles), 1)
 endif
 
 run: set_mesh
+<<<<<<< HEAD
+=======
+	
+>>>>>>> 7c362eb (Update project)
 	@echo 'Magia is available at https://github.com/pulp-platform/MAGIA.git'
 	@echo 'please run "source setup_env.sh" in the magia folder before running this script'
 	@echo 'and make sure the risc-v objdump binary is visible on path using "which riscv32-unknown-elf-objdump".'
@@ -100,8 +104,13 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
+<<<<<<< HEAD
 	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
+=======
+	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) --trace-level=trace run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --trace=magia-tile-0/tile-0-cv32-core/insn:trace.txt
+>>>>>>> 7c362eb (Update project)
 else ifeq ($(platform), rtl)
+	sed -i 's/ QUESTA ?= questa-2025.1/ QUESTA ?= questa-2023.4/' $(MAGIA_DIR)/Makefile
 	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
 	objcopy --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
