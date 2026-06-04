@@ -48,7 +48,7 @@ void nsync_global(const uint32_t tile_hartid){
    // Phase I - synchronize along X direction
    if (tile_xid != SYNC_NODE_X_ID){  // SRC
       // Send synchronization request to DST
-      amo_increment(SYNC_BASE + tile_1d_syncid*L1_TILE_OFFSET);
+      amo_add_imm(SYNC_BASE + tile_1d_syncid*L1_TILE_OFFSET, 1);
 
       // Wait for DST synchronization response
       while (mmio32(SYNC_BASE + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -62,7 +62,7 @@ void nsync_global(const uint32_t tile_hartid){
       // Phase II - synchronize along Y direction
       if (tile_hartid != SYNC_NODE_ID) { // SRC
          // Send synchronization request to DST
-         amo_increment(SYNC_BASE + SYNC_NODE_ID*L1_TILE_OFFSET);
+         amo_add_imm(SYNC_BASE + SYNC_NODE_ID*L1_TILE_OFFSET, 1);
 
          // Wait for DST synchronization response
          while (mmio32(SYNC_BASE + tile_hartid*L1_TILE_OFFSET) < MESH_X_TILES);
@@ -77,13 +77,13 @@ void nsync_global(const uint32_t tile_hartid){
          mmio32(SYNC_BASE + tile_hartid*L1_TILE_OFFSET) = 0;
          
          // Send synchronization response to all SRCs
-         for (int i = 0; i < SYNC_NODE_Y_ID; i++) amo_increment(SYNC_BASE + (GET_ID(i, SYNC_NODE_X_ID))*L1_TILE_OFFSET);
-         for (int i = SYNC_NODE_Y_ID+1; i < MESH_Y_TILES; i++) amo_increment(SYNC_BASE + (GET_ID(i, SYNC_NODE_X_ID))*L1_TILE_OFFSET);
+         for (int i = 0; i < SYNC_NODE_Y_ID; i++) amo_add_imm(SYNC_BASE + (GET_ID(i, SYNC_NODE_X_ID))*L1_TILE_OFFSET, 1);
+         for (int i = SYNC_NODE_Y_ID+1; i < MESH_Y_TILES; i++) amo_add_imm(SYNC_BASE + (GET_ID(i, SYNC_NODE_X_ID))*L1_TILE_OFFSET, 1);
       }
 
       // Send synchronization response to all SRCs
-      for (int i = 0; i < SYNC_NODE_X_ID; i++) amo_increment(SYNC_BASE + (GET_ID(tile_yid, i))*L1_TILE_OFFSET);
-      for (int i = SYNC_NODE_X_ID+1; i < MESH_X_TILES; i++) amo_increment(SYNC_BASE + (GET_ID(tile_yid, i))*L1_TILE_OFFSET);
+      for (int i = 0; i < SYNC_NODE_X_ID; i++) amo_add_imm(SYNC_BASE + (GET_ID(tile_yid, i))*L1_TILE_OFFSET, 1);
+      for (int i = SYNC_NODE_X_ID+1; i < MESH_X_TILES; i++) amo_add_imm(SYNC_BASE + (GET_ID(tile_yid, i))*L1_TILE_OFFSET, 1);
    }
 
 #else
@@ -118,7 +118,7 @@ void nsync_global(const uint32_t tile_hartid){
          } else {  // SRC
             // Send synchronization request to DST: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          }
          sync_sign = sync_sign | (1 << sync_bit);
 
@@ -134,7 +134,7 @@ void nsync_global(const uint32_t tile_hartid){
          } else {  // SRC
             // Send synchronization request to DST: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          }
          if (sync_bit >= (SYNC_GLOBAL_MAX_BIT/2))
             sync_sign = sync_sign | (1 << sync_bit);
@@ -151,7 +151,7 @@ void nsync_global(const uint32_t tile_hartid){
          } else {  // SRC
             // Send synchronization request to DST: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          }
          if (sync_bit < (SYNC_GLOBAL_MAX_BIT/2))
             sync_sign = sync_sign | (1 << sync_bit);
@@ -167,7 +167,7 @@ void nsync_global(const uint32_t tile_hartid){
          } else {  // SRC
             // Send synchronization request to DST: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          }
          // Default sign is already correct
       }
@@ -180,7 +180,7 @@ void nsync_global(const uint32_t tile_hartid){
    if ((tile_yid == SYNC_NODE_Y_ID+1) && (tile_xid == SYNC_NODE_X_ID+1)) { // Forth quadrant root
       // Send synchronization request to DST: No need for AMOs (single source write)
       mmio32(SYNC_BASE + 4*sync_bit + q3_rootid*L1_TILE_OFFSET) = 1;
-      // amo_increment(SYNC_BASE + 4*sync_bit + q3_rootid*L1_TILE_OFFSET);
+      // amo_add_imm(SYNC_BASE + 4*sync_bit + q3_rootid*L1_TILE_OFFSET, 1);
 
       // Wait for DST synchronization response
       while (mmio32(SYNC_BASE + 4*sync_bit + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -191,7 +191,7 @@ void nsync_global(const uint32_t tile_hartid){
    } else if ((tile_yid == SYNC_NODE_Y_ID) && (tile_xid == SYNC_NODE_X_ID+1)) {  // Second quadrant root
       // Send synchronization request to DST: No need for AMOs (single source write)
       mmio32(SYNC_BASE + 4*sync_bit + SYNC_NODE_ID*L1_TILE_OFFSET) = 1;
-      // amo_increment(SYNC_BASE + 4*sync_bit + SYNC_NODE_ID*L1_TILE_OFFSET);
+      // amo_add_imm(SYNC_BASE + 4*sync_bit + SYNC_NODE_ID*L1_TILE_OFFSET, 1);
 
       // Wait for DST synchronization response
       while (mmio32(SYNC_BASE + 4*sync_bit + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -208,7 +208,7 @@ void nsync_global(const uint32_t tile_hartid){
 
       // Send synchronization request to DST: No need for AMOs (single source write)
       mmio32(SYNC_BASE + 4*(sync_bit+1) + SYNC_NODE_ID*L1_TILE_OFFSET) = 1;
-      // amo_increment(SYNC_BASE + 4*(sync_bit+1) + SYNC_NODE_ID*L1_TILE_OFFSET);
+      // amo_add_imm(SYNC_BASE + 4*(sync_bit+1) + SYNC_NODE_ID*L1_TILE_OFFSET, 1);
 
       // Wait for DST synchronization response
       while (mmio32(SYNC_BASE + 4*(sync_bit+1) + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -218,7 +218,7 @@ void nsync_global(const uint32_t tile_hartid){
 
       // Send synchronization response to SRC: No need for AMOs (single source write)
       mmio32(SYNC_BASE + 4*sync_bit + q4_rootid*L1_TILE_OFFSET) = 1;
-      // amo_increment(SYNC_BASE + 4*sync_bit + q4_rootid*L1_TILE_OFFSET);
+      // amo_add_imm(SYNC_BASE + 4*sync_bit + q4_rootid*L1_TILE_OFFSET, 1);
 
    } else if ((tile_yid == SYNC_NODE_Y_ID) && (tile_xid == SYNC_NODE_X_ID)) {  // First quadrant root
       // Wait for SRC to request synchronization
@@ -235,11 +235,11 @@ void nsync_global(const uint32_t tile_hartid){
 
       // Send synchronization response to SRC: No need for AMOs (single source write)
       mmio32(SYNC_BASE + 4*(sync_bit+1) + q3_rootid*L1_TILE_OFFSET) = 1;
-      // amo_increment(SYNC_BASE + 4*(sync_bit+1) + q3_rootid*L1_TILE_OFFSET);
+      // amo_add_imm(SYNC_BASE + 4*(sync_bit+1) + q3_rootid*L1_TILE_OFFSET, 1);
 
       // Send synchronization response to SRC: No need for AMOs (single source write)
       mmio32(SYNC_BASE + 4*sync_bit + q2_rootid*L1_TILE_OFFSET) = 1;
-      // amo_increment(SYNC_BASE + 4*sync_bit + q2_rootid*L1_TILE_OFFSET);
+      // amo_add_imm(SYNC_BASE + 4*sync_bit + q2_rootid*L1_TILE_OFFSET, 1);
    }
 
    // Descend tree
@@ -262,7 +262,7 @@ void nsync_global(const uint32_t tile_hartid){
          if (tile_hartid & sync_ohbit) {  // SRC
             // Send synchronization response to SRC: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          } else {  // DST
             // Wait for DST synchronization response
             while (mmio32(SYNC_BASE + 4*sync_bit + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -277,7 +277,7 @@ void nsync_global(const uint32_t tile_hartid){
             ((tile_hartid & sync_ohbit) && (sync_bit >= (SYNC_GLOBAL_MAX_BIT/2)))) {  // SRC
             // Send synchronization response to SRC: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          } else {  // DST
             // Wait for DST synchronization response
             while (mmio32(SYNC_BASE + 4*sync_bit + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -292,7 +292,7 @@ void nsync_global(const uint32_t tile_hartid){
             (!(tile_hartid & sync_ohbit) && (sync_bit >= (SYNC_GLOBAL_MAX_BIT/2)))) {  // SRC
             // Send synchronization response to SRC: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          } else {  // DST
             // Wait for DST synchronization response
             while (mmio32(SYNC_BASE + 4*sync_bit + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -306,7 +306,7 @@ void nsync_global(const uint32_t tile_hartid){
          if (!(tile_hartid & sync_ohbit)) {  // SRC
             // Send synchronization response to SRC: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          } else {  // DST
             // Wait for DST synchronization response
             while (mmio32(SYNC_BASE + 4*sync_bit + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -347,7 +347,7 @@ void nsync_row(const uint32_t tile_hartid){
          } else {  // SRC
             // Send synchronization request to DST: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          }
          sync_sign = sync_sign | (1 << sync_bit);
 
@@ -362,7 +362,7 @@ void nsync_row(const uint32_t tile_hartid){
          } else {  // SRC
             // Send synchronization request to DST: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          }
          // Default sign is already correct
       }
@@ -382,11 +382,11 @@ void nsync_row(const uint32_t tile_hartid){
 
          // Send synchronization response to SRC: No need for AMOs (single source write)
          mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid+1)*L1_TILE_OFFSET) = 1;
-         // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid+1)*L1_TILE_OFFSET);
+         // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid+1)*L1_TILE_OFFSET, 1);
       } else {  // SRC
          // Send synchronization request to DST: No need for AMOs (single source write)
          mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid-1)*L1_TILE_OFFSET) = 1;
-         // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid-1)*L1_TILE_OFFSET);
+         // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid-1)*L1_TILE_OFFSET, 1);
 
          // Wait for DST synchronization response
          while (mmio32(SYNC_BASE + 4*sync_bit + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -407,7 +407,7 @@ void nsync_row(const uint32_t tile_hartid){
          if (tile_hartid & sync_ohbit) {  // SRC
             // Send synchronization response to SRC: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          } else {  // DST
             // Wait for DST synchronization response
             while (mmio32(SYNC_BASE + 4*sync_bit + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -421,7 +421,7 @@ void nsync_row(const uint32_t tile_hartid){
          if (!(tile_hartid & sync_ohbit)) {  // SRC
             // Send synchronization response to SRC: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          } else {  // DST
             // Wait for DST synchronization response
             while (mmio32(SYNC_BASE + 4*sync_bit + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -456,11 +456,11 @@ void nsync_col(const uint32_t tile_hartid){
       mmio32(SYNC_BASE + tile_hartid*L1_TILE_OFFSET) = 0;
 
       // Send synchronization response to all SRCs
-      for (int i = 0; i < SYNC_NODE_Y_ID; i++) amo_increment(SYNC_BASE + (GET_ID(i, tile_xid))*L1_TILE_OFFSET);
-      for (int i = SYNC_NODE_Y_ID+1; i < MESH_Y_TILES; i++) amo_increment(SYNC_BASE + (GET_ID(i, tile_xid))*L1_TILE_OFFSET);
+      for (int i = 0; i < SYNC_NODE_Y_ID; i++) amo_add_imm(SYNC_BASE + (GET_ID(i, tile_xid))*L1_TILE_OFFSET, 1);
+      for (int i = SYNC_NODE_Y_ID+1; i < MESH_Y_TILES; i++) amo_add_imm(SYNC_BASE + (GET_ID(i, tile_xid))*L1_TILE_OFFSET, 1);
    } else { // SRC
       // Send synchronization request to DST
-      amo_increment(SYNC_BASE + (GET_ID(SYNC_NODE_Y_ID, tile_xid))*L1_TILE_OFFSET);
+      amo_add_imm(SYNC_BASE + (GET_ID(SYNC_NODE_Y_ID, tile_xid))*L1_TILE_OFFSET, 1);
 
       // Wait for DST synchronization response
       while (mmio32(SYNC_BASE + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -490,7 +490,7 @@ void nsync_col(const uint32_t tile_hartid){
          } else {  // SRC
             // Send synchronization request to DST: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          }
          sync_sign = sync_sign | (1 << sync_bit);
 
@@ -505,7 +505,7 @@ void nsync_col(const uint32_t tile_hartid){
          } else {  // SRC
             // Send synchronization request to DST: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          }
          // Default sign is already correct
       }
@@ -525,11 +525,11 @@ void nsync_col(const uint32_t tile_hartid){
 
          // Send synchronization response to SRC: No need for AMOs (single source write)
          mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid+MESH_X_TILES)*L1_TILE_OFFSET) = 1;
-         // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid+MESH_X_TILES)*L1_TILE_OFFSET);
+         // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid+MESH_X_TILES)*L1_TILE_OFFSET, 1);
       } else {  // SRC
          // Send synchronization request to DST: No need for AMOs (single source write)
          mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid-MESH_X_TILES)*L1_TILE_OFFSET) = 1;
-         // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid-MESH_X_TILES)*L1_TILE_OFFSET);
+         // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid-MESH_X_TILES)*L1_TILE_OFFSET, 1);
 
          // Wait for DST synchronization response
          while (mmio32(SYNC_BASE + 4*sync_bit + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -550,7 +550,7 @@ void nsync_col(const uint32_t tile_hartid){
          if (tile_hartid & sync_ohbit) {  // SRC
             // Send synchronization response to SRC: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          } else {  // DST
             // Wait for DST synchronization response
             while (mmio32(SYNC_BASE + 4*sync_bit + tile_hartid*L1_TILE_OFFSET) < 1);
@@ -564,7 +564,7 @@ void nsync_col(const uint32_t tile_hartid){
          if (!(tile_hartid & sync_ohbit)) {  // SRC
             // Send synchronization response to SRC: No need for AMOs (single source write)
             mmio32(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET) = 1;
-            // amo_increment(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET);
+            // amo_add_imm(SYNC_BASE + 4*sync_bit + (tile_hartid ^ sync_ohbit)*L1_TILE_OFFSET, 1);
          } else {  // DST
             // Wait for DST synchronization response
             while (mmio32(SYNC_BASE + 4*sync_bit + tile_hartid*L1_TILE_OFFSET) < 1);
