@@ -73,58 +73,58 @@
 
 // iDMA specific event mapping (within DMA events)
 // Based on magia_tile.sv: assign dma_events_array[0] = {idma_o2a_done, idma_a2o_done};
-#define EU_IDMA_A2O_DONE_BIT         EU_DMA_EVT_0_BIT // bit 2 - iDMA AXI2OBI (L2->L1) completion
-#define EU_IDMA_O2A_DONE_BIT         EU_DMA_EVT_1_BIT // bit 3 - iDMA OBI2AXI (L1->L2) completion
-#define EU_IDMA_A2O_DONE_MASK        (1 << EU_IDMA_A2O_DONE_BIT) // 0x04 - L2->L1 done
-#define EU_IDMA_O2A_DONE_MASK        (1 << EU_IDMA_O2A_DONE_BIT) // 0x08 - L1->L2 done
-#define EU_IDMA_ALL_DONE_MASK        (EU_IDMA_A2O_DONE_MASK | EU_IDMA_O2A_DONE_MASK) // 0x0C
-#define EU_IDMA_ALL_MASK             (EU_DMA_EVT_MASK)                               // 0x0C
+#define EU_IDMA_A2O_DONE_BIT          EU_DMA_EVT_0_BIT // bit 2 - iDMA AXI2OBI (L2->L1) completion
+#define EU_IDMA_O2A_DONE_BIT          EU_DMA_EVT_1_BIT // bit 3 - iDMA OBI2AXI (L1->L2) completion
+#define EU_IDMA_A2O_DONE_MASK         (1 << EU_IDMA_A2O_DONE_BIT) // 0x04 - L2->L1 done
+#define EU_IDMA_O2A_DONE_MASK         (1 << EU_IDMA_O2A_DONE_BIT) // 0x08 - L1->L2 done
+#define EU_IDMA_ALL_DONE_MASK         (EU_IDMA_A2O_DONE_MASK | EU_IDMA_O2A_DONE_MASK) // 0x0C
+#define EU_IDMA_ALL_MASK              (EU_DMA_EVT_MASK)                               // 0x0C
 
 // Legacy compatibility (uses A2O done by default)
-#define EU_IDMA_DONE_BIT             EU_IDMA_A2O_DONE_BIT  // bit 2 - Default to A2O done
-#define EU_IDMA_ERROR_BIT            EU_IDMA_O2A_DONE_BIT  // bit 3 - Legacy "error" was O2A done
-#define EU_IDMA_DONE_MASK            EU_IDMA_A2O_DONE_MASK // 0x04 - Legacy compatibility
-#define EU_IDMA_ERROR_MASK           EU_IDMA_O2A_DONE_MASK // 0x08 - Legacy compatibility
+#define EU_IDMA_DONE_BIT              EU_IDMA_A2O_DONE_BIT  // bit 2 - Default to A2O done
+#define EU_IDMA_ERROR_BIT             EU_IDMA_O2A_DONE_BIT  // bit 3 - Legacy "error" was O2A done
+#define EU_IDMA_DONE_MASK             EU_IDMA_A2O_DONE_MASK // 0x04 - Legacy compatibility
+#define EU_IDMA_ERROR_MASK            EU_IDMA_O2A_DONE_MASK // 0x08 - Legacy compatibility
 
 // iDMA extended status via cluster events [31:26]
-#define EU_IDMA_A2O_ERROR_BIT        (26)                         // iDMA AXI2OBI error
-#define EU_IDMA_O2A_ERROR_BIT        (27)                         // iDMA OBI2AXI error
-#define EU_IDMA_A2O_START_BIT        (28)                         // iDMA AXI2OBI start
-#define EU_IDMA_O2A_START_BIT        (29)                         // iDMA OBI2AXI start
-#define EU_IDMA_A2O_BUSY_BIT         (30)                         // iDMA AXI2OBI busy
-#define EU_IDMA_O2A_BUSY_BIT         (31)                         // iDMA OBI2AXI busy
-#define EU_IDMA_A2O_ERROR_MASK       (1 << EU_IDMA_A2O_ERROR_BIT) // 0x04000000
-#define EU_IDMA_O2A_ERROR_MASK       (1 << EU_IDMA_O2A_ERROR_BIT) // 0x08000000
-#define EU_IDMA_A2O_START_MASK       (1 << EU_IDMA_A2O_START_BIT) // 0x10000000
-#define EU_IDMA_O2A_START_MASK       (1 << EU_IDMA_O2A_START_BIT) // 0x20000000
-#define EU_IDMA_A2O_BUSY_MASK        (1 << EU_IDMA_A2O_BUSY_BIT)  // 0x40000000
-#define EU_IDMA_O2A_BUSY_MASK        (1 << EU_IDMA_O2A_BUSY_BIT)  // 0x80000000
-#define EU_IDMA_STATUS_MASK          (0xFC000000)                 // All iDMA status bits [31:26]
+#define EU_IDMA_A2O_ERROR_BIT         (26)                         // iDMA AXI2OBI error
+#define EU_IDMA_O2A_ERROR_BIT         (27)                         // iDMA OBI2AXI error
+#define EU_IDMA_A2O_START_BIT         (28)                         // iDMA AXI2OBI start
+#define EU_IDMA_O2A_START_BIT         (29)                         // iDMA OBI2AXI start
+#define EU_IDMA_A2O_BUSY_BIT          (30)                         // iDMA AXI2OBI busy
+#define EU_IDMA_O2A_BUSY_BIT          (31)                         // iDMA OBI2AXI busy
+#define EU_IDMA_A2O_ERROR_MASK        (1 << EU_IDMA_A2O_ERROR_BIT) // 0x04000000
+#define EU_IDMA_O2A_ERROR_MASK        (1 << EU_IDMA_O2A_ERROR_BIT) // 0x08000000
+#define EU_IDMA_A2O_START_MASK        (1 << EU_IDMA_A2O_START_BIT) // 0x10000000
+#define EU_IDMA_O2A_START_MASK        (1 << EU_IDMA_O2A_START_BIT) // 0x20000000
+#define EU_IDMA_A2O_BUSY_MASK         (1 << EU_IDMA_A2O_BUSY_BIT)  // 0x40000000
+#define EU_IDMA_O2A_BUSY_MASK         (1 << EU_IDMA_O2A_BUSY_BIT)  // 0x80000000
+#define EU_IDMA_STATUS_MASK           (0xFC000000)                 // All iDMA status bits [31:26]
 
 // FSync specific event mapping (via cluster_events_i[25:24])
 // Based on magia_tile.sv: fsync_error, fsync_done at bits [25:24]
-#define EU_FSYNC_DONE_BIT            (24)                      // FSync completion event
-#define EU_FSYNC_ERROR_BIT           (25)                      // FSync error event
-#define EU_FSYNC_DONE_MASK           (1 << EU_FSYNC_DONE_BIT)  // 0x01000000
-#define EU_FSYNC_ERROR_MASK          (1 << EU_FSYNC_ERROR_BIT) // 0x02000000
-#define EU_FSYNC_ALL_MASK            (EU_FSYNC_DONE_MASK | EU_FSYNC_ERROR_MASK) // 0x03000000
+#define EU_FSYNC_DONE_BIT             (24)                      // FSync completion event
+#define EU_FSYNC_ERROR_BIT            (25)                      // FSync error event
+#define EU_FSYNC_DONE_MASK            (1 << EU_FSYNC_DONE_BIT)  // 0x01000000
+#define EU_FSYNC_ERROR_MASK           (1 << EU_FSYNC_ERROR_BIT) // 0x02000000
+#define EU_FSYNC_ALL_MASK             (EU_FSYNC_DONE_MASK | EU_FSYNC_ERROR_MASK) // 0x03000000
 
 // Legacy compatibility - use DONE by default
-#define EU_FSYNC_EVT_BIT             EU_FSYNC_DONE_BIT  // bit 24 - Legacy compatibility
-#define EU_FSYNC_EVT_MASK            EU_FSYNC_DONE_MASK // 0x01000000 - Legacy compatibility
+#define EU_FSYNC_EVT_BIT              EU_FSYNC_DONE_BIT  // bit 24 - Legacy compatibility
+#define EU_FSYNC_EVT_MASK             EU_FSYNC_DONE_MASK // 0x01000000 - Legacy compatibility
 
 // Synchronization and barrier events [1:0]
-#define EU_SYNC_EVT_BIT              (0)          // Synchronization/barrier event
-#define EU_DISPATCH_EVT_BIT          (1)          // Dispatch event
-#define EU_SYNC_EVT_MASK             (0x00000001) // bit 0
-#define EU_DISPATCH_EVT_MASK         (0x00000002) // bit 1
+#define EU_SYNC_EVT_BIT               (0)          // Synchronization/barrier event
+#define EU_DISPATCH_EVT_BIT           (1)          // Dispatch event
+#define EU_SYNC_EVT_MASK              (0x00000001) // bit 0
+#define EU_DISPATCH_EVT_MASK          (0x00000002) // bit 1
 
 // Spatz events (accelerator events [8] + cluster events [23])
-#define EU_SPATZ_DONE_BIT            (8)  // Spatz completion event (acc_events_array[0][0])
-#define EU_SPATZ_START_BIT           (23) // Spatz start trigger event (other_events_array[0][23])
-#define EU_SPATZ_DONE_MASK           (1 << EU_SPATZ_DONE_BIT)                   // 0x100
-#define EU_SPATZ_START_MASK          (1 << EU_SPATZ_START_BIT)                  // 0x800000
-#define EU_SPATZ_ALL_MASK            (EU_SPATZ_DONE_MASK | EU_SPATZ_START_MASK) // 0x800100
+#define EU_SPATZ_DONE_BIT             (8)  // Spatz completion event (acc_events_array[0][0])
+#define EU_SPATZ_START_BIT            (23) // Spatz start trigger event (other_events_array[0][23])
+#define EU_SPATZ_DONE_MASK            (1 << EU_SPATZ_DONE_BIT)                   // 0x100
+#define EU_SPATZ_START_MASK           (1 << EU_SPATZ_START_BIT)                  // 0x800000
+#define EU_SPATZ_ALL_MASK             (EU_SPATZ_DONE_MASK | EU_SPATZ_START_MASK) // 0x800100
 
 //=============================================================================
 // IDMA Register Addresses
