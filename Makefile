@@ -26,6 +26,8 @@ CURR_DIR		?= $(shell pwd)
 CMAKE_BUILDDIR  ?= $(CURR_DIR)/build
 MAGIA_RTL_DIR 	?= ..
 BUILD_DIR 		?= $(MAGIA_RTL_DIR)/sw/tests/$(test)
+MAGIA_DIR_ABS	?= $(abspath $(MAGIA_RTL_DIR))
+BUILD_DIR_ABS	?= $(MAGIA_DIR_ABS)/sw/tests/$(test)
 GVSOC_DIR 		?= ./gvsoc
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
 BIN_ABS_PATH	?= $(CMAKE_BUILDDIR)/bin
@@ -64,7 +66,10 @@ tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
 GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
-GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --trace-level=trace --trace=kill-module
+
+CMAKE ?= cmake
+
+GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace --trace=kill-module
 GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
 GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 profile_tile		?=
