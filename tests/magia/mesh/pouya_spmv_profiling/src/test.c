@@ -660,7 +660,9 @@ int main(void)
         printf("dma_wait_cycles          : %u\n", max_dma_wait);
 
         printf("fsync_wait_cycles        : %u\n", max_fsync_wait);
-
+        for (int i = 0; i < NUM_CORES; i++) {
+            printf("wait to run ratio [core %d]  : %u%%\n", i, (fsync_wait_cycle[i]) * 100 / run_time_cycle[i]);
+        }
         printf("compute_cycles           : %u\n", max_compute);
 
         printf("NNZ                       : %u\n", NNZ);
