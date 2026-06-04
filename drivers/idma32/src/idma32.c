@@ -125,8 +125,6 @@ int idma32_memcpy_2d(idma_controller_t *ctrl,
 
 extern int idma_init(idma_controller_t *ctrl)
     __attribute__((alias("idma32_init"), used, visibility("default")));
-/* extern void idma_wait()
-    __attribute__((alias("idma32_wait"), used, visibility("default"))); */
 extern int idma_memcpy_1d(
     idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
     __attribute__((alias("idma32_memcpy_1d"), used, visibility("default")));

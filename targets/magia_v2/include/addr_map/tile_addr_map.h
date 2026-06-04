@@ -29,6 +29,9 @@
 #define BITS_WORD         (32)
 #define BITS_BYTE         (8)
 
+#define IDMA_BASE_AXI2OBI (IDMA_BASE)         // direction=0, L2 to L1
+#define IDMA_BASE_OBI2AXI (IDMA_BASE + 0x200) // direction=1, L1 to L2
+
 #define REDMULE_BASE      (0x00000100)
 #define REDMULE_END       (0x000001FF)
 #define IDMA_BASE         (0x00000200)
@@ -37,7 +40,9 @@
 #define FSYNC_END         (0x000006FF)
 #define EU_BASE           (0x00000700)
 #define EU_END            (0x000016FF)
-#define RESERVED_START    (0x00001700)
+#define SPATZ_CTRL_BASE   (0x00001700)
+#define SPATZ_CTRL_END    (0x000017FF)
+#define RESERVED_START    (0x00001800)
 #define RESERVED_END      (0x0000FFFF)
 #define STACK_START       (0x00010000)
 #define STACK_END         (0x0001FFFF)
@@ -48,10 +53,6 @@
 #define TEST_END_ADDR     (0xCCFF0000)
 #define PRINT_ADDR        (0xFFFF0004)
 #define MHARTID_OFFSET    (0x00100000)
-
-#define IDMA_BASE_AXI2OBI (IDMA_BASE)         // direction=0, L2 to L1
-#define IDMA_BASE_OBI2AXI (IDMA_BASE + 0x200) // direction=1, L1 to L2
-
 #include "tile_config.h"
 #define NUM_HARTS                         (MESH_X_TILES * MESH_Y_TILES)
 
@@ -64,6 +65,12 @@
 #define GET_X_ID(mhartid)                 ((mhartid) % MESH_Y_TILES)
 #define GET_Y_ID(mhartid)                 ((mhartid) / MESH_Y_TILES)
 #define GET_ID(y_id, x_id)                (((y_id) * MESH_Y_TILES) + (x_id))
+
+#define STR_OFFSET                        (0x00000000)
+#define STR_BASE                          (RESERVED_START + STR_OFFSET)
+#define SYNC_OFFSET                       (0x0000F000)
+#define SYNC_BASE                         (RESERVED_START + SYNC_OFFSET)
+#define SYNC_EN                           (SYNC_BASE + 0x4)
 
 //=============================================================================
 // Event Unit Register Map - Base addresses and offsets

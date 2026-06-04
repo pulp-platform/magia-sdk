@@ -119,6 +119,13 @@
 #define EU_SYNC_EVT_MASK              (0x00000001) // bit 0
 #define EU_DISPATCH_EVT_MASK          (0x00000002) // bit 1
 
+// Spatz events (accelerator events [8] + cluster events [23])
+#define EU_SPATZ_DONE_BIT             (8)  // Spatz completion event (acc_events_array[0][0])
+#define EU_SPATZ_START_BIT            (23) // Spatz start trigger event (other_events_array[0][23])
+#define EU_SPATZ_DONE_MASK            (1 << EU_SPATZ_DONE_BIT)                   // 0x100
+#define EU_SPATZ_START_MASK           (1 << EU_SPATZ_START_BIT)                  // 0x800000
+#define EU_SPATZ_ALL_MASK             (EU_SPATZ_DONE_MASK | EU_SPATZ_START_MASK) // 0x800100
+
 //=============================================================================
 // IDMA Register Addresses
 //=============================================================================

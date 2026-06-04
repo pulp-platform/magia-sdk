@@ -17,6 +17,7 @@ variables:
   MAGIA: './MAGIA'
   RISCV_GCC_BINROOT: /usr/pack/pulpsdk-1.0-kgf/artifactory/pulp-sdk-release/pkg/pulp_riscv_gcc/1.0.16/bin
   PYENV_BINROOT: /home/adequi/.pyenv/bin
+  LLVM_DIR: /usr/pack/riscv-1.0-kgf/spatz-llvm-2023.08.10/
   GIT_CLONE_PATH: "$CI_BUILDS_DIR/$CI_CONCURRENT_ID/$CI_PIPELINE_ID/$CI_JOB_ID"
   GIT_STRATEGY: clone
   GIT_CLEAN_FLAGS: "-ffdx"
@@ -25,6 +26,7 @@ variables:
   before_script:
     - export PATH=$RISCV_GCC_BINROOT:$PATH
     - export PATH=$PYENV_BINROOT:$PATH
+    - export LLVM_INSTALL_DIR=$LLVM_DIR
 
 stages:
   - clone
@@ -134,7 +136,7 @@ magia_v2_tiles_1:
 .build:
   extends: [.base, .export_path]
   script:
-    - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler}
+    - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler} CMAKE=${CMAKE}
   artifacts:
     paths: [ "build", "targets/${target_platform}/include/addr_map/tile_addr_map.h" ]
 
@@ -145,6 +147,7 @@ build_test_magia_v2_tiles_4:
     tiles: 4
     target_platform: magia_v2
     compiler: GCC_PULP
+    CMAKE: cmake-3.28.3
   dependencies:
     - python_gvsoc
 
@@ -156,6 +159,7 @@ build_test_magia_v2_tiles_1:
     tiles: 1
     target_platform: magia_v2
     compiler: GCC_PULP
+    CMAKE: cmake-3.28.3
   dependencies:
     - python_gvsoc
 
@@ -187,7 +191,7 @@ magia_v2_tiles_4_rtl_sim:
     tiles: 4
   parallel:
     matrix:
-      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
+      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv, onnx_add, onnx_ceil, onnx_clip, onnx_div, onnx_floor, onnx_relu, onnx_sub]
   dependencies:
     - clone_magia
     - magia_v2_tiles_4
@@ -202,7 +206,7 @@ magia_v2_tiles_4_gvsoc_sim:
     tiles: 4
   parallel:
     matrix:
-      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
+      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv, onnx_add, onnx_ceil, onnx_clip, onnx_div, onnx_floor, onnx_relu, onnx_sub]
   dependencies:
     - clone_magia
     - magia_v2_tiles_4
@@ -220,7 +224,7 @@ magia_v2_tiles_1_rtl_sim:
     tiles: 1
   parallel:
     matrix:
-      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
+      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv, onnx_add, onnx_ceil, onnx_clip, onnx_div, onnx_floor, onnx_relu, onnx_sub]
   dependencies:
     - clone_magia
     - magia_v2_tiles_1
@@ -235,7 +239,7 @@ magia_v2_tiles_1_gvsoc_sim:
     tiles: 1
   parallel:
     matrix:
-      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv]
+      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv, onnx_add, onnx_ceil, onnx_clip, onnx_div, onnx_floor, onnx_relu, onnx_sub]
   dependencies:
     - clone_magia
     - magia_v2_tiles_1
