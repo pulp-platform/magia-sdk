@@ -6,7 +6,7 @@
 from Deeploy.AbstractDataTypes import PointerClass
 from Deeploy.CommonExtensions.DataTypes import float16_t, int8_t, int32_t
 from Deeploy.DeeployTypes import CodeTransformation, NodeBinding
-from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, ConcatChecker, ConvChecker, DivChecker, DummyChecker, GatherChecker, GELUChecker, GEMMChecker, LayerNormChecker, MatMulChecker, MaxPoolChecker, ReluChecker
+from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, ConcatChecker, ConvChecker, DivChecker, DummyChecker, GatherChecker, GELUChecker, GEMMChecker, LayerNormChecker, MatMulChecker, MaxPoolChecker, ReluChecker, TransposeChecker
 from MagiaDeeployTarget.Templates import AddFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import AddTemplate
 from MagiaDeeployTarget.Templates import AveragePool2DFP16SpatzTemplate
@@ -35,6 +35,7 @@ from MagiaDeeployTarget.Templates import SigmoidFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SoftMaxFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SubFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SwishFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import TransposeFP16SpatzTemplate
 
 BasicTransformer = CodeTransformation([])
 
@@ -338,6 +339,17 @@ MagiaSwishFp16Bindings = [
             [PointerClass(float16_t)],
         ),
         SwishFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    ),
+]
+
+MagiaTransposeFp16Bindings = [
+    NodeBinding(
+        TransposeChecker(
+            [PointerClass(float16_t)],
+            [PointerClass(float16_t)],
+        ),
+        TransposeFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     ),
 ]
