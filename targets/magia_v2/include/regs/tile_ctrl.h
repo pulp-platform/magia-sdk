@@ -24,52 +24,52 @@
 #ifndef _TILE_REG_DEFS_
 #define _TILE_REG_DEFS_
 
-#define DEFAULT_EXIT_CODE            (0x0)
-#define PASS_EXIT_CODE               (0x0)
-#define FAIL_EXIT_CODE               (0x1)
-#define IRQ_REDMULE_EVT_0            (31)
-#define IRQ_REDMULE_EVT_1            (30)
-#define IRQ_A2O_ERROR                (29)
-#define IRQ_O2A_ERROR                (28)
-#define IRQ_A2O_DONE                 (27)
-#define IRQ_O2A_DONE                 (26)
-#define IRQ_A2O_START                (25)
-#define IRQ_O2A_START                (24)
-#define IRQ_A2O_BUSY                 (23)
-#define IRQ_O2A_BUSY                 (22)
-#define IRQ_REDMULE_BUSY             (21)
-#define IRQ_FSYNC_DONE               (20)
-#define IRQ_FSYNC_ERROR              (19)
+#define DEFAULT_EXIT_CODE             (0x0)
+#define PASS_EXIT_CODE                (0x0)
+#define FAIL_EXIT_CODE                (0x1)
+#define IRQ_REDMULE_EVT_0             (31)
+#define IRQ_REDMULE_EVT_1             (30)
+#define IRQ_A2O_ERROR                 (29)
+#define IRQ_O2A_ERROR                 (28)
+#define IRQ_A2O_DONE                  (27)
+#define IRQ_O2A_DONE                  (26)
+#define IRQ_A2O_START                 (25)
+#define IRQ_O2A_START                 (24)
+#define IRQ_A2O_BUSY                  (23)
+#define IRQ_O2A_BUSY                  (22)
+#define IRQ_REDMULE_BUSY              (21)
+#define IRQ_FSYNC_DONE                (20)
+#define IRQ_FSYNC_ERROR               (19)
 
 //=============================================================================
 // Event Bit Mapping - Based on cluster_event_map.sv
 //=============================================================================
 
 // DMA Events [3:2] - dma_events_i mapping
-#define EU_DMA_EVT_0_BIT             (2)          // DMA event 0 (completion)
-#define EU_DMA_EVT_1_BIT             (3)          // DMA event 1 (error/status)
-#define EU_DMA_EVT_MASK              (0x0000000C) // bits 3:2
+#define EU_DMA_EVT_0_BIT              (2)          // DMA event 0 (completion)
+#define EU_DMA_EVT_1_BIT              (3)          // DMA event 1 (error/status)
+#define EU_DMA_EVT_MASK               (0x0000000C) // bits 3:2
 
 // Timer Events [5:4] - timer_events_i mapping
-#define EU_TIMER_EVT_0_BIT           (4)          // Timer event 0
-#define EU_TIMER_EVT_1_BIT           (5)          // Timer event 1
-#define EU_TIMER_EVT_MASK            (0x00000030) // bits 5:4
+#define EU_TIMER_EVT_0_BIT            (4)          // Timer event 0
+#define EU_TIMER_EVT_1_BIT            (5)          // Timer event 1
+#define EU_TIMER_EVT_MASK             (0x00000030) // bits 5:4
 
 // Accelerator Events [11:8] - acc_events_i mapping
-#define EU_ACC_EVT_0_BIT             (8)          // Accelerator event 0 (always zero)
-#define EU_ACC_EVT_1_BIT             (9)          // Accelerator event 1 (busy)
-#define EU_ACC_EVT_2_BIT             (10)         // Accelerator event 2 (completion)
-#define EU_ACC_EVT_3_BIT             (11)         // Accelerator event 3 (additional)
-#define EU_ACC_EVT_MASK              (0x00000F00) // bits 11:8
+#define EU_ACC_EVT_0_BIT              (8)          // Accelerator event 0 (always zero)
+#define EU_ACC_EVT_1_BIT              (9)          // Accelerator event 1 (busy)
+#define EU_ACC_EVT_2_BIT              (10)         // Accelerator event 2 (completion)
+#define EU_ACC_EVT_3_BIT              (11)         // Accelerator event 3 (additional)
+#define EU_ACC_EVT_MASK               (0x00000F00) // bits 11:8
 
 // RedMulE specific event mapping (within accelerator events)
-#define EU_REDMULE_BUSY_BIT          EU_ACC_EVT_1_BIT           // bit 9 - RedMulE busy
-#define EU_REDMULE_DONE_BIT          EU_ACC_EVT_2_BIT           // bit 10 - RedMulE completion
-#define EU_REDMULE_EVT1_BIT          EU_ACC_EVT_3_BIT           // bit 11 - RedMulE additional event
-#define EU_REDMULE_DONE_MASK         (1 << EU_REDMULE_DONE_BIT) // 0x400
-#define EU_REDMULE_BUSY_MASK         (1 << EU_REDMULE_BUSY_BIT) // 0x200
-#define EU_REDMULE_EVT1_MASK         (1 << EU_REDMULE_EVT1_BIT) // 0x800
-#define EU_REDMULE_ALL_MASK          (EU_ACC_EVT_MASK)          // 0xF00
+#define EU_REDMULE_BUSY_BIT           EU_ACC_EVT_1_BIT // bit 9 - RedMulE busy
+#define EU_REDMULE_DONE_BIT           EU_ACC_EVT_2_BIT // bit 10 - RedMulE completion
+#define EU_REDMULE_EVT1_BIT           EU_ACC_EVT_3_BIT // bit 11 - RedMulE additional event
+#define EU_REDMULE_DONE_MASK          (1 << EU_REDMULE_DONE_BIT) // 0x400
+#define EU_REDMULE_BUSY_MASK          (1 << EU_REDMULE_BUSY_BIT) // 0x200
+#define EU_REDMULE_EVT1_MASK          (1 << EU_REDMULE_EVT1_BIT) // 0x800
+#define EU_REDMULE_ALL_MASK           (EU_ACC_EVT_MASK)          // 0xF00
 
 // iDMA specific event mapping (within DMA events)
 // Based on magia_tile.sv: assign dma_events_array[0] = {idma_o2a_done, idma_a2o_done};
@@ -130,19 +130,21 @@
 // IDMA Register Addresses
 //=============================================================================
 
-#define IDMA_CONF_OFFSET             (0x00)
-#define IDMA_STATUS_OFFSET           (0x04)
-#define IDMA_NEXT_ID_OFFSET          (0x44)
-#define IDMA_DONE_ID_OFFSET          (0x84)
-#define IDMA_DST_ADDR_LOW_OFFSET     (0xD0)
-#define IDMA_SRC_ADDR_LOW_OFFSET     (0xD8)
-#define IDMA_LENGTH_LOW_OFFSET       (0xE0)
-#define IDMA_DST_STRIDE_2_LOW_OFFSET (0xE8)
-#define IDMA_SRC_STRIDE_2_LOW_OFFSET (0xF0)
-#define IDMA_REPS_2_LOW_OFFSET       (0xF8)
-#define IDMA_DST_STRIDE_3_LOW_OFFSET (0x100)
-#define IDMA_SRC_STRIDE_3_LOW_OFFSET (0x108)
-#define IDMA_REPS_3_LOW_OFFSET       (0x110)
+#define IDMA_CONF_OFFSET              (0x00)
+#define IDMA_STATUS_OFFSET            (0x04)
+#define IDMA_NEXT_ID_OFFSET           (0x44)
+#define IDMA_DONE_ID_OFFSET           (0x84)
+#define IDMA_DST_ADDR_LOW_OFFSET      (0xD0)
+#define IDMA_SRC_ADDR_LOW_OFFSET      (0xD8)
+#define IDMA_LENGTH_LOW_OFFSET        (0xE0)
+#define IDMA_DST_STRIDE_2_LOW_OFFSET  (0xE8)
+#define IDMA_SRC_STRIDE_2_LOW_OFFSET  (0xF0)
+#define IDMA_REPS_2_LOW_OFFSET        (0xF8)
+#define IDMA_DST_STRIDE_3_LOW_OFFSET  (0x100)
+#define IDMA_SRC_STRIDE_3_LOW_OFFSET  (0x108)
+#define IDMA_REPS_3_LOW_OFFSET        (0x110)
+#define IDMA_CONF_DST_PROTOCOL_OFFSET (0x0F)
+#define IDMA_CONF_SRC_PROTOCOL_OFFSET (0x0C)
 
 // Register Addresses - now direction-aware
 #define IDMA_CONF_ADDR(is_l1_to_l2)                                                                \
@@ -186,7 +188,20 @@
                    : (IDMA_BASE_AXI2OBI + IDMA_REPS_3_LOW_OFFSET))
 
 // Status Register Bit Fields
-#define IDMA_STATUS_BUSY_MASK    (0x3FF) // bits 9:0
+#define IDMA_CONF_DECOUPLE_AW_BIT    (0)
+#define IDMA_CONF_DECOUPLE_RW_BIT    (1)
+#define IDMA_CONF_SRC_REDUCE_LEN_BIT (2)
+#define IDMA_CONF_DST_REDUCE_LEN_BIT (3)
+#define IDMA_CONF_SRC_MAX_LLEN_SHIFT (4)
+#define IDMA_CONF_DST_MAX_LLEN_SHIFT (7)
+#define IDMA_CONF_ENABLE_ND_SHIFT    (10)
+#define IDMA_STATUS_BUSY_MASK        (0x3FF) // bits 9:0
+
+// Enum IDMA Transfer protocols
+typedef enum {
+    IDMA_PROT_AXI = 0, // AXI protocol: L2 memory
+    IDMA_PROT_OBI = 1, // OBI protocol: L1 memory
+} idma_prot_t;
 
 //=============================================================================
 // RedMule Register Addresses
