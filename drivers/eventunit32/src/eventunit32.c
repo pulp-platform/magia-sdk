@@ -255,7 +255,7 @@ void eu32_fsync_init(eu_controller_t *ctrl, uint32_t enable_irq)
 {
     // Enable FSync events in mask (bits 25:24)
     eu_enable_events(EU_FSYNC_DONE_MASK);
-    
+
     // Optionally enable IRQ for FSync completion (bit 24)
     if (enable_irq) {
         eu_enable_irq(EU_FSYNC_DONE_MASK);

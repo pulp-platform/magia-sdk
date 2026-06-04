@@ -46,7 +46,7 @@ The following *optional* parameters can be specified when running the make comma
 
         MAGIA_RTL_DIR ?= path/to/MAGIA/repository
 
-        BUILD_DIR ?= $(MAGIA_DIR)//work/sw/tests/$(test).c
+        BUILD_DIR ?= $(MAGIA_RTL_DIR)//work/sw/tests/$(test).c
 
     It is also required to have a cmake version >= 3.13.
 
@@ -83,8 +83,7 @@ The following *optional* parameters can be specified when running the make comma
         curl https://pyenv.run | bash
         bash
         pyenv install 3.12
-    
-    
+
 2. Build the Magia architecture (*this command may take time and return an error, please be patient.*):
 
     `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode>`
