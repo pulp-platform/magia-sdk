@@ -32,20 +32,8 @@ typedef struct node {
 /**
  * Atomically increase the value stored in addr by an immediate value
  */
-int amo_add_immediate(uint32_t addr, uint32_t immediate){
-    asm volatile("addi t0, %0, 0" ::"r"(addr));
-    asm volatile("mv t1, %0" ::"r"(immediate));
-    asm volatile("amoadd.w t2, t1, (t0)" ::);
-    return 0;
-}
-
-/**
- * Atomically increase the value in addr by 1
- */
-inline void amo_increment(volatile uint32_t addr){
-    asm volatile("addi t0, %0, 0" ::"r"(addr));
-    asm volatile("li t1, 1" ::);
-    asm volatile("amoadd.w t2, t1, (t0)" ::);
+static inline void amo_add_imm(volatile uint32_t addr, volatile uint32_t imm){
+    asm volatile("amoadd.w x0, %1, (%0)" ::"r"(addr), "r"(imm):"memory");
 }
 
 /**
