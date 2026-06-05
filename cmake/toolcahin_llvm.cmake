@@ -32,7 +32,7 @@ set(CMAKE_LINK_LIBRARY_USING_WHOLE_ARCHIVE_SUPPORTED True)
 
 
 # Use LLVM LLD linker
-add_link_options("-fuse-ld=lld")
+add_link_options("--ld-path=lld")
 
 # Check LLVM version
 execute_process(

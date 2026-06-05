@@ -28,7 +28,8 @@
 /**
  * Atomically increase the value stored in addr by an immediate value
  */
-int amo_add_immediate(uint32_t addr, uint32_t immediate){
+int amo_add_immediate(uint32_t addr, uint32_t immediate)
+{
     asm volatile("addi t0, %0, 0" ::"r"(addr));
     asm volatile("mv t1, %0" ::"r"(immediate));
     asm volatile("amoadd.w t2, t1, (t0)" ::);
@@ -93,4 +94,4 @@ static inline void csem_signal(volatile uint32_t *sem_addr){
                  :"t1", "t0", "memory");
 }
 
-#endif //AMO_UTILS_H
+#endif // AMO_UTILS_H

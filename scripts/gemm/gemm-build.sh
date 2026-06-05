@@ -17,6 +17,7 @@ TILES="${TILES:-8}"
 COMPILER="${COMPILER:-GCC_PULP}"
 EVAL="${EVAL:-0}"
 MAKE="${MAKE:-make}"
+SPATZ="0"
 
 "$MAKE" clean
-"$MAKE" build target_platform=magia_v2 tiles="$TILES" compiler="$COMPILER" eval="$EVAL"
+"$MAKE" build target_platform=magia_v2 tiles="$TILES" compiler="$COMPILER" eval="$EVAL" spatz="$SPATZ"
