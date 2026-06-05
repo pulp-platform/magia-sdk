@@ -43,7 +43,7 @@
 #define LOCAL_INDEX(global_index) ((global_index) & (BLOCK_SIZE-1))
 
 void idma_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len){
-    idma_mm_conf(dir);
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
     if(dir){    // OBI to AXI (L1 to L2)
         idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
     }
