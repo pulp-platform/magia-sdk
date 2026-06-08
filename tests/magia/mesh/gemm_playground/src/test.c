@@ -93,29 +93,41 @@ int main(void)
     // int gemm4_idx = get_local_idx(hartid, gemm4_tiles, GEMM4_N_TILES);
 
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
 
     /* Barrier: synchronize all tiles after GEMM1 before sandbox transfers */
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
 
     uint32_t m2_size = (uint32_t)(DIM_B * DIM_C * 2);
 
     /* Xfer A: L2 → tile 12 L1 */
     if (hartid == 12) {
         idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m2_inp, get_l1_base(12), m2_size);
+        #if STALLING == 0
         eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        #endif
     }
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
 
     /* Xfer C: tile 12 L1 → tile 13 L1, pushed by tile 12 */
     if (hartid == 12) {
         idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(13), get_l1_base(12), m2_size);
+        #if STALLING == 0
         eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        #endif
     }
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
 
     /* Xfer E: tile 12 L1 → tile 13 L1, work split in half:
      *   tile 12 pushes first half  (dir=1, src=tile12 L1,        dst=tile13 L1)
@@ -123,22 +135,32 @@ int main(void)
     uint32_t half = m2_size / 2;
     if (hartid == 12) {
         idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(13), get_l1_base(12), half);
+        #if STALLING == 0
         eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        #endif
     }
     if (hartid == 13) {
         idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(12) + half, get_l1_base(13) + half, half);
+        #if STALLING == 0
         eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        #endif
     }
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
 
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
 
     /* ~~~~~~~~~~~~~~~~~~~~ Validation ~~~~~~~~~~~~~~~~~~~~ */
     // Final barrier
     fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    #endif
 
     // Tile 0 checks R1 against golden
     uint32_t errors = 0;

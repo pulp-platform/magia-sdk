@@ -131,7 +131,7 @@ int main(void){
     uint32_t obi_addr_id = (l1_tile_base);
     uint32_t axi_addr_id = (uint32_t) id_mat; 
     // printf("Transfering identity matrix: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d, stride %0d, reps %0d\n", axi_addr_id, obi_addr_id, len_id, std_id, reps_id);
-    idma_mm_conf(DMA_IN);
+    idma_mm_conf(DMA_IN, 0, 0, 0, 0, 0, 0, 3);
     idma_mm_set_addr_len(DMA_IN, obi_addr_id, axi_addr_id, len_id);
     idma_mm_set_std2_rep2(DMA_IN, len_id, std_id, reps_id);
     idma_mm_set_std3_rep3(DMA_IN, 0, 0, 1);
@@ -151,7 +151,7 @@ int main(void){
     uint32_t axi_addr_y = (x_id == 0) ? (uint32_t) y_in + (y_id*tile_w*2) : (uint32_t) y_out + (y_id*tile_w*2);
     
     // printf("Transfering bias: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", axi_addr_y, obi_addr_y, len_y);
-    idma_mm_conf(DMA_IN);
+    idma_mm_conf(DMA_IN, 0, 0, 0, 0, 0, 0, 3);
     idma_mm_set_addr_len(DMA_IN, obi_addr_y, axi_addr_y, len_y);
     idma_mm_set_std2_rep2(DMA_IN, 0, 0, 1);
     idma_mm_set_std3_rep3(DMA_IN, 0, 0, 1);
@@ -168,7 +168,7 @@ int main(void){
     uint32_t axi_addr_w = (uint32_t) w_in + (x_id*tile_h*K_SIZE*2) + (y_id*tile_w*2); 
     
     // printf("Transfering input matrix: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d, stride %0d, reps %0d\n", axi_addr_w, obi_addr_w, len_w, std_w, reps_w);
-    idma_mm_conf(DMA_IN);
+    idma_mm_conf(DMA_IN, 0, 0, 0, 0, 0, 0, 3);
     idma_mm_set_addr_len(DMA_IN, obi_addr_w, axi_addr_w, len_w);
     idma_mm_set_std2_rep2(DMA_IN, len_w, std_w, reps_w);
     idma_mm_set_std3_rep3(DMA_IN, 0, 0, 1);
@@ -183,7 +183,7 @@ int main(void){
     uint32_t axi_addr_x = (uint32_t) x_in + (x_id*tile_h*2); 
     
     // printf("Transfering input vector: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", axi_addr_x, obi_addr_x, len_x);
-    idma_mm_conf(DMA_IN);
+    idma_mm_conf(DMA_IN, 0, 0, 0, 0, 0, 0, 3);
     idma_mm_set_addr_len(DMA_IN, obi_addr_x, axi_addr_x, len_x);
     idma_mm_set_std2_rep2(DMA_IN, 0, 0, 1);
     idma_mm_set_std3_rep3(DMA_IN, 0, 0, 1);
@@ -228,7 +228,7 @@ int main(void){
                 */
                 uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, reduce_degree*(x_id/reduce_degree))) + 2*(tile_w*tile_h*2) + (tile_w*2) + (((x_id%reduce_degree)-1)*len_y);
                 // printf("Transfering partial GeMV to neighbor: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, partial_gemv_addr, len_y);
-                idma_mm_conf(DMA_OUT);
+                idma_mm_conf(DMA_OUT, 0, 0, 0, 0, 0, 0, 3);
                 idma_mm_set_addr_len(DMA_OUT, partial_gemv_addr, obi_addr_y, len_y);
                 idma_mm_set_std2_rep2(DMA_OUT, 0, 0, 1);
                 idma_mm_set_std3_rep3(DMA_OUT, 0, 0, 1);
@@ -257,7 +257,7 @@ int main(void){
                 */
                 uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, 0)) + 2*(tile_w*tile_h*2) + (tile_w*2) + (((x_id/reduce_degree)-1)*len_y);
                 // printf("Transfering partial GeMV to neighbor: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, partial_gemv_addr, len_y);
-                idma_mm_conf(DMA_OUT);
+                idma_mm_conf(DMA_OUT, 0, 0, 0, 0, 0, 0, 3);
                 idma_mm_set_addr_len(DMA_OUT, partial_gemv_addr, obi_addr_y, len_y);
                 idma_mm_set_std2_rep2(DMA_OUT, 0, 0, 1);
                 idma_mm_set_std3_rep3(DMA_OUT, 0, 0, 1);
@@ -277,7 +277,7 @@ int main(void){
                 */
                 axi_addr_y = (uint32_t) y_out + (y_id*tile_w*2);
                 // printf("Transfering result: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, axi_addr_y, len_y);
-                idma_mm_conf(DMA_OUT);
+                idma_mm_conf(DMA_OUT, 0, 0, 0, 0, 0, 0, 3);
                 idma_mm_set_addr_len(DMA_OUT, axi_addr_y, obi_addr_y, len_y);
                 idma_mm_set_std2_rep2(DMA_OUT, 0, 0, 1);
                 idma_mm_set_std3_rep3(DMA_OUT, 0, 0, 1);
@@ -296,7 +296,7 @@ int main(void){
             */
             uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, x_id^log_tree_bit)) + (tile_w*tile_h*2);
             // printf("Transfering partial GeMV from neighbor: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", partial_gemv_addr, obi_addr_x, len_x);
-            idma_mm_conf(DMA_IN);
+            idma_mm_conf(DMA_IN, 0, 0, 0, 0, 0, 0, 3);
             idma_mm_set_addr_len(DMA_IN, obi_addr_x, partial_gemv_addr, len_x);
             idma_mm_set_std2_rep2(DMA_IN, 0, 0, 1);
             idma_mm_set_std3_rep3(DMA_IN, 0, 0, 1);
@@ -319,7 +319,7 @@ int main(void){
                 */
                 axi_addr_y = (uint32_t) y_out + (y_id*tile_w*2);
                 // printf("Transfering result: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, axi_addr_y, len_y);
-                idma_mm_conf(DMA_OUT);
+                idma_mm_conf(DMA_OUT, 0, 0, 0, 0, 0, 0, 3);
                 idma_mm_set_addr_len(DMA_OUT, axi_addr_y, obi_addr_y, len_y);
                 idma_mm_set_std2_rep2(DMA_OUT, 0, 0, 1);
                 idma_mm_set_std3_rep3(DMA_OUT, 0, 0, 1);

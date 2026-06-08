@@ -37,7 +37,7 @@ fsync_mode		?= stall
 mesh_dv			?= 1
 fast_sim		?= 0
 eval			?= 0
-stalling		?= 0
+stalling		?= 1
 fsync_mm		?= 1
 idma_mm			?= 1
 redmule_mm		?= 1
@@ -46,8 +46,8 @@ profile_cmi		?= 0
 profile_cmo		?= 0
 profile_snc		?= 0
 
-# target_platform ?= magia_v2
-target_platform ?= magia_v1
+target_platform ?= magia_v2
+#target_platform ?= magia_v1
 compiler 		?= GCC_PULP
 # ISA				?= rv32imcxgap9
 ISA				?= rv32imac
@@ -74,6 +74,7 @@ CMAKE ?= cmake
 GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace --trace=kill-module
 GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
 GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
+GVRUN_SPATZ_ARGS	?= $(GVRUN_COMMON_ARGS) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin run
 profile_tile		?=
 PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=tile-$(profile_tile)-idma-ctrl-mm,)
 
@@ -120,7 +121,11 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
+ifeq ($(spatz), 0)
 	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
+else ifeq ($(spatz), 1)
+	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_SPATZ_ARGS)
+endif
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
