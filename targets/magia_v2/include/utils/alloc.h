@@ -14,113 +14,42 @@
  * limitations under the License.
  * SPDX-License-Identifier: Apache-2.0
  *
- * Authors:
- * Alberto Dequino <alberto.dequino@unibo.it>
- * 
- * MAGIA allocator
- */
-
-#ifndef ALLOC_H
-#define ALLOC_H
-
-
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
-
-/*
- * All allocated memory blocks are aligned to this boundary for optimal access performance.
- */
-#define ALLOC_ALIGNMENT 4
-
-/**
- * Macro to align a size to the memory alignment boundary.
- */
-#define ALLOC_ALIGN(size) (((size) + (ALLOC_ALIGNMENT - 1)) & ~(ALLOC_ALIGNMENT - 1))
-
-/**
- * Memory block structure for the freelist allocator.
+ * Authors: Alberto Dequino <alberto.dequino@unibo.it>
  *
- * This structure is used internally to track free memory blocks in a linked list.
- * Each allocated block has this header prepended to store metadata.
+ * MAGIA Attention ISA Utils
  */
-typedef struct MemoryBlock {
-    struct MemoryBlock *next; /**< Pointer to the next free block in the list. */
-    size_t size;              /**< Size of the memory block in bytes. */
-} MemoryBlock;
+#ifndef ALLOC_H_
+#define ALLOC_H_
 
-/**
- * This function allocates a block of memory of the specified size from the dataram heap.
- * The allocated memory is aligned to ALLOC_ALIGNMENT bytes. The memory is not initialized.
- *
- * The allocated memory should be freed using magia_l2_free() when no longer needed.
- */
-void *magia_l2_malloc(size_t size);
+#include "magia_utils.h"
 
-/**
- * This function returns a memory block to the free list, making it available for future
- * allocations. The memory block is added to the head of the freelist for efficient reuse.
- *
- * The pointer must have been returned by a previous call to magia_l2_malloc().
- * After calling this function, the memory pointed to by ptr should not be accessed.
- */
-void magia_l2_free(void *ptr);
+#define ALIGNMENT       (4)
+#define ALIGN_4B(addr)  (((addr) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
-/**
- * This function allocates memory for an array of num elements, each of size bytes,
- * and initializes all bytes to zero.
- *
- * The allocated memory should be freed using magia_l2_free() when no longer needed.
- */
-void *magia_l2_calloc(size_t num, size_t size);
+#define L1_TILE_BASE    (L1_BASE + (get_hartid() * L1_TILE_OFFSET))
+#define L1_TILE_END     (L1_TILE_BASE + L1_SIZE)
 
-/**
- * This function changes the size of the memory block pointed to by ptr to size bytes.
- * The contents are unchanged up to the minimum of the old and new sizes.
- * If the new size is larger, the additional memory is uninitialized.
- *
- * If reallocation fails, the original memory block is unchanged.
- */
-void *magia_l2_realloc(void *ptr, size_t size);
+#define L1_TAIL         (L1_TILE_BASE)
+#define L1_TAIL_START   ALIGN_4B(L1_TILE_BASE + (sizeof(uint32_t)))  /* Reserves 4 Bytes for L1_TAIL */
 
-/**
- * Gets the total size of the dataram l2 heap.
- */
-size_t magia_l2_heap_size(void);
+static inline void l1_alloc_init(void)
+{
+    mmio32(L1_TAIL) = L1_TAIL_START;
+}
 
-/**
- * This function calculates the total amount of free memory by traversing the freelist
- * and summing the sizes of all free blocks, plus any remaining unallocated heap space.
- */
-size_t magia_l2_heap_free(void);
+static inline void *l1_alloc(size_t size)
+{
+    uint32_t current_offset = mmio32(L1_TAIL);
+    uint32_t next_offset = ALIGN_4B(current_offset + size);
 
-/**
- * Gets the amount of allocated memory in the l2 heap.
- */
-size_t magia_l2_heap_used(void);
+    /* check: out-of-memory || overflow (if 'size' is too big) */
+    if (next_offset > L1_TILE_END || next_offset < current_offset) {
+        return NULL;
+    }
 
-/**
- * This function verifies if the given pointer points to a memory block that was
- * allocated by magia_l2_malloc() and is within the heap bounds.
- */
-bool magia_l2_ptr_valid(void *ptr);
+    mmio32(L1_TAIL) = next_offset;
 
-/**
- * This function validates the integrity of the heap data structures, including:
- * - Freelist consistency
- * - Memory block header validity
- * - Heap boundary checks
- *
- * This function is intended for debugging and should not be used in production code
- * due to its performance impact.
- */
-bool magia_l2_heap_check(void);
+    return (void *)(current_offset);
+}
 
-
-#endif //ALLOC_H
-
-
-
-
-
-
+#endif /* ALLOG_H_ */
