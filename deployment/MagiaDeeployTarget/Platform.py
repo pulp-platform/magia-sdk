@@ -7,10 +7,10 @@ import onnx_graphsurgeon as gs
 
 from Deeploy.DeeployTypes import ConstantBuffer, DeploymentEngine, DeploymentPlatform, NetworkContext, NodeMapper, \
     NodeTemplate, StructBuffer, TopologyOptimizer, TransientBuffer, VariableBuffer
-from Deeploy.Targets.Generic.Layers import AddLayer, AveragePoolLayer, BatchNormalizationLayer, CeilLayer, ClipLayer, ConcatLayer, ConvLayer, ConvTransposeLayer, DivLayer, EluLayer, ExpLayer, FloorLayer, GatherLayer, GELULayer, GEMMLayer, GlobalAveragePoolLayer, GlobalMaxPoolLayer, GroupNormLayer, HardSigmoidLayer, HardSwishLayer, InstanceNormLayer, LayerNormLayer, MatMulLayer, MaxPoolLayer, ReluLayer, SigmoidLayer, SoftmaxLayer, SubLayer, SwishLayer, TransposeLayer
-from Deeploy.Targets.Generic.Parsers import AddParser, AveragePool2DParser, BatchNormParser, CeilParser, ClipParser, ConcatParser, Conv2DParser, ConvTransposeParser, DivParser, EluParser, ExpParser, FloorParser, GatherParser, GELUParser, GEMMParser, GlobalAveragePoolParser, GlobalMaxPoolParser, GroupNormParser, HardSigmoidParser, HardSwishParser, InstanceNormParser, LayerNormParser, MatMulParser, MaxPool2DParser, ReluParser, SigmoidParser, SoftmaxParser, SubParser, SwishParser, TransposeParser
+from Deeploy.Targets.Generic.Layers import AddLayer, AveragePoolLayer, BatchNormalizationLayer, CeilLayer, ClipLayer, ConcatLayer, ConvLayer, ConvTransposeLayer, DivLayer, EluLayer, ExpLayer, FloorLayer, GatherLayer, GELULayer, GEMMLayer, GlobalAveragePoolLayer, GlobalMaxPoolLayer, GroupNormLayer, HardSigmoidLayer, HardSwishLayer, InstanceNormLayer, LayerNormLayer, MatMulLayer, MaxPoolLayer, ReluLayer, SeluLayer, SigmoidLayer, SoftmaxLayer, SubLayer, SwishLayer, TransposeLayer
+from Deeploy.Targets.Generic.Parsers import AddParser, AveragePool2DParser, BatchNormParser, CeilParser, ClipParser, ConcatParser, Conv2DParser, ConvTransposeParser, DivParser, EluParser, ExpParser, FloorParser, GatherParser, GELUParser, GEMMParser, GlobalAveragePoolParser, GlobalMaxPoolParser, GroupNormParser, HardSigmoidParser, HardSwishParser, InstanceNormParser, LayerNormParser, MatMulParser, MaxPool2DParser, ReluParser, SeluParser, SigmoidParser, SoftmaxParser, SubParser, SwishParser, TransposeParser
 from Deeploy.Targets.Generic.Templates import AllocateTemplate as BasicAllocateTemplate
-from MagiaDeeployTarget.Bindings import MagiaAddBindings, MagiaAddFp16Bindings, MagiaAveragePool2DFp16Bindings, MagiaBatchNormFp16Bindings, MagiaCeilFp16Bindings, MagiaClipFp16Bindings, MagiaConcatFp16Bindings, MagiaConv2DFp16Bindings, MagiaConvTransposeBindings, MagiaDivFp16Bindings, MagiaEluFp16Bindings, MagiaExpFp16Bindings, MagiaFloorFp16Bindings, MagiaGatherFp16Bindings, MagiaGeluFp16Bindings, MagiaGemmFp16Bindings, MagiaGlobalAveragePoolFp16Bindings, MagiaGlobalMaxPoolFp16Bindings, MagiaGroupNormFp16Bindings, MagiaHardSigmoidFp16Bindings, MagiaHardSwishFp16Bindings, MagiaInstanceNormFp16Bindings, MagiaLayerNormFp16Bindings, MagiaMatMulFp16Bindings, MagiaMaxPool2DFp16Bindings, MagiaReluFp16Bindings, MagiaSigmoidFp16Bindings, MagiaSoftmaxFp16Bindings, MagiaSubFp16Bindings, MagiaSwishFp16Bindings, MagiaTransposeFp16Bindings
+from MagiaDeeployTarget.Bindings import MagiaAddBindings, MagiaAddFp16Bindings, MagiaAveragePool2DFp16Bindings, MagiaBatchNormFp16Bindings, MagiaCeilFp16Bindings, MagiaClipFp16Bindings, MagiaConcatFp16Bindings, MagiaConv2DFp16Bindings, MagiaConvTransposeBindings, MagiaDivFp16Bindings, MagiaEluFp16Bindings, MagiaExpFp16Bindings, MagiaFloorFp16Bindings, MagiaGatherFp16Bindings, MagiaGeluFp16Bindings, MagiaGemmFp16Bindings, MagiaGlobalAveragePoolFp16Bindings, MagiaGlobalMaxPoolFp16Bindings, MagiaGroupNormFp16Bindings, MagiaHardSigmoidFp16Bindings, MagiaHardSwishFp16Bindings, MagiaInstanceNormFp16Bindings, MagiaLayerNormFp16Bindings, MagiaMatMulFp16Bindings, MagiaMaxPool2DFp16Bindings, MagiaReluFp16Bindings, MagiaSeluFp16Bindings, MagiaSigmoidFp16Bindings, MagiaSoftmaxFp16Bindings, MagiaSubFp16Bindings, MagiaSwishFp16Bindings, MagiaTransposeFp16Bindings
 from MagiaDeeployTarget.Templates import AllocateTemplate, FreeTemplate
 
 
@@ -39,6 +39,7 @@ LayerNormMapper = NodeMapper(LayerNormParser(), MagiaLayerNormFp16Bindings)
 MatMulMapper = NodeMapper(MatMulParser(), MagiaMatMulFp16Bindings)
 MaxPool2DMapper = NodeMapper(MaxPool2DParser(), MagiaMaxPool2DFp16Bindings)
 ReluMapper = NodeMapper(ReluParser(), MagiaReluFp16Bindings)
+SeluMapper = NodeMapper(SeluParser(), MagiaSeluFp16Bindings)
 SigmoidMapper = NodeMapper(SigmoidParser(), MagiaSigmoidFp16Bindings)
 SoftmaxMapper = NodeMapper(SoftmaxParser(), MagiaSoftmaxFp16Bindings)
 SubMapper = NodeMapper(SubParser(), MagiaSubFp16Bindings)
@@ -71,6 +72,7 @@ MagiaMapping = {
     'MatMul': MatMulLayer([MatMulMapper]),
     'MaxPool': MaxPoolLayer([MaxPool2DMapper]),
     'Relu': ReluLayer([ReluMapper]),
+    'Selu': SeluLayer([SeluMapper]),
     'Sigmoid': SigmoidLayer([SigmoidMapper]),
     'Softmax': SoftmaxLayer([SoftmaxMapper]),
     'Sub': SubLayer([SubMapper]),
