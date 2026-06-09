@@ -30,6 +30,7 @@ from MagiaDeeployTarget.Templates import HardSigmoidFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import HardSwishFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import InstanceNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import LayerNormFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import LeakyReluFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import MaxPool2DFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import MatMulFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ReluFP16SpatzTemplate
@@ -248,17 +249,6 @@ MagiaGroupNormFp16Bindings = [
     )
 ]
 
-MagiaSeluFp16Bindings = [
-    NodeBinding(
-        DummyChecker(
-            [PointerClass(float16_t)],
-            [PointerClass(float16_t)]
-        ),
-        SeluFP16SpatzTemplate.referenceTemplate,
-        BasicTransformer,
-    )
-]
-
 MagiaHardSigmoidFp16Bindings = [
     NodeBinding(
         DummyChecker(
@@ -302,6 +292,17 @@ MagiaLayerNormFp16Bindings = [
     )
 ]
 
+MagiaLeakyReluFp16Bindings = [
+    NodeBinding(
+        DummyChecker(
+            [PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        LeakyReluFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    )
+]
+
 MagiaMatMulFp16Bindings = [
     NodeBinding(
         MatMulChecker(
@@ -333,6 +334,17 @@ MagiaReluFp16Bindings = [
         ReluFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     ),
+]
+
+MagiaSeluFp16Bindings = [
+    NodeBinding(
+        DummyChecker(
+            [PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        SeluFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    )
 ]
 
 MagiaSigmoidFp16Bindings = [
