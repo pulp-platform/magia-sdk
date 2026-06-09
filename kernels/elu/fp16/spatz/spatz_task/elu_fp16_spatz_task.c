@@ -3,8 +3,10 @@
 
 static void elu(const _Float16 *src, _Float16 *dst, const _Float16 alpha, const size_t len)
 {
+    /* NOTE: The COEFF value can be raised to obtain a better exp approx in case input values are mostrly close to [-1; 1] */
     register _Float16 BIAS asm ("fs1") = 15360.0f;
-    register _Float16 COEF asm ("fs2") = 1477.0f;
+    // register _Float16 COEF asm ("fs2") = 1477.0f;
+    register _Float16 COEF asm ("fs2") = 1596.0f;
     register _Float16 ZERO asm ("fs3") = 0.0f;
     register _Float16 ONE  asm ("fs4") = 1.0f;
     register _Float16 MIN  asm ("fs5") = -5.0f;

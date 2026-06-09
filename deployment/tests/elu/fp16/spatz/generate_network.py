@@ -39,7 +39,7 @@ def parse_args():
     parser.add_argument("H", type=positive_int, help="Spatial height dimension")
     parser.add_argument("W", type=positive_int, help="Spatial width dimension")
 
-    parser.add_argument("--alpha", type=nonnegative_flaot, default=1e-05, help="Coefficient of ELU (default: 1.0)")
+    parser.add_argument("--alpha", type=nonnegative_flaot, default=1.0, help="Coefficient of ELU (default: 1.0)")
 
     args = parser.parse_args()
     return args
@@ -47,7 +47,7 @@ def parse_args():
 
 def generate_input_data(args):
     X_shape = (args.N, args.C, args.H, args.W)
-    X = np.random.randn(*X_shape).astype(np.float16)
+    X = np.random.uniform(-10, 5, size=X_shape).astype(np.float16)
     return X
 
 def run_onnx_elu(X, alpha):
