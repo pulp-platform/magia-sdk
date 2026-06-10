@@ -174,8 +174,9 @@ ifneq (,$(filter $(build_mode), update synth profile))
 	make python_venv || true											&& \
 	source setup_env.sh 												&& \
 	make python_deps || true											&& \
+	curl --proto '=https' --tlsv1.2 https://pulp-platform.github.io/bender/init -sSf | sh -s -- --local && \
+	export PATH=$$(pwd):$$PATH											&& \
 	python -m pip install --upgrade "setuptools<81"						&& \
-	make bender															&& \
 	make $(build_mode)-ips > $(build_mode)-ips.log mesh_dv=$(mesh_dv)	&& \
 	make floonoc-patch || true											&& \
 	make build-hw > build-hw.log mesh_dv=$(mesh_dv) fast_sim=$(fast_sim)
