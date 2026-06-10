@@ -6,13 +6,14 @@
 from Deeploy.AbstractDataTypes import PointerClass
 from Deeploy.CommonExtensions.DataTypes import float16_t, int8_t, int32_t
 from Deeploy.DeeployTypes import CodeTransformation, NodeBinding
-from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, ConcatChecker, ConvChecker, DivChecker, DummyChecker, GatherChecker, GELUChecker, GEMMChecker, LayerNormChecker, MatMulChecker, MaxPoolChecker, ReluChecker, TransposeChecker
+from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, ConcatChecker, ConvChecker, DivChecker, DummyChecker, GatherChecker, GELUChecker, GEMMChecker, LayerNormChecker, MatMulChecker, MaxPoolChecker, PassThroughTypeChecker, ReluChecker, TransposeChecker
 from MagiaDeeployTarget.Templates import AddFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import AddTemplate
 from MagiaDeeployTarget.Templates import AveragePool2DFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import BatchNormFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import CeilFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ClipFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import Col2ImFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ConcatFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import Conv2DFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ConvTransposeFP16SpatzTemplate
@@ -107,6 +108,18 @@ MagiaClipFp16Bindings = [
         BasicTransformer,
     )
 ]
+
+MagiaCol2ImFp16Bindings = [
+    NodeBinding(
+        PassThroughTypeChecker(
+            [PointerClass(float16_t), PointerClass(int32_t), PointerClass(int32_t)],
+            [PointerClass(float16_t)]
+        ),
+        Col2ImFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    )
+]
+
 
 MagiaConcatFp16Bindings = [
     NodeBinding(
