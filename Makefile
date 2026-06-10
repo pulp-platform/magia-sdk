@@ -198,9 +198,9 @@ endif
 	cd $(GVSOC_DIR)	&& \
 	make build TARGETS=magia_v2
 
-# Pinned commits for gvsoc/gvsoc-core/gvsoc-pulp live in scripts/deps.env.
+# Pinned commits for FondazioneChipsIT/gvsoc, gvsoc-core, pulp, engine, gvrun live in scripts/deps.env.
 gvsoc_init:
-	git clone https://github.com/gvsoc/gvsoc.git || true
+	git clone https://github.com/FondazioneChipsIT/gvsoc.git || true
 	cd $(GVSOC_DIR) && \
 	git fetch origin $(GVSOC_COMMIT) && \
 	git checkout $(GVSOC_COMMIT) && \
@@ -210,7 +210,13 @@ gvsoc_init:
 	git checkout $(GVSOC_CORE_COMMIT) && \
 	cd ../pulp && \
 	git fetch origin $(GVSOC_PULP_COMMIT) && \
-	git checkout $(GVSOC_PULP_COMMIT)
+	git checkout $(GVSOC_PULP_COMMIT) && \
+	cd ../engine && \
+	git fetch origin $(GVSOC_ENGINE_COMMIT) && \
+	git checkout $(GVSOC_ENGINE_COMMIT) && \
+	cd ../gvrun && \
+	git fetch origin $(GVSOC_GVRUN_COMMIT) && \
+	git checkout $(GVSOC_GVRUN_COMMIT)
 
 gvsoc_venv:
 	eval "$(pyenv init -)" && \
