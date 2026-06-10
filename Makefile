@@ -174,8 +174,9 @@ ifneq (,$(filter $(build_mode), update synth profile))
 	make python_venv || true											&& \
 	source setup_env.sh 												&& \
 	make python_deps || true											&& \
+	curl --proto '=https' --tlsv1.2 https://pulp-platform.github.io/bender/init -sSf | sh -s -- --local && \
+	export PATH=$$(pwd):$$PATH											&& \
 	python -m pip install --upgrade "setuptools<81"						&& \
-	make bender															&& \
 	make $(build_mode)-ips > $(build_mode)-ips.log mesh_dv=$(mesh_dv)	&& \
 	make floonoc-patch || true											&& \
 	make build-hw > build-hw.log mesh_dv=$(mesh_dv) fast_sim=$(fast_sim)
@@ -198,9 +199,9 @@ endif
 	cd $(GVSOC_DIR)	&& \
 	make build TARGETS=magia_v2
 
-# Pinned commits for gvsoc/gvsoc-core/gvsoc-pulp live in scripts/deps.env.
+# Pinned commits for FondazioneChipsIT/gvsoc, gvsoc-core, pulp, engine, gvrun live in scripts/deps.env.
 gvsoc_init:
-	git clone https://github.com/gvsoc/gvsoc.git || true
+	git clone https://github.com/FondazioneChipsIT/gvsoc.git || true
 	cd $(GVSOC_DIR) && \
 	git fetch origin $(GVSOC_COMMIT) && \
 	git checkout $(GVSOC_COMMIT) && \
@@ -210,7 +211,13 @@ gvsoc_init:
 	git checkout $(GVSOC_CORE_COMMIT) && \
 	cd ../pulp && \
 	git fetch origin $(GVSOC_PULP_COMMIT) && \
-	git checkout $(GVSOC_PULP_COMMIT)
+	git checkout $(GVSOC_PULP_COMMIT) && \
+	cd ../engine && \
+	git fetch origin $(GVSOC_ENGINE_COMMIT) && \
+	git checkout $(GVSOC_ENGINE_COMMIT) && \
+	cd ../gvrun && \
+	git fetch origin $(GVSOC_GVRUN_COMMIT) && \
+	git checkout $(GVSOC_GVRUN_COMMIT)
 
 gvsoc_venv:
 	eval "$(pyenv init -)" && \
