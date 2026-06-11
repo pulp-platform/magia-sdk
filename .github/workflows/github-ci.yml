@@ -29,4 +29,5 @@ jobs:
           domain: iis-git.ee.ethz.ch
           repo: github-mirror/magia-sdk-mirror
           token: ${{ secrets.GITLAB_TOKEN }}
+          expose-error-logs: 'true'
 

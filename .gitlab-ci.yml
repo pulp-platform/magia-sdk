@@ -77,6 +77,12 @@ clone_gvsoc:
   artifacts:
     paths: [ "gvsoc" ]
 
+intentional_failure:
+  stage: clone
+  script:
+    - echo "Intentional failure to test error log surfacing in CI"
+    - exit 1
+
 .gvsoc:
   extends: [.base]
   script:
