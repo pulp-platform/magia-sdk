@@ -53,6 +53,7 @@ int batchnorm_fp16_spatz_task(void)
     const _Float16 *var;
     _Float16 epsilon;
     uint32_t c_len;
+    uint32_t input_C;
     uint32_t hw_len;
 
     params_addr = mmio32(SPATZ_DATA);
@@ -67,8 +68,9 @@ int batchnorm_fp16_spatz_task(void)
     var   = (_Float16 *) params->var;
     c_len = params->c_len;
     hw_len = params->hw_len;
+    input_C = params->channels;
 
-    for (int c = 0; c < c_len; c++) {
+    for (uint32_t c = 0; c < c_len; c++) {
         uint32_t c_off;
         uint32_t c_idx;
         _Float16 gamma_c;
@@ -77,7 +79,8 @@ int batchnorm_fp16_spatz_task(void)
         _Float16 var_c;
 
         c_off = c * hw_len;
-        c_idx = params->c_start + c;
+        c_idx = (params->c_start + c) % input_C;
+
         gamma_c = gamma[c_idx];
         beta_c  = beta[c_idx];
         mean_c  = mean[c_idx];
