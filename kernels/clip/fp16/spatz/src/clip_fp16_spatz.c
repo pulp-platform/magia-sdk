@@ -1,55 +1,105 @@
 #include <stdint.h>
+#include <errno.h>
 
 #include "eventunit.h"
 #include "tile.h"
 
 #include "clip_fp16_spatz.h"
-#include "clip_fp16_spatz_mem_layout.h"
 #include "clip_fp16_spatz_params.h"
 #include "clip_fp16_spatz_task_bin.h"
 
 #define HID get_hartid()
 
-static int init_input_params(void *params, const float16 *input, float16 min, float16 max, uint32_t size)
+static int alloc_l1(void **params, uint32_t size)
 {
     volatile clip_fp16_spatz_params_t *clip_params;
-    uint32_t shard;
-    uint32_t start;
-    uint32_t left;
-    uint32_t end;
-    uint32_t len;
+    uintptr_t shard_input;
+    uintptr_t shard_output;
+    uintptr_t min;
+    uintptr_t max;
 
-    clip_params = (volatile clip_fp16_spatz_params_t *) params;
+    size_t shard_start;
+    size_t shard_end;
+    size_t shard_len;
+    size_t elems;
+    size_t left;
 
-    shard = size / NUM_HARTS;
+    elems = size / NUM_HARTS;
     left = size % NUM_HARTS;
-    start = HID * shard + (HID < left ? HID : left);
-    end   = start + shard + (HID < left ? 1 : 0);
-    len   = end - start;
+    shard_start = HID * elems + (HID < left ? HID : left);
+    shard_end = shard_start + elems + (HID < left ? 1 : 0);
+    shard_len = shard_end - shard_start;
 
-    for (int i = 0; i < len; i++) {
-        uint32_t global_idx = start + i;
-        uint32_t offset = i * sizeof(float16);
+    l1_alloc_init();
 
-        mmio_fp16(SHARD_IN_BASE + offset) = input[global_idx];
-        mmio_fp16(SHARD_OUT_BASE + offset) = 0;
-    }
+    clip_params = l1_alloc(sizeof(clip_fp16_spatz_params_t));
+    if (!clip_params)
+        return ENOMEM;
 
-    mmio_fp16(MIN_BASE) = min;
-    mmio_fp16(MAX_BASE) = max;
+    shard_input = l1_alloc(shard_len * sizeof(float16));
+    if (!shard_input)
+        return ENOMEM;
 
-    clip_params->shard_input = SHARD_IN_BASE;
-    clip_params->shard_output = SHARD_OUT_BASE;
-    clip_params->min = MIN_BASE;
-    clip_params->max = MAX_BASE;
-    clip_params->start = start;
-    clip_params->len = len;
-    clip_params->end = end;
+    shard_output = l1_alloc(shard_len * sizeof(float16));
+    if (!shard_output)
+        return ENOMEM;
+
+    min = l1_alloc(sizeof(float16));
+    if (!min)
+        return ENOMEM;
+
+    max = l1_alloc(sizeof(float16));
+    if (!max)
+        return ENOMEM;
+
+    clip_params->shard_input = shard_input;
+    clip_params->shard_output = shard_output;
+    clip_params->start = shard_start;
+    clip_params->len = shard_len;
+    clip_params->end = shard_end;
+    clip_params->min = min;
+    clip_params->max = max;
+
+    *params = (void *) clip_params;
 
     return 0;
 }
 
-static int offload_spatz_task()
+static int init_input_params(void *params, const float16 *input, float16 minimum, float16 maximum)
+{
+    volatile clip_fp16_spatz_params_t *clip_params;
+    uintptr_t shard_input;
+    uintptr_t shard_output;
+    uintptr_t min;
+    uintptr_t max;
+    uint32_t start;
+    uint32_t len;
+
+    clip_params = (volatile clip_fp16_spatz_params_t *) params;
+
+    shard_input = clip_params->shard_input;
+    shard_output = clip_params->shard_output;
+    min = clip_params->min;
+    max = clip_params->max;
+
+    start = clip_params->start;
+    len = clip_params->len;
+
+    for (uint32_t i = 0; i < len; i++) {
+        uint32_t global_idx = start + i;
+        uint32_t offset = i * sizeof(float16);
+
+        mmio_fp16(shard_input + offset) = input[global_idx];
+        mmio_fp16(shard_output + offset) = 0;
+    }
+
+    mmio_fp16(min) = minimum;
+    mmio_fp16(max) = maximum;
+
+    return 0;
+}
+
+static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
     eu_config_t eu_cfg;
@@ -61,7 +111,7 @@ static int offload_spatz_task()
     eu_ctrl.api = &eu_api;
 
     spatz_init(SPATZ_BINARY_START);
-    spatz_run_task_with_params(CLIP_FP16_SPATZ_TASK, CLIP_FP16_SPATZ_PARAMS_BASE);
+    spatz_run_task_with_params(CLIP_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
@@ -88,7 +138,7 @@ static int store_result(void* params, float16 *dst)
     start = clip_params->start;
     len = clip_params->len;
 
-    for (int i = 0; i < len; i++) {
+    for (uint32_t i = 0; i < len; i++) {
         uint32_t global_idx = start + i;
         uint32_t offset = i * sizeof(float16);
         dst[global_idx] = mmio_fp16(shard_out_base + offset);
@@ -102,15 +152,19 @@ void MAGIA_clip_fp16_spatz(const float16 *input, float16 *output, float16 min, f
     int ret;
     volatile clip_fp16_spatz_params_t *params;
 
-    params = (volatile clip_fp16_spatz_params_t *) CLIP_FP16_SPATZ_PARAMS_BASE;
+    ret = alloc_l1(&params, size);
+    if (ret != 0) {
+        printf("[CV32 (%d)] L1 allocation failed with error: %d\n", HID, ret);
+        return;
+    }
 
-    ret = init_input_params(params, input, min, max, size);
+    ret = init_input_params(params, input, min, max);
     if (ret != 0) {
         printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
         return;
     }
 
-    ret = offload_spatz_task();
+    ret = offload_spatz_task(params);
     if (ret != 0) {
         printf("[CV32 (%d)] Spatz task offloading failed with error: %d\n", HID, ret);
         return;
