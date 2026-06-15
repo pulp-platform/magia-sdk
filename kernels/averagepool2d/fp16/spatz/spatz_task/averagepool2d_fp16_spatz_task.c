@@ -46,17 +46,17 @@ static inline void averagepool2d(const _Float16 *src, const uint32_t c_len, cons
     in_hw_len = h_in * w_in;
     out_hw_len = h_out * w_out;
 
-    for (int c = 0; c < c_len; c++) {
+    for (uint32_t c = 0; c < c_len; c++) {
         const _Float16 *src_c;
         _Float16 *dst_c;
 
         src_c = src + (c * in_hw_len);
         dst_c = dst + (c * out_hw_len);
 
-        for (int oh = 0; oh < h_out; oh++) {
+        for (uint32_t oh = 0; oh < h_out; oh++) {
             compute_window_boundaries_2d( oh, stride_h, pad_h, kernel_h, h_in, &h_win_start, &h_win_len);
 
-            for (int ow = 0; ow < w_out; ow++) {
+            for (uint32_t ow = 0; ow < w_out; ow++) {
                 compute_window_boundaries_2d( ow, stride_w, pad_w, kernel_w, w_in, &w_win_start, &w_win_len);
 
                 if ((h_win_len == 0) || (w_win_len == 0)) {
@@ -68,7 +68,7 @@ static inline void averagepool2d(const _Float16 *src, const uint32_t c_len, cons
 
                 asm volatile ("vfmv.v.f v8, %0" :: "f"(ZERO));
 
-                for (int kh = 0; kh < h_win_len; kh++) {
+                for (uint32_t kh = 0; kh < (uint32_t)h_win_len; kh++) {
 
                     p_src = src_c + ((h_win_start + kh) * w_in) + w_win_start;
                     avl = w_win_len;
