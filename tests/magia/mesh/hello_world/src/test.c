@@ -15,9 +15,11 @@ int main(void){
 
     int test = NULL;
 
+    uint32_t _xperf = xperf_start();
     volatile float16alt a = -12.0456f;
     volatile float16alt b = 4.0f;
     volatile float16alt c = (a + b);
+    xperf_end(_xperf);
     //int test_integer = -123;
     
     uint32_t *v = (uint32_t *) &c; 

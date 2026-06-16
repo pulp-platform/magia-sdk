@@ -110,6 +110,8 @@ int main(void){
     volatile uint8_t total_timeslots = (MESH_X_TILES - 1) * 2 + timeslots + 1;
     //printf("timeslots=%d, t_start=%d, t_end=%d\n", timeslots, t_start, t_end);
 
+    uint32_t _xperf = xperf_start();
+
     /**
      * 2. Initalize the IDMA transfer variables for input data-tile transfers.
      */
@@ -297,10 +299,12 @@ int main(void){
     }
     
     
+    xperf_end(_xperf);
+
     /**
      * 5. Check results
      */
-    
+
     fsync_sync_row(&fsync_ctrl);
     #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);

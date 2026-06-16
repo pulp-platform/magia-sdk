@@ -110,6 +110,8 @@ int main(void){
     uint8_t total_timeslots = (MESH_Y_TILES - 1) * 2 + timeslots + 1;
     // printf("timeslots=%d, t_start=%d, t_end=%d\n", timeslots, t_start, t_end);
 
+    uint32_t _xperf = xperf_start();
+
     /**
      * 2. Initalize the IDMA transfer variables for weight data-tile transfers.
      */
@@ -282,6 +284,8 @@ int main(void){
             #endif
         }
     }
+
+    xperf_end(_xperf);
 
     /**
      * 5. Check results

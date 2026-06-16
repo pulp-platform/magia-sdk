@@ -77,6 +77,7 @@ int main(void)
      * 1d - Wait for the read before returning.
      */
     if (x_id == y_id) {
+        uint32_t _xperf = xperf_start();
         // wait_nop(100 * hartid);
         mmio8(l1_tile_base) = (uint8_t)123;
         fsync_sync_diag(&fsync_ctrl);
@@ -88,6 +89,7 @@ int main(void)
 #if STALLING == 0
         eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 #endif
+        xperf_end(_xperf);
         if (!flag) {
             printf("No errors detected in diagonal!\n");
             return 0;

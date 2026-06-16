@@ -102,6 +102,8 @@ int main(void){
     uint8_t timeslots   = 2;
     uint8_t t_size      = N_SIZE / timeslots;
 
+    uint32_t _xperf = xperf_start();
+
     /**
      * 2. Use IDMA to transfer static output data-tile
      */
@@ -225,6 +227,8 @@ int main(void){
         eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
         #endif
     }
+
+    xperf_end(_xperf);
 
     /**
      * 6. Check results

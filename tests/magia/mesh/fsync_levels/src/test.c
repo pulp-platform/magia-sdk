@@ -91,6 +91,7 @@ int main(void){
      * 1. Cycle over the synchronization levels.
      * Increasing the synchronization level increases the mesh area that has to be synchronized.
      */
+    uint32_t _xperf = xperf_start();
     for(uint8_t i = 0; i < MAX_SYNC_LVL; i++){
         //printf("Entering synchronization level %d", i);
         /**
@@ -126,6 +127,7 @@ int main(void){
         eu_fsync_wait(&eu_ctrl, WAIT_MODE);
         #endif
     }
+    xperf_end(_xperf);
 
     if(!flag){
         printf("No errors detected for all synchronization levels! (MAX LEVEL: %d)\n", (MAX_SYNC_LVL-1));

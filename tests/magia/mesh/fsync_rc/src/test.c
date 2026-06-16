@@ -92,6 +92,7 @@ int main(void){
     if(hartid == 1){
     wait_nop(1000);
     }
+    uint32_t _xperf = xperf_start();
     mmio8(l1_tile_base) = y_id;
     fsync_sync_row(&fsync_ctrl);
     #if STALLING == 0
@@ -102,6 +103,7 @@ int main(void){
     #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     #endif
+    xperf_end(_xperf);
     if(!flag){
         printf("No errors detected in row synch!\n");
     }

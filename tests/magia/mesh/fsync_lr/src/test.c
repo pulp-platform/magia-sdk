@@ -140,6 +140,8 @@ int main(void){
     volatile uint32_t obi_addr_y = obi_addr_w + (tile_w * t_size * 2);
     volatile uint32_t axi_addr_y = (uint32_t) y_inp;
 
+    uint32_t _xperf = xperf_start();
+
     /**
      * 3. Load variables and then compute matmul
      */
@@ -176,6 +178,8 @@ int main(void){
     #if STALLING == 0
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     #endif
+
+    xperf_end(_xperf);
 
     uint16_t computed, expected, diff = 0;
     if(x_id != (MESH_X_TILES - 1)){

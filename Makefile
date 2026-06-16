@@ -45,6 +45,7 @@ profile_cmp		?= 0
 profile_cmi		?= 0
 profile_cmo		?= 0
 profile_snc		?= 0
+profile_xperf		?= 0
 
 target_platform ?= magia_v2
 compiler 		?= GCC_PULP
@@ -96,7 +97,7 @@ endif
 ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
 endif
-	$(CMAKE) -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz) -B $(CMAKE_BUILDDIR) --trace-expand
+	$(CMAKE) -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DPROFILE_XPERF=$(profile_xperf) -DSPATZ_TESTS=$(spatz) -B $(CMAKE_BUILDDIR) --trace-expand
 	$(CMAKE) --build $(CMAKE_BUILDDIR) --verbose
 
 set_mesh:

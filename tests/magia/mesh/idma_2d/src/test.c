@@ -94,6 +94,8 @@ int main(void){
         //printf("ID:%d, Mesh-Tile-X:%d, Mesh-Tile-Y:%d, Data-Tile w: %d, Data-Tile h: %d", hartid, x_id, y_id, tile_w, tile_h);
     }
 
+    uint32_t _xperf = xperf_start();
+
     /**
      * 2. Use IDMA to transfer output data-tile in L1 memory
      */
@@ -128,6 +130,7 @@ int main(void){
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     #endif
 
+    xperf_end(_xperf);
 
     /**
      * 5. Check results

@@ -114,6 +114,8 @@ int main(void){
     uint8_t timeslots = 16;
     uint8_t t_size = M_SIZE / timeslots;
 
+    uint32_t _xperf = xperf_start();
+
     /**
      * 2. Use IDMA to transfer static weight data-tile
      */
@@ -260,6 +262,8 @@ int main(void){
             #endif 
         }
     }
+
+    xperf_end(_xperf);
 
     /**
      * 5. Check results

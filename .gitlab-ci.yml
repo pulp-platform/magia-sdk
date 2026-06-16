@@ -33,8 +33,10 @@ stages:
   - python_setup
   - build_tiles_4
   - test_tiles_4
+  - compare_tiles_4
   - build_tiles_1
   - test_tiles_1
+  - compare_tiles_1
   - postscript
 
 python_gvsoc:
@@ -111,7 +113,9 @@ gvsoc_tiles_1:
   extends: [.base]
   script:
     - make rtl-clean MAGIA_RTL_DIR=$MAGIA
-    - make MAGIA MAGIA_RTL_DIR=$MAGIA tiles=${tiles} target_platform=${target_platform} fast_sim=1
+    # build_mode=profile compiles the testbench profiling monitors (PROFILE_SENTINEL),
+    # which emit per-tile "(<N> clock cycles)" lines for the xperf sentinel pairs.
+    - make MAGIA MAGIA_RTL_DIR=$MAGIA tiles=${tiles} target_platform=${target_platform} build_mode=profile fast_sim=1
   artifacts:
     paths: [ "$MAGIA/work", "$MAGIA/sim/work", "$MAGIA/sim/modelsim.ini", "$MAGIA/scripts/sim_ret_errors.sh", "$MAGIA/scripts/compile.tcl", "$MAGIA/Makefile", "$MAGIA/hw/mesh/magia_pkg.sv", "$MAGIA/hw/tile/magia_tile_pkg.sv" ]
 
@@ -136,7 +140,9 @@ magia_v2_tiles_1:
 .build:
   extends: [.base, .export_path]
   script:
-    - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler} CMAKE=${CMAKE}
+    # profile_xperf=1 compiles in the xperf cycle-profiling calls (sentinels + mcycle
+    # print) so the RTL/GVSoC cycle cross-check (compare_tiles_*) has data to compare.
+    - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler} profile_xperf=1 CMAKE=${CMAKE}
   artifacts:
     paths: [ "build", "targets/${target_platform}/include/addr_map/tile_addr_map.h" ]
 
@@ -167,8 +173,8 @@ build_test_magia_v2_tiles_1:
   extends: [.base, .export_path]
   script:
     - export TESTLOG="${TESTNAME##*/}"
-    - make run MAGIA_RTL_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.log
-    - ./scripts/sim_ret_errors.sh $TESTLOG.log
+    - make run MAGIA_RTL_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.rtl.log
+    - ./scripts/sim_ret_errors.sh $TESTLOG.rtl.log
   artifacts:
     paths: [ "*.log" ]
     expire_in: 2 weeks
@@ -177,8 +183,8 @@ build_test_magia_v2_tiles_1:
   extends: [.base, .export_path]
   script:
     - export TESTLOG="${TESTNAME##*/}"
-    - source gvsoc_venv/bin/activate && make run MAGIA_RTL_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.log
-    - ./scripts/sim_ret_errors_gvsoc.sh $TESTLOG.log
+    - source gvsoc_venv/bin/activate && make run MAGIA_RTL_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.gvsoc.log
+    - ./scripts/sim_ret_errors_gvsoc.sh $TESTLOG.gvsoc.log
   artifacts:
     paths: [ "*.log" ]
     expire_in: 2 weeks
@@ -247,6 +253,41 @@ magia_v2_tiles_1_gvsoc_sim:
     - gvsoc_tiles_1
     - build_test_magia_v2_tiles_1
     - python_gvsoc
+
+# Cross-check per-tile cycle counts between RTL and GVSoC. Both sim stages emit one
+# cycle number per tile per test (RTL via the testbench PROFILE_SENTINEL monitors,
+# GVSoC via the xperf_end mcycle print). compare_cycles.py fails if any tile diverges
+# by more than the tolerance.
+.compare_cycles:
+  extends: [.base]
+  variables:
+    COMPARE_TESTS: "test_helloworld test_fsync_levels test_fsync_rc test_fsync_diag test_fsync_lr test_idma_1d test_idma_2d test_mm_is test_mm_ws test_mm_os test_mm_is_2 test_mm_ws_2 test_mm_os_2 test_gemv"
+    COMPARE_TOL: "0.10"
+  script:
+    - |
+      rc=0
+      for t in $COMPARE_TESTS; do
+        python3 scripts/ci/compare_cycles.py --test "$t" --rtl "$t.rtl.log" --gvsoc "$t.gvsoc.log" --tol "$COMPARE_TOL" || rc=1
+      done
+      exit $rc
+  artifacts:
+    when: always
+    paths: [ "*.log" ]
+    expire_in: 2 weeks
+
+compare_tiles_4:
+  extends: [.compare_cycles]
+  stage: compare_tiles_4
+  dependencies:
+    - magia_v2_tiles_4_rtl_sim
+    - magia_v2_tiles_4_gvsoc_sim
+
+compare_tiles_1:
+  extends: [.compare_cycles]
+  stage: compare_tiles_1
+  dependencies:
+    - magia_v2_tiles_1_rtl_sim
+    - magia_v2_tiles_1_gvsoc_sim
 
 cleanup:
   stage: postscript

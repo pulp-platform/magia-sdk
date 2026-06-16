@@ -122,6 +122,8 @@ int main(void){
 
     // printf("Blocking dimensions: height %0d, width %0d\n", tile_h, tile_w);
 
+    uint32_t _xperf = xperf_start();
+
     /**
      * 2. Use iDMA to transfer indentity matrix.
      */
@@ -297,6 +299,8 @@ int main(void){
         fsync_sync_global(&fsync_ctrl);
         eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     }
+
+    xperf_end(_xperf);
 
     /**
     * 7. Check results.
