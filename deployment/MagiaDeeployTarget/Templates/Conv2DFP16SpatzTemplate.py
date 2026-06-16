@@ -8,8 +8,12 @@ from Deeploy.DeeployTypes import NetworkContext, NodeTemplate, OperatorRepresent
 class _MagiaConv2DFP16Spatz(NodeTemplate):
     def alignToContext(self, ctxt: NetworkContext,
                        operatorRepresentation: OperatorRepresentation) -> Tuple[NetworkContext, Dict, List[str]]:
-        ctxt.lookup(operatorRepresentation['data_in'])
-        ctxt.lookup(operatorRepresentation['data_out'])
+        data_in = ctxt.lookup(operatorRepresentation['data_in'])
+        weight = ctxt.lookup(operatorRepresentation['weight'])
+        data_out = ctxt.lookup(operatorRepresentation['data_out'])
+
+        operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, data_in.shape)) + "}"
+        operatorRepresentation['output_shape'] = "{" + ", ".join(map(str, data_out.shape)) + "}"
 
         operatorRepresentation['offset'] = 0
 
@@ -17,5 +21,5 @@ class _MagiaConv2DFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaConv2DFP16Spatz("""
 // Magia Conv2D FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
-MAGIA_conv2d_fp16_spatz(${data_in}, ${weight}, ${data_out}, ${kernel_shape[0]}, ${kernel_shape[1]}, ${strides[0]}, ${strides[1]}, ${pads[0]}, ${pads[1]}, ${group});
+MAGIA_conv2d_fp16_spatz(${data_in}, ${weight}, ${data_out}, (uint32_t[])${input_shape}, (uint32_t[])${output_shape}, ${kernel_shape[0]}, ${kernel_shape[1]}, ${strides[0]}, ${strides[1]}, ${pads[0]}, ${pads[1]}, ${group});
 """)

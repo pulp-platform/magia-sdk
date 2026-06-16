@@ -26,21 +26,26 @@ static inline void compute_window_boundaries(const int out_idx, const uint32_t s
         *win_len = 0;
 }
 
-static inline void conv2d_scalar(const _Float16 *src, const _Float16 *weight, const uint32_t c_in_g, const uint32_t c_out_g, const uint32_t h_in, const uint32_t w_in, const uint32_t h_out, const uint32_t w_out, const uint32_t kernel_h, const uint32_t kernel_w, const uint32_t stride_h, const uint32_t stride_w, const uint32_t pad_h, const uint32_t pad_w, const uint32_t c_out_start, const uint32_t c_out_len, _Float16 *dst)
+static inline void conv2d_scalar(const _Float16 *src, const _Float16 *weight, const uint32_t c_in_g, const uint32_t c_out_g, const uint32_t h_in, const uint32_t w_in, const uint32_t h_out, const uint32_t w_out, const uint32_t kernel_h, const uint32_t kernel_w, const uint32_t stride_h, const uint32_t stride_w, const uint32_t pad_h, const uint32_t pad_w, const uint32_t iter_start, const uint32_t iter_len, const uint32_t c_out, _Float16 *dst)
 {
     uint32_t in_hw  = h_in * w_in;
     uint32_t out_hw = h_out * w_out;
     uint32_t ker_hw = kernel_h * kernel_w;
+    uint32_t full_in_size = (c_in_g * (c_out / c_out_g)) * in_hw;
     uintptr_t dst_base = (uintptr_t) dst;
 
     int h_win_start, h_win_len, h_ker_start;
     int w_win_start, w_win_len, w_ker_start;
 
-    for (int oc = 0; oc < c_out_len; oc++) {
-        uint32_t global_oc = c_out_start + oc;
-        uint32_t g = global_oc / c_out_g;
+    for (uint32_t i = 0; i < iter_len; i++) {
+        uint32_t abs_iter = iter_start + i;
+        uint32_t batch_idx = abs_iter / c_out;
+        uint32_t oc_idx = abs_iter % c_out;
+        uint32_t g = oc_idx / c_out_g;
 
-        const _Float16 *weight_c = weight + (oc * c_in_g * ker_hw);
+        const _Float16 *batch_src = src + (batch_idx * full_in_size);
+        const _Float16 *weight_c = weight + (oc_idx * c_in_g * ker_hw);
+        _Float16 *dst_plane = dst + (i * out_hw);
 
         for (int oh = 0; oh < h_out; oh++) {
             compute_window_boundaries(oh, stride_h, pad_h, kernel_h, h_in, &h_win_start, &h_win_len, &h_ker_start);
@@ -58,7 +63,7 @@ static inline void conv2d_scalar(const _Float16 *src, const _Float16 *weight, co
                 for (uint32_t ic = ic_start; ic < ic_end; ic++) {
                     uint32_t local_ic = ic - ic_start;
 
-                    const _Float16 *src_c = src + (ic * in_hw);
+                    const _Float16 *src_c = batch_src + (ic * in_hw);
                     const _Float16 *weight_k = weight_c + (local_ic * ker_hw);
 
                     for (int kh = 0; kh < h_win_len; kh++) {
@@ -71,20 +76,20 @@ static inline void conv2d_scalar(const _Float16 *src, const _Float16 *weight, co
                     }
                 }
 
-                uint32_t dst_offset = ((oc * out_hw) + (oh * w_out) + ow) * sizeof(_Float16);
-                mmio16(dst_base + dst_offset) = *(uint16_t *)&acc_scaler;
+                uint32_t dst_offset = ((oh * w_out) + ow);
+                dst_plane[dst_offset] = acc_scaler;
             }
         }
     }
 }
 
-static inline void conv2d_rvv(const _Float16 *src, const _Float16 *weight, const uint32_t c_in_g, const uint32_t c_out_g, const uint32_t h_in, const uint32_t w_in, const uint32_t h_out, const uint32_t w_out, const uint32_t kernel_h, const uint32_t kernel_w, const uint32_t stride_h, const uint32_t stride_w, const uint32_t pad_h, const uint32_t pad_w, const uint32_t c_out_start, const uint32_t c_out_len, _Float16 *dst)
+static inline void conv2d_rvv(const _Float16 *src, const _Float16 *weight, const uint32_t c_in_g, const uint32_t c_out_g, const uint32_t h_in, const uint32_t w_in, const uint32_t h_out, const uint32_t w_out, const uint32_t kernel_h, const uint32_t kernel_w, const uint32_t stride_h, const uint32_t stride_w, const uint32_t pad_h, const uint32_t pad_w, const uint32_t iter_start, const uint32_t iter_len, const uint32_t c_out, _Float16 *dst)
 {
     register _Float16 ZERO asm ("f10") = 0.0f;
     uint32_t in_hw  = h_in * w_in;
     uint32_t out_hw = h_out * w_out;
     uint32_t ker_hw = kernel_h * kernel_w;
-    uintptr_t dst_base = (uintptr_t) dst;
+    uint32_t full_in_size = (c_in_g * (c_out / c_out_g)) * in_hw;
 
     int h_win_start, h_win_len, h_ker_start;
     int w_win_start, w_win_len, w_ker_start;
@@ -93,11 +98,15 @@ static inline void conv2d_rvv(const _Float16 *src, const _Float16 *weight, const
     size_t avl;
     size_t vl_max;
 
-    for (int oc = 0; oc < c_out_len; oc++) {
-        uint32_t global_oc = c_out_start + oc;
-        uint32_t g = global_oc / c_out_g;
+    for (uint32_t i = 0; i < iter_len; i++) {
+        uint32_t abs_iter = iter_start + i;
+        uint32_t batch_idx = abs_iter / c_out;
+        uint32_t oc_idx = abs_iter % c_out;
+        uint32_t g = oc_idx / c_out_g;
 
-        const _Float16 *weight_c = weight + (oc * c_in_g * ker_hw);
+        const _Float16 *batch_src = src + (batch_idx * full_in_size);
+        const _Float16 *weight_c = weight + (oc_idx * c_in_g * ker_hw);
+        _Float16 *dst_plane = dst + (i * out_hw);
 
         for (int oh = 0; oh < h_out; oh++) {
             compute_window_boundaries(oh, stride_h, pad_h, kernel_h, h_in, &h_win_start, &h_win_len, &h_ker_start);
@@ -119,7 +128,7 @@ static inline void conv2d_rvv(const _Float16 *src, const _Float16 *weight, const
                 for (uint32_t ic = ic_start; ic < ic_end; ic++) {
                     uint32_t local_ic = ic - ic_start;
 
-                    const _Float16 *src_c = src + (ic * in_hw);
+                    const _Float16 *src_c = batch_src + (ic * in_hw);
                     const _Float16 *weight_k = weight_c + (local_ic * ker_hw);
 
                     for (int kh = 0; kh < h_win_len; kh++) {
@@ -131,7 +140,6 @@ static inline void conv2d_rvv(const _Float16 *src, const _Float16 *weight, const
                             asm volatile ("vsetvli %0, %1, e16, m8, tu, ma" : "=r"(vl) : "r"(avl));
                             asm volatile ("vle16.v v16, (%0)" :: "r"(p_src));
                             asm volatile ("vle16.v v24, (%0)" :: "r"(p_weight));
-
                             asm volatile ("vfmacc.vv v8, v16, v24");
 
                             p_src += vl;
@@ -144,8 +152,8 @@ static inline void conv2d_rvv(const _Float16 *src, const _Float16 *weight, const
                 asm volatile ("vfredosum.vs v0, v8, v0");
                 asm volatile ("vfmv.f.s %0, v0" : "=f"(acc_scaler));
 
-                uint32_t dst_offset = ((oc * out_hw) + (oh * w_out) + ow) * sizeof(_Float16);
-                mmio16(dst_base + dst_offset) = *(uint16_t *)&acc_scaler;
+                uint32_t dst_offset = ((oh * w_out) + ow);
+                dst_plane[dst_offset] = acc_scaler;
             }
         }
     }
@@ -164,8 +172,8 @@ int conv2d_fp16_spatz_task(void)
     uint32_t stride_h, stride_w;
     uint32_t kernel_h, kernel_w;
     uint32_t pad_h, pad_w;
-    uint32_t h_in, w_in, h_out, w_out;
-    uint32_t c_out_start, c_out_len, c_in_g, c_out_g;
+    uint32_t h_in, w_in, h_out, w_out, c_out;
+    uint32_t iter_start, iter_len, c_in_g, c_out_g;
 
     params_addr = mmio32(SPATZ_DATA);
     params = (volatile conv2d_fp16_spatz_params_t *) params_addr;
@@ -186,13 +194,15 @@ int conv2d_fp16_spatz_task(void)
     h_out    = params->h_out;
     w_out    = params->w_out;
 
-    c_out_start = params->c_out_start;
-    c_out_len   = params->c_out_len;
+    iter_start  = params->iter_start;
+    iter_len    = params->iter_len;
+    c_out       = params->c_out;
     c_in_g      = params->c_in_g;
     c_out_g     = params->c_out_g;
 
-    conv2d_scalar(src, weight, c_in_g, c_out_g, h_in, w_in, h_out, w_out, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, c_out_start, c_out_len, dst);
-    // conv2d_rvv(src, weight, c_in_g, c_out_g, h_in, w_in, h_out, w_out, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, c_out_start, c_out_len, dst);
+    /* Notice: For the time being the scalar version is used because the reduction in fp16 introduces a significant difference wrt the golden model */
+    // conv2d_rvv(src, weight, c_in_g, c_out_g, h_in, w_in, h_out, w_out, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, iter_start, iter_len, c_out, dst);
+    conv2d_scalar(src, weight, c_in_g, c_out_g, h_in, w_in, h_out, w_out, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, iter_start, iter_len, c_out, dst);
 
     return 0;
 }
