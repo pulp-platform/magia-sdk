@@ -23,6 +23,11 @@
 #ifndef PERFORMANCE_UTILS_H
 #define PERFORMANCE_UTILS_H
 
+// get_hartid() and printf() used by the xperf cross-sim profiling helpers below.
+// Included here (rather than relying on tile.h include order) so this header is
+// self-contained for drivers that pull it via idma_isa_utils.h.
+#include "magia_utils.h"
+
 /**
  * @brief Returns the cycles of the performance counter
  * !! WARNING !! AT THE MOMENT OF WRITING (06/05/2026) THIS PROFILING UTILITY ONLY WORKS ON GVSOC.
