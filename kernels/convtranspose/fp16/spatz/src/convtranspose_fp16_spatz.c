@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <errno.h>
 
 #include "eventunit.h"
 #include "tile.h"
@@ -10,9 +11,77 @@
 
 #define HID get_hartid()
 
+static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shape[4], uint32_t kernel_h, uint32_t kernel_w, uint32_t stride_h, uint32_t stride_w, uint32_t pad_h, uint32_t pad_w, uint32_t num_groups)
+{
+    volatile convtranspose_fp16_spatz_params_t *convtranspose_params;
+    uintptr_t shard_X;
+    uintptr_t shard_W;
+    uintptr_t shard_Y;
+
+    size_t N_in;
+    size_t C_in;
+    size_t H_in;
+    size_t W_in;
+    size_t C_out;
+    size_t H_out;
+    size_t W_out;
+
+    size_t input_HW_len;
+    size_t weight_HW_len;
+    size_t output_HW_len;
+    size_t c_out_per_tile;
+
+    N_in = input_shape[0];
+    C_in = input_shape[1];
+    H_in = input_shape[2];
+    W_in = input_shape[3];
+    C_out = output_shape[1];
+    H_out = output_shape[2];
+    W_out = output_shape[3];
+
+    input_HW_len = H_in * W_in;
+    weight_HW_len = kernel_h * kernel_w;
+    output_HW_len = H_out * W_out;
+    c_out_per_tile = C_out / NUM_HARTS;
+
+    l1_alloc_init();
+
+    convtranspose_params = l1_alloc(sizeof(convtranspose_fp16_spatz_params_t));
+    if (!convtranspose_params)
+        return ENOMEM;
+
+    shard_X = l1_alloc(N_in * C_in * input_HW_len * sizeof(float16));
+    if (!shard_X)
+        return ENOMEM;
+
+    shard_W = l1_alloc(C_in * c_out_per_tile * weight_HW_len * sizeof(float16));
+    if (!shard_W)
+        return ENOMEM;
+
+    shard_Y = l1_alloc(N_in * c_out_per_tile * output_HW_len * sizeof(float16));
+    if (!shard_Y)
+        return ENOMEM;
+
+    convtranspose_params->shard_X = shard_X;
+    convtranspose_params->shard_W = shard_W;
+    convtranspose_params->shard_Y = shard_Y;
+
+    *params = (void *) convtranspose_params;
+
+    return 0;
+}
+
 static int init_input_params(void *params, const float16 *X, const float16 *W, uint32_t kernel_h, uint32_t kernel_w, uint32_t stride_h, uint32_t stride_w, uint32_t pad_h, uint32_t pad_w, uint32_t num_groups)
 {
     volatile convtranspose_fp16_spatz_params_t *convtranspose_params = (volatile convtranspose_fp16_spatz_params_t *) params;
+    uintptr_t shard_X;
+    uintptr_t shard_W;
+    uintptr_t shard_Y;
+
+    convtranspose_params = (volatile convtranspose_fp16_spatz_params_t *) params;
+    shard_X = convtranspose_params->shard_X;
+    shard_W = convtranspose_params->shard_W;
+    shard_Y = convtranspose_params->shard_Y;
 
     uint32_t c_in_per_grp;
     uint32_t c_out_per_grp;
@@ -47,7 +116,7 @@ static int init_input_params(void *params, const float16 *X, const float16 *W, u
 
             for (uint32_t i = 0; i < INPUT_HW_LEN; i++) {
                 uint32_t offset = local_x_idx * sizeof(float16);
-                mmio_fp16(SHARD_X_BASE + offset) = X[global_X_idx_base + i];
+                mmio_fp16(shard_X + offset) = X[global_X_idx_base + i];
                 local_x_idx++;
             }
         }
@@ -61,19 +130,16 @@ static int init_input_params(void *params, const float16 *X, const float16 *W, u
 
             for (uint32_t i = 0; i < WEIGTHS_HW_LEN; i++) {
                 uint32_t offset = local_w_idx * sizeof(float16);
-                mmio_fp16(SHARD_W_BASE + offset) = W[global_W_idx_base + i];
+                mmio_fp16(shard_W + offset) = W[global_W_idx_base + i];
                 local_w_idx++;
             }
         }
     }
 
     for (uint32_t i = 0; i < (INPUT0_DIM0 * c_out_len * OUTPUT_HW_LEN); i++) {
-        mmio_fp16(SHARD_Y_BASE + (i * sizeof(float16))) = 0.0f;
+        mmio_fp16(shard_Y + (i * sizeof(float16))) = 0.0f;
     }
 
-    convtranspose_params->shard_X     = SHARD_X_BASE;
-    convtranspose_params->shard_W     = SHARD_W_BASE;
-    convtranspose_params->shard_Y     = SHARD_Y_BASE;
     convtranspose_params->n_batches  = INPUT0_DIM0;
     convtranspose_params->c_out_start = c_out_start;
     convtranspose_params->c_out_len   = c_out_len;
@@ -93,7 +159,7 @@ static int init_input_params(void *params, const float16 *X, const float16 *W, u
     return 0;
 }
 
-static int offload_spatz_task()
+static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
     eu_config_t eu_cfg;
@@ -105,7 +171,7 @@ static int offload_spatz_task()
     eu_ctrl.api = &eu_api;
 
     spatz_init(SPATZ_BINARY_START);
-    spatz_run_task_with_params(CONVTRANSPOSE_FP16_SPATZ_TASK, CONVTRANSPOSE_FP16_SPATZ_PARAMS_BASE);
+    spatz_run_task_with_params(CONVTRANSPOSE_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
@@ -150,7 +216,11 @@ void MAGIA_convtranspose_fp16_spatz(const float16 *X, const float16 *W, float16 
     int ret;
     volatile convtranspose_fp16_spatz_params_t *params;
 
-    params = (volatile convtranspose_fp16_spatz_params_t *) CONVTRANSPOSE_FP16_SPATZ_PARAMS_BASE;
+    ret = alloc_l1(&params, input_shape, output_shape, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, num_groups);
+    if (ret != 0) {
+        printf("[CV32 (%d)] L1 allocation failed with error: %d\n", HID, ret);
+        return;
+    }
 
     ret = init_input_params(params, X, W, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, num_groups);
     if (ret != 0) {
@@ -158,7 +228,7 @@ void MAGIA_convtranspose_fp16_spatz(const float16 *X, const float16 *W, float16 
         return;
     }
 
-    ret = offload_spatz_task();
+    ret = offload_spatz_task(params);
     if (ret != 0) {
         printf("[CV32 (%d)] Spatz task offloading failed with error: %d\n", HID, ret);
         return;
