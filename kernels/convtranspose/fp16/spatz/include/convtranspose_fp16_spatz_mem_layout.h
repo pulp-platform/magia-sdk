@@ -11,13 +11,13 @@
 #define C_OUT_PER_TILE          DIV_UP(OUTPUT0_DIM1, NUM_HARTS)
 #define MAX_C_IN_PER_TILE       (INPUT0_DIM1)   // Worst Case: G = 1
 #define INPUT_HW_LEN            (INPUT0_DIM2 * INPUT0_DIM3)
-#define CONV_INPUT_LEN          (MAX_C_IN_PER_TILE * INPUT_HW_LEN)
+#define CONV_INPUT_LEN          (INPUT0_DIM0 * MAX_C_IN_PER_TILE * INPUT_HW_LEN)
 #define INPUT_SIZE              (CONV_INPUT_LEN * sizeof(float16))
 #define WEIGTHS_HW_LEN          (INPUT1_DIM2 * INPUT1_DIM3)
 #define CONV_KERNEL_LEN         (MAX_C_IN_PER_TILE * C_OUT_PER_TILE * WEIGTHS_HW_LEN)
 #define WEIGTHS_HW_SIZE         (CONV_KERNEL_LEN * sizeof(float16))
 #define OUTPUT_HW_LEN           (OUTPUT0_DIM2 * OUTPUT0_DIM3)
-#define CONV_OUTPUT_LEN         (C_OUT_PER_TILE * OUTPUT_HW_LEN)
+#define CONV_OUTPUT_LEN         (INPUT0_DIM0 * C_OUT_PER_TILE * OUTPUT_HW_LEN)
 #define OUTPUT_SIZE             (CONV_OUTPUT_LEN * sizeof(float16))
 
 #define CONVTRANSPOSE_FP16_SPATZ_PARAMS_BASE   (L1_BASE_TILE)

@@ -41,13 +41,15 @@ static int init_input_params(void *params, const float16 *X, const float16 *W, u
     c_in_len   = c_in_end - c_in_start;
 
     uint32_t local_x_idx = 0;
-    for (uint32_t c_in = c_in_start; c_in < c_in_end; c_in++) {
-        uint32_t global_X_idx_base = c_in * INPUT_HW_LEN;
+    for (uint32_t n = 0; n < INPUT0_DIM0; n++) {
+        for (uint32_t c_in = c_in_start; c_in < c_in_end; c_in++) {
+            uint32_t global_X_idx_base = (n * INPUT0_DIM1 * INPUT_HW_LEN) + (c_in * INPUT_HW_LEN);
 
-        for (uint32_t i = 0; i < INPUT_HW_LEN; i++) {
-            uint32_t offset = local_x_idx * sizeof(float16);
-            mmio_fp16(SHARD_X_BASE + offset) = X[global_X_idx_base + i];
-            local_x_idx++;
+            for (uint32_t i = 0; i < INPUT_HW_LEN; i++) {
+                uint32_t offset = local_x_idx * sizeof(float16);
+                mmio_fp16(SHARD_X_BASE + offset) = X[global_X_idx_base + i];
+                local_x_idx++;
+            }
         }
     }
 
@@ -65,13 +67,14 @@ static int init_input_params(void *params, const float16 *X, const float16 *W, u
         }
     }
 
-    for (uint32_t i = 0; i < (c_out_len * OUTPUT_HW_LEN); i++) {
+    for (uint32_t i = 0; i < (INPUT0_DIM0 * c_out_len * OUTPUT_HW_LEN); i++) {
         mmio_fp16(SHARD_Y_BASE + (i * sizeof(float16))) = 0.0f;
     }
 
     convtranspose_params->shard_X     = SHARD_X_BASE;
     convtranspose_params->shard_W     = SHARD_W_BASE;
     convtranspose_params->shard_Y     = SHARD_Y_BASE;
+    convtranspose_params->n_batches  = INPUT0_DIM0;
     convtranspose_params->c_out_start = c_out_start;
     convtranspose_params->c_out_len   = c_out_len;
     convtranspose_params->c_in_g      = c_in_len;
@@ -124,23 +127,25 @@ static int store_result(void *params, float16 *Y)
     uint32_t out_hw_len = convtranspose_params->h_out * convtranspose_params->w_out;
     uint32_t local_idx = 0;
 
-    for (uint32_t c = 0; c < convtranspose_params->c_out_len; c++) {
-        uint32_t global_c = convtranspose_params->c_out_start + c;
-        uint32_t global_base = global_c * out_hw_len;
+    for (uint32_t n = 0; n < convtranspose_params->n_batches; n++) {
+        for (uint32_t c = 0; c < convtranspose_params->c_out_len; c++) {
+            uint32_t global_c = convtranspose_params->c_out_start + c;
+            uint32_t global_base = (n * OUTPUT0_DIM1 * out_hw_len) + (global_c * out_hw_len);
 
-        for (uint32_t i = 0; i < out_hw_len; i++) {
-            uint32_t global_idx = global_base + i;
-            uint32_t offset = local_idx * sizeof(float16);
+            for (uint32_t i = 0; i < out_hw_len; i++) {
+                uint32_t global_idx = global_base + i;
+                uint32_t offset = local_idx * sizeof(float16);
 
-            Y[global_idx] = mmio_fp16(convtranspose_params->shard_Y + offset);
-            local_idx++;
+                Y[global_idx] = mmio_fp16(convtranspose_params->shard_Y + offset);
+                local_idx++;
+            }
         }
     }
 
     return 0;
 }
 
-void MAGIA_convtranspose_fp16_spatz(const float16 *X, const float16 *W, float16 *Y, uint32_t kernel_h, uint32_t kernel_w, uint32_t stride_h, uint32_t stride_w, uint32_t pad_h, uint32_t pad_w, uint32_t num_groups)
+void MAGIA_convtranspose_fp16_spatz(const float16 *X, const float16 *W, float16 *Y, uint32_t input_shape[4], uint32_t output_shape[4], uint32_t kernel_h, uint32_t kernel_w, uint32_t stride_h, uint32_t stride_w, uint32_t pad_h, uint32_t pad_w, uint32_t num_groups)
 {
     int ret;
     volatile convtranspose_fp16_spatz_params_t *params;

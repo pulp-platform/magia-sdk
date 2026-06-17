@@ -8,6 +8,7 @@ typedef struct {
     uintptr_t shard_W;       /* Tile's weights shard                            */
     uintptr_t shard_Y;       /* Tile's output channels shard                    */
 
+    uint32_t n_batches;      /* Number of batches (N)                           */
     uint32_t c_out_start;    /* Tile's output channel shard start               */
     uint32_t c_out_len;      /* Tile's number of output channels                */
     uint32_t c_in_g;         /* Input channels per group (C_in / G)             */
