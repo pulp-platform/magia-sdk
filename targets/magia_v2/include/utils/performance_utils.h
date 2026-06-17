@@ -185,11 +185,21 @@ static inline void stnl_r()
  *
  * Requires get_hartid() (magia_utils.h) and printf() (printf.h), both pulled in by
  * tile.h before this header.
+ *
+ * Each sentinel is followed by NOP padding: the testbench monitors the WB stage
+ * every cycle, so if a sentinel instruction is held in WB across a pipeline stall
+ * (e.g. a following CSR read, MMIO store, or fsync) it gets counted more than once,
+ * producing spurious "sentinel without pair" errors. The NOPs guarantee the
+ * sentinel retires from WB before any stalling instruction follows it.
  */
+#define XPERF_NOP_PAD()                                                                            \
+    asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop" ::: )
+
 static inline unsigned int xperf_start()
 {
 #if PROFILE_XPERF == 1
     sentinel_start();
+    XPERF_NOP_PAD();
     return perf_get_cycles(); // valid on GVSOC; ignored on RTL
 #else
     return 0;
@@ -201,6 +211,7 @@ static inline void xperf_end(unsigned int start)
 #if PROFILE_XPERF == 1
     unsigned int cyc = perf_get_cycles();
     sentinel_end();
+    XPERF_NOP_PAD();
     printf("[XPERF] mhartid %u CYCLES %u\n", get_hartid(), cyc - start);
 #else
     (void)start;

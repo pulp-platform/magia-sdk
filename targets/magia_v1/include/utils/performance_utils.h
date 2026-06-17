@@ -190,11 +190,20 @@ static inline void stnl_r()
  * sentinels (PROFILE_SENTINEL). GVSOC: the mcycle CSR (perf_get_cycles()).
  * Gated by the PROFILE_XPERF build flag (profile_xperf=1); off by default so normal
  * builds are unaffected. Requires get_hartid() and printf() (pulled in by tile.h).
+ *
+ * Each sentinel is followed by NOP padding: the testbench monitors the WB stage
+ * every cycle, so a sentinel held in WB across a pipeline stall (a following CSR
+ * read, MMIO store, or fsync) would be counted more than once, raising spurious
+ * "sentinel without pair" errors. The NOPs let it retire before any stall follows.
  */
+#define XPERF_NOP_PAD()                                                                            \
+    asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop" ::: )
+
 static inline unsigned int xperf_start()
 {
 #if PROFILE_XPERF == 1
     sentinel_start();
+    XPERF_NOP_PAD();
     return perf_get_cycles(); // valid on GVSOC; ignored on RTL
 #else
     return 0;
@@ -206,6 +215,7 @@ static inline void xperf_end(unsigned int start)
 #if PROFILE_XPERF == 1
     unsigned int cyc = perf_get_cycles();
     sentinel_end();
+    XPERF_NOP_PAD();
     printf("[XPERF] mhartid %u CYCLES %u\n", get_hartid(), cyc - start);
 #else
     (void)start;
