@@ -262,7 +262,7 @@ magia_v2_tiles_1_gvsoc_sim:
   extends: [.base]
   variables:
     COMPARE_TESTS: "test_helloworld test_fsync_levels test_fsync_rc test_fsync_diag test_fsync_lr test_idma_1d test_idma_2d test_mm_is test_mm_ws test_mm_os test_mm_is_2 test_mm_ws_2 test_mm_os_2 test_gemv"
-    COMPARE_TOL: "0.10"
+    COMPARE_TOL: "0.05"
   script:
     - |
       rc=0

@@ -48,14 +48,31 @@ jobs:
           OUT_DIR: gitlab-logs
         run: bash _ci_tools/scripts/ci/fetch_gitlab_logs.sh
 
+      - name: Upload GitLab logs as artifact
+        if: failure() && steps.gitlab_ci.conclusion == 'failure' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitlab-logs
+          # Full job traces plus the unzipped per-job artifacts fetched above,
+          # i.e. the complete test_*.rtl.log / test_*.gvsoc.log files.
+          path: gitlab-logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: 🔶 Show error log
         if: failure() && steps.gitlab_ci.conclusion == 'failure' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: |
-          shopt -s nullglob
+          shopt -s nullglob globstar
           for trace in gitlab-logs/*.trace; do
             job=$(basename "$trace" .trace)
-            echo "::group:: FAILED: ${job}"
+            echo "::group:: FAILED (trace): ${job}"
             tail -n 200 "$trace"
+            echo "::endgroup::"
+          done
+          # Also surface the full job artifacts fetched above (the test logs).
+          for log in gitlab-logs/**/*.log; do
+            echo "::group:: FAILED (log): ${log}"
+            tail -n 200 "$log"
             echo "::endgroup::"
           done
 

@@ -44,7 +44,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rtl", required=True, help="RTL (Modelsim) log file")
     ap.add_argument("--gvsoc", required=True, help="GVSoC log file")
-    ap.add_argument("--tol", type=float, default=0.10, help="relative tolerance")
+    ap.add_argument("--tol", type=float, default=0.05, help="relative tolerance")
     ap.add_argument("--test", default="<test>", help="test name (for reporting)")
     args = ap.parse_args()
 
