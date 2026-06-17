@@ -23,6 +23,11 @@
 #ifndef PERFORMANCE_UTILS_H
 #define PERFORMANCE_UTILS_H
 
+// get_hartid() and printf() used by the xperf cross-sim profiling helpers below.
+// Included here (rather than relying on tile.h include order) so this header is
+// self-contained for drivers that pull it via idma_isa_utils.h.
+#include "magia_utils.h"
+
 /**
  * @brief Returns the cycles of the performance counter
  * !! WARNING !! AT THE MOMENT OF WRITING (06/05/2026) THIS PROFILING UTILITY ONLY WORKS ON GVSOC.
@@ -158,6 +163,58 @@ static inline void stnl_ts_r()
 static inline void stnl_r()
 {
     asm volatile("addi x0, x0, 0x5EE" ::);
+}
+
+///////////// CROSS-SIM CYCLE PROFILING //////////////
+/*
+ * Emit one cycle count per tile for a single "region of interest", in a form both
+ * simulators can be parsed for (see scripts/ci/compare_cycles.py):
+ *   - RTL  : sentinel_start()/sentinel_end() are detected by the MAGIA testbench
+ *            (magia_vip.sv, `ifdef PROFILE_SENTINEL), which prints the elapsed
+ *            clock cycles per mhartid. perf_get_cycles() does NOT work on RTL.
+ *   - GVSOC: the testbench sentinels are no-ops; the cycle count comes from the
+ *            mcycle CSR (perf_get_cycles()) printed below.
+ * The same binary runs on both platforms; each simulator ignores the path that
+ * does not apply to it. Gated by the PROFILE_XPERF build flag (profile_xperf=1):
+ * when off, both calls compile to nothing so default builds are unaffected.
+ *
+ * Usage (inside the per-tile body, around the work region):
+ *   uint32_t _t = xperf_start();
+ *   ... work ...
+ *   xperf_end(_t);
+ *
+ * Requires get_hartid() (magia_utils.h) and printf() (printf.h), both pulled in by
+ * tile.h before this header.
+ *
+ * Each sentinel is followed by NOP padding: the testbench monitors the WB stage
+ * every cycle, so if a sentinel instruction is held in WB across a pipeline stall
+ * (e.g. a following CSR read, MMIO store, or fsync) it gets counted more than once,
+ * producing spurious "sentinel without pair" errors. The NOPs guarantee the
+ * sentinel retires from WB before any stalling instruction follows it.
+ */
+#define XPERF_NOP_PAD() asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop" :::)
+
+static inline unsigned int xperf_start()
+{
+#if PROFILE_XPERF == 1
+    sentinel_start();
+    XPERF_NOP_PAD();
+    return perf_get_cycles(); // valid on GVSOC; ignored on RTL
+#else
+    return 0;
+#endif
+}
+
+static inline void xperf_end(unsigned int start)
+{
+#if PROFILE_XPERF == 1
+    unsigned int cyc = perf_get_cycles();
+    sentinel_end();
+    XPERF_NOP_PAD();
+    printf("[XPERF] mhartid %u CYCLES %u\n", get_hartid(), cyc - start);
+#else
+    (void)start;
+#endif
 }
 
 // LEGACY PROFILING UTILITIES //

@@ -42,6 +42,7 @@ target_compile_options(runtime
   -DPROFILE_CMI=${PROFILE_CMI}
   -DPROFILE_CMO=${PROFILE_CMO}
   -DPROFILE_SNC=${PROFILE_SNC}
+  -DPROFILE_XPERF=${PROFILE_XPERF}
 )
 
 target_compile_options(runtime
