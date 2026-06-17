@@ -1,0 +1,354 @@
+// Copyright 2025 University of Bologna.
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+//
+// Victor Isachi <victor.isachi@unibo.it>
+// Alberto Dequino <alberto.dequino@unibo.it>
+
+#define SIZE_1x64x64
+// #define SIZE_1x128x128
+// #define SIZE_1x256x256
+// #define SIZE_1x512x512
+// #define SIZE_1x1024x1024
+
+#include <stdint.h>
+
+#if defined(SIZE_1x64x64)
+#include "mat_vec_1x64x64.h"
+#elif defined(SIZE_1x128x128)
+#include "mat_vec_1x128x128.h"
+#elif defined(SIZE_1x256x256)
+#include "mat_vec_1x256x256.h"
+#elif defined(SIZE_1x512x512)
+#include "mat_vec_1x512x512.h"
+#elif defined(SIZE_1x1024x1024)
+#include "mat_vec_1x1024x1024.h"
+#endif
+
+#include "tile.h"
+#include "idma.h"
+#include "redmule.h"
+
+#define BASELINE_K2
+// #define K_LOGN
+
+#define DMA_IN  (0)
+#define DMA_OUT (1)
+
+/**
+ * This test implements the optimal GeMV algorithm for MAGIA (and for mesh-based architectures in general) using FractalSync for synchronization. 
+ * See "WaferLLM: Large Language Model Inference at Wafer Scale" paper.
+ */
+int main(void){
+    /** 
+     * 0. Get the mesh-tile's hartid, mesh-tile coordinates and define its L1 base. 
+     * Initialize the controllers for the idma and redmule.
+     * Move in identity matrix.
+     */
+    uint32_t hartid = get_hartid();
+
+    idma_config_t idma_cfg = {.hartid = hartid};
+    idma_controller_t idma_ctrl = {
+        .base = NULL,
+        .cfg = &idma_cfg,
+        .api = &idma_api,
+    };
+    idma_init(&idma_ctrl);
+
+    redmule_config_t redmule_cfg = {.hartid = hartid};
+    redmule_controller_t redmule_ctrl = {
+        .base = NULL,
+        .cfg = &redmule_cfg,
+        .api = &redmule_api,
+    };
+    redmule_init(&redmule_ctrl);
+
+    uint32_t y_id = GET_Y_ID(hartid);
+    uint32_t x_id = GET_X_ID(hartid);
+    uint32_t l1_tile_base = get_l1_base(hartid);
+
+    /**
+     * The MeshGeMV is implemented with a constant number of timeslots (1), each partial GeMV computed in a single go.
+     * The reduce phase is implemented as (i) a 2-Tree as indicated in the paper as the baseline, (ii) a logarithmic tree with degree 2.
+     */
+#if defined(SIZE_1x64x64)
+#if defined(BASELINE_K2)
+    uint32_t reduce_degree = 2;
+    uint32_t reduce_phases = 1;
+#elif defined(K_LOGN)
+    uint32_t reduce_degree = 2;
+    uint32_t reduce_phases = 1;
+#endif
+#elif defined(SIZE_1x128x128)
+#if defined(BASELINE_K2)
+    uint32_t reduce_degree = 2;
+    uint32_t reduce_phases = 2;
+#elif defined(K_LOGN)
+    uint32_t reduce_degree = 2;
+    uint32_t reduce_phases = 2;
+#endif
+#elif defined(SIZE_1x256x256)
+#if defined(BASELINE_K2)
+    uint32_t reduce_degree = 3;
+    uint32_t reduce_phases = 2;
+#elif defined(K_LOGN)
+    uint32_t reduce_degree = 2;
+    uint32_t reduce_phases = 3;
+#endif
+#elif defined(SIZE_1x512x512)
+#if defined(BASELINE_K2)
+    uint32_t reduce_degree = 4;
+    uint32_t reduce_phases = 2;
+#elif defined(K_LOGN)
+    uint32_t reduce_degree = 2;
+    uint32_t reduce_phases = 4;
+#endif
+#elif defined(SIZE_1x1024x1024)
+#if defined(BASELINE_K2)
+    uint32_t reduce_degree = 6;
+    uint32_t reduce_phases = 2;
+#elif defined(K_LOGN)
+    uint32_t reduce_degree = 2;
+    uint32_t reduce_phases = 5;
+#endif
+#endif
+
+    /**
+     * 1. Calculate blocking dimensions.
+     * It is assumed that blocks can be equally divided among all tiles. 
+     */
+    uint32_t tile_h = N_SIZE/MESH_X_TILES;
+    uint32_t tile_w = K_SIZE/MESH_Y_TILES;
+    uint32_t tile_m = M_SIZE;
+    // printf("Blocking dimensions: height %0d, width %0d\n", tile_h, tile_w);
+
+    /**
+     * 2. Use iDMA to transfer indentity matrix.
+     */
+    uint32_t len_id  = tile_w*2;
+    uint32_t std_id  = K_SIZE*2;
+    uint32_t reps_id = tile_h;
+    uint32_t obi_addr_id = (l1_tile_base);
+    uint32_t axi_addr_id = (uint32_t) id_mat; 
+    // printf("Transfering identity matrix: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d, stride %0d, reps %0d\n", axi_addr_id, obi_addr_id, len_id, std_id, reps_id);
+    idma_mm_conf(DMA_IN);
+    idma_mm_set_addr_len(DMA_IN, obi_addr_id, axi_addr_id, len_id);
+    idma_mm_set_std2_rep2(DMA_IN, len_id, std_id, reps_id);
+    idma_mm_set_std3_rep3(DMA_IN, 0, 0, 1);
+    idma_mm_start(DMA_IN);
+    // idma_wait();
+
+    // Wait for all tiles to be awake and ready to start the kernel
+    nsync_global(hartid);
+
+    /**
+     * 2a. Use iDMA to transfer bias blocks.
+     * To avoid accumulating the bias multiple times only one tile per row fetches it, the rest fetch the 0 matrix.
+     * The leftmost tile is the root of the reduction tree so it fetches the bias.
+     */
+    uint32_t len_y = tile_w*2;
+    uint32_t obi_addr_y = obi_addr_id + (tile_w*tile_h*2);
+    uint32_t axi_addr_y = (x_id == 0) ? (uint32_t) y_in + (y_id*tile_w*2) : (uint32_t) y_out + (y_id*tile_w*2);
+    
+    // printf("Transfering bias: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", axi_addr_y, obi_addr_y, len_y);
+    idma_mm_conf(DMA_IN);
+    idma_mm_set_addr_len(DMA_IN, obi_addr_y, axi_addr_y, len_y);
+    idma_mm_set_std2_rep2(DMA_IN, 0, 0, 1);
+    idma_mm_set_std3_rep3(DMA_IN, 0, 0, 1);
+    idma_mm_start(DMA_IN);
+    // idma_wait();
+
+    /**
+     * 2b. Use iDMA to transfer input matrix blocks.
+     */
+    uint32_t len_w  = tile_w*2;
+    uint32_t std_w  = K_SIZE*2;
+    uint32_t reps_w = (uint32_t) tile_h;
+    uint32_t obi_addr_w = obi_addr_y + (tile_w*2);
+    uint32_t axi_addr_w = (uint32_t) w_in + (x_id*tile_h*K_SIZE*2) + (y_id*tile_w*2); 
+    
+    // printf("Transfering input matrix: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d, stride %0d, reps %0d\n", axi_addr_w, obi_addr_w, len_w, std_w, reps_w);
+    idma_mm_conf(DMA_IN);
+    idma_mm_set_addr_len(DMA_IN, obi_addr_w, axi_addr_w, len_w);
+    idma_mm_set_std2_rep2(DMA_IN, len_w, std_w, reps_w);
+    idma_mm_set_std3_rep3(DMA_IN, 0, 0, 1);
+    idma_mm_start(DMA_IN);
+    // idma_wait();
+
+    /**
+     * 2c. Use iDMA to transfer input vector blocks.
+     */
+    uint32_t len_x = tile_h*2;
+    uint32_t obi_addr_x = obi_addr_w + (tile_w*tile_h*2);
+    uint32_t axi_addr_x = (uint32_t) x_in + (x_id*tile_h*2); 
+    
+    // printf("Transfering input vector: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", axi_addr_x, obi_addr_x, len_x);
+    idma_mm_conf(DMA_IN);
+    idma_mm_set_addr_len(DMA_IN, obi_addr_x, axi_addr_x, len_x);
+    idma_mm_set_std2_rep2(DMA_IN, 0, 0, 1);
+    idma_mm_set_std3_rep3(DMA_IN, 0, 0, 1);
+    idma_mm_start(DMA_IN);
+    // idma_wait();
+    
+    /**
+     * 3. Compute partial GeMV.
+     */
+    // printf("RedMulE block sizes: tile_m = %0d, tile_h = %0d, tile_w = %0d\n", tile_m, tile_h, tile_w);
+    redmule_mm_mcnfig((uint16_t) tile_w, (uint16_t) tile_m, (uint16_t) tile_h);
+
+    redmule_mm_marith(obi_addr_y, obi_addr_w, obi_addr_x);
+    // redmule_wait();
+
+    /**
+    * 4. Reduce partial GeMV.
+    */
+    uint32_t log_tree_mask = 1;
+    uint32_t log_tree_bit  = 1;
+    for (int i = 0; i < reduce_phases; i++){
+#if defined(BASELINE_K2)
+        nsync_row(hartid);
+
+        if (i == 0) {   // First level of the tree
+            if (x_id%reduce_degree == 0) {  // DST
+                nsync_row(hartid);
+
+                /**
+                * 4b. Sum partial GeMV.
+                */
+                for (int j = 0; j < reduce_degree-1; j++){
+                    if ((x_id+1+j) > (MESH_X_TILES-1)) break; // Non full-degree node
+                    uint32_t partial_gemv_addr = obi_addr_x + (j*len_y);
+                    // printf("Summing partial GeMV: y_addr 0x%0x, x_addr 0x%0x\n", obi_addr_y, partial_gemv_addr);
+                    redmule_mm_marith(obi_addr_y, obi_addr_id, partial_gemv_addr);
+                    // redmule_wait();
+                }
+            } else {    // SRC
+                /**
+                * 4a. Scatter partial GeMV.
+                */
+                uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, reduce_degree*(x_id/reduce_degree))) + 2*(tile_w*tile_h*2) + (tile_w*2) + (((x_id%reduce_degree)-1)*len_y);
+                // printf("Transfering partial GeMV to neighbor: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, partial_gemv_addr, len_y);
+                idma_mm_conf(DMA_OUT);
+                idma_mm_set_addr_len(DMA_OUT, partial_gemv_addr, obi_addr_y, len_y);
+                idma_mm_set_std2_rep2(DMA_OUT, 0, 0, 1);
+                idma_mm_set_std3_rep3(DMA_OUT, 0, 0, 1);
+                idma_mm_start(DMA_OUT);
+                // idma_wait();
+
+                nsync_row(hartid);
+            }
+        } else {    // Second level of the tree
+            if (x_id == 0) {    // DST
+                nsync_row(hartid);
+
+                /**
+                * 4b. Sum partial GeMV.
+                */
+                for (int j = 0; j < reduce_degree-1; j++){
+                    if ((x_id+1+j) > (MESH_X_TILES-1)) break; // Non full-degree node
+                    uint32_t partial_gemv_addr = obi_addr_x + (j*len_y);
+                    // printf("Summing partial GeMV: y_addr 0x%0x, x_addr 0x%0x\n", obi_addr_y, partial_gemv_addr);
+                    redmule_mm_marith(obi_addr_y, obi_addr_id, partial_gemv_addr);
+                    // redmule_wait();
+                }
+            } else if (x_id%reduce_degree == 0) {    // SRC
+                 /**
+                * 4a. Scatter partial GeMV.
+                */
+                uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, 0)) + 2*(tile_w*tile_h*2) + (tile_w*2) + (((x_id/reduce_degree)-1)*len_y);
+                // printf("Transfering partial GeMV to neighbor: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, partial_gemv_addr, len_y);
+                idma_mm_conf(DMA_OUT);
+                idma_mm_set_addr_len(DMA_OUT, partial_gemv_addr, obi_addr_y, len_y);
+                idma_mm_set_std2_rep2(DMA_OUT, 0, 0, 1);
+                idma_mm_set_std3_rep3(DMA_OUT, 0, 0, 1);
+                idma_mm_start(DMA_OUT);
+                // idma_wait();
+
+                nsync_row(hartid);
+            } else {
+                nsync_row(hartid);
+            }
+        }
+
+        if (i == (reduce_phases-1)){
+            if (x_id == 0){
+                /**
+                * 5. Store result in memory.
+                */
+                axi_addr_y = (uint32_t) y_out + (y_id*tile_w*2);
+                // printf("Transfering result: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, axi_addr_y, len_y);
+                idma_mm_conf(DMA_OUT);
+                idma_mm_set_addr_len(DMA_OUT, axi_addr_y, obi_addr_y, len_y);
+                idma_mm_set_std2_rep2(DMA_OUT, 0, 0, 1);
+                idma_mm_set_std3_rep3(DMA_OUT, 0, 0, 1);
+                idma_mm_start(DMA_OUT);
+                // idma_wait();
+            }
+        }
+#elif defined(K_LOGN)
+        nsync_row(hartid);
+
+        // printf("Log Tree Mask: 0x%0x, Log Tree Bit: 0x%0x\n", log_tree_mask, log_tree_bit);
+        
+        if ((x_id&log_tree_mask) == 0){
+            /**
+            * 4a. Gather all partial GeMV.
+            */
+            uint32_t partial_gemv_addr = get_l1_base(GET_ID(y_id, x_id^log_tree_bit)) + (tile_w*tile_h*2);
+            // printf("Transfering partial GeMV from neighbor: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", partial_gemv_addr, obi_addr_x, len_x);
+            idma_mm_conf(DMA_IN);
+            idma_mm_set_addr_len(DMA_IN, obi_addr_x, partial_gemv_addr, len_x);
+            idma_mm_set_std2_rep2(DMA_IN, 0, 0, 1);
+            idma_mm_set_std3_rep3(DMA_IN, 0, 0, 1);
+            idma_mm_start(DMA_IN);
+            // idma_wait();
+
+            /**
+            * 4b. Sum partial GeMV.
+            */
+            redmule_mm_marith(obi_addr_y, obi_addr_id, obi_addr_x);
+            // redmule_wait();
+        }
+        log_tree_mask = (log_tree_mask << 1) | 1;
+        log_tree_bit <<= 1;
+
+        if (i == (reduce_phases-1)){
+            if (x_id == 0){
+                /**
+                * 5. Store result in memory.
+                */
+                axi_addr_y = (uint32_t) y_out + (y_id*tile_w*2);
+                // printf("Transfering result: src_addr 0x%0x, dst_addr 0x%0x, lenght (bytes) %0d\n", obi_addr_y, axi_addr_y, len_y);
+                idma_mm_conf(DMA_OUT);
+                idma_mm_set_addr_len(DMA_OUT, axi_addr_y, obi_addr_y, len_y);
+                idma_mm_set_std2_rep2(DMA_OUT, 0, 0, 1);
+                idma_mm_set_std3_rep3(DMA_OUT, 0, 0, 1);
+                idma_mm_start(DMA_OUT);
+                // idma_wait();
+            }
+        }
+#endif
+    }
+
+    nsync_global(hartid);
+
+    /**
+    * 7. Check results.
+    */
+    uint32_t num_errors = 0;
+    if (hartid == 0){
+        uint16_t computed, expected, diff;
+        for(int i = 0; i < M_SIZE*K_SIZE; i++){
+            computed = y_out[i];
+            expected = z_out[i];
+            diff = (computed > expected) ? (computed - expected) : (expected - computed);
+            if(diff > 0x0011){
+                num_errors++;
+                printf("**ERROR**: Y[%0d](=0x%4x) != Z[%0d](=0x%4x)\n", i, computed, i, expected);
+            }
+        }
+        printf("Finished test with %0d errors\n", num_errors);
+    }
+
+    return num_errors;
+}
