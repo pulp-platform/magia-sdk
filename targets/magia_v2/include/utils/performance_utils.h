@@ -192,8 +192,7 @@ static inline void stnl_r()
  * producing spurious "sentinel without pair" errors. The NOPs guarantee the
  * sentinel retires from WB before any stalling instruction follows it.
  */
-#define XPERF_NOP_PAD()                                                                            \
-    asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop" ::: )
+#define XPERF_NOP_PAD() asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop" :::)
 
 static inline unsigned int xperf_start()
 {

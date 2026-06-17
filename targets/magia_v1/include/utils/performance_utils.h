@@ -196,8 +196,7 @@ static inline void stnl_r()
  * read, MMIO store, or fsync) would be counted more than once, raising spurious
  * "sentinel without pair" errors. The NOPs let it retire before any stall follows.
  */
-#define XPERF_NOP_PAD()                                                                            \
-    asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop" ::: )
+#define XPERF_NOP_PAD() asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop" :::)
 
 static inline unsigned int xperf_start()
 {
