@@ -152,6 +152,7 @@ int groupnorm_fp16_spatz_task(void)
     uint32_t c_per_g;
     uint32_t hw_len;
     uint32_t g_start;
+    uint32_t c_out;
 
     _Float16 mean;
     _Float16 var;
@@ -169,19 +170,23 @@ int groupnorm_fp16_spatz_task(void)
     g_len      = params->g_len;
     c_per_g    = params->c_per_g;
     hw_len     = params->hw_len;
+    c_out      = params->c_out;
     elements_per_group = c_per_g * hw_len;
 
     for (uint32_t g = 0; g < g_len; g++) {
         uint32_t group_offset = g * elements_per_group;
+        uint32_t global_g = g_start + g;
 
-        mean = compute_mean(src_base + group_offset, elements_per_group);
-        var  = compute_variance(src_base + group_offset, mean, elements_per_group);
+        uint32_t input_group_offset = global_g * elements_per_group;
 
-        normalize(src_base + group_offset, dst_base + group_offset, mean, var, eps, elements_per_group);
+        mean = compute_mean(src_base + input_group_offset, elements_per_group);
+        var  = compute_variance(src_base + input_group_offset, mean, elements_per_group);
+
+        normalize(src_base + input_group_offset, dst_base + group_offset, mean, var, eps, elements_per_group);
 
         for (uint32_t c = 0; c < c_per_g; c++) {
             uint32_t channel_offset = group_offset + (c * hw_len);
-            uint32_t gamma_beta_idx = (g_start + g) * c_per_g + c;
+            uint32_t gamma_beta_idx = (global_g * c_per_g + c) % c_out;
 
             _Float16 g_val = gamma_base[gamma_beta_idx];
             _Float16 b_val = beta_base[gamma_beta_idx];

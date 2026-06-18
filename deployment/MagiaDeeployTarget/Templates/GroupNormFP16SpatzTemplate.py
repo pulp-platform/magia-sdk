@@ -5,6 +5,7 @@ class _MagiaGroupNormFP16Spatz(NodeTemplate):
     def alignToContext(self, ctxt: NetworkContext,
                        operatorRepresentation: OperatorRepresentation) -> Tuple[NetworkContext, Dict, List[str]]:
         data_in = ctxt.lookup(operatorRepresentation['data_in'])
+        operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, data_in.shape)) + "}"
 
         operatorRepresentation['offset'] = 0
 
@@ -12,5 +13,5 @@ class _MagiaGroupNormFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaGroupNormFP16Spatz("""
 // Magia GroupNorm FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
-MAGIA_groupnorm_fp16_spatz(${data_in}, ${data_out}, ${scale}, ${bias}, ${num_groups}, ${epsilon});
+MAGIA_groupnorm_fp16_spatz(${data_in}, ${data_out}, ${scale}, ${bias}, (uint32_t[])${input_shape}, ${num_groups}, ${epsilon});
 """)
