@@ -3,6 +3,6 @@
 
 #include <stdint.h>
 
-void MAGIA_gemm_fp16_spatz(const float16 *A, const float16 *B, const float16 *C, float16 alpha, float16 beta, int transA, int transB, float16 *Y);
+void MAGIA_gemm_fp16_spatz(const float16 *A, const float16 *B, const float16 *C, float16 alpha, float16 beta, int transA, int transB, uint32_t A_shape[2], uint32_t B_shape[2], uint32_t C_shape[2], uint32_t Y_shape[2], float16 *Y);
 
 #endif  /* GEMM_FP16_SPATZ_H_ */

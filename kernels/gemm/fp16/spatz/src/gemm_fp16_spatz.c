@@ -1,113 +1,173 @@
 #include <stdint.h>
+#include <errno.h>
 
 #include "eventunit.h"
 #include "tile.h"
 
 #include "gemm_fp16_spatz.h"
-#include "gemm_fp16_spatz_mem_layout.h"
 #include "gemm_fp16_spatz_params.h"
 #include "gemm_fp16_spatz_task_bin.h"
 
 #define HID get_hartid()
 
-static int init_input_params(void *params, const float16 *A, const float16 *B, const float16 *C, const float16 alpha, const float16 beta, int transA, int transB)
+static int alloc_l1(void **params, uint32_t A_shape[2], uint32_t B_shape[2], uint32_t C_shape[2], uint32_t Y_shape[2], int transA, int transB)
 {
     volatile gemm_fp16_spatz_params_t *gemm_params;
-    uint32_t shard;
-    uint32_t left;
-    uint32_t m_start;
-    uint32_t m_end;
-    uint32_t m_len;
-    uint32_t local_idx;
+    uintptr_t shard_A;
+    uintptr_t shard_B;
+    uintptr_t shard_C;
+    uintptr_t shard_Y;
+    uintptr_t alpha;
+    uintptr_t beta;
 
-    gemm_params = (volatile gemm_fp16_spatz_params_t *) params;
+    size_t m;
+    size_t n;
+    size_t k;
+    size_t shard;
+    size_t left;
+    size_t m_start;
+    size_t m_end;
+    size_t m_len;
+    size_t shard_A_len;
+    size_t shard_B_len;
+    size_t shard_C_len;
+    size_t shard_Y_len;
 
-    shard = OUTPUT0_DIM0 / NUM_HARTS;
-    left  = OUTPUT0_DIM0 % NUM_HARTS;
+    m = Y_shape[0];
+    n = Y_shape[1];
+    k = (!transA) ? A_shape[1] : A_shape[0];
+
+    shard = m / NUM_HARTS;
+    left = m % NUM_HARTS;
 
     m_start = HID * shard + (HID < left ? HID : left);
-    m_end   = m_start + shard + (HID < left ? 1 : 0);
-    m_len   = m_end - m_start;
+    m_end = m_start + shard + (HID < left ? 1 : 0);
+    m_len = m_end - m_start;
 
+    shard_A_len = m_len * k;
+    shard_B_len = k * n;
+    shard_C_len = m_len * n;
+    shard_Y_len = m_len * n;
 
-    local_idx = 0;
-    if (!transA) {
-        for (int m = m_start; m < m_end; m++) {
-            uint32_t row_base;
-            row_base = m * INPUT0_DIM1;
+    l1_alloc_init();
 
-            for (int k = 0; k < INPUT0_DIM1; k++) {
-                uint32_t global_idx;
-                uint32_t offset;
+    gemm_params = l1_alloc(sizeof(gemm_fp16_spatz_params_t));
+    if (!gemm_params)
+        return ENOMEM;
 
-                global_idx = row_base + k;
-                offset = local_idx * sizeof(float16);
+    shard_A = l1_alloc(shard_A_len * sizeof(float16));
+    if (!shard_A)
+        return ENOMEM;
 
-                mmio_fp16(SHARD_A_BASE + offset) = A[global_idx];
+    shard_B = l1_alloc(shard_B_len * sizeof(float16));
+    if (!shard_B)
+        return ENOMEM;
 
-                local_idx++;
-            }
-        }
-    } else {
-        for (int k = 0; k < INPUT0_DIM0; k++) {
-            for (int m = 0; m < m_len; m++) {
-                uint32_t m_global = m_start + m;
-                uint32_t global_idx = k * INPUT0_DIM1 + m_global;
+    shard_C = l1_alloc(shard_C_len * sizeof(float16));
+    if (!shard_C)
+        return ENOMEM;
 
-                uint32_t offset = local_idx * sizeof(float16);
-                mmio_fp16(SHARD_A_BASE + offset) = A[global_idx];
+    shard_Y = l1_alloc(shard_Y_len * sizeof(float16));
+    if (!shard_Y)
+        return ENOMEM;
 
-                local_idx++;
-            }
-        }
-    }
+    alpha = l1_alloc(sizeof(float16));
+    if (!alpha)
+        return ENOMEM;
 
-    for (int i = 0; i < INPUT1_SIZE; i++) {
-        uint32_t offset;
-        offset = i * sizeof(float16);
-        mmio_fp16(SHARD_B_BASE + offset) = B[i];
-    }
+    beta = l1_alloc(sizeof(float16));
+    if (!beta)
+        return ENOMEM;
 
+    gemm_params->shard_A = shard_A;
+    gemm_params->shard_B = shard_B;
+    gemm_params->shard_C = shard_C;
+    gemm_params->shard_Y = shard_Y;
+    gemm_params->alpha   = alpha;
+    gemm_params->beta    = beta;
+    gemm_params->transA  = transA;
+    gemm_params->transB  = transB;
+    gemm_params->m_start = (uint32_t) m_start;
+    gemm_params->m_len   = (uint32_t) m_len;
+    gemm_params->M       = (uint32_t) m;
+    gemm_params->N       = (uint32_t) n;
+    gemm_params->K       = (uint32_t) k;
 
-    local_idx = 0;
-    for (int m = m_start; m < m_end; m++) {
-        uint32_t row_base;
-        row_base = m * OUTPUT0_DIM1;
-        for (int n = 0; n < OUTPUT0_DIM1; n++) {
-            uint32_t global_idx;
-            uint32_t offset;
-
-            global_idx = row_base + n;
-            offset = local_idx * sizeof(float16);
-
-            mmio_fp16(SHARD_C_BASE + offset) = C[global_idx];
-            mmio_fp16(SHARD_Y_BASE + offset) = 0;
-
-            local_idx++;
-        }
-    }
-
-    mmio_fp16(ALPHA_BASE) = alpha;
-    mmio_fp16(BETA_BASE)  = beta;
-
-    gemm_params->shard_A = SHARD_A_BASE;
-    gemm_params->shard_B = SHARD_B_BASE;
-    gemm_params->shard_C = SHARD_C_BASE;
-    gemm_params->shard_Y = SHARD_Y_BASE;
-    gemm_params->alpha = ALPHA_BASE;
-    gemm_params->beta  = BETA_BASE;
-    gemm_params->transA = transA;
-    gemm_params->transB = transB;
-    gemm_params->m_start = m_start;
-    gemm_params->m_len   = m_len;
-    gemm_params->M = OUTPUT0_DIM0;
-    gemm_params->N = OUTPUT0_DIM1;
-    gemm_params->K = (!transA) ? INPUT0_DIM1 : INPUT0_DIM0;
+    *params = (void *) gemm_params;
 
     return 0;
 }
 
-static int offload_spatz_task()
+static int init_input_params(void *params, const float16 *A, const float16 *B, const float16 *C, const float16 alpha_val, const float16 beta_val, uint32_t A_shape[2], uint32_t B_shape[2], uint32_t C_shape[2], uint32_t Y_shape[2])
+{
+    volatile gemm_fp16_spatz_params_t *gemm_params;
+    uintptr_t shard_A;
+    uintptr_t shard_B;
+    uintptr_t shard_C;
+    uintptr_t shard_Y;
+    uint32_t m_start;
+    uint32_t m_end;
+    uint32_t m_len;
+    uint32_t local_idx;
+    uint32_t b_size;
+
+    gemm_params = (volatile gemm_fp16_spatz_params_t *) params;
+    shard_A = gemm_params->shard_A;
+    shard_B = gemm_params->shard_B;
+    shard_C = gemm_params->shard_C;
+    shard_Y = gemm_params->shard_Y;
+    m_start = gemm_params->m_start;
+    m_len   = gemm_params->m_len;
+    m_end   = m_start + m_len;
+
+    local_idx = 0;
+    if (!gemm_params->transA) {
+        for (uint32_t m = m_start; m < m_end; m++) {
+            uint32_t row_base = m * gemm_params->K;
+            for (uint32_t k = 0; k < gemm_params->K; k++) {
+                uint32_t global_idx = row_base + k;
+                uint32_t offset = local_idx * sizeof(float16);
+                mmio_fp16(shard_A + offset) = A[global_idx];
+                local_idx++;
+            }
+        }
+    } else {
+        for (uint32_t k = 0; k < A_shape[0]; k++) {
+            for (uint32_t m = 0; m < m_len; m++) {
+                uint32_t m_global = m_start + m;
+                uint32_t global_idx = k * A_shape[1] + m_global;
+                uint32_t offset = local_idx * sizeof(float16);
+                mmio_fp16(shard_A + offset) = A[global_idx];
+                local_idx++;
+            }
+        }
+    }
+
+    b_size = B_shape[0] * B_shape[1];
+    for (uint32_t i = 0; i < b_size; i++) {
+        uint32_t offset = i * sizeof(float16);
+        mmio_fp16(shard_B + offset) = B[i];
+    }
+
+    local_idx = 0;
+    for (uint32_t m = m_start; m < m_end; m++) {
+        uint32_t row_base = m * gemm_params->N;
+        for (uint32_t n = 0; n < gemm_params->N; n++) {
+            uint32_t global_idx = row_base + n;
+            uint32_t offset = local_idx * sizeof(float16);
+            mmio_fp16(shard_C + offset) = C[global_idx];
+            mmio_fp16(shard_Y + offset) = 0;
+            local_idx++;
+        }
+    }
+
+    mmio_fp16(gemm_params->alpha) = alpha_val;
+    mmio_fp16(gemm_params->beta)  = beta_val;
+
+    return 0;
+}
+
+static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
     eu_config_t eu_cfg;
@@ -119,7 +179,7 @@ static int offload_spatz_task()
     eu_ctrl.api = &eu_api;
 
     spatz_init(SPATZ_BINARY_START);
-    spatz_run_task_with_params(GEMM_FP16_SPATZ_TASK, GEMM_FP16_SPATZ_PARAMS_BASE);
+    spatz_run_task_with_params(GEMM_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
@@ -137,33 +197,24 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile gemm_fp16_spatz_params_t *gemm_params;
-    uint32_t shard_Y_base;
+    uintptr_t shard_Y_base;
     uint32_t m_start;
     uint32_t m_len;
     uint32_t local_idx;
 
     gemm_params = (volatile gemm_fp16_spatz_params_t *) params;
-
     shard_Y_base = gemm_params->shard_Y;
-
     m_start = gemm_params->m_start;
     m_len   = gemm_params->m_len;
 
     local_idx = 0;
-    for (int m = 0; m < m_len; m++) {
-        uint32_t global_m;
-        uint32_t row_base;
-
-        global_m = m_start + m;
-        row_base = global_m * OUTPUT0_DIM1;
-        for (int n = 0; n < OUTPUT0_DIM1; n++) {
-            uint32_t global_idx;
-            uint32_t offset;
-
-            global_idx = row_base + n;
-            offset = local_idx * sizeof(float16);
+    for (uint32_t m = 0; m < m_len; m++) {
+        uint32_t global_m = m_start + m;
+        uint32_t row_base = global_m * gemm_params->N;
+        for (uint32_t n = 0; n < gemm_params->N; n++) {
+            uint32_t global_idx = row_base + n;
+            uint32_t offset = local_idx * sizeof(float16);
             Y[global_idx] = mmio_fp16(shard_Y_base + offset);
-
             local_idx++;
         }
     }
@@ -171,20 +222,24 @@ static int store_result(void *params, float16 *Y)
     return 0;
 }
 
-void MAGIA_gemm_fp16_spatz(const float16 *A, const float16 *B, const float16 *C, float16 alpha, float16 beta, int transA, int transB, float16 *Y)
+void MAGIA_gemm_fp16_spatz(const float16 *A, const float16 *B, const float16 *C, float16 alpha, float16 beta, int transA, int transB, uint32_t A_shape[2], uint32_t B_shape[2], uint32_t C_shape[2], uint32_t Y_shape[2], float16 *Y)
 {
     int ret;
     volatile gemm_fp16_spatz_params_t *params;
 
-    params = (volatile gemm_fp16_spatz_params_t *) GEMM_FP16_SPATZ_PARAMS_BASE;
+    ret = alloc_l1(&params, A_shape, B_shape, C_shape, Y_shape, transA, transB);
+    if (ret != 0) {
+        printf("[CV32 (%d)] L1 allocation failed with error: %d\n", HID, ret);
+        return;
+    }
 
-    ret = init_input_params(params, A, B, C, alpha, beta, transA, transB);
+    ret = init_input_params(params, A, B, C, alpha, beta, A_shape, B_shape, C_shape, Y_shape);
     if (ret != 0) {
         printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
         return;
     }
 
-    ret = offload_spatz_task();
+    ret = offload_spatz_task(params);
     if (ret != 0) {
         printf("[CV32 (%d)] Spatz task offloading failed with error: %d\n", HID, ret);
         return;
