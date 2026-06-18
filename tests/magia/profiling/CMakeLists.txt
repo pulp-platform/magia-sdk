@@ -1,0 +1,7 @@
+add_subdirectory(brah_dma)
+# add_subdirectory(brah_full)
+# add_subdirectory(brah_full_hier)
+# add_subdirectory(brah_l2_row)
+# add_subdirectory(brah_repeat)
+# add_subdirectory(brah_tile_to_tile)
+add_subdirectory(latency_distance)
