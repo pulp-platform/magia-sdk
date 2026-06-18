@@ -14,8 +14,12 @@ class _MagiaConvTransposeFP16Spatz(NodeTemplate):
         operatorRepresentation['offset'] = 0
 
         operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, data_in.shape)) + "}"
-        operatorRepresentation['output_shape'] = "{" + ", ".join(map(str, data_out.shape)) + "}"
+        N = data_in.shape[0]
+        C = operatorRepresentation['ch_im_out']
+        H = operatorRepresentation['dim_im_out_y']
+        W = operatorRepresentation['dim_im_out_x']
 
+        operatorRepresentation['output_shape'] = f"{{ {N}, {C}, {H}, {W} }}"
 
         return ctxt, operatorRepresentation, []
 

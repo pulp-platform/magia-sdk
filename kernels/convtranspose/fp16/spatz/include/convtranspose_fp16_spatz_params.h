@@ -9,8 +9,10 @@ typedef struct {
     uintptr_t shard_Y;       /* Tile's output channels shard                    */
 
     uint32_t n_batches;      /* Number of batches (N)                           */
-    uint32_t c_out_start;    /* Tile's output channel shard start               */
-    uint32_t c_out_len;      /* Tile's number of output channels                */
+    uint32_t c_in;           /* Total number of input channels                  */
+    uint32_t c_out;          /* Total number of output channels                 */
+    uint32_t iter_start;     /* Global iteration start (n * C_out + c_out)      */
+    uint32_t iter_len;       /* Number of output planes to compute              */
     uint32_t c_in_g;         /* Input channels per group (C_in / G)             */
     uint32_t c_out_g;        /* Output channels per group (C_out / G)           */
 
@@ -27,4 +29,4 @@ typedef struct {
     uint32_t pad_w;          /* Padding Left/Right                              */
 } convtranspose_fp16_spatz_params_t;
 
-#endif  /* CONVTRANSPOSE_FP16_SPATZ_PARAMS_H_ */
+#endif /* CONVTRANSPOSE_FP16_SPATZ_PARAMS_H_ */
