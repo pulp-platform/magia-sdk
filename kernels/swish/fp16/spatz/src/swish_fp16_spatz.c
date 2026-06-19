@@ -1,26 +1,27 @@
 #include <stdint.h>
+#include <errno.h>
 
 #include "eventunit.h"
 #include "tile.h"
 
 #include "swish_fp16_spatz.h"
-#include "swish_fp16_spatz_mem_layout.h"
 #include "swish_fp16_spatz_params.h"
 #include "swish_fp16_spatz_task_bin.h"
 
 #define HID get_hartid()
 
-static int init_input_params(void *params, const float16 *X, const float16 alpha, uint32_t size)
+static int alloc_l1(void **params, uint32_t size, const float16 alpha)
 {
     volatile swish_fp16_spatz_params_t *swish_params;
+    uintptr_t shard_X;
+    uintptr_t shard_Y;
+    uintptr_t alpha_ptr;
+
     uint32_t shard;
-    uint32_t start;
     uint32_t left;
+    uint32_t start;
     uint32_t end;
     uint32_t len;
-    uint32_t hid;
-
-    swish_params = (volatile swish_fp16_spatz_params_t *) params;
 
     shard = size / NUM_HARTS;
     left  = size % NUM_HARTS;
@@ -28,27 +29,65 @@ static int init_input_params(void *params, const float16 *X, const float16 alpha
     end   = start + shard + (HID < left ? 1 : 0);
     len   = end - start;
 
-    for (int i = 0; i < len; i++) {
-        uint32_t global_idx = start + i;
-        uint32_t offset = i * sizeof(float16);
+    l1_alloc_init();
 
-        mmio_fp16(SHARD_X_BASE + offset) = X[global_idx];
-        mmio_fp16(SHARD_Y_BASE + offset) = 0;
-    }
+    swish_params = l1_alloc(sizeof(swish_fp16_spatz_params_t));
+    if (!swish_params)
+        return ENOMEM;
 
-    mmio_fp16(ALPHA_BASE) = alpha;
+    shard_X = l1_alloc(len * sizeof(float16));
+    if (!shard_X)
+        return ENOMEM;
 
-    swish_params->shard_X = SHARD_X_BASE;
-    swish_params->shard_Y = SHARD_Y_BASE;
-    swish_params->alpha = ALPHA_BASE;
+    shard_Y = l1_alloc(len * sizeof(float16));
+    if (!shard_Y)
+        return ENOMEM;
+
+    alpha_ptr = l1_alloc(sizeof(float16));
+    if (!alpha_ptr)
+        return ENOMEM;
+
+    mmio_fp16(alpha_ptr) = alpha;
+
+    swish_params->shard_X = shard_X;
+    swish_params->shard_Y = shard_Y;
+    swish_params->alpha   = alpha_ptr;
     swish_params->start   = start;
     swish_params->len     = len;
     swish_params->end     = end;
 
+    *params = (void *) swish_params;
+
     return 0;
 }
 
-static int offload_spatz_task()
+static int init_input_params(void *params, const float16 *X)
+{
+    volatile swish_fp16_spatz_params_t *swish_params;
+    uintptr_t shard_X_base;
+    uintptr_t shard_Y_base;
+    uint32_t start;
+    uint32_t len;
+
+    swish_params = (volatile swish_fp16_spatz_params_t *) params;
+    shard_X_base = swish_params->shard_X;
+    shard_Y_base = swish_params->shard_Y;
+
+    start = swish_params->start;
+    len   = swish_params->len;
+
+    for (uint32_t i = 0; i < len; i++) {
+        uint32_t global_idx = start + i;
+        uint32_t offset = i * sizeof(float16);
+
+        mmio_fp16(shard_X_base + offset) = X[global_idx];
+        mmio_fp16(shard_Y_base + offset) = 0;
+    }
+
+    return 0;
+}
+
+static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
     eu_config_t eu_cfg;
@@ -60,7 +99,7 @@ static int offload_spatz_task()
     eu_ctrl.api = &eu_api;
 
     spatz_init(SPATZ_BINARY_START);
-    spatz_run_task_with_params(SWISH_FP16_SPATZ_TASK, SWISH_FP16_SPATZ_PARAMS_BASE);
+    spatz_run_task_with_params(SWISH_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
@@ -75,10 +114,10 @@ exit:
     return ret;
 }
 
-static int store_result(void* params, float16 *dst)
+static int store_result(void *params, float16 *dst)
 {
     volatile swish_fp16_spatz_params_t *swish_params;
-    uint32_t shard_Y_base;
+    uintptr_t shard_Y_base;
     uint32_t start;
     uint32_t len;
 
@@ -87,7 +126,7 @@ static int store_result(void* params, float16 *dst)
     start = swish_params->start;
     len = swish_params->len;
 
-    for (int i = 0; i < len; i++) {
+    for (uint32_t i = 0; i < len; i++) {
         uint32_t global_idx = start + i;
         uint32_t offset = i * sizeof(float16);
         dst[global_idx] = mmio_fp16(shard_Y_base + offset);
@@ -101,21 +140,25 @@ void MAGIA_swish_fp16_spatz(const float16 *X, float16 *Y, const float16 alpha, u
     int ret;
     volatile swish_fp16_spatz_params_t *params;
 
-    params = (volatile swish_fp16_spatz_params_t *) SWISH_FP16_SPATZ_PARAMS_BASE;
-
-    ret = init_input_params(params, X, alpha, size);
+    ret = alloc_l1((void **)&params, size, alpha);
     if (ret != 0) {
-        printf("[CV32 (%d) Params initialization failed with error: %d\n]", HID, ret);
+        printf("[CV32 (%d)] L1 allocation failed with error: %d\n", HID, ret);
         return;
     }
 
-    ret = offload_spatz_task();
+    ret = init_input_params((void *)params, X);
+    if (ret != 0) {
+        printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
+        return;
+    }
+
+    ret = offload_spatz_task((void *)params);
     if (ret != 0) {
         printf("[CV32 (%d)] Spatz task offloading failed with error: %d\n", HID, ret);
         return;
     }
 
-    ret = store_result(params, Y);
+    ret = store_result((void *)params, Y);
     if (ret != 0) {
         printf("[CV32 (%d)] Result write back failed with error: %d\n", HID, ret);
     }
