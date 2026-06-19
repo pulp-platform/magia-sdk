@@ -1,26 +1,28 @@
 #include <stdint.h>
+#include <errno.h>
 
 #include "eventunit.h"
 #include "tile.h"
 
 #include "hardsigmoid_fp16_spatz.h"
-#include "hardsigmoid_fp16_spatz_mem_layout.h"
 #include "hardsigmoid_fp16_spatz_params.h"
 #include "hardsigmoid_fp16_spatz_task_bin.h"
 
 #define HID get_hartid()
 
-static int init_input_params(void *params, const float16 *X, const float16 alpha, const float16 beta, uint32_t size)
+static int alloc_l1(void **params, uint32_t size, const float16 alpha, const float16 beta)
 {
     volatile hardsigmoid_fp16_spatz_params_t *hardsigmoid_params;
+    uintptr_t shard_X;
+    uintptr_t shard_Y;
+    uintptr_t alpha_ptr;
+    uintptr_t beta_ptr;
+
     uint32_t shard;
-    uint32_t start;
     uint32_t left;
+    uint32_t start;
     uint32_t end;
     uint32_t len;
-    uint32_t hid;
-
-    hardsigmoid_params = (volatile hardsigmoid_fp16_spatz_params_t *) params;
 
     shard = size / NUM_HARTS;
     left  = size % NUM_HARTS;
@@ -28,29 +30,71 @@ static int init_input_params(void *params, const float16 *X, const float16 alpha
     end   = start + shard + (HID < left ? 1 : 0);
     len   = end - start;
 
-    for (int i = 0; i < len; i++) {
-        uint32_t global_idx = start + i;
-        uint32_t offset = i * sizeof(float16);
+    l1_alloc_init();
 
-        mmio_fp16(SHARD_X_BASE + offset) = X[global_idx];
-        mmio_fp16(SHARD_Y_BASE + offset) = 0;
-    }
+    hardsigmoid_params = l1_alloc(sizeof(hardsigmoid_fp16_spatz_params_t));
+    if (!hardsigmoid_params)
+        return ENOMEM;
 
-    mmio_fp16(ALPHA_BASE) = alpha;
-    mmio_fp16(BETA_BASE) = beta;
+    shard_X = l1_alloc(len * sizeof(float16));
+    if (!shard_X)
+        return ENOMEM;
 
-    hardsigmoid_params->shard_X = SHARD_X_BASE;
-    hardsigmoid_params->shard_Y = SHARD_Y_BASE;
-    hardsigmoid_params->alpha = ALPHA_BASE;
-    hardsigmoid_params->beta = BETA_BASE;
+    shard_Y = l1_alloc(len * sizeof(float16));
+    if (!shard_Y)
+        return ENOMEM;
+
+    alpha_ptr = l1_alloc(sizeof(float16));
+    if (!alpha_ptr)
+        return ENOMEM;
+
+    beta_ptr = l1_alloc(sizeof(float16));
+    if (!beta_ptr)
+        return ENOMEM;
+
+    mmio_fp16(alpha_ptr) = alpha;
+    mmio_fp16(beta_ptr)  = beta;
+
+    hardsigmoid_params->shard_X = shard_X;
+    hardsigmoid_params->shard_Y = shard_Y;
+    hardsigmoid_params->alpha   = alpha_ptr;
+    hardsigmoid_params->beta    = beta_ptr;
     hardsigmoid_params->start   = start;
     hardsigmoid_params->len     = len;
     hardsigmoid_params->end     = end;
 
+    *params = (void *) hardsigmoid_params;
+
     return 0;
 }
 
-static int offload_spatz_task()
+static int init_input_params(void *params, const float16 *X)
+{
+    volatile hardsigmoid_fp16_spatz_params_t *hardsigmoid_params;
+    uintptr_t shard_X_base;
+    uintptr_t shard_Y_base;
+    uint32_t start;
+    uint32_t len;
+
+    hardsigmoid_params = (volatile hardsigmoid_fp16_spatz_params_t *) params;
+    shard_X_base = hardsigmoid_params->shard_X;
+    shard_Y_base = hardsigmoid_params->shard_Y;
+
+    start = hardsigmoid_params->start;
+    len   = hardsigmoid_params->len;
+
+    for (uint32_t i = 0; i < len; i++) {
+        uint32_t global_idx = start + i;
+        uint32_t offset = i * sizeof(float16);
+
+        mmio_fp16(shard_X_base + offset) = X[global_idx];
+        mmio_fp16(shard_Y_base + offset) = 0;
+    }
+
+    return 0;
+}
+
+static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
     eu_config_t eu_cfg;
@@ -62,7 +106,7 @@ static int offload_spatz_task()
     eu_ctrl.api = &eu_api;
 
     spatz_init(SPATZ_BINARY_START);
-    spatz_run_task_with_params(HARDSIGMOID_FP16_SPATZ_TASK, HARDSIGMOID_FP16_SPATZ_PARAMS_BASE);
+    spatz_run_task_with_params(HARDSIGMOID_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
@@ -77,10 +121,10 @@ exit:
     return ret;
 }
 
-static int store_result(void* params, float16 *dst)
+static int store_result(void *params, float16 *dst)
 {
     volatile hardsigmoid_fp16_spatz_params_t *hardsigmoid_params;
-    uint32_t shard_Y_base;
+    uintptr_t shard_Y_base;
     uint32_t start;
     uint32_t len;
 
@@ -89,7 +133,7 @@ static int store_result(void* params, float16 *dst)
     start = hardsigmoid_params->start;
     len = hardsigmoid_params->len;
 
-    for (int i = 0; i < len; i++) {
+    for (uint32_t i = 0; i < len; i++) {
         uint32_t global_idx = start + i;
         uint32_t offset = i * sizeof(float16);
         dst[global_idx] = mmio_fp16(shard_Y_base + offset);
@@ -103,21 +147,25 @@ void MAGIA_hardsigmoid_fp16_spatz(const float16 *X, float16 *Y, const float16 al
     int ret;
     volatile hardsigmoid_fp16_spatz_params_t *params;
 
-    params = (volatile hardsigmoid_fp16_spatz_params_t *) HARDSIGMOID_FP16_SPATZ_PARAMS_BASE;
-
-    ret = init_input_params(params, X, alpha, beta, size);
+    ret = alloc_l1((void **)&params, size, alpha, beta);
     if (ret != 0) {
-        printf("[CV32 (%d) Params initialization failed with error: %d\n]", HID, ret);
+        printf("[CV32 (%d)] L1 allocation failed with error: %d\n", HID, ret);
         return;
     }
 
-    ret = offload_spatz_task();
+    ret = init_input_params((void *)params, X);
+    if (ret != 0) {
+        printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
+        return;
+    }
+
+    ret = offload_spatz_task((void *)params);
     if (ret != 0) {
         printf("[CV32 (%d)] Spatz task offloading failed with error: %d\n", HID, ret);
         return;
     }
 
-    ret = store_result(params, Y);
+    ret = store_result((void *)params, Y);
     if (ret != 0) {
         printf("[CV32 (%d)] Result write back failed with error: %d\n", HID, ret);
     }
