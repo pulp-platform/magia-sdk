@@ -20,11 +20,13 @@ class _MagiaTransposeFP16Spatz(NodeTemplate):
         operatorRepresentation['iterations'] = iterations
 
         # from python list to C array
+        operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, data_in_shape)) + "}"
+        operatorRepresentation['output_shape'] = "{" + ", ".join(map(str, data_out_shape)) + "}"
         operatorRepresentation['c_perm'] = "{" + ", ".join(map(str, perm)) + "}"
 
         return ctxt, operatorRepresentation, []
 
 referenceTemplate = _MagiaTransposeFP16Spatz("""
 // Magia Transpose FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
-MAGIA_transpose_fp16_spatz(${data_in}, ${data_out}, (uint32_t[]) ${c_perm}, ${iterations});
+MAGIA_transpose_fp16_spatz(${data_in}, ${data_out}, (uint32_t[]) ${c_perm}, (uint32_t[])${input_shape}, (uint32_t[])${output_shape}, ${iterations});
 """)
