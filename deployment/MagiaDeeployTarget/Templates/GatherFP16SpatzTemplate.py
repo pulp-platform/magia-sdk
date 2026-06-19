@@ -15,10 +15,13 @@ class _MagiaGatherFP16Spatz(NodeTemplate):
 
         gather_dim_size = int(shape[axis])
         operatorRepresentation['gather_dim_size'] = gather_dim_size
+        operatorRepresentation['axis'] = axis
+
+        operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, shape)) + "}"
 
         return ctxt, operatorRepresentation, []
 
 referenceTemplate = _MagiaGatherFP16Spatz("""
 // Magia Gather FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
-MAGIA_gather_fp16_spatz(${data_in}, ${data_out}, ${batch}, ${gather_dim_size}, ${axis_length}, ${index});
+MAGIA_gather_fp16_spatz(${data_in}, (uint32_t[])${input_shape}, ${data_out}, ${batch}, ${gather_dim_size}, ${axis_length}, ${index}, ${axis});
 """)

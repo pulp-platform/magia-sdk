@@ -46,12 +46,12 @@ int gather_fp16_spatz_task(void)
     index = params->index;
 
     uint32_t in_batch_stride = gather_dim_size * axis_length;
-    uint32_t target_fetta_offset = index * axis_length;
+    uint32_t target_shard_offset = index * axis_length;
 
     for (int b = 0; b < batch_len; b++) {
-        const _Float16 *fetta_ptr = input + target_fetta_offset;
+        const _Float16 *shard_ptr = input + target_shard_offset;
 
-        gather(fetta_ptr, output, axis_length);
+        gather(shard_ptr, output, axis_length);
 
         input += in_batch_stride;
         output += axis_length;
