@@ -3,6 +3,6 @@
 
 #include <stdint.h>
 
-void MAGIA_softmax_fp16_spatz(const float16 *input, float16 *output);
+void MAGIA_softmax_fp16_spatz(const float16 *input, float16 *output, uint32_t input_shape[4]);
 
 #endif  /* SOFTMAX_FP16_SPATZ_H_ */
