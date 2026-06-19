@@ -1,74 +1,133 @@
 #include <stdint.h>
+#include <errno.h>
 
 #include "eventunit.h"
 #include "tile.h"
 
 #include "instancenorm_fp16_spatz.h"
-#include "instancenorm_fp16_spatz_mem_layout.h"
 #include "instancenorm_fp16_spatz_params.h"
 #include "instancenorm_fp16_spatz_task_bin.h"
 
 #define HID get_hartid()
 
-static int init_input_params(void *params, const float16 *input, const float16 *scale, const float16 *B, const float16 epsilon)
+static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t *out_num_channels)
 {
     volatile instancenorm_fp16_spatz_params_t *instancenorm_params;
+    uintptr_t shard_input;
+    uintptr_t shard_output;
+    uintptr_t gamma;
+    uintptr_t beta;
+    uintptr_t eps;
+
+    uint32_t total_instances;
+    uint32_t instance_len;
+    uint32_t num_channels;
     uint32_t shard;
     uint32_t left;
     uint32_t inst_start;
     uint32_t inst_end;
     uint32_t inst_len;
-    uint32_t hw_len;
-    uint32_t local_idx;
 
-    instancenorm_params = (volatile instancenorm_fp16_spatz_params_t *) params;
+    num_channels = input_shape[1];
+    total_instances = input_shape[0] * input_shape[1];
+    instance_len = input_shape[2] * input_shape[3];
 
-    shard = TOTAL_INSTANCES / NUM_HARTS;
-    left  = TOTAL_INSTANCES % NUM_HARTS;
+    shard = total_instances / NUM_HARTS;
+    left  = total_instances % NUM_HARTS;
 
     inst_start = HID * shard + (HID < left ? HID : left);
     inst_end   = inst_start + shard + (HID < left ? 1 : 0);
     inst_len   = inst_end - inst_start;
-    hw_len     = INSTANCE_LEN;
+
+    l1_alloc_init();
+
+    instancenorm_params = l1_alloc(sizeof(instancenorm_fp16_spatz_params_t));
+    if (!instancenorm_params)
+        return ENOMEM;
+
+    shard_input = l1_alloc(inst_len * instance_len * sizeof(float16));
+    if (!shard_input)
+        return ENOMEM;
+
+    shard_output = l1_alloc(inst_len * instance_len * sizeof(float16));
+    if (!shard_output)
+        return ENOMEM;
+
+    gamma = l1_alloc(num_channels * sizeof(float16));
+    if (!gamma)
+        return ENOMEM;
+
+    beta = l1_alloc(num_channels * sizeof(float16));
+    if (!beta)
+        return ENOMEM;
+
+    eps = l1_alloc(sizeof(float16));
+    if (!eps)
+        return ENOMEM;
+
+    instancenorm_params->shard_input  = shard_input;
+    instancenorm_params->shard_output = shard_output;
+    instancenorm_params->gamma        = gamma;
+    instancenorm_params->beta         = beta;
+    instancenorm_params->eps          = eps;
+    instancenorm_params->inst_start   = inst_start;
+    instancenorm_params->inst_len     = inst_len;
+    instancenorm_params->hw_len       = instance_len;
+    instancenorm_params->num_channels = num_channels;
+
+    *params = (void *) instancenorm_params;
+    *out_num_channels = num_channels;
+
+    return 0;
+}
+
+static int init_input_params(void *params, const float16 *input, const float16 *scale, const float16 *B, const float16 epsilon)
+{
+    volatile instancenorm_fp16_spatz_params_t *instancenorm_params;
+    uintptr_t shard_input_base;
+    uintptr_t shard_output_base;
+    uintptr_t gamma_base;
+    uintptr_t beta_base;
+    uintptr_t eps_base;
+    uint32_t local_idx;
+    uint32_t inst_end;
+
+    instancenorm_params = (volatile instancenorm_fp16_spatz_params_t *) params;
+    shard_input_base  = instancenorm_params->shard_input;
+    shard_output_base = instancenorm_params->shard_output;
+    gamma_base        = instancenorm_params->gamma;
+    beta_base         = instancenorm_params->beta;
+    eps_base          = instancenorm_params->eps;
+    inst_end          = instancenorm_params->inst_start + instancenorm_params->inst_len;
 
     local_idx = 0;
-    for (int inst = inst_start; inst < inst_end; inst++) {
-        uint32_t global_base = inst * hw_len;
+    for (uint32_t inst = instancenorm_params->inst_start; inst < inst_end; inst++) {
+        uint32_t global_base = inst * instancenorm_params->hw_len;
 
-        for (int i = 0; i < hw_len; i++) {
+        for (uint32_t i = 0; i < instancenorm_params->hw_len; i++) {
             uint32_t global_idx = global_base + i;
             uint32_t offset = local_idx * sizeof(float16);
 
-            mmio_fp16(SHARD_INPUT_BASE + offset) = input[global_idx];
-            mmio_fp16(SHARD_OUTPUT_BASE + offset) = 0;
+            mmio_fp16(shard_input_base + offset) = input[global_idx];
+            mmio_fp16(shard_output_base + offset) = 0;
 
             local_idx++;
         }
     }
 
-    for (int i = 0; i < INPUT0_DIM1; i++) {
+    for (uint32_t i = 0; i < instancenorm_params->num_channels; i++) {
         uint32_t offset = i * sizeof(float16);
 
-        mmio_fp16(GAMMA_BASE + offset) = scale[i];
-        mmio_fp16(BETA_BASE + offset) = B[i];
+        mmio_fp16(gamma_base + offset) = scale[i];
+        mmio_fp16(beta_base + offset) = B[i];
     }
 
-    mmio_fp16(EPS_BASE) = epsilon;
-
-    instancenorm_params->shard_input = SHARD_INPUT_BASE;
-    instancenorm_params->shard_output = SHARD_OUTPUT_BASE;
-    instancenorm_params->gamma = GAMMA_BASE;
-    instancenorm_params->beta  = BETA_BASE;
-    instancenorm_params->eps   = EPS_BASE;
-    instancenorm_params->inst_start = inst_start;
-    instancenorm_params->inst_len   = inst_len;
-    instancenorm_params->hw_len    = hw_len;
-    instancenorm_params->num_channels = INPUT0_DIM1;
+    mmio_fp16(eps_base) = epsilon;
 
     return 0;
 }
 
-static int offload_spatz_task()
+static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
     eu_config_t eu_cfg;
@@ -80,7 +139,7 @@ static int offload_spatz_task()
     eu_ctrl.api = &eu_api;
 
     spatz_init(SPATZ_BINARY_START);
-    spatz_run_task_with_params(INSTANCENORM_FP16_SPATZ_TASK, INSTANCENORM_FP16_SPATZ_PARAMS_BASE);
+    spatz_run_task_with_params(INSTANCENORM_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
@@ -98,19 +157,18 @@ exit:
 static int store_result(void *params, float16 *output)
 {
     volatile instancenorm_fp16_spatz_params_t *instancenorm_params;
-    uint32_t shard_output_base;
+    uintptr_t shard_output_base;
     uint32_t local_idx;
 
     instancenorm_params = (volatile instancenorm_fp16_spatz_params_t *) params;
     shard_output_base = instancenorm_params->shard_output;
     local_idx = 0;
 
-    /* Scrittura indietro da L1 a L2 */
-    for (int inst = 0; inst < instancenorm_params->inst_len; inst++) {
+    for (uint32_t inst = 0; inst < instancenorm_params->inst_len; inst++) {
         uint32_t global_inst_idx = instancenorm_params->inst_start + inst;
         uint32_t global_base = global_inst_idx * instancenorm_params->hw_len;
 
-        for (int i = 0; i < instancenorm_params->hw_len; i++) {
+        for (uint32_t i = 0; i < instancenorm_params->hw_len; i++) {
             uint32_t global_idx = global_base + i;
             uint32_t offset = local_idx * sizeof(float16);
 
@@ -123,28 +181,32 @@ static int store_result(void *params, float16 *output)
     return 0;
 }
 
-void MAGIA_instancenorm_fp16_spatz(const float16 *input, float16 *output, const float16 *scale, const float16 *B, const float16 epsilon)
+void MAGIA_instancenorm_fp16_spatz(const float16 *input, float16 *output, const float16 *scale, const float16 *B, const float16 epsilon, uint32_t input_shape[4])
 {
     int ret;
     volatile instancenorm_fp16_spatz_params_t *params;
+    uint32_t num_channels;
 
-    params = (volatile instancenorm_fp16_spatz_params_t *) INSTANCENORM_FP16_SPATZ_PARAMS_BASE;
+    ret = alloc_l1((void **)&params, input_shape, &num_channels);
+    if (ret != 0) {
+        printf("[CV32 (%d)] L1 allocation failed with error: %d\n", HID, ret);
+        return;
+    }
 
-    ret = init_input_params(params, input, scale, B, epsilon);
+    ret = init_input_params((void *)params, input, scale, B, epsilon);
     if (ret != 0) {
         printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
         return;
     }
 
-    ret = offload_spatz_task();
+    ret = offload_spatz_task((void *)params);
     if (ret != 0) {
         printf("[CV32 (%d)] Spatz task offloading failed with error: %d\n", HID, ret);
         return;
     }
 
-    ret = store_result(params, output);
+    ret = store_result((void *)params, output);
     if (ret != 0) {
         printf("[CV32 (%d)] Result write back failed with error: %d\n", HID, ret);
     }
-
 }
