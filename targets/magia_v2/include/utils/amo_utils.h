@@ -15,7 +15,7 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Authors: Alberto Dequino <alberto.dequino@unibo.it>
- * 
+ *
  * MAGIA Atomic Memory Operations Utils
  */
 
@@ -27,7 +27,8 @@
 /**
  * Atomically increase the value stored in addr by an immediate value
  */
-int amo_add_immediate(uint32_t addr, uint32_t immediate){
+int amo_add_immediate(uint32_t addr, uint32_t immediate)
+{
     asm volatile("addi t0, %0, 0" ::"r"(addr));
     asm volatile("mv t1, %0" ::"r"(immediate));
     asm volatile("amoadd.w t2, t1, (t0)" ::);
@@ -37,10 +38,11 @@ int amo_add_immediate(uint32_t addr, uint32_t immediate){
 /**
  * Atomically increase the value in addr by 1
  */
-inline void amo_increment(volatile uint32_t addr){
+inline void amo_increment(volatile uint32_t addr)
+{
     asm volatile("addi t0, %0, 0" ::"r"(addr));
     asm volatile("li t1, 1" ::);
     asm volatile("amoadd.w t2, t1, (t0)" ::);
 }
 
-#endif //AMO_UTILS_H
+#endif // AMO_UTILS_H

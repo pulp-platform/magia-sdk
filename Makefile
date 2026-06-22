@@ -22,11 +22,13 @@ SHELL 			:= /bin/bash
 
 include scripts/deps.env
 
-CMAKE_BUILDDIR  	?= $(CURR_DIR)/build
-MAGIA_RTL_DIR 		?= ..
-BUILD_DIR 		?= $(MAGIA_RTL_DIR)/sw/tests/$(test)
-GVSOC_DIR 		?= ./gvsoc
 CURR_DIR		?= $(shell pwd)
+CMAKE_BUILDDIR  ?= $(CURR_DIR)/build
+MAGIA_RTL_DIR 	?= ..
+BUILD_DIR 		?= $(MAGIA_RTL_DIR)/sw/tests/$(test)
+MAGIA_DIR_ABS	?= $(abspath $(MAGIA_RTL_DIR))
+BUILD_DIR_ABS	?= $(MAGIA_DIR_ABS)/sw/tests/$(test)
+GVSOC_DIR 		?= ./gvsoc
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
 BIN_ABS_PATH	?= $(CMAKE_BUILDDIR)/bin
 BIN 			?= $(BUILD_DIR)/build/verif
@@ -49,15 +51,31 @@ compiler 		?= GCC_PULP
 ISA				?= rv32imcxgap9
 gui 			?= 0
 tiles 			?= 2
+spatz			?= 1
+
+LLVM_CMAKE			?= cmake
+LLVM_DIR			?= llvm
+LLVM_REPO			?= git@github.com:pulp-platform/llvm-project.git
+LLVM_COMMIT			?= b494f2d8dde88723026db8ec16ac6c7ee1e140ca
+LLVM_INSTALL_DIR	?= $(CURR_DIR)/llvm/install
+LLVM_BUILD_DIR		?= $(LLVM_DIR)/llvm-project/build
+LLVM_JOBS			?= 8
 
 tiles_2 		:= $(shell echo $$(( $(tiles) * $(tiles) )))
 tiles_log    	:= $(shell awk 'BEGIN { printf "%.0f", log($(tiles_2))/log(2) }')
 tiles_log_real  := $(shell awk 'BEGIN { printf "%.0f", log($(tiles))/log(2) }')
 
 GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
-GVRUN_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --trace-level=trace run --trace=kill-module
 
-.PHONY: gvsoc build format
+CMAKE ?= cmake
+
+GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace --trace=kill-module
+GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
+GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
+profile_tile		?=
+PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=tile-$(profile_tile)-idma-ctrl-mm,)
+
+.PHONY: gvsoc build format run_profiling
 
 format:
 	@bash scripts/ci/format-changed.sh apply
@@ -78,8 +96,8 @@ endif
 ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
 endif
-	cmake -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -B $(CMAKE_BUILDDIR) --trace-expand
-	cmake --build $(CMAKE_BUILDDIR) --verbose
+	$(CMAKE) -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz) -B $(CMAKE_BUILDDIR) --trace-expand
+	$(CMAKE) --build $(CMAKE_BUILDDIR) --verbose
 
 set_mesh:
 ifeq ($(tiles), 1)
@@ -103,15 +121,14 @@ endif
 ifeq ($(platform), gvsoc)
 	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) --trace-level=trace run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --trace=magia-tile-0/tile-0-cv32-core/insn:trace.txt
 else ifeq ($(platform), rtl)
-	sed -i 's/ QUESTA ?= questa-2025.1/ QUESTA ?= questa-2023.4/' $(MAGIA_DIR)/Makefile
-	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && mkdir -p build
-	cp ./build/bin/$(test) $(BUILD_DIR)/build/verif
+	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
+	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
 	objcopy --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
 	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
-	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR)/build/stim_instr.txt $(BUILD_DIR)/build/stim_data.txt
-	cd $(BUILD_DIR)													&& \
-	cp -sf ../../../sim/modelsim.ini modelsim.ini    				&& \
-	ln -sfn ../../../sim/work work
+	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
+	cd $(BUILD_DIR_ABS)													&& \
+	cp -sf "$(MAGIA_DIR_ABS)/sim/modelsim.ini" modelsim.ini    			&& \
+	ln -sfn "$(MAGIA_DIR_ABS)/sim/work" work
 	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
@@ -120,6 +137,15 @@ else ifeq ($(platform), rtl)
 else
 	$(error Only rtl and gvsoc are supported as platforms.)
 endif
+
+run_profiling: set_mesh
+ifndef test
+	$(error Proper formatting is: make run_profiling test=<test_name>)
+endif
+ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
+	$(error No test found with name: $(test))
+endif
+	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG)
 
 MAGIA: set_mesh
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
@@ -149,8 +175,9 @@ ifneq (,$(filter $(build_mode), update synth profile))
 	make python_venv || true											&& \
 	source setup_env.sh 												&& \
 	make python_deps || true											&& \
+	curl --proto '=https' --tlsv1.2 https://pulp-platform.github.io/bender/init -sSf | sh -s -- --local && \
+	export PATH=$$(pwd):$$PATH											&& \
 	python -m pip install --upgrade "setuptools<81"						&& \
-	make bender															&& \
 	make $(build_mode)-ips > $(build_mode)-ips.log mesh_dv=$(mesh_dv)	&& \
 	make floonoc-patch || true											&& \
 	make build-hw > build-hw.log mesh_dv=$(mesh_dv) fast_sim=$(fast_sim)
@@ -165,12 +192,17 @@ ifeq ($(target_platform), magia_v2)
 else
 	$(error unrecognized platform (acceptable platform: magia_v2).)
 endif
+ifeq ($(spatz), 1)
+	sed -i 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)False/\1True/' $(GVSOC_DIR)/pulp/pulp/chips/magia_v2/arch.py
+else
+	sed -i 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)True/\1False/' "$(GVSOC_DIR)/pulp/pulp/chips/magia_v2/arch.py"
+endif
 	cd $(GVSOC_DIR)	&& \
 	make build TARGETS=magia_v2
 
-# Pinned commits for gvsoc/gvsoc-core/gvsoc-pulp live in scripts/deps.env.
+# Pinned commits for FondazioneChipsIT/gvsoc, gvsoc-core, pulp, engine, gvrun live in scripts/deps.env.
 gvsoc_init:
-	git clone https://github.com/gvsoc/gvsoc.git || true
+	git clone https://github.com/FondazioneChipsIT/gvsoc.git || true
 	cd $(GVSOC_DIR) && \
 	git fetch origin $(GVSOC_COMMIT) && \
 	git checkout $(GVSOC_COMMIT) && \
@@ -180,7 +212,13 @@ gvsoc_init:
 	git checkout $(GVSOC_CORE_COMMIT) && \
 	cd ../pulp && \
 	git fetch origin $(GVSOC_PULP_COMMIT) && \
-	git checkout $(GVSOC_PULP_COMMIT)
+	git checkout $(GVSOC_PULP_COMMIT) && \
+	cd ../engine && \
+	git fetch origin $(GVSOC_ENGINE_COMMIT) && \
+	git checkout $(GVSOC_ENGINE_COMMIT) && \
+	cd ../gvrun && \
+	git fetch origin $(GVSOC_GVRUN_COMMIT) && \
+	git checkout $(GVSOC_GVRUN_COMMIT)
 
 gvsoc_venv:
 	eval "$(pyenv init -)" && \
@@ -188,3 +226,28 @@ gvsoc_venv:
 	python -m venv gvsoc_venv && \
 	source gvsoc_venv/bin/activate && \
 	pip install .
+
+llvm:
+	mkdir -p $(LLVM_DIR)
+	if [ ! -d "$(LLVM_DIR)/llvm-project/.git" ]; then \
+		cd $(LLVM_DIR) && git clone $(LLVM_REPO); \
+	fi
+	cd $(LLVM_DIR)/llvm-project && \
+	git checkout $(LLVM_COMMIT) && \
+	git submodule update --init --recursive --jobs=$(LLVM_JOBS) .
+	mkdir -p $(LLVM_INSTALL_DIR)
+	cd $(LLVM_DIR)/llvm-project && mkdir -p build && cd build && \
+	$(LLVM_CMAKE) \
+		-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
+		-DCMAKE_CXX_COMPILER=${CXX} \
+		-DCMAKE_C_COMPILER=${CC} \
+		-DLLVM_OPTIMIZED_TABLEGEN=True \
+		-DLLVM_ENABLE_PROJECTS="clang;lld" \
+		-DLLVM_TARGETS_TO_BUILD="RISCV" \
+		-DLLVM_DEFAULT_TARGET_TRIPLE=riscv32-unknown-elf \
+		-DLLVM_ENABLE_LLD=False \
+		-DLLVM_APPEND_VC_REV=ON \
+		-DCMAKE_BUILD_TYPE=Release \
+		../llvm && \
+	make -j$(LLVM_JOBS) all && \
+	make install

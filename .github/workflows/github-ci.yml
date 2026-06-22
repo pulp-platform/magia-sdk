@@ -13,6 +13,7 @@ name: gitlab-ci
     branches:
       - main
   pull_request:
+    push:
   workflow_dispatch:
 
 jobs:
