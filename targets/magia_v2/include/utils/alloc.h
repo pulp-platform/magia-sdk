@@ -23,14 +23,15 @@
 
 #include "magia_utils.h"
 
-#define ALIGNMENT       (4)
-#define ALIGN_4B(addr)  (((addr) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
+#define ALIGNMENT      (4)
+#define ALIGN_4B(addr) (((addr) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
-#define L1_TILE_BASE    (L1_BASE + (get_hartid() * L1_TILE_OFFSET))
-#define L1_TILE_END     (L1_TILE_BASE + L1_SIZE)
+#define L1_TILE_BASE   (L1_BASE + (get_hartid() * L1_TILE_OFFSET))
+#define L1_TILE_END    (L1_TILE_BASE + L1_SIZE)
 
-#define L1_TAIL         (L1_TILE_BASE)
-#define L1_TAIL_START   ALIGN_4B(L1_TILE_BASE + (sizeof(uint32_t)))  /* Reserves 4 Bytes for L1_TAIL */
+#define L1_TAIL        (L1_TILE_BASE)
+#define L1_TAIL_START  ALIGN_4B(L1_TILE_BASE + (sizeof(uint32_t))) /* Reserves 4 Bytes for L1_TAIL \
+                                                                    */
 
 static inline void l1_alloc_init(void)
 {
@@ -40,7 +41,7 @@ static inline void l1_alloc_init(void)
 static inline void *l1_alloc(size_t size)
 {
     uint32_t current_offset = mmio32(L1_TAIL);
-    uint32_t next_offset = ALIGN_4B(current_offset + size);
+    uint32_t next_offset    = ALIGN_4B(current_offset + size);
 
     /* check: out-of-memory || overflow (if 'size' is too big) */
     if (next_offset > L1_TILE_END || next_offset < current_offset) {
