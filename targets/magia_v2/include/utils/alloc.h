@@ -30,8 +30,9 @@
 #define L1_TILE_END    (L1_TILE_BASE + L1_SIZE)
 
 #define L1_TAIL        (L1_TILE_BASE)
-#define L1_TAIL_START  ALIGN_4B(L1_TILE_BASE + (sizeof(uint32_t))) /* Reserves 4 Bytes for L1_TAIL \
-                                                                    */
+#define L1_TAIL_START                                                                              \
+    ALIGN_4B(L1_TILE_BASE + (sizeof(uint32_t))) /* Reserves 4 Bytes for L1_TAIL                    \
+                                                 */
 
 static inline void l1_alloc_init(void)
 {
