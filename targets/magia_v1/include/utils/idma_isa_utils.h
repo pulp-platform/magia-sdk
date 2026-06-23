@@ -309,12 +309,13 @@ inline void idma_mm_conf(uint32_t dir,
                          uint32_t enable_nd)
 {
     uint32_t conf_val = 0;
+
     if (dir) {
-        conf_val |= (1 << 12);
-        conf_val |= (0 << 15);
+        conf_val |= (IDMA_PROT_OBI << IDMA_CONF_SRC_PROTOCOL_OFFSET);
+        conf_val |= (IDMA_PROT_AXI << IDMA_CONF_DST_PROTOCOL_OFFSET);
     } else {
-        conf_val |= (0 << 12);
-        conf_val |= (1 << 15);
+        conf_val |= (IDMA_PROT_AXI << IDMA_CONF_SRC_PROTOCOL_OFFSET);
+        conf_val |= (IDMA_PROT_OBI << IDMA_CONF_DST_PROTOCOL_OFFSET);
     }
 
     if (decouple_aw)

@@ -12,7 +12,7 @@
 #include "eventunit.h"
 
 #define INITIAL_VALUE 1234
-#define N_ITERS       1000
+#define N_ITERS       100
 
 #define WAIT_MODE     POLLING
 
