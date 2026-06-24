@@ -300,8 +300,6 @@ int main(void){
         eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     }
 
-<<<<<<< HEAD
-=======
     //printf("I'm done dog\n");
     fsync_sync_global(&fsync_ctrl);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
@@ -309,7 +307,6 @@ int main(void){
     int end = perf_get_cycles();
     printf("[tile %d]Cycles: %d\n", hartid, end - start);
 
->>>>>>> 7c362eb (Update project)
     /**
     * 7. Check results.
     */

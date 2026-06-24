@@ -558,10 +558,16 @@ int main(void)
     Final synchronization
     ==============================================================
     */
+    uint32_t fsync_wait_start = perf_get_cycles();
+    fsync_sync_global(&fsync_ctrl);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    uint32_t fsync_wait_end = perf_get_cycles();
+    uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start;
+    
 
     run_time_cycle[hartid] = perf_get_cycles() - run_time;
     DMA_wait_cycle[hartid] = dma_wait_time;
-    fsync_wait_cycle[hartid] = 0;
+    fsync_wait_cycle[hartid] = fsync_wait_time;
     compute_cycle[hartid] = computed_time;
     DMA_bytes[hartid] = dma_bytes;
 
@@ -586,15 +592,6 @@ int main(void)
         DMA_bytes[hartid],
         DMA_bytes[hartid] / DMA_wait_cycle[hartid]
     );
-
-    uint32_t fsync_wait_start = perf_get_cycles();
-    fsync_sync_global(&fsync_ctrl);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-    uint32_t fsync_wait_end = perf_get_cycles();
-    uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start;
-
-
-
 
     /*
     ==============================================================
