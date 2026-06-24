@@ -73,11 +73,11 @@ GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
 
 CMAKE ?= cmake
 
-GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace --trace=kill-module
+GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace
 GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
 GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 profile_tile		?=
-PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=tile-$(profile_tile)-idma-ctrl-mm,)
+PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=idma-ctrl-mm,)
 
 .PHONY: gvsoc build format run_profiling
 
