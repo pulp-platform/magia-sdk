@@ -22,6 +22,7 @@ testlogs/
 targets/magia_v1/include/utils/cache_fill.h
 magia_deployment.egg*
 .python-version
+<<<<<<< HEAD
 cache_fill.h
 regression_output*
 scripts/wave.do
