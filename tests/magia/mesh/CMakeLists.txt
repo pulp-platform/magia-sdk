@@ -31,7 +31,7 @@ add_subdirectory(fsync_lr)
 #add_subdirectory(pouya_spmv_simple)
 #add_subdirectory(pouya_spmv_compression)
 add_subdirectory(pouya_spmv_idma)
-add_subdirectory(pouya_spmv_bcsr)
+# add_subdirectory(pouya_spmv_bcsr)
 
 # add_subdirectory(hello_world)
 # add_subdirectory(pouya_mat_mul)
