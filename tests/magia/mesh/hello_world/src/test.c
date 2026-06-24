@@ -10,24 +10,21 @@
 /**
  * This test gently asks for each tile to say hello world.
  */
-int main(void){
-    perf_start();
-    int start = perf_get_cycles();
-
+int main(void)
+{
     uint32_t hartid = get_hartid();
 
     int test = NULL;
 
-    volatile float16alt a = -12.0456f;
-    volatile float16alt b = 4.0f;
-    volatile float16alt c = (a + b);
-    //int test_integer = -123;
-    
-    uint32_t *v = (uint32_t *) &c; 
-    printf("Hello world! %#x\n", *v);
+    // volatile float16alt a = -12.0456f;
+    // volatile float16alt b = 4.0f;
+    // volatile float16alt c = (a + b);
+    int test_integer = -123;
+
+    // uint32_t *v = (uint32_t *) &c;
+    // printf("Hello world! %#x\n", *v);
     // printf("Hello world! %f\n", c);
-    //printf("Hello world! %d\n", test_integer);
-    int end = perf_get_cycles();
-    printf("[tile %d]Cycles: %d\n", hartid, end - start);
+    printf("Hello world! %d\n", test_integer);
+
     return 0;
 }

@@ -42,7 +42,7 @@ project(magia-sdk LANGUAGES C ASM)
 
 set(ABI ilp32)
 if (TARGET_PLATFORM STREQUAL "magia_v1")
-    set(ISA rv32imafc)
+    set(ISA rv32imac)
 elseif (TARGET_PLATFORM STREQUAL "magia_v2")
     set(ISA rv32imcxgap9)
 endif ()

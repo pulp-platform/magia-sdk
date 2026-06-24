@@ -48,7 +48,11 @@ profile_snc		?= 0
 
 target_platform ?= magia_v2
 compiler 		?= GCC_PULP
+ifeq ($(target_platform), magia_v2)
 ISA				?= rv32imcxgap9
+else ifeq($(target_platform), magia_v1)
+ISA				?= rv32imac
+endif
 gui 			?= 0
 tiles 			?= 2
 spatz			?= 1
