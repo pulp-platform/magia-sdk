@@ -78,7 +78,7 @@ GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_WORK_DIR) --attr magia_v2/n_tiles_x=$(ti
 GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
 GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 profile_tile		?=
-PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=tile-$(profile_tile)-idma-ctrl-mm,)
+PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=idma-ctrl-mm,)
 
 GVSOC2PERFETTO_SCRIPT  ?= scripts/gvsoc2perfetto.py
 GVSOC2PERFETTO_VCD     ?= $(GVSOC_WORK_DIR)/all.vcd
