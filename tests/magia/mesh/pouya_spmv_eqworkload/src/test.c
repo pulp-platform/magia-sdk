@@ -4,7 +4,21 @@
 #include "idma.h"
 #include "fsync.h"
 #include "eventunit.h"
-#include "test.h"
+
+
+#include "sme3Da.h"
+//#include "poisson3Da.h"
+//#include "raefsky5.h"
+//#include "ex6.h"
+//#include "cavity05.h"
+//#include "g7jac140.h"
+//#include "fxm4_6.h"
+//#include "scsd8-2r.h"
+//#include "e18.h"
+//#include "scfxm1-2b.h"
+//#include "sctap1-2b.h"
+//#include "testbig.h"
+
 
 #define WAIT_MODE WFE
 #define clock_freq_MHz 1000
@@ -593,6 +607,8 @@ int main(void)
         DMA_bytes[hartid] / DMA_wait_cycle[hartid]
     );
 
+
+
     /*
     ==============================================================
     Verification + metrics
@@ -715,9 +731,11 @@ int main(void)
         printf("dma_wait_cycles          : %u\n", max_dma_wait);
 
         printf("fsync_wait_cycles        : %u\n", max_fsync_wait);
+        
         for (int i = 0; i < NUM_CORES; i++) {
             printf("wait to run ratio [core %d]  : %u%%\n", i, (fsync_wait_cycle[i]) * 100 / run_time_cycle[i]);
         }
+        
         printf("compute_cycles           : %u\n", max_compute);
 
         printf("NNZ                       : %u\n", NNZ);
