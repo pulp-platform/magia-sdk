@@ -72,6 +72,34 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl,
                           uint32_t reps);
 
 /**
+ * Start 3-dimensional memory copy.
+ * Copies `reps3` planes of `reps2` rows of `len` bytes each. Within a plane rows are
+ * separated by `std2` bytes on the L2 side (L1 is contiguous). Between planes the L2
+ * base advances by `std3` bytes and the L1 base advances by `reps2 * len` bytes.
+ *
+ * @param ctrl  IDMA controller handle.
+ * @param dir   Copy direction. 0 = AXI to OBI (L2 to L1), !0 = OBI to AXI (L1 to L2).
+ * @param axi_addr AXI (L2) memory address of first element.
+ * @param obi_addr OBI (L1) memory address of first element.
+ * @param len   Byte length of each innermost row.
+ * @param std2  Stride in bytes between rows on the L2 side.
+ * @param reps2 Number of rows per plane.
+ * @param std3  Stride in bytes between planes on the L2 side.
+ * @param reps3 Number of planes.
+ *
+ * @return 0 on successful dispatch.
+ */
+extern int idma_memcpy_3d(idma_controller_t *ctrl,
+                          uint8_t dir,
+                          uint32_t axi_addr,
+                          uint32_t obi_addr,
+                          uint32_t len,
+                          uint32_t std2,
+                          uint32_t reps2,
+                          uint32_t std3,
+                          uint32_t reps3);
+
+/**
  * WIP
  * IDMA API
  */
@@ -91,6 +119,16 @@ struct idma_controller_api {
                      uint32_t len,
                      uint32_t std,
                      uint32_t reps);
+
+    int (*memcpy_3d)(idma_controller_t *ctrl,
+                     uint8_t dir,
+                     uint32_t axi_addr,
+                     uint32_t obi_addr,
+                     uint32_t len,
+                     uint32_t std2,
+                     uint32_t reps2,
+                     uint32_t std3,
+                     uint32_t reps3);
 };
 
 /*
