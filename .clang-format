@@ -17,10 +17,7 @@ SpacesInParentheses: false
 # Alignment
 AlignConsecutiveAssignments: Consecutive
 AlignConsecutiveDeclarations: false
-AlignConsecutiveMacros:
-  Enabled: true
-  AcrossEmptyLines: true
-  AcrossComments: true
+AlignConsecutiveMacros: AcrossEmptyLinesAndComments
 AlignOperands: Align
 AlignAfterOpenBracket: Align
 
@@ -33,9 +30,8 @@ AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 
 # Includes
-SortIncludes: Never
+SortIncludes: false
 
 # Other
 PointerAlignment: Right
 SpaceBeforeAssignmentOperators: true
-InsertNewlineAtEOF: true

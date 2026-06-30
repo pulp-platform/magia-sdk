@@ -5,13 +5,12 @@
 // Viviane Potocnik <vivianep@iis.ee.ethz.ch>
 // Alberto Dequino <alberto.dequino@unibo.it>
 
-
 #ifndef HAL_EU_H
 #define HAL_EU_H
 
 typedef enum {
-    POLLING = 0,                  // Busy wait polling
-    WFE,                          // Wait For Event (RISC-V)
+    POLLING = 0, // Busy wait polling
+    WFE,         // Wait For Event (RISC-V)
 } eu_wait_mode_t;
 
 /** Forward declaration of the event unit controller instance and API structure. */
@@ -23,9 +22,9 @@ typedef struct eu_controller_api eu_controller_api_t;
  * Holds the API function pointers, base address and controller-specific configuration.
  */
 struct eu_controller {
-    eu_controller_api_t *api;       /**< Function pointers for this interface. */
-    uint32_t base;                  /**< MMIO base address (if applicable). */
-    void *cfg;                      /**< Driver‑specific configuration. */
+    eu_controller_api_t *api; /**< Function pointers for this interface. */
+    uint32_t base;            /**< MMIO base address (if applicable). */
+    void *cfg;                /**< Driver‑specific configuration. */
 };
 
 /**
@@ -33,7 +32,7 @@ struct eu_controller {
  * This structure holds the configuration settings for event unit initialization.
  */
 typedef struct {
-    uint32_t hartid;    /**< Mesh tile ID*/
+    uint32_t hartid; /**< Mesh tile ID*/
 } eu_config_t;
 
 /**
@@ -71,7 +70,7 @@ extern uint32_t eu_redmule_is_busy(eu_controller_t *ctrl);
 extern uint32_t eu_redmule_is_done(eu_controller_t *ctrl);
 
 //=============================================================================
-// iDMA-specific Event Functions  
+// iDMA-specific Event Functions
 //=============================================================================
 
 /**
@@ -93,7 +92,8 @@ extern uint32_t eu_idma_wait(eu_controller_t *ctrl, eu_wait_mode_t mode);
  * @param mode Wait mode (polling, WFE, etc.)
  * @return Non-zero if specified direction completed, 0 if timeout/error
  */
-extern uint32_t eu_idma_wait_direction(eu_controller_t *ctrl, uint32_t direction, eu_wait_mode_t mode);
+extern uint32_t
+eu_idma_wait_direction(eu_controller_t *ctrl, uint32_t direction, eu_wait_mode_t mode);
 
 /**
  * @brief Wait for L2->L1 (AXI2OBI) completion specifically
@@ -103,7 +103,7 @@ extern uint32_t eu_idma_wait_direction(eu_controller_t *ctrl, uint32_t direction
 extern uint32_t eu_idma_wait_a2o(eu_controller_t *ctrl, eu_wait_mode_t mode);
 
 /**
- * @brief Wait for L1->L2 (OBI2AXI) completion specifically  
+ * @brief Wait for L1->L2 (OBI2AXI) completion specifically
  * @param mode Wait mode (polling, WFE, etc.)
  * @return Non-zero if L1->L2 completed, 0 if timeout/error
  */
@@ -192,29 +192,52 @@ extern uint32_t eu_fsync_is_done(eu_controller_t *ctrl);
  */
 extern uint32_t eu_fsync_has_error(eu_controller_t *ctrl);
 
+//=============================================================================
+// Spatz-specific Event Functions
+//=============================================================================
+
+/**
+ * @brief Initialize Event Unit for Spatz events
+ */
+extern void eu_spatz_init(eu_controller_t *ctrl, uint32_t enable_irq);
+
+/**
+ * @brief Wait for Spatz completion in WFE mode
+ */
+extern uint32_t eu_spatz_wait(eu_controller_t *ctrl, eu_wait_mode_t mode);
+
+/**
+ * @brief Check if Spatz has completed, non-blocking
+ * @return Non-zero if Spatz completed
+ */
+extern uint32_t eu_spatz_is_done(eu_controller_t *ctrl);
+
 struct eu_controller_api {
-    void (*init) (eu_controller_t *ctrl);
-    void (*redmule_init) (eu_controller_t *ctrl, uint32_t enable_irq);
-    uint32_t (*redmule_wait) (eu_controller_t *ctrl, eu_wait_mode_t mode); 
-    uint32_t (*redmule_is_busy) (eu_controller_t *ctrl);
-    uint32_t (*redmule_is_done) (eu_controller_t *ctrl);
-    void (*idma_init) (eu_controller_t *ctrl, uint32_t enable_irq);
-    uint32_t (*idma_wait_direction) (eu_controller_t *ctrl, uint32_t direction, eu_wait_mode_t mode);
-    uint32_t (*idma_wait_a2o) (eu_controller_t *ctrl, eu_wait_mode_t mode);
-    uint32_t (*idma_wait_o2a) (eu_controller_t *ctrl, eu_wait_mode_t mode);
-    uint32_t (*idma_is_done) (eu_controller_t *ctrl);
-    uint32_t (*idma_a2o_is_done) (eu_controller_t *ctrl);
-    uint32_t (*idma_o2a_is_done) (eu_controller_t *ctrl);
-    uint32_t (*idma_has_error) (eu_controller_t *ctrl);
-    uint32_t (*idma_a2o_has_error) (eu_controller_t *ctrl);
-    uint32_t (*idma_o2a_has_error) (eu_controller_t *ctrl);
-    uint32_t (*idma_is_busy) (eu_controller_t *ctrl);
-    uint32_t (*idma_a2o_is_busy) (eu_controller_t *ctrl);
-    uint32_t (*idma_o2a_is_busy) (eu_controller_t *ctrl);
-    void (*fsync_init) (eu_controller_t *ctrl, uint32_t enable_irq);
-    uint32_t (*fsync_wait) (eu_controller_t *ctrl, eu_wait_mode_t mode);
-    uint32_t (*fsync_is_done) (eu_controller_t *ctrl);
-    uint32_t (*fsync_has_error) (eu_controller_t *ctrl);
+    void (*init)(eu_controller_t *ctrl);
+    void (*redmule_init)(eu_controller_t *ctrl, uint32_t enable_irq);
+    uint32_t (*redmule_wait)(eu_controller_t *ctrl, eu_wait_mode_t mode);
+    uint32_t (*redmule_is_busy)(eu_controller_t *ctrl);
+    uint32_t (*redmule_is_done)(eu_controller_t *ctrl);
+    void (*idma_init)(eu_controller_t *ctrl, uint32_t enable_irq);
+    uint32_t (*idma_wait_direction)(eu_controller_t *ctrl, uint32_t direction, eu_wait_mode_t mode);
+    uint32_t (*idma_wait_a2o)(eu_controller_t *ctrl, eu_wait_mode_t mode);
+    uint32_t (*idma_wait_o2a)(eu_controller_t *ctrl, eu_wait_mode_t mode);
+    uint32_t (*idma_is_done)(eu_controller_t *ctrl);
+    uint32_t (*idma_a2o_is_done)(eu_controller_t *ctrl);
+    uint32_t (*idma_o2a_is_done)(eu_controller_t *ctrl);
+    uint32_t (*idma_has_error)(eu_controller_t *ctrl);
+    uint32_t (*idma_a2o_has_error)(eu_controller_t *ctrl);
+    uint32_t (*idma_o2a_has_error)(eu_controller_t *ctrl);
+    uint32_t (*idma_is_busy)(eu_controller_t *ctrl);
+    uint32_t (*idma_a2o_is_busy)(eu_controller_t *ctrl);
+    uint32_t (*idma_o2a_is_busy)(eu_controller_t *ctrl);
+    void (*fsync_init)(eu_controller_t *ctrl, uint32_t enable_irq);
+    uint32_t (*fsync_wait)(eu_controller_t *ctrl, eu_wait_mode_t mode);
+    uint32_t (*fsync_is_done)(eu_controller_t *ctrl);
+    uint32_t (*fsync_has_error)(eu_controller_t *ctrl);
+    void (*spatz_init)(eu_controller_t *ctrl, uint32_t enable_irq);
+    uint32_t (*spatz_wait)(eu_controller_t *ctrl, eu_wait_mode_t mode);
+    uint32_t (*spatz_is_done)(eu_controller_t *ctrl);
 };
 
 /*

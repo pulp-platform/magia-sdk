@@ -9,7 +9,7 @@
 #   TILES          mesh dimension N         (default: 8)
 #   GEMM_PLATFORM  gvsoc|rtl                (default: gvsoc)
 #   TEST_NAME      GEMM variant binary name (default: test_gemm)
-#                  e.g. test_gemm, test_gemm_interlaced,
+#                  e.g. test_gemm, test_gemm_l2_naive, test_gemm_interlaced,
 #                       test_gemm_l1_naive, test_gemm_l1_interlaced,
 #                       test_gemm_fifo
 #   MAKE           make binary              (default: make)

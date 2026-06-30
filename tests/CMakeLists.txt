@@ -7,10 +7,17 @@
 # Alberto Dequino <alberto.dequino@unibo.it>
 
 # Define mappings for tests
-set(TEST_MAPPINGS
-    magia_v1:magia
-    magia_v2:magia
-)
+if(SPATZ_TESTS)
+    set(TEST_MAPPINGS
+        magia_v1:magia
+        magia_v2:magia,spatz_on_magia
+    )
+else()
+    set(TEST_MAPPINGS
+        magia_v1:magia
+        magia_v2:magia
+    )
+endif()
 
 # Call the macro
 add_magia_subdirectories(${TARGET_PLATFORM} "Test" "${TEST_MAPPINGS}")
