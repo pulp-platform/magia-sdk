@@ -50,7 +50,7 @@ target_platform ?= magia_v2
 compiler 		?= GCC_PULP
 ifeq ($(target_platform), magia_v2)
 ISA				?= rv32imcxgap9
-else ifeq($(target_platform), magia_v1)
+else
 ISA				?= rv32imac
 endif
 gui 			?= 0
@@ -222,6 +222,11 @@ gvsoc_init:
 	cd ../gvrun && \
 	git fetch origin $(GVSOC_GVRUN_COMMIT) && \
 	git checkout $(GVSOC_GVRUN_COMMIT)
+
+gvsoc_uv:
+	uv venv --python 3.12 gvsoc_venv && \
+	source gvsoc_venv/bin/activate && \
+	uv pip install .
 
 gvsoc_venv:
 	eval "$(pyenv init -)" && \
