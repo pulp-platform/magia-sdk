@@ -146,7 +146,12 @@ int idma32_memcpy_3d(idma_controller_t *ctrl,
                      uint32_t std3,
                      uint32_t reps3)
 {
-#if IDMA_MM == 0
+    // The memory-mapped front-end (idma_mm_*) never wires REPS_3/STRIDE_3 into the
+    // transfer it triggers -- it only relays the 2D (REPS_2/STRIDE_2) parameters, so any
+    // reps3 > 1 is silently dropped and only the first plane is ever copied. This is true
+    // regardless of IDMA_MM, so 3D transfers always go through the ISA instruction path,
+    // whose CONF instruction natively enables the ND extension and has dedicated
+    // STD_3/REP_3 set instructions.
     if (dir) { // OBI to AXI (L1 to L2)
         idma_conf_out();
         idma_set_addr_len_out(axi_addr, obi_addr, len);
@@ -161,20 +166,6 @@ int idma32_memcpy_3d(idma_controller_t *ctrl,
         idma_start_in();
     }
     return 0;
-#else
-    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
-    if (dir) {
-        idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
-        idma_mm_set_std2_rep2(dir, std2, len, reps2);
-        idma_mm_set_std3_rep3(dir, std3, reps2 * len, reps3);
-    } else {
-        idma_mm_set_addr_len(dir, obi_addr, axi_addr, len);
-        idma_mm_set_std2_rep2(dir, len, std2, reps2);
-        idma_mm_set_std3_rep3(dir, reps2 * len, std3, reps3);
-    }
-    idma_mm_start(dir);
-    return 0;
-#endif
 }
 
 extern int idma_init(idma_controller_t *ctrl)
