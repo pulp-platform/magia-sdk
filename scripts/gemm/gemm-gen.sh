@@ -19,7 +19,7 @@ DIM_E="${DIM_E:-64}"
 DIM_F="${DIM_F:-128}"
 SEED="${SEED:-42}"
 
-python3 tests/magia/mesh/gemm/via_l2/gen_golden.py \
+python3 tests/magia/mesh/gemm_comm/gen_golden.py \
     --dim-a "$DIM_A" --dim-b "$DIM_B" --dim-c "$DIM_C" \
     --dim-d "$DIM_D" --dim-e "$DIM_E" --dim-f "$DIM_F" \
     --seed "$SEED"

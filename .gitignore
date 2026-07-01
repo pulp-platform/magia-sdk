@@ -28,7 +28,7 @@ scripts/wave.do
 llvm/
 
 # Generated test inputs
-tests/magia/mesh/gemm/*/include/*
+tests/magia/mesh/gemm**/include/*
 
 # Editor
 .vscode/
