@@ -135,6 +135,8 @@ Once the [Prerequisites](#prerequisites) are in place:
 
 If you want to run gvsoc or a binary from outside the magia-sdk directory you can edit the **GVSOC_ABS_PATH** and **BIN_ABS_PATH** option in Makefile or directly on the *run* command line.
 
+GVSOC will use **GVSOC_WORK_DIR** as working directory (default: `./gvsoc_work`). You will find traces, outputs, etc. there.
+
 To ensure a clean re-build of the RTL, you can run:
 
 `make rtl-clean`

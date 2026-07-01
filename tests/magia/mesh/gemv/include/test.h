@@ -1,3 +1,7 @@
+// Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+
 // Auto-generated data (uint16_t) for Z = Y + X*W, with X 1x64, W 64x64, Y 1x64 and Z 1x64
 // Python computes in full precision, values are truncated to 16 bits when emitted
 // RNG seed: 1

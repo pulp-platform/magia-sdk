@@ -73,7 +73,8 @@ GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
 
 CMAKE ?= cmake
 
-GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_ABS_PATH)/Documents/test --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace --trace=kill-module
+GVSOC_WORK_DIR ?= ./gvsoc_work
+GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_WORK_DIR) --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace --trace=kill-module
 GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
 GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 profile_tile		?=
@@ -108,7 +109,10 @@ ifeq ($(tiles), 1)
 	$(eval mesh_dv=0)
 endif
 
-run: set_mesh
+$(GVSOC_WORK_DIR):
+	mkdir -p $(GVSOC_WORK_DIR)
+
+run: set_mesh $(GVSOC_WORK_DIR)
 	@echo 'Magia is available at https://github.com/pulp-platform/MAGIA.git'
 	@echo 'please run "source setup_env.sh" in the magia folder before running this script'
 	@echo 'and make sure the risc-v objdump binary is visible on path using "which riscv32-unknown-elf-objdump".'
@@ -141,7 +145,7 @@ else
 	$(error Only rtl and gvsoc are supported as platforms.)
 endif
 
-run_profiling: set_mesh
+run_profiling: set_mesh $(GVSOC_WORK_DIR)
 ifndef test
 	$(error Proper formatting is: make run_profiling test=<test_name>)
 endif

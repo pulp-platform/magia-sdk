@@ -1,4 +1,4 @@
-// Copyright 2025 University of Bologna
+// Copyright 2025-2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
 // Licensed under the Apache License, Version 2.0
 // SPDX-License-Identifier: Apache-2.0
 //
