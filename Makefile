@@ -80,7 +80,25 @@ GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 profile_tile		?=
 PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=tile-$(profile_tile)-idma-ctrl-mm,)
 
-.PHONY: gvsoc build format run_profiling
+GVSOC2PERFETTO_SCRIPT  ?= scripts/gvsoc2perfetto.py
+GVSOC2PERFETTO_VCD     ?= $(GVSOC_WORK_DIR)/all.vcd
+GVSOC2PERFETTO_OUT     ?= $(GVSOC_WORK_DIR)/trace.json
+# Per-tile: CV32E40P core, light_redmule, both idma ports (frontend descriptor
+# fields + real me_state/be_state FSM), Snitch+Spatz (scalar core + Spatz/ara
+# vector unit). Chip-level: NoC mesh routers/network-interfaces, L2 traffic.
+GVSOC2PERFETTO_INCLUDE ?= (?x) \
+	tile-\d+-cv32-core\.(busy|asm|func)$$ \
+  | tile-\d+-redmule\.(busy|fsm_state)$$ \
+  | tile-\d+-idma[01]\.(fe\.do_transfer_grant|me\.me_state|be\.be_state)$$ \
+  | tile-\d+-snitch-spatz\.(busy|asm|func)$$ \
+  | tile-\d+-snitch-spatz\.ara\.(active|label)$$ \
+  | tile-\d+-snitch-spatz\.ara\.(vfpu|vlsu|vslide)\.(active|label)$$ \
+  | magia-noc\.(req|rsp|wide)_router_\d+_\d+\.(stalled_queue_\w+|req_is_write)$$ \
+  | magia-noc\.(req|rsp|wide)_router_\d+_\d+\.req(_size)?$$ \
+  | magia-noc\.ni_\d+_\d+\.(narrow_req|wide_req)$$ \
+  | L2-mem\.(req_addr|req_size|req_is_write)$$
+
+.PHONY: gvsoc build format run_profiling gvsoc2perfetto
 
 format:
 	@bash scripts/ci/format-changed.sh apply
@@ -153,6 +171,22 @@ ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
 	$(error No test found with name: $(test))
 endif
 	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG)
+
+# Converts the VCD from `make run_profiling` into a Perfetto trace.json
+# (open at https://ui.perfetto.dev). Requires run_profiling to have been run
+# first. Override GVSOC2PERFETTO_VCD/_OUT/_INCLUDE to customize.
+gvsoc2perfetto:
+ifeq (,$(wildcard $(GVSOC2PERFETTO_VCD)))
+	$(error No VCD found at $(GVSOC2PERFETTO_VCD) -- run `make run_profiling test=<test_name>` first)
+endif
+	python3 $(GVSOC2PERFETTO_SCRIPT) $(GVSOC2PERFETTO_VCD) \
+		-o $(GVSOC2PERFETTO_OUT) \
+		--state-map 'fsm_state=0:idle,1:preload,2:routine,3:storing,4:finished,5:acknowledge' \
+		--state-map 'me_state=0:idle,1:decomposing' \
+		--state-map 'be_state=0:idle,1:active' \
+		--rename 'ara=vfu' \
+		--stats \
+		--include '$(GVSOC2PERFETTO_INCLUDE)'
 
 MAGIA: set_mesh
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
