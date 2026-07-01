@@ -123,51 +123,6 @@ int idma32_memcpy_2d(idma_controller_t *ctrl,
     return 0;
 }
 
-/**
- * Start 3-dimensional memory copy.
- *
- * @param dir   Copy Direction. 0 = AXI to OBI (L2 to L1), !0 = OBI to AXI (L1 to L2).
- * @param axi_addr AXI/L2 memory address of first element.
- * @param obi_addr OBI/L1 memory address of first element.
- * @param len   Byte length of each innermost row.
- * @param std2  Stride in bytes between rows on the L2 side; L1 rows are contiguous (stride = len).
- * @param reps2 Number of rows per plane.
- * @param std3  Stride in bytes between planes on the L2 side; L1 planes are contiguous (stride =
- * reps2*len).
- * @param reps3 Number of planes.
- */
-int idma32_memcpy_3d(idma_controller_t *ctrl,
-                     uint8_t dir,
-                     uint32_t axi_addr,
-                     uint32_t obi_addr,
-                     uint32_t len,
-                     uint32_t std2,
-                     uint32_t reps2,
-                     uint32_t std3,
-                     uint32_t reps3)
-{
-    // The memory-mapped front-end (idma_mm_*) never wires REPS_3/STRIDE_3 into the
-    // transfer it triggers -- it only relays the 2D (REPS_2/STRIDE_2) parameters, so any
-    // reps3 > 1 is silently dropped and only the first plane is ever copied. This is true
-    // regardless of IDMA_MM, so 3D transfers always go through the ISA instruction path,
-    // whose CONF instruction natively enables the ND extension and has dedicated
-    // STD_3/REP_3 set instructions.
-    if (dir) { // OBI to AXI (L1 to L2)
-        idma_conf_out();
-        idma_set_addr_len_out(axi_addr, obi_addr, len);
-        idma_set_std2_rep2_out(std2, len, reps2);
-        idma_set_std3_rep3_out(std3, reps2 * len, reps3);
-        idma_start_out();
-    } else { // AXI to OBI (L2 to L1)
-        idma_conf_in();
-        idma_set_addr_len_in(obi_addr, axi_addr, len);
-        idma_set_std2_rep2_in(len, std2, reps2);
-        idma_set_std3_rep3_in(reps2 * len, std3, reps3);
-        idma_start_in();
-    }
-    return 0;
-}
-
 extern int idma_init(idma_controller_t *ctrl)
     __attribute__((alias("idma32_init"), used, visibility("default")));
 /* extern void idma_wait()
@@ -183,16 +138,6 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl,
                           uint32_t std,
                           uint32_t reps)
     __attribute__((alias("idma32_memcpy_2d"), used, visibility("default")));
-extern int idma_memcpy_3d(idma_controller_t *ctrl,
-                          uint8_t dir,
-                          uint32_t axi_addr,
-                          uint32_t obi_addr,
-                          uint32_t len,
-                          uint32_t std2,
-                          uint32_t reps2,
-                          uint32_t std3,
-                          uint32_t reps3)
-    __attribute__((alias("idma32_memcpy_3d"), used, visibility("default")));
 
 /* Export the IDMA-specific controller API */
 idma_controller_api_t idma_api = {
@@ -200,5 +145,4 @@ idma_controller_api_t idma_api = {
     /*     .wait = idma32_wait, */
     .memcpy_1d = idma32_memcpy_1d,
     .memcpy_2d = idma32_memcpy_2d,
-    .memcpy_3d = idma32_memcpy_3d,
 };
