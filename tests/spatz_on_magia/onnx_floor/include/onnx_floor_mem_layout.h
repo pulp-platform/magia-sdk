@@ -16,7 +16,7 @@
 #define ALIGN_4B(addr)         (((addr) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
 /* Division with round upwards */
-#define DIV_UP(a, b)           (((a) + (b)-1) / (b))
+#define DIV_UP(a, b)           (((a) + (b) - 1) / (b))
 
 #define L1_BASE_TILE           (L1_BASE + (get_hartid() * L1_TILE_OFFSET))
 #define TENSOR_LEN             (BATCH * CHANNELS * HEIGHT * WIDTH)
