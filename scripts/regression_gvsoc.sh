@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
 
 testlist="test_helloworld test_fsync_levels test_fsync_rc test_fsync_diag test_mm_is test_mm_ws test_mm_os test_idma_2d test_idma_1d test_cemm_global test_mm_is_2 test_mm_os_2 test_mm_ws_2 test_fsync_lr test_gemv"
 nlist="1 2 4 8 16"
