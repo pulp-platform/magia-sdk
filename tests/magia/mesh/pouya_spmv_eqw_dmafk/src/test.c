@@ -1,0 +1,818 @@
+#include <stdint.h>
+
+#include "tile.h"
+#include "idma.h"
+#include "fsync.h"
+#include "eventunit.h"
+
+
+//#include "sme3Da.h"
+//#include "poisson3Da.h"
+//#include "raefsky5.h"
+//#include "ex6.h"
+//#include "cavity05.h"
+//#include "g7jac140.h"
+//#include "fxm4_6.h"
+//#include "scsd8-2r.h"
+//#include "e18.h"
+//#include "scfxm1-2b.h"
+//#include "sctap1-2b.h"
+#include "testbig.h"
+
+//#include "test.h"
+
+
+#define WAIT_MODE WFE
+#define clock_freq_MHz 1000
+#define DMA_FACTOR 4
+
+
+/*
+--------------------------------------------------
+Packed CSR entry format
+
+bits[15:0]  = signed int16 value
+bits[31:16] = uint16 column
+--------------------------------------------------
+*/
+typedef uint32_t csr_entry_t;
+
+/*
+--------------------------------------------------
+Packing / unpacking
+--------------------------------------------------
+*/
+#define GET_VALUE(x) \
+    ((int16_t)((x) & 0xFFFF))
+
+#define GET_COL(x) \
+    ((uint16_t)((x) >> 16))
+
+/*
+--------------------------------------------------
+L2 CSR storage
+
+Generated offline by Python.
+--------------------------------------------------
+*/
+static uint32_t HARTIDS[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t NUM_CORES __attribute__((section(".l2"), aligned(64))) = 0;
+static uint32_t run_time_cycle[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t DMA_wait_cycle[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t fsync_wait_cycle[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t compute_cycle[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t DMA_bytes[128] __attribute__((section(".l2"), aligned(64))) = {0};
+
+/*
+=====================================================
+Functions
+=====================================================
+*/
+
+uint32_t find_max (uint32_t input[], uint32_t length)
+{
+    uint32_t max = 0;
+
+    for (uint32_t i = 0; i < length; i++) {
+        if (input[i] > max) {
+            max = input[i];
+        }
+    }
+    return max;
+};
+
+
+int main(void)
+{
+    uint32_t hartid = get_hartid();
+
+    /*
+    ==============================================================
+    Initialize IDMA
+    ==============================================================
+    */
+    idma_config_t idma_cfg = {
+        .hartid = hartid
+    };
+
+    idma_controller_t idma_ctrl = {
+        .base = NULL,
+        .cfg  = &idma_cfg,
+        .api  = &idma_api,
+    };
+
+    idma_init(&idma_ctrl);
+
+    /*
+    ==============================================================
+    Initialize FSYNC
+    ==============================================================
+    */
+    fsync_config_t fsync_cfg = {
+        .hartid = hartid
+    };
+
+    fsync_controller_t fsync_ctrl = {
+        .base = NULL,
+        .cfg  = &fsync_cfg,
+        .api  = &fsync_api,
+    };
+
+    fsync_init(&fsync_ctrl);
+
+    /*
+    ==============================================================
+    Initialize Event Unit
+    ==============================================================
+    */
+    eu_config_t eu_cfg = {
+        .hartid = hartid
+    };
+
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg  = &eu_cfg,
+        .api  = &eu_api,
+    };
+
+    eu_init(&eu_ctrl);
+
+    eu_clear_events(0xFFFFFFFF);
+
+    eu_idma_init(&eu_ctrl, 0);
+
+    eu_fsync_init(&eu_ctrl, 0);
+
+    /*
+    ===============================================================
+    NUM_CORES Computation
+    ================================================================
+    */
+    HARTIDS[hartid] = 1;
+    fsync_sync_global(&fsync_ctrl);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+
+    if (hartid == 0) {
+        for (int i = 0; i < 128; i++) {
+            if (HARTIDS[i] == 1) {
+                NUM_CORES++;
+            }
+        }
+    }
+
+    fsync_sync_global(&fsync_ctrl);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+
+    if (hartid >= NUM_CORES) {
+        return 0;
+    }
+
+    /*
+    ==============================================================
+    Start performance measurement
+    ==============================================================
+    */
+    perf_start();
+    int32_t run_time = perf_get_cycles();
+    /*
+    ==============================================================
+    Row partitioning across cores
+    ==============================================================
+    */
+    uint32_t *core_start_row = NULL;
+
+    switch(NUM_CORES)
+    {
+        case 1:
+            core_start_row = core_start_row_1;
+            break;
+
+        case 4:
+            core_start_row = core_start_row_4;
+            break;
+
+        case 16:
+            core_start_row = core_start_row_16;
+            break;
+
+        case 64:
+            core_start_row = core_start_row_64;
+            break;
+
+        case 256:
+            core_start_row = core_start_row_256;
+            break;
+
+        default:
+            return -1;
+    }
+
+    uint32_t start_row = core_start_row[hartid];
+    uint32_t end_row   = core_start_row[hartid + 1];
+    uint32_t local_rows = end_row - start_row;
+
+    /*
+    ==============================================================
+    L1 memory layout
+    ==============================================================
+    */
+    uint32_t l1 = get_l1_base(hartid);
+
+    /*
+    --------------------------------------------------
+    x vector buffer
+    --------------------------------------------------
+    */
+    uint32_t addr_x = l1;
+
+    /*
+    --------------------------------------------------
+    Double buffers for streamed CSR entries
+    --------------------------------------------------
+    */
+    uint32_t tile_buffer_bytes =
+        DMA_FACTOR *
+        MAX_TILE_NNZ *
+        sizeof(csr_entry_t);
+
+    uint32_t addr_valcol_buf0 =
+        addr_x + N * sizeof(int32_t);
+
+    uint32_t addr_valcol_buf1 =
+        addr_valcol_buf0 +
+        tile_buffer_bytes;
+
+    /*
+    --------------------------------------------------
+    y local buffer
+    --------------------------------------------------
+    */
+    uint32_t addr_ylocal =
+        addr_valcol_buf1 +
+        tile_buffer_bytes;
+
+    /*
+    ==============================================================
+    Local pointers
+    ==============================================================
+    */
+    volatile int16_t *local_x =
+        (int16_t*)addr_x;
+
+    volatile csr_entry_t *valcol_buf[2];
+
+    valcol_buf[0] =
+        (csr_entry_t*)addr_valcol_buf0;
+
+    valcol_buf[1] =
+        (csr_entry_t*)addr_valcol_buf1;
+
+    volatile int32_t *local_y =
+        (int32_t*)addr_ylocal;
+
+    /*
+    ==============================================================
+    Bring x vector -> L1
+    ==============================================================
+    */
+    uint64_t dma_bytes = 0;
+    uint32_t dma_wait_start = perf_get_cycles();
+    idma_memcpy_1d(
+        &idma_ctrl,
+        0,
+        (uint32_t)x,
+        addr_x,
+        N * sizeof(int32_t)
+    );
+    dma_bytes += N * sizeof(int32_t);
+    
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    uint32_t dma_wait_end = perf_get_cycles();
+    uint32_t dma_wait_time = dma_wait_end - dma_wait_start;
+    
+
+    /*
+    ==============================================================
+    Synchronization
+    ==============================================================
+    */
+    /*
+    uint32_t fsync_wait_start = perf_get_cycles();
+    fsync_sync_global(&fsync_ctrl);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    uint32_t fsync_wait_end = perf_get_cycles();
+    uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start;
+    */
+    /*
+    ==============================================================
+    Double-buffered tiled SpMV
+    ==============================================================
+    */
+
+    uint32_t current_buf = 0;
+    uint32_t next_buf    = 1;
+
+    /*
+    --------------------------------------------------
+    Total number of tiles
+    --------------------------------------------------
+    */
+    uint32_t num_tiles =
+        (local_rows + TILE_ROWS - 1)
+        / TILE_ROWS;
+
+    uint32_t num_super_tiles =
+        (num_tiles + DMA_FACTOR - 1)
+        / DMA_FACTOR;
+
+    /*
+    ==============================================================
+    Prefetch first tile
+    ==============================================================
+    */
+    uint32_t first_batch_start_tile = 0;
+
+    uint32_t first_batch_end_tile =
+        DMA_FACTOR;
+
+    if (first_batch_end_tile > num_tiles)
+        first_batch_end_tile = num_tiles;
+
+    uint32_t first_batch_start_row =
+        first_batch_start_tile * TILE_ROWS;
+
+    uint32_t first_batch_end_row =
+        first_batch_end_tile * TILE_ROWS;
+
+    if (first_batch_end_row > local_rows)
+        first_batch_end_row = local_rows;
+
+    uint32_t first_global_start =
+        start_row + first_batch_start_row;
+
+    uint32_t first_global_end =
+        start_row + first_batch_end_row;
+
+    uint32_t first_start_nnz =
+        rowptr_l2[first_global_start];
+
+    uint32_t first_end_nnz =
+        rowptr_l2[first_global_end];
+
+    uint32_t first_batch_nnz =
+        first_end_nnz - first_start_nnz;
+
+    printf("first battch bytes = %d\n",first_batch_nnz*4);
+
+    dma_wait_start = perf_get_cycles();
+
+    idma_memcpy_1d(
+        &idma_ctrl,
+        0,
+        (uint32_t)&valcol_l2[first_start_nnz],
+        (uint32_t)valcol_buf[current_buf],
+        first_batch_nnz * sizeof(csr_entry_t)
+    );
+
+    dma_bytes +=
+        first_batch_nnz * sizeof(csr_entry_t);
+
+    eu_idma_wait_a2o(
+        &eu_ctrl,
+        WAIT_MODE
+    );
+
+    dma_wait_end = perf_get_cycles();
+
+    dma_wait_time +=
+        dma_wait_end - dma_wait_start;
+
+    /*
+    ==============================================================
+    Main tile loop
+    ==============================================================
+    */
+
+    //uint32_t fsync_wait_start = perf_get_cycles();
+    //fsync_sync_global(&fsync_ctrl);
+    //eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    //uint32_t fsync_wait_end = perf_get_cycles();
+    //uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start;
+
+    uint32_t computed_time = 0;
+    uint32_t compute_start = perf_get_cycles();
+
+    uint32_t first_for_loop_iteration = num_tiles;
+    uint32_t second_for_loop_iteration;
+    uint32_t third_for_loop_iteration;
+
+    for (uint32_t batch = 0;
+     batch < num_super_tiles;
+     batch++) {
+
+        /*
+        ==========================================================
+        Launch DMA for NEXT tile
+        ==========================================================
+        */
+        if (batch + 1 < num_super_tiles) {
+
+            uint32_t next_batch_start_tile =
+                (batch + 1) * DMA_FACTOR;
+
+            uint32_t next_batch_end_tile =
+                next_batch_start_tile +
+                DMA_FACTOR;
+
+            if (next_batch_end_tile > num_tiles)
+                next_batch_end_tile = num_tiles;
+
+            uint32_t next_batch_start_row =
+                next_batch_start_tile *
+                TILE_ROWS;
+
+            uint32_t next_batch_end_row =
+                next_batch_end_tile *
+                TILE_ROWS;
+
+            if (next_batch_end_row > local_rows)
+                next_batch_end_row = local_rows;
+
+            uint32_t next_global_start =
+                start_row +
+                next_batch_start_row;
+
+            uint32_t next_global_end =
+                start_row +
+                next_batch_end_row;
+
+            uint32_t next_start_nnz =
+                rowptr_l2[next_global_start];
+
+            uint32_t next_end_nnz =
+                rowptr_l2[next_global_end];
+
+            uint32_t next_batch_nnz =
+                next_end_nnz -
+                next_start_nnz;
+
+            idma_memcpy_1d(
+                &idma_ctrl,
+                0,
+                (uint32_t)&valcol_l2[next_start_nnz],
+                (uint32_t)valcol_buf[next_buf],
+                next_batch_nnz *
+                sizeof(csr_entry_t)
+            );
+
+            dma_bytes +=
+                next_batch_nnz *
+                sizeof(csr_entry_t);
+        }
+
+        /*
+        ==========================================================
+        Compute current tile
+        ==========================================================
+        */
+        
+        uint32_t batch_start_tile =
+            batch * DMA_FACTOR;
+
+        uint32_t batch_end_tile =
+            batch_start_tile +
+            DMA_FACTOR;
+
+        if (batch_end_tile > num_tiles)
+            batch_end_tile = num_tiles;
+
+        second_for_loop_iteration += batch_end_tile - batch_start_tile;
+
+        for (uint32_t tile = batch_start_tile;
+            tile < batch_end_tile;
+            tile++){
+
+            uint32_t tile_row_start =
+                tile * TILE_ROWS;
+
+            uint32_t tile_row_end =
+                tile_row_start + TILE_ROWS;
+
+            if (tile_row_end > local_rows) {
+                tile_row_end = local_rows;
+            }
+
+            for (uint32_t i = tile_row_start;
+                i < tile_row_end;
+                i++) {
+
+                uint32_t global_row =
+                    start_row + i;
+
+                int32_t sum = 0;
+
+                /*
+                ------------------------------------------------------
+                Convert global CSR offsets into local tile offsets
+                ------------------------------------------------------
+                */
+                uint32_t batch_start_nnz =
+                    rowptr_l2[
+                        start_row +
+                        batch_start_tile *
+                        TILE_ROWS
+                    ];
+
+                uint32_t local_start =
+                    rowptr_l2[global_row] -
+                    batch_start_nnz;
+
+                uint32_t local_end =
+                    rowptr_l2[global_row + 1] -
+                    batch_start_nnz;
+
+                third_for_loop_iteration += local_end - local_start;
+
+                for (uint32_t j = local_start;
+                    j < local_end;
+                    j++) {
+
+                    /*
+                    --------------------------------------------------
+                    Single 32-bit load
+                    --------------------------------------------------
+                    */
+                    csr_entry_t packed =
+                        valcol_buf[current_buf][j];
+
+                    /*
+                    --------------------------------------------------
+                    Unpack value and column
+                    --------------------------------------------------
+                    */
+                    int16_t value =
+                        GET_VALUE(packed);
+
+                    uint16_t col =
+                        GET_COL(packed);
+
+                    /*
+                    --------------------------------------------------
+                    SpMV MAC
+                    --------------------------------------------------
+                    */
+                    sum +=
+                        ((int32_t)value) *
+                        ((int32_t)local_x[col]);
+                }
+
+                local_y[i] = sum;
+            }
+        }
+
+        /*
+        ==========================================================
+        Wait for next tile DMA completion
+        ==========================================================
+        */
+        if (batch + 1 < num_super_tiles) {
+            dma_wait_start = perf_get_cycles();
+            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            dma_wait_end = perf_get_cycles();
+            dma_wait_time += dma_wait_end - dma_wait_start;
+        }
+
+        /*
+        ==========================================================
+        Swap ping-pong buffers
+        ==========================================================
+        */
+        current_buf ^= 1;
+        next_buf    ^= 1;
+    }
+    
+    /*
+    ==============================================================
+    DMA local y -> global y
+    ==============================================================
+    */
+    idma_memcpy_1d(
+        &idma_ctrl,
+        1,
+        (uint32_t)(y + start_row),
+        addr_ylocal,
+        local_rows * sizeof(int32_t)
+    );
+    dma_bytes += local_rows * sizeof(int32_t);
+
+    dma_wait_start = perf_get_cycles();
+    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+    dma_wait_end = perf_get_cycles();
+    dma_wait_time += dma_wait_end - dma_wait_start;
+
+    uint32_t compute_end = perf_get_cycles();
+    computed_time = compute_end - compute_start;
+
+    /*
+    ==============================================================
+    Final synchronization
+    ==============================================================
+    */
+    uint32_t fsync_wait_start = perf_get_cycles();
+    fsync_sync_global(&fsync_ctrl);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    uint32_t fsync_wait_end = perf_get_cycles();
+    uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start;
+    
+
+    run_time_cycle[hartid] = perf_get_cycles() - run_time;
+    DMA_wait_cycle[hartid] = dma_wait_time;
+    fsync_wait_cycle[hartid] = fsync_wait_time;
+    compute_cycle[hartid] = computed_time;
+    DMA_bytes[hartid] = dma_bytes;
+
+    fsync_sync_global(&fsync_ctrl);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+
+
+
+    uint32_t local_nnz =
+    rowptr_l2[end_row] -
+    rowptr_l2[start_row];
+
+    printf(
+        "core %u rows=%u nnz=%u runtime=%u compute=%u fsync=%u dmaC=%u dmaB=%u dma/cycle=%u\n",
+        hartid,
+        local_rows,
+        local_nnz,
+        run_time_cycle[hartid],
+        compute_cycle[hartid],
+        fsync_wait_cycle[hartid],
+        DMA_wait_cycle[hartid],
+        DMA_bytes[hartid],
+        DMA_bytes[hartid] / DMA_wait_cycle[hartid]
+    );
+
+
+
+    /*
+    ==============================================================
+    Verification + metrics
+    ==============================================================
+    */
+    if (hartid == 0) {
+
+        int errors = 0;
+
+        for (int i = 0; i < M; i++) {
+
+            if (y[i] != y_expected[i]) {
+
+                printf(
+                    "Mismatch at index %d: got %d expected %d\n",
+                    i,
+                    y[i],
+                    y_expected[i]
+                );
+
+                errors++;
+            }
+        }
+
+        printf("Errors: %d\n", errors);
+
+        /*
+        --------------------------------------------------------------
+        Performance metrics
+        --------------------------------------------------------------
+        */
+
+        uint32_t max_run_time = find_max(run_time_cycle, 128);
+        uint32_t max_dma_wait = find_max(DMA_wait_cycle, 128);
+        uint32_t max_fsync_wait = find_max(fsync_wait_cycle, 128);
+        uint32_t max_compute = find_max(compute_cycle, 128);
+
+        uint32_t total_macs  = NNZ;
+
+        uint32_t total_flops = 2 * NNZ;
+
+        uint32_t gflops_x1000 =
+            (total_flops * clock_freq_MHz) /
+            max_run_time;
+
+        uint32_t mac_per_cycle_x1000 =
+            (total_macs * 1000) /
+            max_run_time;
+        /*
+        --------------------------------------------------------------
+        Dense equivalent size
+        --------------------------------------------------------------
+        */
+        uint32_t dense_matrix_bytes =
+            M * N * sizeof(int16_t);
+
+        /*
+        --------------------------------------------------------------
+        Bandwidth
+        --------------------------------------------------------------
+        */
+        //              CSR entries              +      x vector       +        rowptr              +         y
+        uint32_t BW = (NNZ * sizeof(csr_entry_t) + N * sizeof(int16_t) + (M + 1) * sizeof(uint32_t) + M * sizeof(int32_t)) * clock_freq_MHz / max_run_time;
+
+        /*
+        --------------------------------------------------------------
+        L1 Memory Occupancy
+        --------------------------------------------------------------
+        */
+
+        /* per core */
+        uint32_t l1_per_core_bytes =
+            N * sizeof(int16_t) +          // local_x
+            2 * tile_buffer_bytes +        // ping-pong buffers
+            local_rows * sizeof(int32_t);  // local_y
+
+        /* whole chip */
+        uint32_t total_l1_bytes =
+            l1_per_core_bytes * NUM_CORES;
+
+        /*
+        --------------------------------------------------------------
+        L2 Memory Occupancy
+        --------------------------------------------------------------
+        */
+
+        uint32_t profiling_bytes =
+            sizeof(HARTIDS) +
+            sizeof(NUM_CORES) +
+            sizeof(run_time_cycle) +
+            sizeof(DMA_wait_cycle) +
+            sizeof(fsync_wait_cycle) +
+            sizeof(compute_cycle);
+
+        uint32_t l2_bytes =
+            NNZ * sizeof(csr_entry_t) +        // packed matrix
+            (M + 1) * sizeof(uint32_t) +       // rowptr
+            N * sizeof(int16_t) +              // x
+            M * sizeof(int32_t) +              // y
+            M * sizeof(int32_t) +              // y_expected
+            profiling_bytes;
+
+        /*
+        --------------------------------------------------------------
+        Total Occupancy
+        --------------------------------------------------------------
+        */
+
+        uint32_t total_memory_footprint =
+            total_l1_bytes +
+            l2_bytes;
+
+        /*
+        --------------------------------------------------------------
+        Print metrics
+        --------------------------------------------------------------
+        */
+        printf("run_time_cycles          : %u\n", max_run_time);
+
+        printf("dma_wait_cycles          : %u\n", max_dma_wait);
+
+        printf("fsync_wait_cycles        : %u\n", max_fsync_wait);
+        /*
+        for (int i = 0; i < NUM_CORES; i++) {
+            printf("wait to run ratio [core %d]  : %u%%\n", i, (fsync_wait_cycle[i]) * 100 / run_time_cycle[i]);
+        }
+        */
+        printf("compute_cycles           : %u\n", max_compute);
+
+        printf("NNZ                       : %u\n", NNZ);
+
+        printf("Total MACs                : %u\n", total_macs);
+
+        printf("Total FLOPs               : %u\n", total_flops);
+
+        printf("GFLOPS x1000              : %u\n", gflops_x1000);
+
+        printf("MAC/Cycle x1000           : %u\n", mac_per_cycle_x1000);
+
+        printf("Bandwidth                 : %u MB/second\n", BW);
+
+        printf("L1 per core bytes         : %u KB\n", l1_per_core_bytes / 1024);
+
+        printf("Total L1 bytes           : %u KB\n", total_l1_bytes / 1024);
+
+        printf("Total L2 bytes           : %u KB\n", l2_bytes / 1024);
+
+        printf("Total memory footprint    : %u KB\n", total_memory_footprint / 1024);
+
+        printf("avg nnz/row = %.2f\n", (double)NNZ / M);
+        printf("reuse factor = %.2f\n", (double)NNZ / N);
+
+        printf("First loop iteration = %d\n", first_for_loop_iteration);
+        printf("Second loop iteration = %d\n", second_for_loop_iteration);
+        printf("Third loop iteration = %d\n", third_for_loop_iteration);
+
+        return errors;
+    }
+
+    return 0;
+}

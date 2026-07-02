@@ -6,18 +6,20 @@
 #include "eventunit.h"
 
 
-#include "sme3Da.h"
+//#include "sme3Da.h"
 //#include "poisson3Da.h"
 //#include "raefsky5.h"
 //#include "ex6.h"
 //#include "cavity05.h"
 //#include "g7jac140.h"
 //#include "fxm4_6.h"
-//#include "scsd8-2r.h"
+#include "scsd8-2r.h"
 //#include "e18.h"
 //#include "scfxm1-2b.h"
 //#include "sctap1-2b.h"
 //#include "testbig.h"
+
+//#include "test.h"
 
 
 #define WAIT_MODE WFE
@@ -372,6 +374,10 @@ int main(void)
     uint32_t computed_time = 0;
     uint32_t compute_start = perf_get_cycles();
 
+    uint32_t first_for_loop_iteration = num_tiles;
+    uint32_t second_for_loop_iteration;
+    uint32_t third_for_loop_iteration;
+
     for (uint32_t tile = 0;
          tile < num_tiles;
          tile++) {
@@ -447,6 +453,9 @@ int main(void)
             uint32_t next_tile_nnz =
                 next_end_nnz - next_start_nnz;
 
+            if(hartid==50)
+                printf("next_tile_nnz for core 0 = %d\n", next_tile_nnz);
+
             /*
             ------------------------------------------------------
             Non-blocking DMA launch
@@ -467,6 +476,7 @@ int main(void)
         Compute current tile
         ==========================================================
         */
+        second_for_loop_iteration += tile_row_end - tile_row_start;
 
         for (uint32_t i = tile_row_start;
              i < tile_row_end;
@@ -487,6 +497,8 @@ int main(void)
 
             uint32_t local_end =
                 rowptr_l2[global_row + 1] - start_nnz;
+
+            third_for_loop_iteration += local_end - local_start;
 
             for (uint32_t j = local_start;
                  j < local_end;
@@ -731,11 +743,11 @@ int main(void)
         printf("dma_wait_cycles          : %u\n", max_dma_wait);
 
         printf("fsync_wait_cycles        : %u\n", max_fsync_wait);
-        
+        /*
         for (int i = 0; i < NUM_CORES; i++) {
             printf("wait to run ratio [core %d]  : %u%%\n", i, (fsync_wait_cycle[i]) * 100 / run_time_cycle[i]);
         }
-        
+        */
         printf("compute_cycles           : %u\n", max_compute);
 
         printf("NNZ                       : %u\n", NNZ);
@@ -757,6 +769,13 @@ int main(void)
         printf("Total L2 bytes           : %u KB\n", l2_bytes / 1024);
 
         printf("Total memory footprint    : %u KB\n", total_memory_footprint / 1024);
+
+        printf("avg nnz/row = %.2f\n", (double)NNZ / M);
+        printf("reuse factor = %.2f\n", (double)NNZ / N);
+
+        printf("First loop iteration = %d\n", first_for_loop_iteration);
+        printf("Second loop iteration = %d\n", second_for_loop_iteration);
+        printf("Third loop iteration = %d\n", third_for_loop_iteration);
 
         return errors;
     }
