@@ -52,6 +52,10 @@ target_compile_options(runtime
   -fdata-sections -ffunction-sections #ZL-MOD 03072025
   -Wno-incompatible-pointer-types #ZL-MOD 03072025
   -Wno-int-conversion #ZL-MOD 03072025
+  # io.c defines memset/memcpy/memmove; at -O3 GCC's loop-idiom pass
+  # (-ftree-loop-distribute-patterns, on by default from -O2) rewrites their
+  # naive loops into calls to themselves, causing infinite recursion.
+  -fno-tree-loop-distribute-patterns
 )
 
 target_link_options(runtime
