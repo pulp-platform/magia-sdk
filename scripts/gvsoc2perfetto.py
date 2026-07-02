@@ -369,6 +369,13 @@ def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, st
                         events.append({"ph": "B", "name": instr, "pid": pid,
                                        "tid": tid_ins, "ts": us(t)})
                         open_ins = True
+
+            # If the last asm value is non-idle, ensure slices are closed.
+            end_t = tv[-1][0] + 1
+            if open_pc:
+                events.append({"ph": "E", "pid": pid, "tid": tid_pc, "ts": us(end_t)})
+            if open_ins:
+                events.append({"ph": "E", "pid": pid, "tid": tid_ins, "ts": us(end_t)})
             continue
 
         tid = get_tid(pid, sub)
@@ -395,6 +402,8 @@ def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, st
                                    "ts": us(t)})
                     open_slice = True
 
+            if open_slice:
+                events.append({"ph": "E", "pid": pid, "tid": tid, "ts": us(tv[-1][0] + 1)})
         elif sig["type"] == "string":
             open_slice = False
             for t, val in tv:
@@ -406,6 +415,8 @@ def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, st
                                    "ts": us(t)})
                     open_slice = True
 
+            if open_slice:
+                events.append({"ph": "E", "pid": pid, "tid": tid, "ts": us(tv[-1][0] + 1)})
         elif sig["width"] == 1:
             open_slice = False
             for t, val in tv:
@@ -417,6 +428,8 @@ def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, st
                     events.append({"ph": "E", "pid": pid, "tid": tid, "ts": us(t)})
                     open_slice = False
 
+            if open_slice:
+                events.append({"ph": "E", "pid": pid, "tid": tid, "ts": us(tv[-1][0] + 1)})
         else:  # multi-bit -> counter track
             for t, val in tv:
                 try:
@@ -692,7 +705,12 @@ def main():
     signals, changes, ps = parse_vcd(args.vcd, inc, exc)
 
     if args.derive_busy:
-        specs = [tuple(s.split(",", 1)) for s in args.derive_busy]
+        specs = []
+        for s in args.derive_busy:
+            parts = s.split(",", 1)
+            if len(parts) != 2 or not parts[0] or not parts[1]:
+                ap.error(f"--derive-busy expects 'LEAF_A,LEAF_B' (got {s!r})")
+            specs.append((parts[0], parts[1]))
         n_derived = inject_derived_busy(signals, changes, specs)
         print(f"--derive-busy: synthesized {n_derived} busy_derived signal(s)", file=sys.stderr)
 

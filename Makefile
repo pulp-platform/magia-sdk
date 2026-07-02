@@ -181,7 +181,7 @@ endif
 		--split-asm \
 		--stats \
 		--include '$(GVSOC2PERFETTO_INCLUDE)'
-	rm -rf $(GVSOC2PERFETTO_VCD)
+	rm -f -- $(GVSOC2PERFETTO_VCD)
 
 MAGIA: set_mesh
 ifeq ($(shell expr $(tiles_2) \> 256), 1)

@@ -237,7 +237,7 @@ This appends `--trace=tile-<tile_id>-idma-ctrl-mm` to the GVSoC command. For exa
 `make run_profiling test=my_test tiles=4 profile_tile=12`
 
 If `profile_tile` is not specified, no tile-specific trace filter is applied.
-The traces, that will be available in `$(GVSOC_WORK_DIR)/trace.perfetto-trace` (default: `gvsoc_work/trace.perfetto-trace`), can be visualized with [Perfetto](https://ui.perfetto.dev/) (also available as [Perfetto Trace VSCode extension](https://marketplace.visualstudio.com/items?itemName=drain99.perfetto-trace)).
+The traces will be available in `$(GVSOC_WORK_DIR)/trace.perfetto-trace` (default: `gvsoc_work/trace.perfetto-trace`) and can be visualized with [Perfetto](https://ui.perfetto.dev/) (also available as [Perfetto Trace VSCode extension](https://marketplace.visualstudio.com/items?itemName=drain99.perfetto-trace)).
 
 ![Example of Perfetto traces](.img/perfetto_traces.png)
 
