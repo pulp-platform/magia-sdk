@@ -14,6 +14,10 @@
 #include "tile.h"
 #include "utils/maps_utils.h"
 
+#include "add.h"
+#include "log.h"
+#include "redmule_kernels.h"
+
 #define MAPS_TILE_MM0           0u
 #define MAPS_TILE_MM1           1u
 #define MAPS_TILE_MM2           8u
@@ -127,28 +131,6 @@ static const uint16_t maps_generated_value_lut[8] = {
     0x4800u,
 };
 
-static const uint16_t maps_generated_log_lut[8] = {
-    0x0000u,
-    0x398cu,
-    0x3c65u,
-    0x3d8cu,
-    0x3e70u,
-    0x3f2bu,
-    0x3fc9u,
-    0x4029u,
-};
-
-static const uint16_t maps_generated_log_add_lut[8][8] = {
-    {0x0000u, 0x398cu, 0x3c65u, 0x3d8cu, 0x3e70u, 0x3f2bu, 0x3fc9u, 0x4029u},
-    {0x398cu, 0x3d8cu, 0x3f2bu, 0x4029u, 0x409bu, 0x40f8u, 0x4148u, 0x418cu},
-    {0x3c65u, 0x3f2bu, 0x4065u, 0x40f8u, 0x416au, 0x41c8u, 0x4217u, 0x425cu},
-    {0x3d8cu, 0x4029u, 0x40f8u, 0x418cu, 0x41feu, 0x425cu, 0x42aau, 0x42efu},
-    {0x3e70u, 0x409bu, 0x416au, 0x41feu, 0x4270u, 0x42ceu, 0x431cu, 0x4361u},
-    {0x3f2bu, 0x40f8u, 0x41c8u, 0x425cu, 0x42ceu, 0x432bu, 0x437au, 0x43beu},
-    {0x3fc9u, 0x4148u, 0x4217u, 0x42aau, 0x431cu, 0x437au, 0x43c9u, 0x4407u},
-    {0x4029u, 0x418cu, 0x425cu, 0x42efu, 0x4361u, 0x43beu, 0x4407u, 0x4429u},
-};
-
 static inline uint32_t maps_generated_lcg(uint32_t *state)
 {
     *state = *state * 1664525u + 1013904223u;
@@ -189,53 +171,6 @@ static inline void maps_generated_zero(float16 *dst, uint32_t elems)
 
     for (uint32_t i = 0; i < elems; ++i) {
         dst_half[i] = 0x0000u;
-    }
-}
-
-static inline uint32_t maps_generated_value_index(uint16_t value)
-{
-    switch (value) {
-    case 0x3c00u:
-        return 0u;
-    case 0x4000u:
-        return 1u;
-    case 0x4200u:
-        return 2u;
-    case 0x4400u:
-        return 3u;
-    case 0x4500u:
-        return 4u;
-    case 0x4600u:
-        return 5u;
-    case 0x4700u:
-        return 6u;
-    case 0x4800u:
-        return 7u;
-    default:
-        return 0u;
-    }
-}
-
-static inline uint32_t maps_generated_log_index(uint16_t value)
-{
-    switch (value) {
-    case 0x398cu:
-        return 1u;
-    case 0x3c65u:
-        return 2u;
-    case 0x3d8cu:
-        return 3u;
-    case 0x3e70u:
-        return 4u;
-    case 0x3f2bu:
-        return 5u;
-    case 0x3fc9u:
-        return 6u;
-    case 0x4029u:
-        return 7u;
-    case 0x0000u:
-    default:
-        return 0u;
     }
 }
 
@@ -709,29 +644,6 @@ static inline void maps_generated_clear_mailbox(uint32_t hartid)
     }
 }
 
-static inline void maps_generated_log(uint32_t dst_addr, uint32_t src_addr, uint32_t elems)
-{
-    volatile uint16_t *dst       = (volatile uint16_t *)dst_addr;
-    volatile const uint16_t *src = (volatile const uint16_t *)src_addr;
-
-    for (uint32_t i = 0; i < elems; ++i) {
-        dst[i] = maps_generated_log_lut[maps_generated_value_index(src[i])];
-    }
-}
-
-static inline void
-maps_generated_add(uint32_t dst_addr, uint32_t lhs_addr, uint32_t rhs_addr, uint32_t elems)
-{
-    volatile uint16_t *dst       = (volatile uint16_t *)dst_addr;
-    volatile const uint16_t *lhs = (volatile const uint16_t *)lhs_addr;
-    volatile const uint16_t *rhs = (volatile const uint16_t *)rhs_addr;
-
-    for (uint32_t i = 0; i < elems; ++i) {
-        dst[i] = maps_generated_log_add_lut[maps_generated_log_index(lhs[i])]
-                                           [maps_generated_log_index(rhs[i])];
-    }
-}
-
 static inline int
 maps_generated_execute_op(const tile_plan_t *plan, const op_desc_t *op, uint32_t slot, void *user)
 {
@@ -745,14 +657,15 @@ maps_generated_execute_op(const tile_plan_t *plan, const op_desc_t *op, uint32_t
 
 #if MAPS_HANDWRITTEN_USE_REDMULE
         maps_trace_event(plan, slot, slot, "redmule-start", op->params[0]);
-        redmule_gemm(runtime->redmule_ctrl,
-                     a,
-                     b,
-                     out,
-                     (uint16_t)op->params[0],
-                     (uint16_t)op->params[1],
-                     (uint16_t)op->params[2]);
-        eu_redmule_wait(runtime->eu_ctrl, MAPS_WAIT_MODE);
+        maps_matmul_redmule(runtime->redmule_ctrl,
+                            runtime->eu_ctrl,
+                            a,
+                            b,
+                            out,
+                            (uint16_t)op->params[0],
+                            (uint16_t)op->params[1],
+                            (uint16_t)op->params[2],
+                            MAPS_WAIT_MODE);
         maps_trace_event(plan, slot, slot, "redmule-done", op->params[0]);
 #else
         (void)b;
@@ -765,7 +678,7 @@ maps_generated_execute_op(const tile_plan_t *plan, const op_desc_t *op, uint32_t
         uint32_t in  = local_subslice_addr(plan, &op->inputs[0], slot);
         uint32_t out = local_subslice_addr(plan, &op->outputs[0], slot);
 
-        maps_generated_log(out, in, op->params[0] * op->params[1]);
+        maps_log_f16((float16 *)out, (const float16 *)in, (int32_t)(op->params[0] * op->params[1]));
         return 0;
     }
 
@@ -774,7 +687,10 @@ maps_generated_execute_op(const tile_plan_t *plan, const op_desc_t *op, uint32_t
         uint32_t rhs = local_subslice_addr(plan, &op->inputs[1], slot);
         uint32_t out = local_subslice_addr(plan, &op->outputs[0], slot);
 
-        maps_generated_add(out, lhs, rhs, op->params[0] * op->params[1]);
+        maps_add_f16((float16 *)out,
+                     (const float16 *)lhs,
+                     (const float16 *)rhs,
+                     (int32_t)(op->params[0] * op->params[1]));
         return 0;
     }
 

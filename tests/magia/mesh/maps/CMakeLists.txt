@@ -11,7 +11,7 @@ target_compile_options(${TEST_NAME}
   PRIVATE
   -O2
 )
-target_link_libraries(${TEST_NAME} PUBLIC runtime hal)
+target_link_libraries(${TEST_NAME} PUBLIC runtime hal kernels_redmule kernels_generic)
 
 add_custom_command(
         TARGET ${TEST_NAME}
