@@ -98,7 +98,7 @@ GVSOC2PERFETTO_INCLUDE ?= (?x) \
   | magia-noc\.ni_\d+_\d+\.(narrow_req|wide_req)$$ \
   | L2-mem\.(req_addr|req_size|req_is_write)$$
 
-.PHONY: gvsoc build format run_profiling gvsoc2perfetto
+.PHONY: gvsoc build format run_profiling
 
 format:
 	@bash scripts/ci/format-changed.sh apply
