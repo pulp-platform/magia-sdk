@@ -29,6 +29,8 @@ Mapping:
         signal leaf while the value is 1.
   * multi-bit events                               -> Perfetto counter tracks,
         unless matched by --state-map (see below).
+  * 'pc'/'active_pc' leaves                        -> hex-address slices
+        (e.g. "0xc207b7b3") instead of a decimal counter track.
 
 Track layout:
   * pid  = hierarchy prefix of depth --pid-depth   (e.g. chip.cluster_0)
@@ -250,6 +252,11 @@ def parse_state_map_arg(spec):
 
 IDLE_STRINGS = {"", "idle", "IDLE", "sleep", "off"}
 
+# Program-counter-like leaves: rendered as hex-address slices (e.g.
+# "0xc207b7b3") instead of the raw decimal counter track multi-bit signals
+# otherwise get.
+HEX_LEAVES = {"pc", "active_pc"}
+
 
 def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, state_maps=None,
             renames=None, split_asm=False):
@@ -329,7 +336,8 @@ def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, st
                            "tid": tid_ids[key], "args": {"name": label}})
         return tid_ids[key]
 
-    for vid, sig in signals.items():
+    from tqdm import tqdm
+    for vid, sig in tqdm(signals.items()):
         name = sig["name"]
         if include_re and not include_re.search(name):
             continue
@@ -350,20 +358,13 @@ def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, st
         # dropped, remaining '_' -> spaces). Both share the asm timing. ---
         if split_asm and sig["type"] == "string" and leaf == "asm":
             base = sub.rpartition(".")[0]
-            tid_pc = get_tid(pid, f"{base}.pc" if base else "pc")
             tid_ins = get_tid(pid, f"{base}.instruction" if base else "instruction")
             open_pc = open_ins = False
             for t, val in tv:
-                if open_pc:
-                    events.append({"ph": "E", "pid": pid, "tid": tid_pc, "ts": us(t)})
-                    open_pc = False
                 if open_ins:
                     events.append({"ph": "E", "pid": pid, "tid": tid_ins, "ts": us(t)})
                     open_ins = False
                 if val not in IDLE_STRINGS:
-                    events.append({"ph": "B", "name": "0x" + val[:8], "pid": pid,
-                                   "tid": tid_pc, "ts": us(t)})
-                    open_pc = True
                     instr = val[8:].strip("_").replace("_", " ")
                     if instr:
                         events.append({"ph": "B", "name": instr, "pid": pid,
@@ -372,8 +373,6 @@ def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, st
 
             # If the last asm value is non-idle, ensure slices are closed.
             end_t = tv[-1][0] + 1
-            if open_pc:
-                events.append({"ph": "E", "pid": pid, "tid": tid_pc, "ts": us(end_t)})
             if open_ins:
                 events.append({"ph": "E", "pid": pid, "tid": tid_ins, "ts": us(end_t)})
             continue
@@ -386,7 +385,23 @@ def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, st
                 state_map = mapping
                 break
 
-        if state_map is not None:
+        if leaf in HEX_LEAVES and sig["type"] != "string":
+            nibbles = (sig["width"] + 3) // 4
+            open_slice = False
+            for t, val in tv:
+                try:
+                    num = int(val, 2) if set(val) <= {"0", "1"} else int(val, 0)
+                except ValueError:
+                    continue  # x/z
+                if open_slice:
+                    events.append({"ph": "E", "pid": pid, "tid": tid, "ts": us(t)})
+                events.append({"ph": "B", "name": f"0x{num:0{nibbles}x}", "pid": pid,
+                               "tid": tid, "ts": us(t)})
+                open_slice = True
+
+            if open_slice:
+                events.append({"ph": "E", "pid": pid, "tid": tid, "ts": us(tv[-1][0] + 1)})
+        elif state_map is not None:
             open_slice = False
             for t, val in tv:
                 try:
@@ -694,8 +709,7 @@ def main():
                     help="cosmetic-only: rename a hierarchy path component in "
                          "displayed process/thread names (repeatable)")
     ap.add_argument("--split-asm", action="store_true",
-                    help="split each 'asm' string signal into a '.pc' track "
-                         "(0x<8 hex>) and a '.instruction' track (disassembly)")
+                    help="extracts a '.instruction' track (disassembly) from 'asm' string signal")
     ap.add_argument("--stats", action="store_true",
                     help="also print per-track phase-duration totals to stdout")
     args = ap.parse_args()

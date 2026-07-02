@@ -87,10 +87,10 @@ GVSOC2PERFETTO_OUT     ?= $(GVSOC_WORK_DIR)/trace.perfetto-trace
 # fields + real me_state/be_state FSM), Snitch+Spatz (scalar core + Spatz/ara
 # vector unit). Chip-level: NoC mesh routers/network-interfaces, L2 traffic.
 GVSOC2PERFETTO_INCLUDE ?= (?x) \
-	tile-\d+-cv32-core\.(busy|asm|func)$$ \
+	tile-\d+-cv32-core\.(busy|asm|func|active_pc)$$ \
   | tile-\d+-redmule\.(busy|fsm_state)$$ \
   | tile-\d+-idma[01]\.(fe\.do_transfer_grant|me\.me_state|be\.be_state)$$ \
-  | tile-\d+-snitch-spatz\.(busy|asm|func)$$ \
+  | tile-\d+-snitch-spatz\.(busy|asm|func|active_pc)$$ \
   | tile-\d+-snitch-spatz\.ara\.(active|label)$$ \
   | tile-\d+-snitch-spatz\.ara\.(vfpu|vlsu|vslide)\.(active|label)$$ \
   | magia-noc\.(req|rsp|wide)_router_\d+_\d+\.(stalled_queue_\w+|req_is_write)$$ \
@@ -178,10 +178,11 @@ endif
 		--state-map 'be_state=0:idle,1:active' \
 		--rename 'ara=vfu' \
 		--rename 'label=instructions' \
+		--rename 'active_pc=pc' \
 		--split-asm \
 		--stats \
 		--include '$(GVSOC2PERFETTO_INCLUDE)'
-	rm -f -- $(GVSOC2PERFETTO_VCD)
+#	rm -f -- $(GVSOC2PERFETTO_VCD)
 
 MAGIA: set_mesh
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
