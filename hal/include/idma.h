@@ -73,6 +73,35 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl,
                           uint32_t std,
                           uint32_t reps);
 
+/**
+ * Start 3-dimensional memory copy.
+ * Copies `reps3` planes, each plane being `reps2` rows of `len` bytes. On the strided
+ * (L2/AXI) side, rows advance by `std2` bytes and planes advance by `std3` bytes. On the
+ * contiguous (L1/OBI) side, rows advance by `len` and planes by `len*reps2`.
+ * The caller must wait for completion (e.g. via eu_idma_wait).
+ *
+ * @param ctrl  IDMA controller handle.
+ * @param dir   Copy direction. 0 = AXI to OBI (L2 to L1), !0 = OBI to AXI (L1 to L2).
+ * @param axi_addr AXI (L2) memory address of first element.
+ * @param obi_addr OBI (L1) memory address of first element.
+ * @param len   Byte length of each row to transfer.
+ * @param std2  Stride in bytes between row starts on the strided side (2nd dimension).
+ * @param reps2 Number of rows per plane (repetitions of the 2nd dimension).
+ * @param std3  Stride in bytes between plane starts on the strided side (3rd dimension).
+ * @param reps3 Number of planes (repetitions of the 3rd dimension).
+ *
+ * @return 0 on successful dispatch.
+ */
+extern int idma_memcpy_3d(idma_controller_t *ctrl,
+                          uint8_t dir,
+                          uint32_t axi_addr,
+                          uint32_t obi_addr,
+                          uint32_t len,
+                          uint32_t std2,
+                          uint32_t reps2,
+                          uint32_t std3,
+                          uint32_t reps3);
+
 #define IDMA_ND_MAX_RANK 4u
 
 #ifndef IDMA_ND_WAIT_MODE
@@ -134,6 +163,16 @@ struct idma_controller_api {
                      uint32_t len,
                      uint32_t std,
                      uint32_t reps);
+
+    int (*memcpy_3d)(idma_controller_t *ctrl,
+                     uint8_t dir,
+                     uint32_t axi_addr,
+                     uint32_t obi_addr,
+                     uint32_t len,
+                     uint32_t std2,
+                     uint32_t reps2,
+                     uint32_t std3,
+                     uint32_t reps3);
 
     int (*memcpy_md_to_nd)(idma_controller_t *ctrl,
                            uint8_t dir,

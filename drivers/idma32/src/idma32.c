@@ -124,6 +124,58 @@ int idma32_memcpy_2d(idma_controller_t *ctrl,
 }
 
 /**
+ * Start 3-dimensional memory copy.
+ *
+ * @param dir Copy Direction. 0 = AXI to OBI (L2 to L1), !0 = OBI to AXI (L1 to L2).
+ * @param axi_addr AXI/L2 memory address of first element.
+ * @param obi_addr OBI/L1 memory address of first element.
+ * @param len Byte length of each row to transfer.
+ * @param std2 Stride between row starts on the strided (L2/AXI) side (2nd dimension).
+ * @param reps2 Number of rows per plane (repetitions of the 2nd dimension).
+ * @param std3 Stride between plane starts on the strided (L2/AXI) side (3rd dimension).
+ * @param reps3 Number of planes (repetitions of the 3rd dimension).
+ */
+int idma32_memcpy_3d(idma_controller_t *ctrl,
+                     uint8_t dir,
+                     uint32_t axi_addr,
+                     uint32_t obi_addr,
+                     uint32_t len,
+                     uint32_t std2,
+                     uint32_t reps2,
+                     uint32_t std3,
+                     uint32_t reps3)
+{
+#if IDMA_MM == 0
+    if (dir) { // OBI to AXI (L1 to L2)
+        idma_conf_out();
+        idma_set_addr_len_out(axi_addr, obi_addr, len);
+        idma_set_std2_rep2_out(std2, len, reps2);
+        idma_set_std3_rep3_out(std3, len * reps2, reps3);
+        idma_start_out();
+    } else { // AXI to OBI (L2 to L1)
+        idma_conf_in();
+        idma_set_addr_len_in(obi_addr, axi_addr, len);
+        idma_set_std2_rep2_in(len, std2, reps2);
+        idma_set_std3_rep3_in(len * reps2, std3, reps3);
+        idma_start_in();
+    }
+#else
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
+    if (dir) {
+        idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
+        idma_mm_set_std2_rep2(dir, std2, len, reps2);
+        idma_mm_set_std3_rep3(dir, std3, len * reps2, reps3);
+    } else {
+        idma_mm_set_addr_len(dir, obi_addr, axi_addr, len);
+        idma_mm_set_std2_rep2(dir, len, std2, reps2);
+        idma_mm_set_std3_rep3(dir, len * reps2, std3, reps3);
+    }
+    idma_mm_start(dir);
+#endif
+    return 0;
+}
+
+/**
  * Dispatch an n-dimensional memory copy to the narrowest native IDMA burst that
  * fits it (1D, 2D, or 3D), decided at runtime from copy's shape/strides after
  * coalescing contiguous innermost dimensions.
@@ -255,6 +307,16 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl,
                           uint32_t std,
                           uint32_t reps)
     __attribute__((alias("idma32_memcpy_2d"), used, visibility("default")));
+extern int idma_memcpy_3d(idma_controller_t *ctrl,
+                          uint8_t dir,
+                          uint32_t axi_addr,
+                          uint32_t obi_addr,
+                          uint32_t len,
+                          uint32_t std2,
+                          uint32_t reps2,
+                          uint32_t std3,
+                          uint32_t reps3)
+    __attribute__((alias("idma32_memcpy_3d"), used, visibility("default")));
 extern int idma_memcpy_md_to_nd(idma_controller_t *ctrl,
                                 uint8_t dir,
                                 uint32_t dst_addr,
@@ -269,5 +331,6 @@ idma_controller_api_t idma_api = {
     /*     .wait = idma32_wait, */
     .memcpy_1d       = idma32_memcpy_1d,
     .memcpy_2d       = idma32_memcpy_2d,
+    .memcpy_3d       = idma32_memcpy_3d,
     .memcpy_md_to_nd = idma32_memcpy_md_to_nd,
 };
