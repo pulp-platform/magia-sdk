@@ -1,8 +1,12 @@
+<p align="center">
+  <img src=".img/magia_logo.png" alt="MAGIA logo" width="400" />
+</p>
+
 # Magia-SDK
 This repository contains the WIP development platform for the mesh-based architecture [MAGIA](https://github.com/pulp-platform/MAGIA/tree/main).
 It provides useful tools for programming and running software applications on simulated MAGIA architectures for benchmarking, debugging and profiling.
 
-Magia and Magia-SDK are developed as part of the [PULP project](https://pulp-platform.org/index.html), a joint effort between ETH Zurich and the University of Bologna.
+Magia and Magia-SDK are developed by the University of Bologna and Chips-IT as part of the [PULP project](https://pulp-platform.org/index.html).
 
 ## Prerequisites
 
@@ -215,9 +219,10 @@ In case you are working on RTL, please use the sentinel utilities:
 
     sentinel_end();
 
-### GVSoC VCD Profiling
+### GVSoC Perfetto Profiling
 
-To generate a VCD waveform dump for post-simulation analysis, use the `run_profiling` target instead of `run`:
+The GVSOC model of MAGIA can be profiled by means of VCD tracing that, for ease of visualization, are converted to the Perfetto protobuf format.
+To generate a trace dump for post-simulation analysis, use the `run_profiling` target instead of `run`:
 
 `make run_profiling test=<test_name> tiles=<N>`
 
@@ -232,6 +237,9 @@ This appends `--trace=tile-<tile_id>-idma-ctrl-mm` to the GVSoC command. For exa
 `make run_profiling test=my_test tiles=4 profile_tile=12`
 
 If `profile_tile` is not specified, no tile-specific trace filter is applied.
+The traces will be available in `$(GVSOC_WORK_DIR)/trace.perfetto-trace` (default: `gvsoc_work/trace.perfetto-trace`) and can be visualized with [Perfetto](https://ui.perfetto.dev/) (also available as [Perfetto Trace VSCode extension](https://marketplace.visualstudio.com/items?itemName=drain99.perfetto-trace)).
+
+![Example of Perfetto traces](.img/perfetto_traces.png)
 
 ## Continuous Integration
 
