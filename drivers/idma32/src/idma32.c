@@ -123,6 +123,123 @@ int idma32_memcpy_2d(idma_controller_t *ctrl,
     return 0;
 }
 
+/**
+ * Dispatch an n-dimensional memory copy to the narrowest native IDMA burst that
+ * fits it (1D, 2D, or 3D), decided at runtime from copy's shape/strides after
+ * coalescing contiguous innermost dimensions.
+ *
+ * TODO: dispatch to a native 2D burst (idma32_memcpy_2d) when the transfer
+ * reduces to a single (std, rep) level, and to a native 3D burst (using the
+ * controller's std3/rep3 registers) when it reduces to two levels. For now,
+ * only the fully-contiguous case is handled natively (as a single 1D burst);
+ * anything else prints a warning and falls back to a software loop of 1D
+ * bursts, waiting on eu_ctrl (if non-NULL) between each.
+ *
+ * @param dir Copy Direction. 0 = AXI to OBI (L2 to L1), !0 = OBI to AXI (L1 to L2).
+ * @param dst_addr Destination address of first element.
+ * @param src_addr Source address of first element.
+ * @param copy Copy descriptor (rank, shape, element size, per-side strides).
+ * @param eu_ctrl Event-unit controller used to wait for each burst; pass NULL to skip waiting.
+ */
+int idma32_memcpy_md_to_nd(idma_controller_t *ctrl,
+                           uint8_t dir,
+                           uint32_t dst_addr,
+                           uint32_t src_addr,
+                           const copy_desc_t *copy,
+                           eu_controller_t *eu_ctrl)
+{
+    uint32_t coord[IDMA_ND_MAX_RANK] = {0u, 0u, 0u, 0u};
+    uint32_t iter_rank;
+    uint32_t inner_dim;
+    uint32_t burst_bytes;
+
+    if (copy->rank == 0u) {
+        return 0;
+    }
+
+    if (copy->rank > IDMA_ND_MAX_RANK) {
+        return -1;
+    }
+
+    for (uint32_t d = 0; d < copy->rank; ++d) {
+        if (copy->shape[d] == 0u) {
+            return 0;
+        }
+    }
+
+    inner_dim = copy->rank - 1u;
+    if (copy->src_strides_bytes[inner_dim] == copy->elem_bytes &&
+        copy->dst_strides_bytes[inner_dim] == copy->elem_bytes) {
+        iter_rank   = inner_dim;
+        burst_bytes = copy->shape[inner_dim] * copy->elem_bytes;
+    } else {
+        iter_rank   = copy->rank;
+        burst_bytes = copy->elem_bytes;
+    }
+
+    if (iter_rank == 0u) {
+        // Fully contiguous: a single native 1D burst covers the whole transfer.
+        int ret;
+
+        if (dir == 0u) {
+            ret = idma32_memcpy_1d(ctrl, dir, src_addr, dst_addr, burst_bytes);
+        } else {
+            ret = idma32_memcpy_1d(ctrl, dir, dst_addr, src_addr, burst_bytes);
+        }
+
+        if (eu_ctrl != NULL) {
+            if (dir == 0u) {
+                eu_idma_wait_a2o(eu_ctrl, IDMA_ND_WAIT_MODE);
+            } else {
+                eu_idma_wait_o2a(eu_ctrl, IDMA_ND_WAIT_MODE);
+            }
+        }
+
+        return ret;
+    }
+
+    printf("Warning: idma32_memcpy_md_to_nd: no native %uD burst yet, falling back to 1D bursts\n",
+           iter_rank + 1u);
+
+    for (;;) {
+        uint32_t src_block_addr = src_addr;
+        uint32_t dst_block_addr = dst_addr;
+
+        for (uint32_t d = 0; d < iter_rank; ++d) {
+            src_block_addr += coord[d] * copy->src_strides_bytes[d];
+            dst_block_addr += coord[d] * copy->dst_strides_bytes[d];
+        }
+
+        if (dir == 0u) {
+            idma32_memcpy_1d(ctrl, dir, src_block_addr, dst_block_addr, burst_bytes);
+        } else {
+            idma32_memcpy_1d(ctrl, dir, dst_block_addr, src_block_addr, burst_bytes);
+        }
+
+        if (eu_ctrl != NULL) {
+            if (dir == 0u) {
+                eu_idma_wait_a2o(eu_ctrl, IDMA_ND_WAIT_MODE);
+            } else {
+                eu_idma_wait_o2a(eu_ctrl, IDMA_ND_WAIT_MODE);
+            }
+        }
+
+        for (uint32_t d = iter_rank; d > 0u; --d) {
+            uint32_t idx = d - 1u;
+
+            coord[idx]++;
+            if (coord[idx] < copy->shape[idx]) {
+                break;
+            }
+
+            coord[idx] = 0u;
+            if (idx == 0u) {
+                return 0;
+            }
+        }
+    }
+}
+
 extern int idma_init(idma_controller_t *ctrl)
     __attribute__((alias("idma32_init"), used, visibility("default")));
 /* extern void idma_wait()
@@ -138,11 +255,19 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl,
                           uint32_t std,
                           uint32_t reps)
     __attribute__((alias("idma32_memcpy_2d"), used, visibility("default")));
+extern int idma_memcpy_md_to_nd(idma_controller_t *ctrl,
+                                uint8_t dir,
+                                uint32_t dst_addr,
+                                uint32_t src_addr,
+                                const copy_desc_t *copy,
+                                eu_controller_t *eu_ctrl)
+    __attribute__((alias("idma32_memcpy_md_to_nd"), used, visibility("default")));
 
 /* Export the IDMA-specific controller API */
 idma_controller_api_t idma_api = {
     .init = idma32_init,
     /*     .wait = idma32_wait, */
-    .memcpy_1d = idma32_memcpy_1d,
-    .memcpy_2d = idma32_memcpy_2d,
+    .memcpy_1d       = idma32_memcpy_1d,
+    .memcpy_2d       = idma32_memcpy_2d,
+    .memcpy_md_to_nd = idma32_memcpy_md_to_nd,
 };

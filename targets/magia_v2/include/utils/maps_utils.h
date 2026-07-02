@@ -92,17 +92,6 @@ typedef struct {
 
 } subslice_desc_t;
 
-// descriptor for copy operations
-typedef struct {
-
-    uint32_t rank;
-    uint32_t shape[MAPS_MAX_RANK];
-    uint32_t elem_bytes;
-    uint32_t src_strides_bytes[MAPS_MAX_RANK];
-    uint32_t dst_strides_bytes[MAPS_MAX_RANK];
-
-} copy_desc_t;
-
 // descriptor for l2 read operation
 typedef struct {
 
@@ -423,108 +412,6 @@ static inline void publish_ready(const tile_plan_t *plan,
     __asm__ volatile("fence w, w" ::: "memory");
 }
 
-static inline void wait_dma_reads(eu_controller_t *eu_ctrl)
-{
-    if (eu_ctrl != NULL) {
-        eu_idma_wait_a2o(eu_ctrl, MAPS_WAIT_MODE);
-    }
-}
-
-static inline void wait_dma_writes(eu_controller_t *eu_ctrl)
-{
-    if (eu_ctrl != NULL) {
-        eu_idma_wait_o2a(eu_ctrl, MAPS_WAIT_MODE);
-    }
-}
-
-static inline void maps_wait_dma_dir(eu_controller_t *eu_ctrl, uint8_t dir)
-{
-    if (eu_ctrl == NULL) {
-        return;
-    }
-
-    if (dir == 0u) {
-        wait_dma_reads(eu_ctrl);
-    } else {
-        wait_dma_writes(eu_ctrl);
-    }
-}
-
-// Ndimensional idma copy operation that considers contiguous source
-// tensors and interleaved or contiguous dst
-static inline void copy_nd(uint32_t dst_addr,
-                           uint32_t src_addr,
-                           const copy_desc_t *copy,
-                           uint8_t dir,
-                           idma_controller_t *idma_ctrl,
-                           eu_controller_t *eu_ctrl)
-{
-    uint32_t coord[MAPS_MAX_RANK] = {0u, 0u, 0u, 0u};
-    uint32_t iter_rank;
-    uint32_t inner_dim;
-    uint32_t burst_bytes;
-
-    if (copy->rank == 0u) {
-        return;
-    }
-
-    if (copy->rank > MAPS_MAX_RANK) {
-        trap_unsupported_rank(copy->rank);
-        return;
-    }
-
-    for (uint32_t d = 0; d < copy->rank; ++d) {
-        if (copy->shape[d] == 0u) {
-            return;
-        }
-    }
-
-    inner_dim = copy->rank - 1u;
-    if (copy->src_strides_bytes[inner_dim] == copy->elem_bytes &&
-        copy->dst_strides_bytes[inner_dim] == copy->elem_bytes) {
-        iter_rank   = inner_dim;
-        burst_bytes = copy->shape[inner_dim] * copy->elem_bytes;
-    } else {
-        iter_rank   = copy->rank;
-        burst_bytes = copy->elem_bytes;
-    }
-
-    for (;;) {
-        uint32_t src_block_addr = src_addr;
-        uint32_t dst_block_addr = dst_addr;
-
-        for (uint32_t d = 0; d < iter_rank; ++d) {
-            src_block_addr += coord[d] * copy->src_strides_bytes[d];
-            dst_block_addr += coord[d] * copy->dst_strides_bytes[d];
-        }
-
-        if (dir == 0u) {
-            idma_memcpy_1d(idma_ctrl, dir, src_block_addr, dst_block_addr, burst_bytes);
-        } else {
-            idma_memcpy_1d(idma_ctrl, dir, dst_block_addr, src_block_addr, burst_bytes);
-        }
-        maps_wait_dma_dir(eu_ctrl, dir);
-
-        if (iter_rank == 0u) {
-            break;
-        }
-
-        for (uint32_t d = iter_rank; d > 0u; --d) {
-            uint32_t idx = d - 1u;
-
-            coord[idx]++;
-            if (coord[idx] < copy->shape[idx]) {
-                break;
-            }
-
-            coord[idx] = 0u;
-            if (idx == 0u) {
-                return;
-            }
-        }
-    }
-}
-
 static inline void issue_l2_read_token(const tile_plan_t *plan,
                                        const l2_read_desc_t *read,
                                        uint32_t token,
@@ -535,7 +422,7 @@ static inline void issue_l2_read_token(const tile_plan_t *plan,
     uint32_t dst_addr = local_subslice_addr(plan, &read->dst, slot);
     uint32_t src_addr = read->src_l2_addr + token * read->src_l2_token_stride_bytes;
 
-    copy_nd(dst_addr, src_addr, &read->copy, 0u, idma_ctrl, eu_ctrl);
+    idma_memcpy_md_to_nd(idma_ctrl, 0u, dst_addr, src_addr, &read->copy, eu_ctrl);
 }
 
 static inline void issue_l2_write_token(const tile_plan_t *plan,
@@ -548,7 +435,7 @@ static inline void issue_l2_write_token(const tile_plan_t *plan,
     uint32_t src_addr = local_subslice_addr(plan, &write->src, slot);
     uint32_t dst_addr = write->dst_l2_addr + token * write->dst_l2_token_stride_bytes;
 
-    copy_nd(dst_addr, src_addr, &write->copy, 1u, idma_ctrl, eu_ctrl);
+    idma_memcpy_md_to_nd(idma_ctrl, 1u, dst_addr, src_addr, &write->copy, eu_ctrl);
 }
 
 static inline void issue_send(const tile_plan_t *plan,
@@ -560,7 +447,7 @@ static inline void issue_send(const tile_plan_t *plan,
     uint32_t src_addr = local_subslice_addr(plan, &send->src, slot);
     uint32_t dst_addr = remote_subslice_addr(send, slot);
 
-    copy_nd(dst_addr, src_addr, &send->copy, 1u, idma_ctrl, eu_ctrl);
+    idma_memcpy_md_to_nd(idma_ctrl, 1u, dst_addr, src_addr, &send->copy, eu_ctrl);
     publish_ready(plan, send->dst_hartid, send->transition_id, send->ready_flag_id, slot);
 }
 

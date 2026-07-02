@@ -8,6 +8,8 @@
 #ifndef HAL_IDMA_H
 #define HAL_IDMA_H
 
+#include "eventunit.h"
+
 /** Forward declaration of the idma controller instance and API structure. */
 typedef struct idma_controller idma_controller_t;
 typedef struct idma_controller_api idma_controller_api_t;
@@ -71,6 +73,47 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl,
                           uint32_t std,
                           uint32_t reps);
 
+#define IDMA_ND_MAX_RANK 4u
+
+#ifndef IDMA_ND_WAIT_MODE
+#define IDMA_ND_WAIT_MODE WFE
+#endif
+
+/**
+ * Descriptor for a multi-dimensional memory copy (see idma_memcpy_md_to_nd).
+ */
+typedef struct {
+    uint32_t rank;
+    uint32_t shape[IDMA_ND_MAX_RANK];
+    uint32_t elem_bytes;
+    uint32_t src_strides_bytes[IDMA_ND_MAX_RANK];
+    uint32_t dst_strides_bytes[IDMA_ND_MAX_RANK];
+} copy_desc_t;
+
+/**
+ * Start a multi-dimensional memory copy, dispatched at runtime to the narrowest
+ * native IDMA burst that fits the transfer (1D, 2D, or 3D), based on copy's
+ * shape/strides after coalescing contiguous innermost dimensions. Shapes without
+ * a native path yet fall back to a software loop of 1D bursts. Since the
+ * underlying controller supports only one in-flight transfer, each burst is waited
+ * on via eu_ctrl (if non-NULL, using IDMA_ND_WAIT_MODE) before the next is issued.
+ *
+ * @param ctrl     IDMA controller handle.
+ * @param dir      Copy direction. 0 = AXI to OBI (L2 to L1), !0 = OBI to AXI (L1 to L2).
+ * @param dst_addr Destination address of first element.
+ * @param src_addr Source address of first element.
+ * @param copy     Copy descriptor (rank, shape, element size, per-side strides).
+ * @param eu_ctrl  Event-unit controller used to wait for each burst; pass NULL to skip waiting.
+ *
+ * @return 0 on success, -1 if copy->rank exceeds IDMA_ND_MAX_RANK.
+ */
+extern int idma_memcpy_md_to_nd(idma_controller_t *ctrl,
+                                uint8_t dir,
+                                uint32_t dst_addr,
+                                uint32_t src_addr,
+                                const copy_desc_t *copy,
+                                eu_controller_t *eu_ctrl);
+
 /**
  * WIP
  * IDMA API
@@ -91,6 +134,13 @@ struct idma_controller_api {
                      uint32_t len,
                      uint32_t std,
                      uint32_t reps);
+
+    int (*memcpy_md_to_nd)(idma_controller_t *ctrl,
+                           uint8_t dir,
+                           uint32_t dst_addr,
+                           uint32_t src_addr,
+                           const copy_desc_t *copy,
+                           eu_controller_t *eu_ctrl);
 };
 
 /*
