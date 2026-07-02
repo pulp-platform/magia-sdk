@@ -16,7 +16,7 @@
 #include "regs/tile_ctrl.h"
 #include "utils/idma_isa_utils.h"
 #include "utils/magia_utils.h"
-//#include "utils/tinyprintf.h"
+// #include "utils/tinyprintf.h"
 #include "utils/printf.h"
 
 int idma32_init(idma_controller_t *ctrl)

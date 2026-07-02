@@ -378,6 +378,18 @@ static inline void maps_trace_event(
 #endif
 }
 
+static inline void maps_main_trace(uint32_t hartid, const char *phase)
+{
+#if MAPS_ENABLE_TRACE
+    if (hartid == 0u) {
+        printf("\nmaps main %s\n\n", phase);
+    }
+#else
+    (void)hartid;
+    (void)phase;
+#endif
+}
+
 static inline uint32_t
 is_ready(const tile_plan_t *plan, uint32_t transition_id, uint32_t ready_flag_id, uint32_t slot)
 {
@@ -697,33 +709,39 @@ static inline void run_tile_token(const tile_plan_t *plan,
                                   idma_controller_t *idma_ctrl,
                                   eu_controller_t *eu_ctrl)
 {
+    // Set double buffering slot
     uint32_t slot = maps_token_slot(plan, token);
 
     maps_trace_event(plan, token, slot, "token-begin", 0u);
 
+    // Do L2 reads
     for (uint32_t i = 0; i < plan->num_l2_reads; ++i) {
         maps_trace_event(plan, token, slot, "l2-read", i);
         issue_l2_read_token(plan, &plan->l2_reads[i], token, slot, idma_ctrl, eu_ctrl);
         maps_trace_event(plan, token, slot, "l2-read-done", i);
     }
 
+    // Do L1-L1 receives
     for (uint32_t i = 0; i < plan->num_recvs; ++i) {
         maps_trace_event(plan, token, slot, "recv", i);
         wait_recv_token(plan, &plan->recvs[i], token, slot);
     }
 
+    // Perform actual operations
     for (uint32_t i = 0; i < plan->num_ops; ++i) {
         maps_trace_event(plan, token, slot, "op", i);
         execute_op(plan, &plan->ops[i], slot, idma_ctrl, eu_ctrl);
         maps_trace_event(plan, token, slot, "op-done", i);
     }
 
+    // Do L1-L1 sends
     for (uint32_t i = 0; i < plan->num_sends; ++i) {
         maps_trace_event(plan, token, slot, "send", i);
         issue_send(plan, &plan->sends[i], slot, idma_ctrl, eu_ctrl);
         maps_trace_event(plan, token, slot, "send-done", i);
     }
 
+    // Do L2 writes
     for (uint32_t i = 0; i < plan->num_l2_writes; ++i) {
         maps_trace_event(plan, token, slot, "l2-write", i);
         issue_l2_write_token(plan, &plan->l2_writes[i], token, slot, idma_ctrl, eu_ctrl);
