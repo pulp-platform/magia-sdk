@@ -285,12 +285,13 @@ def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, st
             last = path_parts[min(pid_depth, len(path_parts)) - 1]
             m = re.search(r"-(\d+)$", last)
             pid_val = None
+            inst = None            # the group's instance number (tile N), else None
             display_name = raw_key
             child_prefix = None
             if m:
                 num = int(m.group(1))
                 if num not in pid_used_nums:
-                    pid_val = num
+                    pid_val = inst = num
                     display_name = raw_key[:-len(m.group(0))]
                     stripped_last = last[:-len(m.group(0))]
                     word = stripped_last.rsplit("-", 1)[-1] if stripped_last else None
@@ -304,8 +305,10 @@ def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, st
             pid_used_nums.add(pid_val)
             pid_ids[raw_key] = pid_val
             pid_child_prefix[pid_val] = child_prefix
+            # "num" lets the protobuf backend order groups (tiles by number) and
+            # decide which groups show a number; None => a numberless group (NoC/L2).
             events.append({"ph": "M", "name": "process_name", "pid": pid_val,
-                           "args": {"name": rename(display_name)}})
+                           "args": {"name": rename(display_name), "num": inst}})
         return pid_ids[raw_key]
 
     def get_tid(pid, label):
@@ -510,28 +513,34 @@ def _ps(field, s):          # string field
 _SEQ_CLEARED = 1   # TracePacket.SequenceFlags.SEQ_INCREMENTAL_STATE_CLEARED
 _SEQ_NEEDS = 2     # TracePacket.SequenceFlags.SEQ_NEEDS_INCREMENTAL_STATE
 _EV_BEGIN, _EV_END, _EV_COUNTER = 1, 2, 4  # TrackEvent.Type
+_ORDER_EXPLICIT = 3  # TrackDescriptor.ChildTracksOrdering.EXPLICIT (order by sibling_order_rank)
 
 
 def write_perfetto(events, path, intern=True, gzip_out=False):
     """Translate the JSON-event IR from convert() into a Perfetto protobuf.
 
-    Track model: one process track per pid (renders as "<name> <pid>", so tile
-    groups keep their number) and one generic named child track per (pid, tid)
-    (renders as just the label, dropping the sequential tid). Each child track
-    gets its own packet sequence so its events stay timestamp-ordered within
-    the sequence (Perfetto requires monotonic timestamps per sequence, and the
-    IR emits each track's events contiguously in time order); slice-begin names
-    are interned per sequence.
+    Track model: a single root track (child_ordering=EXPLICIT) groups one
+    generic track per pid; tile groups are named "<short> <N>" and ranked by N
+    (so they list 0..N in order), while numberless groups (NoC, L2) are named
+    plainly and ranked after the tiles. Under each group is one generic named
+    child track per (pid, tid), rendered as just the label (no sequential tid).
+    Generic tracks are used (rather than ProcessDescriptor tracks) because
+    Perfetto ignores ordering hints on process/thread tracks and always appends
+    their pid to the name. Each child track gets its own packet sequence so its
+    events stay timestamp-ordered within the sequence (Perfetto requires
+    monotonic timestamps per sequence, and the IR emits each track's events
+    contiguously in time order); slice-begin names are interned per sequence.
     """
     # Group the flat IR by track, preserving first-seen order.
-    procs = {}          # pid -> display name
+    procs = {}          # pid -> {"name": display, "num": int or None}
     tracks = {}         # (pid, tid) -> {"label", "counter", "events": [(ts,kind,payload)]}
     order = []          # (pid, tid) in first-seen order
     for e in events:
         ph = e["ph"]
         if ph == "M":
             if e["name"] == "process_name":
-                procs.setdefault(e["pid"], e["args"]["name"])
+                procs.setdefault(e["pid"], {"name": e["args"]["name"],
+                                            "num": e["args"].get("num")})
             elif e["name"] == "thread_name":
                 key = (e["pid"], e["tid"])
                 if key not in tracks:
@@ -553,8 +562,31 @@ def write_perfetto(events, path, intern=True, gzip_out=False):
             tr["events"].append((ts, "C", next(iter(e["args"].values()))))
 
     uid = itertools.count(1)
+    root_uuid = next(uid)
     proc_uuid = {pid: next(uid) for pid in procs}
     track_uuid = {key: next(uid) for key in order}
+
+    # Root name = the common leading dotted prefix of all group display names
+    # (e.g. "magia-v2-soc"); it becomes the single top-level group and is
+    # stripped from each child group's shown name.
+    split_names = [p["name"].split(".") for p in procs.values()]
+    common = []
+    for comp in zip(*split_names):
+        if len(set(comp)) == 1:
+            common.append(comp[0])
+        else:
+            break
+    root_name = ".".join(common) or "trace"
+    strip = root_name + "." if common else ""
+
+    def group_name_and_rank(info, unnumbered_idx):
+        short = info["name"]
+        if strip and short.startswith(strip):
+            short = short[len(strip):]
+        short = short or info["name"].rsplit(".", 1)[-1]
+        if info["num"] is not None:                 # tile: keep number, order by it
+            return f"{short} {info['num']}", info["num"]
+        return short, 10 ** 6 + unnumbered_idx      # NoC/L2: no number, after tiles
 
     opener = gzip.open if gzip_out else open
     with opener(path, "wb") as f:
@@ -563,13 +595,20 @@ def write_perfetto(events, path, intern=True, gzip_out=False):
 
         # --- structure sequence: declare every track up front ---
         SEQ_STRUCT = 1
-        for pid, name in procs.items():
-            proc = _pv(1, pid) + _ps(6, name)            # ProcessDescriptor{pid, process_name}
-            td = _pv(1, proc_uuid[pid]) + _pb(3, proc)   # TrackDescriptor{uuid, process}
+        # Root: TrackDescriptor{uuid, name, child_ordering=EXPLICIT}
+        emit(_pb(60, _pv(1, root_uuid) + _ps(2, root_name) + _pv(11, _ORDER_EXPLICIT))
+             + _pv(10, SEQ_STRUCT))
+        unnumbered = 0
+        for pid, info in procs.items():
+            name, rank = group_name_and_rank(info, unnumbered)
+            if info["num"] is None:
+                unnumbered += 1
+            # Generic group TrackDescriptor{uuid, name, parent_uuid=root, sibling_order_rank}
+            td = _pv(1, proc_uuid[pid]) + _ps(2, name) + _pv(5, root_uuid) + _pv(12, rank)
             emit(_pb(60, td) + _pv(10, SEQ_STRUCT))
         for key in order:
             tr = tracks[key]
-            # TrackDescriptor{uuid, name, parent_uuid[, counter]}
+            # TrackDescriptor{uuid, name, parent_uuid=group[, counter]}
             td = _pv(1, track_uuid[key]) + _ps(2, tr["label"]) + _pv(5, proc_uuid[key[0]])
             if tr["counter"]:
                 td += _pb(8, b"")  # empty CounterDescriptor marks this a counter track
