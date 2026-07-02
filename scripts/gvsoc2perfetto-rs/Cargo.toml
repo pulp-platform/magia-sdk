@@ -1,0 +1,23 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "gvsoc2perfetto"
+version = "0.1.0"
+edition = "2021"
+description = "Convert GVSOC waveform traces (VCD) to Perfetto traces (Rust port of gvsoc2perfetto.py)"
+
+[[bin]]
+name = "gvsoc2perfetto"
+path = "src/main.rs"
+
+[dependencies]
+regex = "1"
+flate2 = "1"
+indexmap = "2"
+indicatif = "0.17"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

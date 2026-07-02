@@ -80,7 +80,10 @@ GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 profile_tile		?=
 PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=tile-$(profile_tile)-idma-ctrl-mm,)
 
+# GVSOC VCD to Perfetto converter scripts (Python version kept but unused currently)
 GVSOC2PERFETTO_SCRIPT  ?= scripts/gvsoc2perfetto.py
+GVSOC2PERFETTO_DIR     ?= scripts/gvsoc2perfetto-rs
+GVSOC2PERFETTO_BIN     ?= $(GVSOC2PERFETTO_DIR)/target/release/gvsoc2perfetto
 GVSOC2PERFETTO_VCD     ?= $(GVSOC_WORK_DIR)/all.vcd
 GVSOC2PERFETTO_OUT     ?= $(GVSOC_WORK_DIR)/trace.perfetto-trace
 # Per-tile: CV32E40P core, light_redmule, both idma ports (frontend descriptor
@@ -98,7 +101,12 @@ GVSOC2PERFETTO_INCLUDE ?= (?x) \
   | magia-noc\.ni_\d+_\d+\.(narrow_req|wide_req)$$ \
   | L2-mem\.(req_addr|req_size|req_is_write)$$
 
-.PHONY: gvsoc build format run_profiling
+.PHONY: gvsoc build format run_profiling gvsoc2perfetto
+
+# Build the Rust VCD->Perfetto converter (cargo tracks its own incremental state).
+gvsoc2perfetto: $(GVSOC2PERFETTO_BIN)
+$(GVSOC2PERFETTO_BIN): $(GVSOC2PERFETTO_DIR)/src/main.rs $(GVSOC2PERFETTO_DIR)/Cargo.toml
+	cargo build --release --manifest-path $(GVSOC2PERFETTO_DIR)/Cargo.toml
 
 format:
 	@bash scripts/ci/format-changed.sh apply
@@ -163,7 +171,7 @@ else
 	$(error Only rtl and gvsoc are supported as platforms.)
 endif
 
-run_profiling: set_mesh $(GVSOC_WORK_DIR)
+run_profiling: set_mesh $(GVSOC_WORK_DIR) $(GVSOC2PERFETTO_BIN)
 ifndef test
 	$(error Proper formatting is: make run_profiling test=<test_name>)
 endif
@@ -171,7 +179,7 @@ ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
 	$(error No test found with name: $(test))
 endif
 	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG)
-	python3 $(GVSOC2PERFETTO_SCRIPT) $(GVSOC2PERFETTO_VCD) \
+	$(GVSOC2PERFETTO_BIN) $(GVSOC2PERFETTO_VCD) \
 		-o $(GVSOC2PERFETTO_OUT) \
 		--state-map 'fsm_state=0:idle,1:preload,2:routine,3:storing,4:finished,5:acknowledge' \
 		--state-map 'me_state=0:idle,1:decomposing' \
@@ -182,7 +190,7 @@ endif
 		--split-asm \
 		--stats \
 		--include '$(GVSOC2PERFETTO_INCLUDE)'
-#	rm -f -- $(GVSOC2PERFETTO_VCD)
+	rm -f -- $(GVSOC2PERFETTO_VCD)
 
 MAGIA: set_mesh
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
