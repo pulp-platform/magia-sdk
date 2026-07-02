@@ -146,14 +146,21 @@ int main(void)
     if (hartid == 0u) {
         uint32_t l1 = get_l1_base(hartid);
 
+        uint32_t case_errs;
+
         // --- C1: fully-contiguous 1D -> 1D, both directions (native 1D) --------
+        printf("=== C1: fully-contiguous 1D <-> 1D, both directions ===\n");
+        case_errs = errors;
         {
             tensor_sub_slice_t a = {.rank = 1u, .num_elems = 16u, .dims = {{0u, 16u, 2u}}};
             errors += run_case(&idma_ctrl, eu, 0u, &a, &a, 2u, l1);
             errors += run_case(&idma_ctrl, eu, 1u, &a, &a, 2u, l1);
         }
+        printf("[C1] errors: %d\n", errors - case_errs);
 
         // --- C2: 2D strided L2 <-> contiguous L1 (native 2D), both directions --
+        printf("=== C2: 2D strided L2 <-> contiguous L1 (native 2D), both directions ===\n");
+        case_errs = errors;
         {
             tensor_sub_slice_t strided = {
                 .rank = 2u, .num_elems = 24u, .dims = {{0u, 6u, 16u}, {0u, 4u, 2u}}};
@@ -164,8 +171,11 @@ int main(void)
             // dir=1 (store): OBI=src packed L1, AXI=dst strided.
             errors += run_case(&idma_ctrl, eu, 1u, &packed, &strided, 2u, l1);
         }
+        printf("[C2] errors: %d\n", errors - case_errs);
 
         // --- C3: reshape with different rank/shape, fully contiguous (-> 1D) ----
+        printf("=== C3: reshape with different rank/shape, fully contiguous (-> 1D) ===\n");
+        case_errs = errors;
         {
             tensor_sub_slice_t s1 = {.rank = 1u, .num_elems = 12u, .dims = {{0u, 12u, 2u}}};
             tensor_sub_slice_t d2 = {
@@ -176,8 +186,11 @@ int main(void)
                 .rank = 2u, .num_elems = 12u, .dims = {{0u, 2u, 12u}, {0u, 6u, 2u}}};
             errors += run_case(&idma_ctrl, eu, 0u, &s2, &d2, 2u, l1);
         }
+        printf("[C3] errors: %d\n", errors - case_errs);
 
         // --- C4: strided AXI side with rank>=2 outer dims (-> loop of 2D) ------
+        printf("=== C4: strided AXI side with rank>=2 outer dims (-> loop of 2D) ===\n");
+        case_errs = errors;
         {
             // src (AXI) coalesces to {outer(2,std48), mid(3,std12), inner(4,std2)}:
             // inner is the contiguous burst block, mid/outer are strided levels.
@@ -186,15 +199,21 @@ int main(void)
             tensor_sub_slice_t dpk = {.rank = 1u, .num_elems = 24u, .dims = {{0u, 24u, 2u}}};
             errors += run_case(&idma_ctrl, eu, 0u, &s3, &dpk, 2u, l1);
         }
+        printf("[C4] errors: %d\n", errors - case_errs);
 
         // --- C5: non-zero per-dim starts, contiguous ---------------------------
+        printf("=== C5: non-zero per-dim starts, contiguous ===\n");
+        case_errs = errors;
         {
             tensor_sub_slice_t s = {.rank = 1u, .num_elems = 4u, .dims = {{2u, 4u, 2u}}};
             tensor_sub_slice_t d = {.rank = 1u, .num_elems = 4u, .dims = {{1u, 4u, 2u}}};
             errors += run_case(&idma_ctrl, eu, 0u, &s, &d, 2u, l1);
         }
+        printf("[C5] errors: %d\n", errors - case_errs);
 
         // --- C6: non-contiguous innermost on both sides (-> 1D odometer path) --
+        printf("=== C6: non-contiguous innermost on both sides (-> 1D odometer path) ===\n");
+        case_errs = errors;
         {
             // dir=0 so OBI=dst; its inner stride (4) != elem (2) -> not packed,
             // forcing the software fallback over the common contiguous run (1).
@@ -204,8 +223,11 @@ int main(void)
                 .rank = 2u, .num_elems = 12u, .dims = {{0u, 4u, 16u}, {0u, 3u, 4u}}};
             errors += run_case(&idma_ctrl, eu, 0u, &s, &d, 2u, l1);
         }
+        printf("[C6] errors: %d\n", errors - case_errs);
 
         // --- C7: max rank (IDMA_ND_MAX_RANK) accepted, contiguous -> 1D --------
+        printf("=== C7: max rank (IDMA_ND_MAX_RANK) accepted, contiguous -> 1D ===\n");
+        case_errs = errors;
         {
             tensor_sub_slice_t s4 = {.rank = 4u,
                                      .num_elems = 16u,
@@ -213,8 +235,11 @@ int main(void)
             tensor_sub_slice_t d1 = {.rank = 1u, .num_elems = 16u, .dims = {{0u, 16u, 2u}}};
             errors += run_case(&idma_ctrl, eu, 0u, &s4, &d1, 2u, l1);
         }
+        printf("[C7] errors: %d\n", errors - case_errs);
 
         // --- C8: 4-byte elements, contiguous and 2D strided --------------------
+        printf("=== C8: 4-byte elements, contiguous and 2D strided ===\n");
+        case_errs = errors;
         {
             tensor_sub_slice_t a = {.rank = 1u, .num_elems = 8u, .dims = {{0u, 8u, 4u}}};
             errors += run_case(&idma_ctrl, eu, 0u, &a, &a, 4u, l1);
@@ -225,8 +250,11 @@ int main(void)
                 .rank = 2u, .num_elems = 12u, .dims = {{0u, 4u, 12u}, {0u, 3u, 4u}}};
             errors += run_case(&idma_ctrl, eu, 0u, &strided, &packed, 4u, l1);
         }
+        printf("[C8] errors: %d\n", errors - case_errs);
 
         // --- C9: empty transfer (a zero-length dim) is a no-op -----------------
+        printf("=== C9: empty transfer (a zero-length dim) is a no-op ===\n");
+        case_errs = errors;
         {
             uint32_t dst_base = l1;
             fill_bytes(dst_base, SENTINEL, IDMA_ND_BUF_BYTES);
@@ -243,8 +271,11 @@ int main(void)
                 }
             }
         }
+        printf("[C9] errors: %d\n", errors - case_errs);
 
         // --- C10: mismatched element counts is rejected (-1), leaves dst intact -
+        printf("=== C10: mismatched element counts is rejected (-1), leaves dst intact ===\n");
+        case_errs = errors;
         {
             uint32_t dst_base = l1;
             fill_bytes(dst_base, SENTINEL, IDMA_ND_BUF_BYTES);
@@ -261,6 +292,7 @@ int main(void)
                 }
             }
         }
+        printf("[C10] errors: %d\n", errors - case_errs);
 
         printf("test_idma_nd errors: %d\n", errors);
     }
