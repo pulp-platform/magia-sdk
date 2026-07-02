@@ -13,17 +13,17 @@ class _MagiaConvTransposeFP16Spatz(NodeTemplate):
         data_out = ctxt.lookup(operatorRepresentation['data_out'])
         operatorRepresentation['offset'] = 0
 
-        operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, data_in.shape)) + "}"
-        N = data_in.shape[0]
-        C = operatorRepresentation['ch_im_out']
-        H = operatorRepresentation['dim_im_out_y']
-        W = operatorRepresentation['dim_im_out_x']
+        operatorRepresentation['_input_shape'] = "{" + ", ".join(map(str, data_in.shape)) + "}"
+        N = operatorRepresentation['batch_size']
+        C = operatorRepresentation['feature_maps']
+        H = operatorRepresentation['output_shape'][0]
+        W = operatorRepresentation['output_shape'][1]
 
-        operatorRepresentation['output_shape'] = f"{{ {N}, {C}, {H}, {W} }}"
+        operatorRepresentation['_output_shape'] = f"{{ {N}, {C}, {H}, {W} }}"
 
         return ctxt, operatorRepresentation, []
 
 referenceTemplate = _MagiaConvTransposeFP16Spatz("""
 // Magia ConvTranspose FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
-MAGIA_convtranspose_fp16_spatz(${data_in}, ${weight}, ${data_out}, (uint32_t[])${input_shape}, (uint32_t[])${output_shape}, ${kernel_shape[0]}, ${kernel_shape[1]}, ${strides[0]}, ${strides[1]}, ${pads[0]}, ${pads[1]}, ${group});
+MAGIA_convtranspose_fp16_spatz(${data_in}, ${weight}, ${data_out}, (uint32_t[])${_input_shape}, (uint32_t[])${_output_shape}, ${kernel_shape[0]}, ${kernel_shape[1]}, ${strides[0]}, ${strides[1]}, ${pads[0]}, ${pads[1]}, ${group});
 """)
