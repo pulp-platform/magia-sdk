@@ -334,14 +334,16 @@ static inline void maps_generated_init_tensors(uint32_t hartid)
 #endif
 }
 
-#define MAPS_COPY_INIT(rows, cols)                                                                 \
+/* One side (src or dst) of a maps copy: a packed rows x cols matrix sub-slice. */
+#define MAPS_SUBSLICE_INIT(rows, cols)                                                             \
     {                                                                                              \
-        .rank              = MAPS_MATRIX_RANK,                                                     \
-        .shape             = {(rows), (cols), 0u, 0u},                                             \
-        .elem_bytes        = MAPS_ELEM_BYTES,                                                      \
-        .src_strides_bytes = {(cols) * MAPS_ELEM_BYTES, MAPS_ELEM_BYTES, 0u, 0u},                  \
-        .dst_strides_bytes = {(cols) * MAPS_ELEM_BYTES, MAPS_ELEM_BYTES, 0u, 0u},                  \
+        .rank      = MAPS_MATRIX_RANK,                                                             \
+        .num_elems = (rows) * (cols),                                                              \
+        .dims      = {{0u, (rows), (cols) * MAPS_ELEM_BYTES}, {0u, (cols), MAPS_ELEM_BYTES}},      \
     }
+
+/* Fills both trailing (copy_src, copy_dst) fields; maps src/dst shapes match. */
+#define MAPS_COPY_INIT(rows, cols) MAPS_SUBSLICE_INIT(rows, cols), MAPS_SUBSLICE_INIT(rows, cols)
 
 #define MAPS_SUB_INIT(slice, row_off, rows, cols)                                                  \
     {                                                                                              \
@@ -562,7 +564,8 @@ static const l2_read_desc_t maps_l2_reads_tile8[2] = {
         .dst_l1_data_base          = MAPS_L1_DATA_OFFSET,                                          \
         .dst_slice_l1_offset_bytes = MAPS_L1_LOG_IN_OFFSET,                                        \
         .dst_slice_slot_bytes      = MAPS_LOG_BYTES,                                               \
-        .copy                      = MAPS_COPY_INIT(rows, MAPS_N),                                 \
+        .copy_src                  = MAPS_SUBSLICE_INIT(rows, MAPS_N),                             \
+        .copy_dst                  = MAPS_SUBSLICE_INIT(rows, MAPS_N),                             \
         .ready_flag_id             = 0u,                                                           \
     }
 
@@ -623,7 +626,8 @@ static const recv_desc_t maps_recvs_tile35[2] = {
         .dst_l1_data_base          = MAPS_L1_DATA_OFFSET,                                          \
         .dst_slice_l1_offset_bytes = (dst_offset),                                                 \
         .dst_slice_slot_bytes      = MAPS_LOG_BYTES,                                               \
-        .copy                      = MAPS_COPY_INIT(MAPS_LOG_ROWS, MAPS_N),                        \
+        .copy_src                  = MAPS_SUBSLICE_INIT(MAPS_LOG_ROWS, MAPS_N),                    \
+        .copy_dst                  = MAPS_SUBSLICE_INIT(MAPS_LOG_ROWS, MAPS_N),                    \
         .ready_flag_id             = 0u,                                                           \
     }
 

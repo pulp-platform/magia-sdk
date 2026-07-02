@@ -109,38 +109,72 @@ extern int idma_memcpy_3d(idma_controller_t *ctrl,
 #endif
 
 /**
- * Descriptor for a multi-dimensional memory copy (see idma_memcpy_md_to_nd).
+ * A single dimension of a tensor sub-slice: a strided range of elements.
+ *
+ * The address of index i along this dimension is `base + (start + i) * stride`,
+ * for i in [0, length). `stride` is a byte gap; `start` is in element/index units.
  */
 typedef struct {
-    uint32_t rank;
-    uint32_t shape[IDMA_ND_MAX_RANK];
-    uint32_t elem_bytes;
-    uint32_t src_strides_bytes[IDMA_ND_MAX_RANK];
-    uint32_t dst_strides_bytes[IDMA_ND_MAX_RANK];
-} copy_desc_t;
+    uint32_t start;  /**< Starting index in this dimension (element units). */
+    uint32_t length; /**< Number of elements along this dimension. */
+    uint32_t stride; /**< Byte gap between consecutive indices in this dimension. */
+} TensorRange;
 
 /**
- * Start a multi-dimensional memory copy, dispatched at runtime to the narrowest
- * native IDMA burst that fits the transfer (1D, 2D, or 3D), based on copy's
- * shape/strides after coalescing contiguous innermost dimensions. Shapes without
- * a native path yet fall back to a software loop of 1D bursts. Since the
- * underlying controller supports only one in-flight transfer, each burst is waited
- * on via eu_ctrl (if non-NULL, using IDMA_ND_WAIT_MODE) before the next is issued.
+ * Descriptor for one side (source or destination) of a multi-dimensional copy.
  *
- * @param ctrl     IDMA controller handle.
- * @param dir      Copy direction. 0 = AXI to OBI (L2 to L1), !0 = OBI to AXI (L1 to L2).
- * @param dst_addr Destination address of first element.
- * @param src_addr Source address of first element.
- * @param copy     Copy descriptor (rank, shape, element size, per-side strides).
- * @param eu_ctrl  Event-unit controller used to wait for each burst; pass NULL to skip waiting.
+ * Dimensions are stored outermost-first (row-major): dims[0] varies slowest,
+ * dims[rank-1] varies fastest. `num_elems` must equal the product of dims[].length.
+ * The two sides of a copy may have different rank/shape as long as their
+ * `num_elems` match; element k in row-major order maps to element k on the other
+ * side (see idma_memcpy_md_to_nd).
+ */
+typedef struct {
+    uint32_t rank;                      /**< Number of active dims. */
+    uint32_t num_elems;                 /**< Product of dims[].length. */
+    TensorRange dims[IDMA_ND_MAX_RANK]; /**< Per-dimension ranges, outermost first. */
+} tensor_sub_slice_t;
+
+/**
+ * Start a multi-dimensional memory copy between two independently-shaped tensor
+ * sub-slices, dispatched at runtime to the widest native IDMA burst that fits
+ * (2D or 1D). Source and destination may differ in rank and shape as long as they
+ * hold the same number of elements; element k of `src` (row-major) is copied to
+ * element k of `dst`.
  *
- * @return 0 on success, -1 if copy->rank exceeds IDMA_ND_MAX_RANK.
+ * The AXI endpoint (given by dst_addr/src_addr on the non-OBI side) may be L2 or
+ * another tile's L1 over the NoC, so this covers both L2<->L1 and tile-to-tile
+ * L1->L1 transfers; only the OBI port (this tile's own L1) can never be strided.
+ *
+ * After folding per-dim starts into the base addresses and coalescing contiguous
+ * dimensions, the copy is issued as native 2D bursts whenever the local (OBI)
+ * side is contiguous (the fast, preferred path), collapsing to a single 1D burst
+ * when both sides are fully contiguous. When the OBI side is not contiguous it
+ * falls back to a software loop of 1D bursts over the largest common contiguous
+ * run. Since the underlying controller supports only one in-flight transfer, each
+ * burst is waited on via eu_ctrl (if non-NULL, using IDMA_ND_WAIT_MODE) before the
+ * next is issued.
+ *
+ * @param ctrl       IDMA controller handle.
+ * @param dir        Copy direction. 0 = AXI to OBI (remote/L2 -> local L1),
+ *                   !0 = OBI to AXI (local L1 -> remote/L2).
+ * @param dst_addr   Destination address of first element.
+ * @param src_addr   Source address of first element.
+ * @param src        Source sub-slice descriptor (rank, num_elems, per-dim ranges).
+ * @param dst        Destination sub-slice descriptor.
+ * @param elem_bytes Size of a single element in bytes (shared by both sides).
+ * @param eu_ctrl    Event-unit controller used to wait for each burst; pass NULL to skip waiting.
+ *
+ * @return 0 on success, -1 if either rank exceeds IDMA_ND_MAX_RANK or the two
+ *         sides' num_elems differ.
  */
 extern int idma_memcpy_md_to_nd(idma_controller_t *ctrl,
                                 uint8_t dir,
                                 uint32_t dst_addr,
                                 uint32_t src_addr,
-                                const copy_desc_t *copy,
+                                const tensor_sub_slice_t *src,
+                                const tensor_sub_slice_t *dst,
+                                uint32_t elem_bytes,
                                 eu_controller_t *eu_ctrl);
 
 /**
@@ -178,7 +212,9 @@ struct idma_controller_api {
                            uint8_t dir,
                            uint32_t dst_addr,
                            uint32_t src_addr,
-                           const copy_desc_t *copy,
+                           const tensor_sub_slice_t *src,
+                           const tensor_sub_slice_t *dst,
+                           uint32_t elem_bytes,
                            eu_controller_t *eu_ctrl);
 };
 

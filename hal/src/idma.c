@@ -63,14 +63,18 @@ __attribute__((weak)) int idma_memcpy_md_to_nd(idma_controller_t *ctrl,
                                                uint8_t dir,
                                                uint32_t dst_addr,
                                                uint32_t src_addr,
-                                               const copy_desc_t *copy,
+                                               const tensor_sub_slice_t *src,
+                                               const tensor_sub_slice_t *dst,
+                                               uint32_t elem_bytes,
                                                eu_controller_t *eu_ctrl)
 {
     (void)ctrl;
     (void)dir;
     (void)dst_addr;
     (void)src_addr;
-    (void)copy;
+    (void)src;
+    (void)dst;
+    (void)elem_bytes;
     (void)eu_ctrl;
     return 1;
 }

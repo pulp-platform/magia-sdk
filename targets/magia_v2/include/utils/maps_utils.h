@@ -100,7 +100,8 @@ typedef struct {
     uint32_t src_l2_addr;
     uint32_t src_l2_token_stride_bytes;
     subslice_desc_t dst;
-    copy_desc_t copy;
+    tensor_sub_slice_t copy_src;
+    tensor_sub_slice_t copy_dst;
 
 } l2_read_desc_t;
 
@@ -126,7 +127,8 @@ typedef struct {
     uint32_t dst_l1_data_base;
     uint32_t dst_slice_l1_offset_bytes;
     uint32_t dst_slice_slot_bytes;
-    copy_desc_t copy;
+    tensor_sub_slice_t copy_src;
+    tensor_sub_slice_t copy_dst;
     uint32_t ready_flag_id;
 
 } send_desc_t;
@@ -151,7 +153,8 @@ typedef struct {
     subslice_desc_t src;
     uint32_t dst_l2_addr;
     uint32_t dst_l2_token_stride_bytes;
-    copy_desc_t copy;
+    tensor_sub_slice_t copy_src;
+    tensor_sub_slice_t copy_dst;
 
 } l2_write_desc_t;
 
@@ -422,7 +425,8 @@ static inline void issue_l2_read_token(const tile_plan_t *plan,
     uint32_t dst_addr = local_subslice_addr(plan, &read->dst, slot);
     uint32_t src_addr = read->src_l2_addr + token * read->src_l2_token_stride_bytes;
 
-    idma_memcpy_md_to_nd(idma_ctrl, 0u, dst_addr, src_addr, &read->copy, eu_ctrl);
+    idma_memcpy_md_to_nd(idma_ctrl, 0u, dst_addr, src_addr, &read->copy_src, &read->copy_dst,
+                         read->dst.elem_bytes, eu_ctrl);
 }
 
 static inline void issue_l2_write_token(const tile_plan_t *plan,
@@ -435,7 +439,8 @@ static inline void issue_l2_write_token(const tile_plan_t *plan,
     uint32_t src_addr = local_subslice_addr(plan, &write->src, slot);
     uint32_t dst_addr = write->dst_l2_addr + token * write->dst_l2_token_stride_bytes;
 
-    idma_memcpy_md_to_nd(idma_ctrl, 1u, dst_addr, src_addr, &write->copy, eu_ctrl);
+    idma_memcpy_md_to_nd(idma_ctrl, 1u, dst_addr, src_addr, &write->copy_src, &write->copy_dst,
+                         write->src.elem_bytes, eu_ctrl);
 }
 
 static inline void issue_send(const tile_plan_t *plan,
@@ -447,7 +452,8 @@ static inline void issue_send(const tile_plan_t *plan,
     uint32_t src_addr = local_subslice_addr(plan, &send->src, slot);
     uint32_t dst_addr = remote_subslice_addr(send, slot);
 
-    idma_memcpy_md_to_nd(idma_ctrl, 1u, dst_addr, src_addr, &send->copy, eu_ctrl);
+    idma_memcpy_md_to_nd(idma_ctrl, 1u, dst_addr, src_addr, &send->copy_src, &send->copy_dst,
+                         send->src.elem_bytes, eu_ctrl);
     publish_ready(plan, send->dst_hartid, send->transition_id, send->ready_flag_id, slot);
 }
 
