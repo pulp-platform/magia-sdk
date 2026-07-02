@@ -3,14 +3,23 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 """
-gvsoc2perfetto.py — convert GVSOC waveform traces (VCD/FST) to Perfetto JSON.
+gvsoc2perfetto.py — convert GVSOC waveform traces (VCD/FST) to Perfetto traces.
 
 Usage:
     # FST: convert to VCD first (fst2vcd ships with GTKWave)
     fst2vcd all.fst -o all.vcd
-    ./gvsoc2perfetto.py all.vcd -o trace.json [--pid-depth 2] [--include REGEX]
+    ./gvsoc2perfetto.py all.vcd [-o trace.perfetto-trace] [--pid-depth 2] [--include REGEX]
 
-    Open trace.json at https://ui.perfetto.dev
+    Open the output at https://ui.perfetto.dev
+
+Output format (--format):
+  * perfetto (default) — native protobuf (Perfetto TrackEvent). Smaller and
+        faster to load than JSON, and thread tracks render as just their label
+        (e.g. "cv32-core.busy") with no sequential tid appended. Tile groups
+        still show their instance number ("magia-v2-soc.magia-tile 14").
+  * json               — Chrome Trace-Event JSON (the older format; Perfetto's
+        UI appends a numeric tid to every thread name).
+  --gzip writes a gzip-compressed file, which Perfetto opens directly.
 
 Mapping:
   * string events  (vp::TraceEvent::event_string)  -> Perfetto slices (B/E).
@@ -41,15 +50,24 @@ Extra flags:
         --rename 'ara=vfu' shows "snitch-spatz.vfu.label" instead of
         "snitch-spatz.ara.label"). Never affects --include/--exclude matching,
         which still sees the real VCD names.
+  --split-asm                            Split each 'asm' string signal (format
+        "<8 hex pc>_<disasm with '_' separators>_") into two tracks: a
+        '<parent>.pc' track with slices named "0x<8 hex>" and a
+        '<parent>.instruction' track with the disassembly (leading/trailing
+        '_' removed, remaining '_' turned into spaces). Doubles the number of
+        instruction-trace slices, since each 'asm' slice now produces one on
+        each track.
   --stats                                 Also print per-track phase-duration
         totals to stdout (sum/count per pid/tid/slice-name), sorted by total
         duration — a quick sanity check without opening a browser.
 """
 
 import argparse
+import gzip
 import itertools
 import json
 import re
+import struct
 import sys
 from collections import defaultdict
 
@@ -234,7 +252,7 @@ IDLE_STRINGS = {"", "idle", "IDLE", "sleep", "off"}
 
 
 def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, state_maps=None,
-            renames=None):
+            renames=None, split_asm=False):
     events = []
     pid_ids, tid_ids = {}, {}
     pid_used_nums = set()
@@ -320,8 +338,37 @@ def convert(signals, changes, ps_per_tick, pid_depth, include_re, exclude_re, st
 
         parts = name.split(".")
         pid = get_pid(parts)
-        tid = get_tid(pid, ".".join(parts[pid_depth:]) or parts[-1])
+        sub = ".".join(parts[pid_depth:]) or parts[-1]
         leaf = parts[-1]
+
+        # --- --split-asm: one 'asm' string signal (e.g. "c207b7b3_p.bclri_x15_")
+        # becomes two tracks: '<parent>.pc' with slices named "0x<8 hex>" and
+        # '<parent>.instruction' with the disassembly (leading/trailing '_'
+        # dropped, remaining '_' -> spaces). Both share the asm timing. ---
+        if split_asm and sig["type"] == "string" and leaf == "asm":
+            base = sub.rpartition(".")[0]
+            tid_pc = get_tid(pid, f"{base}.pc" if base else "pc")
+            tid_ins = get_tid(pid, f"{base}.instruction" if base else "instruction")
+            open_pc = open_ins = False
+            for t, val in tv:
+                if open_pc:
+                    events.append({"ph": "E", "pid": pid, "tid": tid_pc, "ts": us(t)})
+                    open_pc = False
+                if open_ins:
+                    events.append({"ph": "E", "pid": pid, "tid": tid_ins, "ts": us(t)})
+                    open_ins = False
+                if val not in IDLE_STRINGS:
+                    events.append({"ph": "B", "name": "0x" + val[:8], "pid": pid,
+                                   "tid": tid_pc, "ts": us(t)})
+                    open_pc = True
+                    instr = val[8:].strip("_").replace("_", " ")
+                    if instr:
+                        events.append({"ph": "B", "name": instr, "pid": pid,
+                                       "tid": tid_ins, "ts": us(t)})
+                        open_ins = True
+            continue
+
+        tid = get_tid(pid, sub)
 
         state_map = None
         for leaf_regex, mapping in state_maps:
@@ -413,11 +460,176 @@ def print_stats(events):
         print(f"... ({len(rows) - 200} more rows omitted)")
 
 
+# --------------------------------------------------------------------------
+# Perfetto native-protobuf emission (Trace = stream of TracePacket).
+#
+# We hand-roll the tiny, stable subset of the Perfetto proto we need rather
+# than depending on the `protobuf`/`perfetto` packages or a .proto compile step
+# (the VCD parser above is likewise dependency-free). The payoff over the JSON
+# path: arbitrary track *names* (a generic named track renders as just "cv32-
+# core.busy", with no Chrome-JSON "{name} {tid}" suffix), plus a smaller,
+# faster-to-load binary (varint fields + interned repeated slice names).
+# --------------------------------------------------------------------------
+
+# --- protobuf wire primitives (wire types: 0=varint, 1=64-bit, 2=len-delim) ---
+
+def _uvarint(n):
+    n &= (1 << 64) - 1  # int64/uint64 share this encoding; negatives -> 10 bytes
+    out = bytearray()
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        if n:
+            out.append(b | 0x80)
+        else:
+            out.append(b)
+            return bytes(out)
+
+
+def _tag(field, wire):
+    return _uvarint((field << 3) | wire)
+
+
+def _pv(field, n):          # varint field
+    return _tag(field, 0) + _uvarint(n)
+
+
+def _pd(field, x):          # double field
+    return _tag(field, 1) + struct.pack("<d", x)
+
+
+def _pb(field, b):          # length-delimited field (bytes / string / message)
+    return _tag(field, 2) + _uvarint(len(b)) + b
+
+
+def _ps(field, s):          # string field
+    return _pb(field, s.encode("utf-8"))
+
+
+# Perfetto enum/flag constants (see protobuf field table in the plan / docs).
+_SEQ_CLEARED = 1   # TracePacket.SequenceFlags.SEQ_INCREMENTAL_STATE_CLEARED
+_SEQ_NEEDS = 2     # TracePacket.SequenceFlags.SEQ_NEEDS_INCREMENTAL_STATE
+_EV_BEGIN, _EV_END, _EV_COUNTER = 1, 2, 4  # TrackEvent.Type
+
+
+def write_perfetto(events, path, intern=True, gzip_out=False):
+    """Translate the JSON-event IR from convert() into a Perfetto protobuf.
+
+    Track model: one process track per pid (renders as "<name> <pid>", so tile
+    groups keep their number) and one generic named child track per (pid, tid)
+    (renders as just the label, dropping the sequential tid). Each child track
+    gets its own packet sequence so its events stay timestamp-ordered within
+    the sequence (Perfetto requires monotonic timestamps per sequence, and the
+    IR emits each track's events contiguously in time order); slice-begin names
+    are interned per sequence.
+    """
+    # Group the flat IR by track, preserving first-seen order.
+    procs = {}          # pid -> display name
+    tracks = {}         # (pid, tid) -> {"label", "counter", "events": [(ts,kind,payload)]}
+    order = []          # (pid, tid) in first-seen order
+    for e in events:
+        ph = e["ph"]
+        if ph == "M":
+            if e["name"] == "process_name":
+                procs.setdefault(e["pid"], e["args"]["name"])
+            elif e["name"] == "thread_name":
+                key = (e["pid"], e["tid"])
+                if key not in tracks:
+                    tracks[key] = {"label": e["args"]["name"], "counter": False, "events": []}
+                    order.append(key)
+            continue
+        key = (e["pid"], e["tid"])
+        tr = tracks.get(key)
+        if tr is None:  # defensive: event before its thread_name metadata
+            tr = tracks[key] = {"label": str(e["tid"]), "counter": False, "events": []}
+            order.append(key)
+        ts = round(e["ts"] * 1000)  # convert.us() gives microseconds; native clock is ns
+        if ph == "B":
+            tr["events"].append((ts, "B", e["name"]))
+        elif ph == "E":
+            tr["events"].append((ts, "E", None))
+        elif ph == "C":
+            tr["counter"] = True
+            tr["events"].append((ts, "C", next(iter(e["args"].values()))))
+
+    uid = itertools.count(1)
+    proc_uuid = {pid: next(uid) for pid in procs}
+    track_uuid = {key: next(uid) for key in order}
+
+    opener = gzip.open if gzip_out else open
+    with opener(path, "wb") as f:
+        def emit(packet):
+            f.write(_pb(1, packet))  # Trace.packet (field 1, repeated)
+
+        # --- structure sequence: declare every track up front ---
+        SEQ_STRUCT = 1
+        for pid, name in procs.items():
+            proc = _pv(1, pid) + _ps(6, name)            # ProcessDescriptor{pid, process_name}
+            td = _pv(1, proc_uuid[pid]) + _pb(3, proc)   # TrackDescriptor{uuid, process}
+            emit(_pb(60, td) + _pv(10, SEQ_STRUCT))
+        for key in order:
+            tr = tracks[key]
+            # TrackDescriptor{uuid, name, parent_uuid[, counter]}
+            td = _pv(1, track_uuid[key]) + _ps(2, tr["label"]) + _pv(5, proc_uuid[key[0]])
+            if tr["counter"]:
+                td += _pb(8, b"")  # empty CounterDescriptor marks this a counter track
+            emit(_pb(60, td) + _pv(10, SEQ_STRUCT))
+
+        # --- one data sequence per track ---
+        seq = itertools.count(2)
+        for key in order:
+            tr = tracks[key]
+            evs = tr["events"]
+            if not evs:
+                continue
+            tu = track_uuid[key]
+            sid = next(seq)
+
+            iid_of = {}
+            if intern and not tr["counter"]:
+                for _, kind, payload in evs:
+                    if kind == "B" and payload not in iid_of:
+                        iid_of[payload] = len(iid_of) + 1
+                if iid_of:
+                    interned = b"".join(
+                        _pb(2, _pv(1, i) + _ps(2, n)) for n, i in iid_of.items()
+                    )  # InternedData.event_names (field 2) -> EventName{iid, name}
+                    emit(_pb(12, interned) + _pv(10, sid) + _pv(13, _SEQ_CLEARED))
+
+            for ts, kind, payload in evs:
+                if kind == "B":
+                    if iid_of:
+                        te = _pv(9, _EV_BEGIN) + _pv(11, tu) + _pv(10, iid_of[payload])
+                        pkt = _pv(8, ts) + _pb(11, te) + _pv(10, sid) + _pv(13, _SEQ_NEEDS)
+                    else:
+                        te = _pv(9, _EV_BEGIN) + _pv(11, tu) + _ps(23, payload)
+                        pkt = _pv(8, ts) + _pb(11, te) + _pv(10, sid)
+                elif kind == "E":
+                    te = _pv(9, _EV_END) + _pv(11, tu)
+                    pkt = _pv(8, ts) + _pb(11, te) + _pv(10, sid)
+                else:  # counter
+                    cv = _pd(44, payload) if isinstance(payload, float) else _pv(30, int(payload))
+                    te = _pv(9, _EV_COUNTER) + _pv(11, tu) + cv
+                    pkt = _pv(8, ts) + _pb(11, te) + _pv(10, sid)
+                emit(pkt)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("vcd", help="input VCD (use fst2vcd for FST dumps)")
-    ap.add_argument("-o", "--output", default="trace.json")
+    ap.add_argument("-o", "--output", default=None,
+                    help="output file (default: trace.perfetto-trace, or "
+                         "trace.json with --format json)")
+    ap.add_argument("--format", choices=["perfetto", "json"], default="perfetto",
+                    help="output format: 'perfetto' native protobuf (default, smaller "
+                         "and drops the sequential tid from thread names) or 'json' "
+                         "Chrome Trace-Event")
+    ap.add_argument("--no-intern", action="store_true",
+                    help="perfetto: emit inline slice names instead of interning them "
+                         "(larger file; useful for debugging)")
+    ap.add_argument("--gzip", action="store_true",
+                    help="gzip the output (Perfetto opens .gz directly)")
     ap.add_argument("--pid-depth", type=int, default=2,
                     help="hierarchy depth grouped as one Perfetto process (default 2)")
     ap.add_argument("--include", help="regex: only convert matching signal paths")
@@ -429,6 +641,9 @@ def main():
     ap.add_argument("--rename", action="append", default=[], metavar="OLD=NEW",
                     help="cosmetic-only: rename a hierarchy path component in "
                          "displayed process/thread names (repeatable)")
+    ap.add_argument("--split-asm", action="store_true",
+                    help="split each 'asm' string signal into a '.pc' track "
+                         "(0x<8 hex>) and a '.instruction' track (disassembly)")
     ap.add_argument("--stats", action="store_true",
                     help="also print per-track phase-duration totals to stdout")
     args = ap.parse_args()
@@ -448,13 +663,24 @@ def main():
     # Filtering already happened in parse_vcd (and derived signals are
     # synthetic, so they wouldn't match the original --include anyway) —
     # convert() just emits everything it was handed.
-    events = convert(signals, changes, ps, args.pid_depth, None, None, state_maps, renames)
+    events = convert(signals, changes, ps, args.pid_depth, None, None, state_maps, renames,
+                     args.split_asm)
 
-    with open(args.output, "w") as f:
-        json.dump({"traceEvents": events, "displayTimeUnit": "ns"}, f)
+    out = args.output or ("trace.perfetto-trace" if args.format == "perfetto" else "trace.json")
+    if args.gzip and not out.endswith(".gz"):
+        out += ".gz"
+
+    if args.format == "perfetto":
+        write_perfetto(events, out, intern=not args.no_intern, gzip_out=args.gzip)
+    elif args.gzip:
+        with gzip.open(out, "wt") as f:
+            json.dump({"traceEvents": events, "displayTimeUnit": "ns"}, f)
+    else:
+        with open(out, "w") as f:
+            json.dump({"traceEvents": events, "displayTimeUnit": "ns"}, f)
 
     n_tracks = len({(e.get("pid"), e.get("tid")) for e in events if e["ph"] != "M"})
-    print(f"{args.output}: {len(events)} events on {n_tracks} tracks "
+    print(f"{out}: {len(events)} events on {n_tracks} tracks "
           f"({len(signals)} signals in VCD). Open at https://ui.perfetto.dev",
           file=sys.stderr)
 
