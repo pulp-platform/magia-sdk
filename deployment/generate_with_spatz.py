@@ -108,7 +108,7 @@ def main(test) -> None:
         loweringOptimizer=MagiaOptimizer,
         scheduler=defaultScheduler,
         name="DeeployNetwork",
-        default_channels_first=False,
+        default_channels_first=True,
         deeployStateDir="states",
     )
 
