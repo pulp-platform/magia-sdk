@@ -36,6 +36,7 @@ from MagiaDeeployTarget.Templates import MaxPool2DFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import MatMulFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ReluFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ReshapeFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import ResizeFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import ScatterFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SeluFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SigmoidFP16SpatzTemplate
@@ -359,6 +360,17 @@ MagiaReshapeFp16Bindings = [
             [PointerClass(float16_t)]
         ),
         ReshapeFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    )
+]
+
+MagiaResizeFp16Bindings = [
+    NodeBinding(
+        PassThroughTypeChecker(
+            [PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        ResizeFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     )
 ]
