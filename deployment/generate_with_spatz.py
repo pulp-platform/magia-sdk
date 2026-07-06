@@ -7,6 +7,8 @@ import onnx
 import onnx_graphsurgeon as gs
 from typing import Sequence
 import numpy as np
+import coloredlogs
+from Deeploy.Logging import DEFAULT_LOGGER, DEFAULT_FMT
 
 from generate import (load_npz, generate_test_header, generate_network_header,
                       generate_network_source, allocator_patch, copyright_comment,
@@ -186,10 +188,13 @@ if __name__ == "__main__":
     # logger configuration
     if args.verbose == 0:
         log_level = logging.WARNING
+        coloredlogs.install(level='WARNING', logger=DEFAULT_LOGGER, fmt=DEFAULT_FMT)
     elif args.verbose == 1:
         log_level = logging.INFO
+        coloredlogs.install(level='INFO', logger=DEFAULT_LOGGER, fmt=DEFAULT_FMT)
     else:
         log_level = logging.DEBUG
+        coloredlogs.install(level='DEBUG', logger=DEFAULT_LOGGER, fmt=DEFAULT_FMT)
 
     logger = logging.getLogger(__name__)
     logger.setLevel(log_level)
