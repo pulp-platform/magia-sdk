@@ -34,28 +34,28 @@
 #include "fsync.h"
 #include "eventunit.h"
 
-#define WAIT_MODE    WFE
-#define TRIAL_COUNT  64    // independent back-to-back measurements per case
+#define WAIT_MODE      WFE
+#define TRIAL_COUNT    64 // independent back-to-back measurements per case
 
 // Buffer sizes matching the reference benchmarks for direct comparison
-#define BUF_SIZE_L2   (16 * 1024)   // 16 KB, same as memory-bound bench
-#define BUF_SIZE_NOC  64            // 64 B, same as ring-shift bench
+#define BUF_SIZE_L2    (16 * 1024) // 16 KB, same as memory-bound bench
+#define BUF_SIZE_NOC   64          // 64 B, same as ring-shift bench
 
 // L2 source for case A
-#define L2_BASE         0xCC040000UL
-#define L2_TILE_STRIDE  0x00008000UL   // 32 KB per tile (>= BUF_SIZE_L2)
+#define L2_BASE        0xCC040000UL
+#define L2_TILE_STRIDE 0x00008000UL // 32 KB per tile (>= BUF_SIZE_L2)
 
 // L1 layout
 #define L1_SRC_OFFSET  0x00021000
 #define L1_DST_OFFSET  0x00022000
-#define L1_TMP_OFFSET  0x00023000   // scratch for case B incoming data
+#define L1_TMP_OFFSET  0x00023000 // scratch for case B incoming data
 
 // Per-tile per-case statistics published for tile-0 summary
 typedef struct {
     uint32_t mean;
     uint32_t min;
     uint32_t max;
-    uint32_t cv_permille;   // (range / mean) * 1000
+    uint32_t cv_permille; // (range / mean) * 1000
 } stat_t;
 
 volatile stat_t tile_stat_a[MESH_X_TILES * MESH_Y_TILES];
@@ -71,16 +71,17 @@ static void compute_stats(const uint32_t *samples, uint32_t n, stat_t *out)
 
     for (uint32_t i = 0; i < n; i++) {
         sum += samples[i];
-        if (samples[i] < mn) mn = samples[i];
-        if (samples[i] > mx) mx = samples[i];
+        if (samples[i] < mn)
+            mn = samples[i];
+        if (samples[i] > mx)
+            mx = samples[i];
     }
 
     out->mean = sum / n;
     out->min  = mn;
     out->max  = mx;
     // CV = (range / mean) * 1000, expressed as per-mille integer
-    out->cv_permille = (out->mean > 0) ?
-                       ((mx - mn) * 1000u) / out->mean : 0;
+    out->cv_permille = (out->mean > 0) ? ((mx - mn) * 1000u) / out->mean : 0;
 }
 
 int main(void)
@@ -90,9 +91,9 @@ int main(void)
     uint32_t y_id      = GET_Y_ID(hartid);
     uint32_t tile_base = hartid * 0x00100000;
 
-    uint8_t  *l1_src = (uint8_t *)(tile_base + L1_SRC_OFFSET);
-    uint8_t  *l1_dst = (uint8_t *)(tile_base + L1_DST_OFFSET);
-    uint8_t  *l1_tmp = (uint8_t *)(tile_base + L1_TMP_OFFSET);
+    uint8_t *l1_src = (uint8_t *)(tile_base + L1_SRC_OFFSET);
+    uint8_t *l1_dst = (uint8_t *)(tile_base + L1_DST_OFFSET);
+    uint8_t *l1_tmp = (uint8_t *)(tile_base + L1_TMP_OFFSET);
 
     uint32_t l2_src = (uint32_t)(L2_BASE + (uint32_t)hartid * L2_TILE_STRIDE);
 
@@ -105,7 +106,7 @@ int main(void)
     // Controller initialisation
     // ----------------------------------------------------------------
 
-    idma_config_t idma_cfg = {.hartid = hartid};
+    idma_config_t idma_cfg      = {.hartid = hartid};
     idma_controller_t idma_ctrl = {
         .base = NULL,
         .cfg  = &idma_cfg,
@@ -113,7 +114,7 @@ int main(void)
     };
     idma_init(&idma_ctrl);
 
-    fsync_config_t fsync_cfg = {.hartid = hartid};
+    fsync_config_t fsync_cfg      = {.hartid = hartid};
     fsync_controller_t fsync_ctrl = {
         .base = NULL,
         .cfg  = &fsync_cfg,
@@ -121,7 +122,7 @@ int main(void)
     };
     fsync_init(&fsync_ctrl);
 
-    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_config_t eu_cfg      = {.hartid = hartid};
     eu_controller_t eu_ctrl = {
         .base = NULL,
         .cfg  = &eu_cfg,
@@ -159,14 +160,14 @@ int main(void)
         uint32_t t0 = perf_get_cycles();
 
         idma_memcpy_1d(&idma_ctrl,
-                       0,          // AXI→OBI
+                       0, // AXI→OBI
                        l2_src,
                        (uint32_t)l1_dst,
                        BUF_SIZE_L2);
 
         eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
-        uint32_t t1 = perf_get_cycles();
+        uint32_t t1  = perf_get_cycles();
         samples_a[t] = t1 - t0;
     }
 
@@ -175,7 +176,11 @@ int main(void)
         compute_stats(samples_a, TRIAL_COUNT, &s);
         tile_stat_a[hartid] = s;
         printf("Tile %u | CASE A L2→L1 16KB | mean=%u min=%u max=%u CV=%u‰\n",
-               hartid, s.mean, s.min, s.max, s.cv_permille);
+               hartid,
+               s.mean,
+               s.min,
+               s.max,
+               s.cv_permille);
     }
 
     fsync_sync_global(&fsync_ctrl);
@@ -186,8 +191,8 @@ int main(void)
     // Identical pattern to the ring-shift benchmark.
     // ================================================================
 
-    uint32_t dest_x   = (x_id + 1) % MESH_X_TILES;
-    uint32_t dest_id  = GET_ID(y_id, dest_x);
+    uint32_t dest_x    = (x_id + 1) % MESH_X_TILES;
+    uint32_t dest_id   = GET_ID(y_id, dest_x);
     uint32_t dest_base = dest_id * 0x00100000;
 
     fsync_sync_global(&fsync_ctrl);
@@ -197,15 +202,12 @@ int main(void)
         uint32_t t0 = perf_get_cycles();
 
         // OBI→AXI (direction 1): local src → remote dst (l1_tmp of neighbor)
-        idma_memcpy_1d(&idma_ctrl,
-                       1,
-                       (uint32_t)(dest_base + L1_TMP_OFFSET),
-                       (uint32_t)l1_src,
-                       BUF_SIZE_NOC);
+        idma_memcpy_1d(
+            &idma_ctrl, 1, (uint32_t)(dest_base + L1_TMP_OFFSET), (uint32_t)l1_src, BUF_SIZE_NOC);
 
         eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
 
-        uint32_t t1 = perf_get_cycles();
+        uint32_t t1  = perf_get_cycles();
         samples_b[t] = t1 - t0;
 
         // Brief sync between trials so data is settled before next send
@@ -218,7 +220,11 @@ int main(void)
         compute_stats(samples_b, TRIAL_COUNT, &s);
         tile_stat_b[hartid] = s;
         printf("Tile %u | CASE B tile→tile 64B | mean=%u min=%u max=%u CV=%u‰\n",
-               hartid, s.mean, s.min, s.max, s.cv_permille);
+               hartid,
+               s.mean,
+               s.min,
+               s.max,
+               s.cv_permille);
     }
 
     fsync_sync_global(&fsync_ctrl);
@@ -234,7 +240,7 @@ int main(void)
         fsync_sync_global(&fsync_ctrl);
         eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
-        uint32_t t1 = perf_get_cycles();
+        uint32_t t1  = perf_get_cycles();
         samples_c[t] = t1 - t0;
     }
 
@@ -243,7 +249,11 @@ int main(void)
         compute_stats(samples_c, TRIAL_COUNT, &s);
         tile_stat_c[hartid] = s;
         printf("Tile %u | CASE C global fsync | mean=%u min=%u max=%u CV=%u‰\n",
-               hartid, s.mean, s.min, s.max, s.cv_permille);
+               hartid,
+               s.mean,
+               s.min,
+               s.max,
+               s.cv_permille);
     }
 
     // ----------------------------------------------------------------
@@ -265,26 +275,40 @@ int main(void)
         uint32_t sum_mean_a = 0, sum_mean_b = 0, sum_mean_c = 0;
 
         for (uint32_t i = 0; i < num_tiles; i++) {
-            if (tile_stat_a[i].cv_permille > max_cv_a) max_cv_a = tile_stat_a[i].cv_permille;
-            if (tile_stat_b[i].cv_permille > max_cv_b) max_cv_b = tile_stat_b[i].cv_permille;
-            if (tile_stat_c[i].cv_permille > max_cv_c) max_cv_c = tile_stat_c[i].cv_permille;
+            if (tile_stat_a[i].cv_permille > max_cv_a)
+                max_cv_a = tile_stat_a[i].cv_permille;
+            if (tile_stat_b[i].cv_permille > max_cv_b)
+                max_cv_b = tile_stat_b[i].cv_permille;
+            if (tile_stat_c[i].cv_permille > max_cv_c)
+                max_cv_c = tile_stat_c[i].cv_permille;
             sum_mean_a += tile_stat_a[i].mean;
             sum_mean_b += tile_stat_b[i].mean;
             sum_mean_c += tile_stat_c[i].mean;
         }
 
         printf("\n=== REPEATABILITY SUMMARY (mesh %ux%u, %u trials) ===\n",
-               MESH_X_TILES, MESH_Y_TILES, TRIAL_COUNT);
+               MESH_X_TILES,
+               MESH_Y_TILES,
+               TRIAL_COUNT);
         printf("Case                    | mesh mean | worst CV(‰) | stable?\n");
         printf("A: L2→L1 16KB          |  %7u  |  %9u  | %s\n",
-               sum_mean_a / num_tiles, max_cv_a,
-               (max_cv_a < 10) ? "YES (CV<10‰)" : (max_cv_a < 50) ? "MARGINAL" : "NO - average required");
+               sum_mean_a / num_tiles,
+               max_cv_a,
+               (max_cv_a < 10)   ? "YES (CV<10‰)"
+               : (max_cv_a < 50) ? "MARGINAL"
+                                 : "NO - average required");
         printf("B: tile→tile 64B (NoC) |  %7u  |  %9u  | %s\n",
-               sum_mean_b / num_tiles, max_cv_b,
-               (max_cv_b < 10) ? "YES (CV<10‰)" : (max_cv_b < 50) ? "MARGINAL" : "NO - average required");
+               sum_mean_b / num_tiles,
+               max_cv_b,
+               (max_cv_b < 10)   ? "YES (CV<10‰)"
+               : (max_cv_b < 50) ? "MARGINAL"
+                                 : "NO - average required");
         printf("C: global fsync        |  %7u  |  %9u  | %s\n",
-               sum_mean_c / num_tiles, max_cv_c,
-               (max_cv_c < 10) ? "YES (CV<10‰)" : (max_cv_c < 50) ? "MARGINAL" : "NO - average required");
+               sum_mean_c / num_tiles,
+               max_cv_c,
+               (max_cv_c < 10)   ? "YES (CV<10‰)"
+               : (max_cv_c < 50) ? "MARGINAL"
+                                 : "NO - average required");
 
         printf("\nInterpretation:\n");
         printf("  CV < 10 per-mille  => single-run results are reliable\n");

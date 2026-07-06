@@ -25,16 +25,16 @@
 #include "fsync.h"
 #include "eventunit.h"
 
-#define WAIT_MODE WFE
+#define WAIT_MODE     WFE
 
-#define BUF_SIZE 256
+#define BUF_SIZE      256
 
 /* Safe L1 offsets */
-#define L1_SRC_OFFSET  0x00020000
-#define L1_DST_OFFSET  0x00021000
+#define L1_SRC_OFFSET 0x00020000
+#define L1_DST_OFFSET 0x00021000
 
 /* Valid L2 base */
-#define L2_BASE 0xCC040000
+#define L2_BASE       0xCC040000
 
 volatile uint32_t row_cycles[MESH_X_TILES * MESH_Y_TILES];
 volatile uint32_t full_cycles[MESH_X_TILES * MESH_Y_TILES];
@@ -50,15 +50,13 @@ int main(void)
     volatile uint8_t *l1_src = (uint8_t *)(l1_base + L1_SRC_OFFSET);
     volatile uint8_t *l1_dst = (uint8_t *)(l1_base + L1_DST_OFFSET);
 
-    volatile uint8_t *l2_row_base  =
-        (uint8_t *)(L2_BASE + y_id * 0x10000);
+    volatile uint8_t *l2_row_base = (uint8_t *)(L2_BASE + y_id * 0x10000);
 
-    volatile uint8_t *l2_full_base =
-        (uint8_t *)(L2_BASE + 0x800000 + hartid * 0x10000);
+    volatile uint8_t *l2_full_base = (uint8_t *)(L2_BASE + 0x800000 + hartid * 0x10000);
 
     // ---------------- Init Controllers ----------------
 
-    idma_config_t idma_cfg = {.hartid = hartid};
+    idma_config_t idma_cfg      = {.hartid = hartid};
     idma_controller_t idma_ctrl = {
         .base = NULL,
         .cfg  = &idma_cfg,
@@ -66,7 +64,7 @@ int main(void)
     };
     idma_init(&idma_ctrl);
 
-    fsync_config_t fsync_cfg = {.hartid = hartid};
+    fsync_config_t fsync_cfg      = {.hartid = hartid};
     fsync_controller_t fsync_ctrl = {
         .base = NULL,
         .cfg  = &fsync_cfg,
@@ -74,7 +72,7 @@ int main(void)
     };
     fsync_init(&fsync_ctrl);
 
-    eu_config_t eu_cfg = {.hartid = hartid};
+    eu_config_t eu_cfg      = {.hartid = hartid};
     eu_controller_t eu_ctrl = {
         .base = NULL,
         .cfg  = &eu_cfg,
@@ -112,11 +110,7 @@ int main(void)
             uint32_t dest_id = GET_ID(y_id, col);
             uint32_t dest_l1 = get_l1_base(dest_id) + L1_DST_OFFSET;
 
-            idma_memcpy_1d(&idma_ctrl,
-                           1,
-                           dest_l1,
-                           (uint32_t)l2_row_base,
-                           BUF_SIZE);
+            idma_memcpy_1d(&idma_ctrl, 1, dest_l1, (uint32_t)l2_row_base, BUF_SIZE);
 
             eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
         }
@@ -125,7 +119,7 @@ int main(void)
     fsync_sync_global(&fsync_ctrl);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
-    uint32_t row_stop = perf_get_cycles();
+    uint32_t row_stop  = perf_get_cycles();
     row_cycles[hartid] = row_stop - row_start;
 
     // ---------------- Row Verification ----------------
@@ -153,18 +147,14 @@ int main(void)
     for (int i = 0; i < BUF_SIZE; i++)
         l2_full_base[i] = (uint8_t)(hartid + i);
 
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
-                   (uint32_t)l2_full_base,
-                   (uint32_t)l1_dst,
-                   BUF_SIZE);
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)l2_full_base, (uint32_t)l1_dst, BUF_SIZE);
 
     eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
 
     fsync_sync_global(&fsync_ctrl);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
-    uint32_t full_stop = perf_get_cycles();
+    uint32_t full_stop  = perf_get_cycles();
     full_cycles[hartid] = full_stop - full_start;
 
     // ---------------- Full Verification ----------------
@@ -197,15 +187,14 @@ int main(void)
         uint32_t total_full = 0;
 
         for (int i = 0; i < MESH_X_TILES * MESH_Y_TILES; i++) {
-            total_row  += row_cycles[i];
+            total_row += row_cycles[i];
             total_full += full_cycles[i];
         }
 
         printf("\n=== Mesh Summary ===\n");
         printf("Total Row Cycles  : %u\n", total_row);
         printf("Total Full Cycles : %u\n", total_full);
-        printf("Full/Row Ratio    : %u\n",
-               (total_row == 0) ? 0 : (total_full / total_row));
+        printf("Full/Row Ratio    : %u\n", (total_row == 0) ? 0 : (total_full / total_row));
     }
 
     return errors;

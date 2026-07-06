@@ -25,21 +25,21 @@
 #include "fsync.h"
 #include "eventunit.h"
 
-#define WAIT_MODE WFE
+#define WAIT_MODE      WFE
 
-#define BUF_SIZE 512
+#define BUF_SIZE       512
 
 /* SAFE L1 OFFSETS */
-#define L1_SRC_OFFSET 0x00020000
-#define L1_DST_OFFSET 0x00021000
+#define L1_SRC_OFFSET  0x00020000
+#define L1_DST_OFFSET  0x00021000
 
 /* SAFE L2 WINDOW (first 512KB only) */
-#define L2_BASE 0xCC040000
+#define L2_BASE        0xCC040000
 
 /* Keep total usage under 512KB */
-#define PRIVATE_STRIDE 0x1000   // 4KB per tile
-#define ROW_STRIDE     0x2000   // 8KB per row
-#define TILE_OFFSET    0x400    // 1KB inside region
+#define PRIVATE_STRIDE 0x1000 // 4KB per tile
+#define ROW_STRIDE     0x2000 // 8KB per row
+#define TILE_OFFSET    0x400  // 1KB inside region
 
 volatile uint32_t private_cycles[MESH_X_TILES * MESH_Y_TILES];
 volatile uint32_t row_cycles[MESH_X_TILES * MESH_Y_TILES];
@@ -53,51 +53,31 @@ int main(void)
 
     uint32_t l1_base = get_l1_base(hartid);
 
-    volatile uint8_t *l1_src =
-        (uint8_t *)(l1_base + L1_SRC_OFFSET);
+    volatile uint8_t *l1_src = (uint8_t *)(l1_base + L1_SRC_OFFSET);
 
-    volatile uint8_t *l1_dst =
-        (uint8_t *)(l1_base + L1_DST_OFFSET);
+    volatile uint8_t *l1_dst = (uint8_t *)(l1_base + L1_DST_OFFSET);
 
     /* SAFE L2 MAPPING */
 
-    volatile uint8_t *l2_private =
-        (uint8_t *)(L2_BASE +
-                    hartid * PRIVATE_STRIDE);
+    volatile uint8_t *l2_private = (uint8_t *)(L2_BASE + hartid * PRIVATE_STRIDE);
 
-    volatile uint8_t *l2_row =
-        (uint8_t *)(L2_BASE +
-                    0x20000 +                // move to next 128KB region
-                    y_id * ROW_STRIDE +
-                    x_id * TILE_OFFSET);
+    volatile uint8_t *l2_row = (uint8_t *)(L2_BASE + 0x20000 + // move to next 128KB region
+                                           y_id * ROW_STRIDE + x_id * TILE_OFFSET);
 
-    volatile uint8_t *l2_full =
-        (uint8_t *)(L2_BASE + 0x40000);      // single shared bank region
+    volatile uint8_t *l2_full = (uint8_t *)(L2_BASE + 0x40000); // single shared bank region
 
     /* ================= INIT CONTROLLERS ================= */
 
     idma_config_t idma_cfg = {.hartid = hartid};
-    idma_controller_t idma = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api
-    };
+    idma_controller_t idma = {.base = NULL, .cfg = &idma_cfg, .api = &idma_api};
     idma_init(&idma);
 
     fsync_config_t fs_cfg = {.hartid = hartid};
-    fsync_controller_t fs = {
-        .base = NULL,
-        .cfg  = &fs_cfg,
-        .api  = &fsync_api
-    };
+    fsync_controller_t fs = {.base = NULL, .cfg = &fs_cfg, .api = &fsync_api};
     fsync_init(&fs);
 
     eu_config_t eu_cfg = {.hartid = hartid};
-    eu_controller_t eu = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api
-    };
+    eu_controller_t eu = {.base = NULL, .cfg = &eu_cfg, .api = &eu_api};
     eu_init(&eu);
     eu_idma_init(&eu, 0);
     eu_fsync_init(&eu, 0);
@@ -120,21 +100,15 @@ int main(void)
 
     uint32_t start = perf_get_cycles();
 
-    idma_memcpy_1d(&idma, 0,
-                   (uint32_t)l2_private,
-                   (uint32_t)l1_src,
-                   BUF_SIZE);
+    idma_memcpy_1d(&idma, 0, (uint32_t)l2_private, (uint32_t)l1_src, BUF_SIZE);
 
     eu_idma_wait_a2o(&eu, WAIT_MODE);
 
-    idma_memcpy_1d(&idma, 1,
-                   (uint32_t)l1_dst,
-                   (uint32_t)l2_private,
-                   BUF_SIZE);
+    idma_memcpy_1d(&idma, 1, (uint32_t)l1_dst, (uint32_t)l2_private, BUF_SIZE);
 
     eu_idma_wait_o2a(&eu, WAIT_MODE);
 
-    uint32_t stop = perf_get_cycles();
+    uint32_t stop          = perf_get_cycles();
     private_cycles[hartid] = stop - start;
 
     for (int i = 0; i < BUF_SIZE; i++) {
@@ -151,21 +125,15 @@ int main(void)
 
     start = perf_get_cycles();
 
-    idma_memcpy_1d(&idma, 0,
-                   (uint32_t)l2_row,
-                   (uint32_t)l1_src,
-                   BUF_SIZE);
+    idma_memcpy_1d(&idma, 0, (uint32_t)l2_row, (uint32_t)l1_src, BUF_SIZE);
 
     eu_idma_wait_a2o(&eu, WAIT_MODE);
 
-    idma_memcpy_1d(&idma, 1,
-                   (uint32_t)l1_dst,
-                   (uint32_t)l2_row,
-                   BUF_SIZE);
+    idma_memcpy_1d(&idma, 1, (uint32_t)l1_dst, (uint32_t)l2_row, BUF_SIZE);
 
     eu_idma_wait_o2a(&eu, WAIT_MODE);
 
-    stop = perf_get_cycles();
+    stop               = perf_get_cycles();
     row_cycles[hartid] = stop - start;
 
     for (int i = 0; i < BUF_SIZE; i++) {
@@ -182,21 +150,17 @@ int main(void)
 
     start = perf_get_cycles();
 
-    idma_memcpy_1d(&idma, 0,
-                   (uint32_t)(l2_full + hartid * TILE_OFFSET),
-                   (uint32_t)l1_src,
-                   BUF_SIZE);
+    idma_memcpy_1d(
+        &idma, 0, (uint32_t)(l2_full + hartid * TILE_OFFSET), (uint32_t)l1_src, BUF_SIZE);
 
     eu_idma_wait_a2o(&eu, WAIT_MODE);
 
-    idma_memcpy_1d(&idma, 1,
-                   (uint32_t)l1_dst,
-                   (uint32_t)(l2_full + hartid * TILE_OFFSET),
-                   BUF_SIZE);
+    idma_memcpy_1d(
+        &idma, 1, (uint32_t)l1_dst, (uint32_t)(l2_full + hartid * TILE_OFFSET), BUF_SIZE);
 
     eu_idma_wait_o2a(&eu, WAIT_MODE);
 
-    stop = perf_get_cycles();
+    stop                = perf_get_cycles();
     full_cycles[hartid] = stop - start;
 
     for (int i = 0; i < BUF_SIZE; i++) {
@@ -204,7 +168,7 @@ int main(void)
             errors++;
     }
 
-       // =========================================================================
+    // =========================================================================
     // GLOBAL SUMMARY (Tile 0 Only)
     // =========================================================================
 
@@ -221,20 +185,17 @@ int main(void)
     fsync_sync_global(&fs);
     eu_fsync_wait(&eu, WAIT_MODE);
 
-    if (hartid == 0)
-    {
+    if (hartid == 0) {
         uint32_t total_private = 0;
         uint32_t total_row     = 0;
         uint32_t total_full    = 0;
 
-        uint32_t total_tiles =
-            MESH_X_TILES * MESH_Y_TILES;
+        uint32_t total_tiles = MESH_X_TILES * MESH_Y_TILES;
 
-        for (uint32_t i = 0; i < total_tiles; i++)
-        {
+        for (uint32_t i = 0; i < total_tiles; i++) {
             total_private += private_cycles[i];
-            total_row     += row_cycles[i];
-            total_full    += full_cycles[i];
+            total_row += row_cycles[i];
+            total_full += full_cycles[i];
         }
 
         printf("\n==============================\n");
@@ -245,13 +206,10 @@ int main(void)
         printf("Total Row Cycles     : %u\n", total_row);
         printf("Total Full Cycles    : %u\n", total_full);
 
-        if (total_private != 0)
-        {
-            printf("Row / Private Ratio  : %u\n",
-                   total_row / total_private);
+        if (total_private != 0) {
+            printf("Row / Private Ratio  : %u\n", total_row / total_private);
 
-            printf("Full / Private Ratio : %u\n",
-                   total_full / total_private);
+            printf("Full / Private Ratio : %u\n", total_full / total_private);
         }
 
         printf("==============================\n");
