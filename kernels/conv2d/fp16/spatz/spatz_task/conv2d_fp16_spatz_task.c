@@ -26,7 +26,7 @@ static inline void compute_window_boundaries(const int out_idx, const uint32_t s
         *win_len = 0;
 }
 
-static inline void conv2d_scalar(const _Float16 *src, const _Float16 *weight, const uint32_t c_in_g, const uint32_t c_out_g, const uint32_t h_in, const uint32_t w_in, const uint32_t h_out, const uint32_t w_out, const uint32_t kernel_h, const uint32_t kernel_w, const uint32_t stride_h, const uint32_t stride_w, const uint32_t pad_h, const uint32_t pad_w, const uint32_t iter_start, const uint32_t iter_len, const uint32_t c_out, _Float16 *dst)
+static inline void conv2d_scalar(const _Float16 *src, const _Float16 *weight, const _Float16 *bias, const uint32_t c_in_g, const uint32_t c_out_g, const uint32_t h_in, const uint32_t w_in, const uint32_t h_out, const uint32_t w_out, const uint32_t kernel_h, const uint32_t kernel_w, const uint32_t stride_h, const uint32_t stride_w, const uint32_t pad_h, const uint32_t pad_w, const uint32_t iter_start, const uint32_t iter_len, const uint32_t c_out, const uint32_t has_bias, _Float16 *dst)
 {
     uint32_t in_hw  = h_in * w_in;
     uint32_t out_hw = h_out * w_out;
@@ -58,7 +58,7 @@ static inline void conv2d_scalar(const _Float16 *src, const _Float16 *weight, co
                 uint32_t ic_start = g * c_in_g;
                 uint32_t ic_end   = ic_start + c_in_g;
 
-                _Float16 acc_scaler = 0.0f;
+                _Float16 acc_scaler = has_bias ? bias[oc_idx] : 0.0f;
 
                 for (uint32_t ic = ic_start; ic < ic_end; ic++) {
                     uint32_t local_ic = ic - ic_start;
@@ -83,7 +83,7 @@ static inline void conv2d_scalar(const _Float16 *src, const _Float16 *weight, co
     }
 }
 
-static inline void conv2d_rvv(const _Float16 *src, const _Float16 *weight, const uint32_t c_in_g, const uint32_t c_out_g, const uint32_t h_in, const uint32_t w_in, const uint32_t h_out, const uint32_t w_out, const uint32_t kernel_h, const uint32_t kernel_w, const uint32_t stride_h, const uint32_t stride_w, const uint32_t pad_h, const uint32_t pad_w, const uint32_t iter_start, const uint32_t iter_len, const uint32_t c_out, _Float16 *dst)
+static inline void conv2d_rvv(const _Float16 *src, const _Float16 *weight, const _Float16 *bias, const uint32_t c_in_g, const uint32_t c_out_g, const uint32_t h_in, const uint32_t w_in, const uint32_t h_out, const uint32_t w_out, const uint32_t kernel_h, const uint32_t kernel_w, const uint32_t stride_h, const uint32_t stride_w, const uint32_t pad_h, const uint32_t pad_w, const uint32_t iter_start, const uint32_t iter_len, const uint32_t c_out, const uint32_t has_bias, _Float16 *dst)
 {
     register _Float16 ZERO asm ("f10") = 0.0f;
     uint32_t in_hw  = h_in * w_in;
@@ -120,9 +120,10 @@ static inline void conv2d_rvv(const _Float16 *src, const _Float16 *weight, const
                 uint32_t ic_end   = ic_start + c_in_g;
 
                 _Float16 acc_scaler = 0;
+                _Float16 bias_val = has_bias ? bias[oc_idx] : 0.0f;
 
                 asm volatile ("vsetvli %0, %1, e16, m8, tu, ma" : "=r"(vl_max) : "r"(w_win_len));
-                asm volatile ("vfmv.v.f v0, %0" :: "f"(ZERO));
+                asm volatile ("vfmv.v.f v0, %0" :: "f"(bias_val));
                 asm volatile ("vfmv.v.f v8, %0" :: "f"(ZERO));
 
                 for (uint32_t ic = ic_start; ic < ic_end; ic++) {
@@ -159,7 +160,6 @@ static inline void conv2d_rvv(const _Float16 *src, const _Float16 *weight, const
     }
 }
 
-
 int conv2d_fp16_spatz_task(void)
 {
     volatile conv2d_fp16_spatz_params_t *params;
@@ -167,6 +167,7 @@ int conv2d_fp16_spatz_task(void)
 
     _Float16 *src;
     _Float16 *weight;
+    _Float16 *bias;
     _Float16 *dst;
 
     uint32_t stride_h, stride_w;
@@ -174,12 +175,14 @@ int conv2d_fp16_spatz_task(void)
     uint32_t pad_h, pad_w;
     uint32_t h_in, w_in, h_out, w_out, c_out;
     uint32_t iter_start, iter_len, c_in_g, c_out_g;
+    uint32_t has_bias;
 
     params_addr = mmio32(SPATZ_DATA);
     params = (volatile conv2d_fp16_spatz_params_t *) params_addr;
 
     src    = (_Float16 *) params->shard_X;
     weight = (_Float16 *) params->shard_W;
+    bias   = (_Float16 *) params->shard_B;
     dst    = (_Float16 *) params->shard_Y;
 
     stride_h = params->stride_h;
@@ -199,10 +202,11 @@ int conv2d_fp16_spatz_task(void)
     c_out       = params->c_out;
     c_in_g      = params->c_in_g;
     c_out_g     = params->c_out_g;
+    has_bias    = params->has_bias;
 
     /* Notice: For the time being the scalar version is used because the reduction in fp16 introduces a significant difference wrt the golden model */
-    // conv2d_rvv(src, weight, c_in_g, c_out_g, h_in, w_in, h_out, w_out, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, iter_start, iter_len, c_out, dst);
-    conv2d_scalar(src, weight, c_in_g, c_out_g, h_in, w_in, h_out, w_out, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, iter_start, iter_len, c_out, dst);
+    // conv2d_rvv(src, weight, bias, c_in_g, c_out_g, h_in, w_in, h_out, w_out, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, iter_start, iter_len, c_out, has_bias, dst);
+    conv2d_scalar(src, weight, bias, c_in_g, c_out_g, h_in, w_in, h_out, w_out, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, iter_start, iter_len, c_out, has_bias, dst);
 
     return 0;
 }

@@ -46,11 +46,13 @@ def parse_args():
 def generate_input_data(args):
     X_shape = (args.N, args.C, args.H, args.W)
     W_shape = (args.C, args.C // args.group, args.kernel_shape, args.kernel_shape)
+    B_shape = (args.C,)
 
     X = np.random.randn(*X_shape).astype(np.float16)
     W = np.random.randn(*W_shape).astype(np.float16)
+    B = np.random.randn(*B_shape).astype(np.float16)
 
-    return X, W
+    return X, W, B
 
 
 def get_output_shape(X_shape, args):
@@ -63,16 +65,17 @@ def get_output_shape(X_shape, args):
     return (N, C_out, H_out, W_out)
 
 
-def run_onnx_conv(X, W, args):
+def run_onnx_conv(X, W, B, args):
     Y_shape = get_output_shape(X.shape, args)
 
     X_info = onnx.helper.make_tensor_value_info('X', onnx.TensorProto.FLOAT16, X.shape)
     Y_info = onnx.helper.make_tensor_value_info('Y', onnx.TensorProto.FLOAT16, Y_shape)
-    W_initializer = onnx.helper.make_tensor( 'W', onnx.TensorProto.FLOAT16, W.shape, W.tobytes(), raw=True)
+    W_initializer = onnx.helper.make_tensor('W', onnx.TensorProto.FLOAT16, W.shape, W.tobytes(), raw=True)
+    B_initializer = onnx.helper.make_tensor('B', onnx.TensorProto.FLOAT16, B.shape, B.tobytes(), raw=True)
 
     opset = onnx.helper.make_operatorsetid("", 22)
-    node_def = onnx.helper.make_node('Conv', inputs=['X', 'W'], outputs=['Y'], strides=[args.strides, args.strides], pads=[args.pads, args.pads, args.pads, args.pads], kernel_shape=[args.kernel_shape, args.kernel_shape], dilations=[1, 1],auto_pad='NOTSET',group=args.group)
-    graph_def = onnx.helper.make_graph( nodes=[node_def],  name='onnx-conv2d-test',  inputs=[X_info], outputs=[Y_info],  initializer=[W_initializer])
+    node_def = onnx.helper.make_node('Conv', inputs=['X', 'W', 'B'], outputs=['Y'], strides=[args.strides, args.strides], pads=[args.pads, args.pads, args.pads, args.pads], kernel_shape=[args.kernel_shape, args.kernel_shape], dilations=[1, 1],auto_pad='NOTSET',group=args.group)
+    graph_def = onnx.helper.make_graph( nodes=[node_def],  name='onnx-conv2d-test',  inputs=[X_info], outputs=[Y_info],  initializer=[W_initializer, B_initializer])
     model_def = onnx.helper.make_model(graph_def, producer_name='onnx-generator', opset_imports=[opset])
 
     ses = ort.InferenceSession(model_def.SerializeToString())
@@ -93,8 +96,8 @@ def save_deployment_files(X, Y, model_def):
 def main():
     args = parse_args()
 
-    X, W = generate_input_data(args)
-    Y, model_def = run_onnx_conv(X, W, args)
+    X, W, B = generate_input_data(args)
+    Y, model_def = run_onnx_conv(X, W, B, args)
 
     save_deployment_files(X, Y, model_def)
 

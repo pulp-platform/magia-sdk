@@ -10,11 +10,12 @@
 
 #define HID get_hartid()
 
-static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shape[4], uint32_t kernel_h, uint32_t kernel_w, uint32_t stride_h, uint32_t stride_w, uint32_t pad_h, uint32_t pad_w, uint32_t group)
+static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shape[4], uint32_t kernel_h, uint32_t kernel_w, uint32_t stride_h, uint32_t stride_w, uint32_t pad_h, uint32_t pad_w, uint32_t group, int has_bias)
 {
     volatile conv2d_fp16_spatz_params_t *conv_params;
     uintptr_t shard_X;
     uintptr_t shard_W;
+    uintptr_t shard_B;
     uintptr_t shard_Y;
 
     size_t n;
@@ -60,12 +61,17 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shap
     if (!shard_W)
         return ENOMEM;
 
+    shard_B = l1_alloc(c_out * sizeof(float16));
+    if (!shard_B)
+        return ENOMEM;
+
     shard_Y = l1_alloc(iter_len * output_HW_len * sizeof(float16));
     if (!shard_Y)
         return ENOMEM;
 
     conv_params->shard_X    = shard_X;
     conv_params->shard_W    = shard_W;
+    conv_params->shard_B    = shard_B;
     conv_params->shard_Y    = shard_Y;
     conv_params->n_batches  = (uint32_t) n;
     conv_params->c_out      = (uint32_t) c_out;
@@ -83,13 +89,14 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shap
     conv_params->stride_w   = stride_w;
     conv_params->pad_h      = pad_h;
     conv_params->pad_w      = pad_w;
+    conv_params->has_bias   = (uint32_t) has_bias;
 
     *params = (void *) conv_params;
 
     return 0;
 }
 
-static int init_input_params(void *params, const float16 *X, const float16 *W)
+static int init_input_params(void *params, const float16 *X, const float16 *W, const float16 *B)
 {
     volatile conv2d_fp16_spatz_params_t *conv_params;
     uintptr_t shard_X;
@@ -112,6 +119,14 @@ static int init_input_params(void *params, const float16 *X, const float16 *W)
     uint32_t total_w = conv_params->c_out * conv_params->c_in_g * conv_params->kernel_h * conv_params->kernel_w;
     for (uint32_t i = 0; i < total_w; i++)
         mmio_fp16(shard_W + i * sizeof(float16)) = W[i];
+
+    if (conv_params->has_bias) {
+        for (uint32_t i = 0; i < conv_params->c_out; i++)
+            mmio_fp16(conv_params->shard_B + i * sizeof(float16)) = B[i];
+    } else {
+        for (uint32_t i = 0; i < conv_params->c_out; i++)
+            mmio_fp16(conv_params->shard_B + i * sizeof(float16)) = 0.0f;
+    }
 
     uint32_t total_out = conv_params->iter_len * conv_params->h_out * conv_params->w_out;
     for (uint32_t i = 0; i < total_out; i++)
@@ -173,18 +188,18 @@ static int store_result(void *params, float16 *Y)
     return 0;
 }
 
-void MAGIA_conv2d_fp16_spatz(const float16* X, const float16 *W, float16 *Y, uint32_t input_shape[4], uint32_t output_shape[4], uint32_t kernel_h, uint32_t kernel_w, uint32_t stride_h, uint32_t stride_w, uint32_t pad_h, uint32_t pad_w, uint32_t group)
+void MAGIA_conv2d_fp16_spatz(const float16* X, const float16 *W, const float16 *B, float16 *Y, uint32_t input_shape[4], uint32_t output_shape[4], uint32_t kernel_h, uint32_t kernel_w, uint32_t stride_h, uint32_t stride_w, uint32_t pad_h, uint32_t pad_w, uint32_t group, int has_bias)
 {
     int ret;
     volatile conv2d_fp16_spatz_params_t *params;
 
-    ret = alloc_l1(&params, input_shape, output_shape, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, group);
+    ret = alloc_l1(&params, input_shape, output_shape, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, group, has_bias);
     if (ret != 0) {
         printf("[CV32 (%d)] L1 allocation failed with error: %d\n", HID, ret);
         return;
     }
 
-    ret = init_input_params(params, X, W);
+    ret = init_input_params(params, X, W, B);
     if (ret != 0) {
         printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
         return;

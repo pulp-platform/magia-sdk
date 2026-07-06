@@ -6,8 +6,10 @@
 typedef struct {
     uintptr_t shard_X;       /* Tile's input channels shard                     */
     uintptr_t shard_W;       /* Tile's weights shard                            */
+    uintptr_t shard_B;       /* Tile's bias shard                               */
     uintptr_t shard_Y;       /* Tile's output channels shard                    */
 
+    uint32_t has_bias;       /* Wether Bias is present or not                   */
     uint32_t n_batches;      /* Number of batches (N)                           */
     uint32_t c_out;          /* Total number of output channels                 */
     uint32_t iter_start;     /* Global iteration start (n * C_out + c_out)      */

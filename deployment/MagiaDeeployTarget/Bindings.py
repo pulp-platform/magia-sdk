@@ -141,7 +141,7 @@ MagiaConcatFp16Bindings = [
 MagiaConv2DFp16Bindings = [
     NodeBinding(
         ConvChecker(
-            [PointerClass(float16_t), PointerClass(float16_t)],
+            [PointerClass(float16_t), PointerClass(float16_t), PointerClass(float16_t)],
             [PointerClass(float16_t)]
         ),
         Conv2DFP16SpatzTemplate.referenceTemplate,
