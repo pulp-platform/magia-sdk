@@ -40,6 +40,19 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 project(magia-sdk LANGUAGES C ASM)
 
+# Speed up rebuilds with ccache when available (opt-out via -DUSE_CCACHE=OFF).
+option(USE_CCACHE "Use ccache to speed up (re)compilation if available" ON)
+if (USE_CCACHE)
+    find_program(CCACHE_PROGRAM ccache)
+    if (CCACHE_PROGRAM)
+        message(STATUS "[MAGIA-SDK] ccache                  : ${CCACHE_PROGRAM}")
+        set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+        set(CMAKE_ASM_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    else()
+        message(STATUS "[MAGIA-SDK] ccache                  : not found (disabled)")
+    endif()
+endif()
+
 set(ABI ilp32)
 if (TARGET_PLATFORM STREQUAL "magia_v1")
     set(ISA rv32imac)
