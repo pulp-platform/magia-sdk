@@ -83,6 +83,7 @@ def main(test) -> None:
 
     print(f"test: {test}")
 
+    test = '_'.join(test.split('/')[-3:])
     operand, format, arch = test.split("_")
     src_dir = Path("deployment") / "tests" / operand / format / arch
     dst_dir = Path("tests") / "spatz_on_magia" / ("deeploy_" + test)
