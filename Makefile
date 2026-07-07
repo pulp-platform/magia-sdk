@@ -192,6 +192,20 @@ endif
 		--include '$(GVSOC2PERFETTO_INCLUDE)'
 	rm -f -- $(GVSOC2PERFETTO_VCD)
 
+debug_profiling: $(GVSOC_WORK_DIR) $(GVSOC2PERFETTO_BIN)
+	$(GVSOC2PERFETTO_BIN) $(GVSOC2PERFETTO_VCD) \
+		-o $(GVSOC2PERFETTO_OUT) \
+		--state-map 'fsm_state=0:idle,1:preload,2:routine,3:storing,4:finished,5:acknowledge' \
+		--state-map 'me_state=0:idle,1:decomposing' \
+		--state-map 'be_state=0:idle,1:active' \
+		--rename 'ara=vfu' \
+		--rename 'label=instructions' \
+		--rename 'active_pc=pc' \
+		--split-asm \
+		--stats \
+		--include '$(GVSOC2PERFETTO_INCLUDE)'
+	rm -f -- $(GVSOC2PERFETTO_VCD)
+
 MAGIA: set_mesh
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
 	$(eval tiles_2=256)
