@@ -56,6 +56,52 @@ fn is_hex_leaf(s: &str) -> bool {
 }
 
 // --------------------------------------------------------------------------
+// Symbol table: map a program-counter value to the enclosing function symbol,
+// parsed from an objdump-style disassembly (build/bin/<test>.s).
+// --------------------------------------------------------------------------
+
+struct SymTable {
+    // (address, symbol name), sorted ascending by address.
+    syms: Vec<(u128, String)>,
+}
+
+impl SymTable {
+    fn load(path: &str) -> io::Result<SymTable> {
+        // Symbol-boundary lines look like: "cc001c34 <main>:"
+        let re = Regex::new(r"^([0-9a-fA-F]+) <([^>]+)>:").unwrap();
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let mut syms: Vec<(u128, String)> = Vec::new();
+        for line in reader.lines() {
+            let line = line?;
+            if let Some(cap) = re.captures(&line) {
+                let name = &cap[2];
+                // Skip objdump "nearest symbol + offset" markers, e.g.
+                // "<_stack_start+0xcbfe4000>" -- not real function starts.
+                if name.contains("+0x") {
+                    continue;
+                }
+                if let Ok(addr) = u128::from_str_radix(&cap[1], 16) {
+                    syms.push((addr, name.to_string()));
+                }
+            }
+        }
+        syms.sort_by_key(|(a, _)| *a);
+        Ok(SymTable { syms })
+    }
+
+    // Greatest symbol whose address is <= pc; None if pc precedes all symbols.
+    fn lookup(&self, pc: u128) -> Option<&str> {
+        let i = self.syms.partition_point(|(a, _)| *a <= pc);
+        if i == 0 {
+            None
+        } else {
+            Some(self.syms[i - 1].1.as_str())
+        }
+    }
+}
+
+// --------------------------------------------------------------------------
 // Numeric parsing helpers (mirror Python int(v,2) / int(v,0) / float(v))
 // --------------------------------------------------------------------------
 
@@ -473,6 +519,7 @@ fn convert(
     state_maps: &[(Regex, HashMap<u128, String>)],
     renames: &HashMap<String, String>,
     split_asm: bool,
+    symbols: Option<&SymTable>,
 ) -> Vec<Event> {
     let mut conv = Converter::new(pid_depth, renames);
     let us = |t: i64| -> f64 { t as f64 * ps / 1e6 };
@@ -527,6 +574,39 @@ fn convert(
         let state_map = state_maps.iter().find(|(re, _)| re.is_match(leaf)).map(|(_, m)| m);
 
         if is_hex_leaf(leaf) && sig.vtype != "string" {
+            // --symbolize: derive a companion '<parent>.function' track that maps
+            // each pc value onto the enclosing symbol from the disassembly,
+            // merging consecutive same-function samples into a single slice.
+            if let Some(symtab) = symbols {
+                let base = sub.rsplit_once('.').map(|x| x.0).unwrap_or("");
+                let fn_label =
+                    if !base.is_empty() { format!("{}.function", base) } else { "function".to_string() };
+                let tid_fn = conv.get_tid(pid, &fn_label);
+                let mut cur: Option<&str> = None;
+                for ch in tv {
+                    let num = match parse_bits_or_int0(&ch.val) {
+                        Some(n) => n,
+                        None => continue,
+                    };
+                    let name = symtab.lookup(num);
+                    if name == cur {
+                        continue;
+                    }
+                    let ts = us(ch.t);
+                    if cur.is_some() {
+                        conv.events.push(Event::End { pid, tid: tid_fn, ts });
+                    }
+                    if let Some(n) = name {
+                        conv.events.push(Event::Begin { pid, tid: tid_fn, ts, name: n.to_string() });
+                    }
+                    cur = name;
+                }
+                if cur.is_some() {
+                    let ts = us(tv.last().unwrap().t + 1);
+                    conv.events.push(Event::End { pid, tid: tid_fn, ts });
+                }
+            }
+
             let nibbles = ((sig.width + 3) / 4) as usize;
             let mut open = false;
             for ch in tv {
@@ -1127,6 +1207,7 @@ struct Args {
     derive_busy: Vec<String>,
     rename: Vec<String>,
     split_asm: bool,
+    symbolize: Option<String>,
     stats: bool,
 }
 
@@ -1144,6 +1225,7 @@ fn parse_args() -> Result<Args, String> {
         derive_busy: Vec::new(),
         rename: Vec::new(),
         split_asm: false,
+        symbolize: None,
         stats: false,
     };
     let argv: Vec<String> = std::env::args().skip(1).collect();
@@ -1177,6 +1259,7 @@ fn parse_args() -> Result<Args, String> {
             "--derive-busy" => a.derive_busy.push(take_val(&mut i)?),
             "--rename" => a.rename.push(take_val(&mut i)?),
             "--split-asm" => a.split_asm = true,
+            "--symbolize" => a.symbolize = Some(take_val(&mut i)?),
             "--stats" => a.stats = true,
             "-h" | "--help" => {
                 print_help();
@@ -1205,7 +1288,8 @@ fn print_help() {
     eprintln!(
         "gvsoc2perfetto <vcd> [-o OUT] [--format perfetto|json] [--no-intern] [--gzip]\n\
          \x20 [--pid-depth N] [--include RE] [--exclude RE] [--state-map LEAF=V:NAME,...]\n\
-         \x20 [--derive-busy LEAF_A,LEAF_B] [--rename OLD=NEW] [--split-asm] [--stats]\n\
+         \x20 [--derive-busy LEAF_A,LEAF_B] [--rename OLD=NEW] [--split-asm]\n\
+         \x20 [--symbolize FILE.s] [--stats]\n\
          See scripts/gvsoc2perfetto.py for the full documentation of each flag."
     );
 }
@@ -1245,7 +1329,33 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .filter_map(|s| s.split_once('=').map(|(a, b)| (a.to_string(), b.to_string())))
         .collect();
 
-    let events = convert(&signals, &changes, ps, args.pid_depth, &state_maps, &renames, args.split_asm);
+    let symbols = match &args.symbolize {
+        // A missing/unreadable disassembly is non-fatal: warn and emit no
+        // function tracks, so --symbolize can be wired unconditionally into
+        // build targets that may run without a matching .s file.
+        Some(path) => match SymTable::load(path) {
+            Ok(st) => {
+                eprintln!("--symbolize: loaded {} symbols from {}", st.syms.len(), path);
+                Some(st)
+            }
+            Err(e) => {
+                eprintln!("--symbolize: skipping (could not read {}: {})", path, e);
+                None
+            }
+        },
+        None => None,
+    };
+
+    let events = convert(
+        &signals,
+        &changes,
+        ps,
+        args.pid_depth,
+        &state_maps,
+        &renames,
+        args.split_asm,
+        symbols.as_ref(),
+    );
 
     let mut out = args.output.clone().unwrap_or_else(|| {
         if args.format == "perfetto" {

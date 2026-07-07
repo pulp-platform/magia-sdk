@@ -188,6 +188,7 @@ endif
 		--rename 'label=instructions' \
 		--rename 'active_pc=pc' \
 		--split-asm \
+		--symbolize $(CMAKE_BUILDDIR)/bin/$(test).s \
 		--stats \
 		--include '$(GVSOC2PERFETTO_INCLUDE)'
 	rm -f -- $(GVSOC2PERFETTO_VCD)
@@ -202,6 +203,7 @@ debug_profiling: $(GVSOC_WORK_DIR) $(GVSOC2PERFETTO_BIN)
 		--rename 'label=instructions' \
 		--rename 'active_pc=pc' \
 		--split-asm \
+		--symbolize $(CMAKE_BUILDDIR)/bin/$(test).s \
 		--stats \
 		--include '$(GVSOC2PERFETTO_INCLUDE)'
 	rm -f -- $(GVSOC2PERFETTO_VCD)

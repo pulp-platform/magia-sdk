@@ -25,6 +25,24 @@ int redmule16_init(redmule_controller_t *ctrl)
 }
 
 /**
+ * Reads the hardware ACQUIRE register, which locks the controller and
+ * returns a fresh job id (the model's job_id_counter only advances on this
+ * read). Returns -1 if the hardware job queue (depth 2) is already full.
+ *
+ * Only meaningful over the memory-mapped HWPE register interface: the
+ * custom-instruction path has no hardware job queue, so it always reports
+ * job id 0 (single job in flight).
+ */
+int32_t redmule16_acquire(redmule_controller_t *ctrl)
+{
+#if REDMULE_MM == 1
+    return (int32_t) HWPE_READ(REDMULE_REG_OFFS + REDMULE_ACQUIRE);
+#else
+    return 0;
+#endif
+}
+
+/**
  * Configure and launch an FP16 GEMM on the RedMulE accelerator.
  * Computes: Y = X * W + Y  where X is [M x N], W is [N x K], Y is [M x K].
  *
@@ -66,6 +84,9 @@ int redmule16_gemm(redmule_controller_t *ctrl,
 extern int redmule_init(redmule_controller_t *ctrl)
     __attribute__((alias("redmule16_init"), used, visibility("default")));
 
+extern int32_t redmule_acquire(redmule_controller_t *ctrl)
+    __attribute__((alias("redmule16_acquire"), used, visibility("default")));
+
 extern int redmule_gemm(redmule_controller_t *ctrl,
                         uint32_t x,
                         uint32_t w,
@@ -78,5 +99,6 @@ extern int redmule_gemm(redmule_controller_t *ctrl,
 /* Export the RedmulE-specific controller API */
 redmule_controller_api_t redmule_api = {
     .init = redmule16_init,
+    .acquire = redmule16_acquire,
     .gemm = redmule16_gemm,
 };
