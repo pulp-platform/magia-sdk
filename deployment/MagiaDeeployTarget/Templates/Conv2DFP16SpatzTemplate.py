@@ -14,7 +14,7 @@ class _MagiaConv2DFP16Spatz(NodeTemplate):
         operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, data_in.shape)) + "}"
         operatorRepresentation['output_shape'] = "{" + ", ".join(map(str, data_out.shape)) + "}"
         operatorRepresentation['offset'] = 0
-        operatorRepresentation['has_bias_c'] = 1 if operatorRepresentation.get('has_bias') == "true" else 0
+        operatorRepresentation['has_bias_c'] = int('bias' in operatorRepresentation)
 
         return ctxt, operatorRepresentation, []
 
