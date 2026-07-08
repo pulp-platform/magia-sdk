@@ -8,6 +8,8 @@
 #ifndef HAL_REDMULE_H
 #define HAL_REDMULE_H
 
+#include <stdint.h>
+
 /** Forward declaration of the Redmule controller instance and API structure. */
 typedef struct redmule_controller redmule_controller_t;
 typedef struct redmule_controller_api redmule_controller_api_t;
