@@ -198,16 +198,16 @@ int main(void)
 
         // enqueue first redmule job, without triggering
         mg_redmule_gemm_enqueue(&redmule_ctrl,
-                        &eu_ctrl,
-                        WAIT_MODE,
-                        obi_addr_x_0,
-                        obi_addr_w_0,
-                        obi_addr_y,
-                        (uint16_t)tile_h,
-                        (uint16_t)t_size,
-                        (uint16_t)tile_w,
-                        &redmule_evt_0,
-                        NULL);
+                                &eu_ctrl,
+                                WAIT_MODE,
+                                obi_addr_x_0,
+                                obi_addr_w_0,
+                                obi_addr_y,
+                                (uint16_t)tile_h,
+                                (uint16_t)t_size,
+                                (uint16_t)tile_w,
+                                &redmule_evt_0,
+                                NULL);
 
         // commit it to the hardware queue (its inputs are already loaded above);
         // this unlocks the controller for the next enqueue and lets the i=0 start
@@ -228,17 +228,17 @@ int main(void)
              * 4a. Select the correct pointer for the current timeslot
              */
             if (i % 2) {
-                input_pt       = obi_addr_x_1;
-                input_pt_next  = obi_addr_x_0;
-                weight_pt      = obi_addr_w_1;
-                weight_pt_next = obi_addr_w_0;
+                input_pt         = obi_addr_x_1;
+                input_pt_next    = obi_addr_x_0;
+                weight_pt        = obi_addr_w_1;
+                weight_pt_next   = obi_addr_w_0;
                 redmule_evt_curr = &redmule_evt_1;
                 redmule_evt_next = &redmule_evt_0;
             } else {
-                input_pt       = obi_addr_x_0;
-                input_pt_next  = obi_addr_x_1;
-                weight_pt      = obi_addr_w_0;
-                weight_pt_next = obi_addr_w_1;
+                input_pt         = obi_addr_x_0;
+                input_pt_next    = obi_addr_x_1;
+                weight_pt        = obi_addr_w_0;
+                weight_pt_next   = obi_addr_w_1;
                 redmule_evt_curr = &redmule_evt_0;
                 redmule_evt_next = &redmule_evt_1;
             }
@@ -263,6 +263,21 @@ int main(void)
                                   &idma_evt_x,
                                   NULL);
 
+                // enqueue next timeslot job
+                // it is convenient to do this here because mg_idma_memcpy_2d currently has a
+                // depth=1 queue!
+                mg_redmule_gemm_enqueue(&redmule_ctrl,
+                                        &eu_ctrl,
+                                        WAIT_MODE,
+                                        input_pt_next,
+                                        weight_pt_next,
+                                        obi_addr_y,
+                                        (uint16_t)tile_h,
+                                        (uint16_t)t_size,
+                                        (uint16_t)tile_w,
+                                        redmule_evt_next,
+                                        NULL);
+
                 // DMA copy-in for next timeslot
                 mg_idma_memcpy_2d(&idma_ctrl,
                                   &eu_ctrl,
@@ -275,19 +290,6 @@ int main(void)
                                   reps_w,
                                   &idma_evt_w,
                                   NULL);
-
-                // enqueue next timeslot job
-                mg_redmule_gemm_enqueue(&redmule_ctrl,
-                                &eu_ctrl,
-                                WAIT_MODE,
-                                input_pt_next,
-                                weight_pt_next,
-                                obi_addr_y,
-                                (uint16_t)tile_h,
-                                (uint16_t)t_size,
-                                (uint16_t)tile_w,
-                                redmule_evt_next,
-                                NULL);
 
                 // wait for the next timeslot's inputs before commiting its job
                 mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_x);

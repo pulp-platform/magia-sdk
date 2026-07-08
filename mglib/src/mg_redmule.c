@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include "mg_redmule.h"
+#include "redmule16.h" // static inline redmule16_gemm_enqueue/_commit/_start
 
 /**
  * Completion counter. Only the low 8 bits are significant (see mg_seq_ge()
@@ -21,7 +22,10 @@
  * (private per tile, zeroed by every hart in crt0) rather than the shared-L2
  * .bss where all tiles would collide on one copy - hence no initializer here.
  */
-static uint8_t mg_redmule_completed __attribute__((section(".tile_bss")));
+// External linkage (declared in mg_redmule.h): shared with the now-inlined
+// mg_redmule_wait() so both the acquire/backpressure path (here) and the wait
+// path observe a single completion counter.
+uint8_t mg_redmule_completed __attribute__((section(".tile_bss")));
 
 void mg_redmule_gemm(redmule_controller_t *ctrl,
                      eu_controller_t *eu,
@@ -71,31 +75,16 @@ void mg_redmule_gemm_enqueue(redmule_controller_t *ctrl,
     redmule16_gemm_enqueue(ctrl, x, w, y, m, n, k);
 }
 
-void mg_redmule_gemm_commit(redmule_controller_t *ctrl) {
+void mg_redmule_gemm_commit(redmule_controller_t *ctrl)
+{
     redmule16_gemm_commit(ctrl);
 }
 
-void mg_redmule_gemm_start(redmule_controller_t *ctrl) {
+void mg_redmule_gemm_start(redmule_controller_t *ctrl)
+{
     redmule16_gemm_start(ctrl);
 }
 
-void mg_redmule_wait(eu_controller_t *eu, eu_wait_mode_t mode, mg_event_t *event)
-{
-    uint8_t target = (uint8_t)(event->id + 1);
-
-    // the event may already be done - e.g. its completion pulse was consumed
-    // while waiting on a later id - in which case we must not wait on the
-    // hardware at all.
-    while (!mg_seq_ge(mg_redmule_completed, target)) {
-        // not yet the right one: spin back into the hardware wait.
-        if (eu32_redmule_wait(eu, mode)) {
-            // update the completion counter whenever a pulse was seen: it
-            // always retires exactly one FIFO-ordered job, whether or not it
-            // is the one we are waiting for.
-            mg_redmule_completed++;
-        }
-    }
-
-    // our event is the one that just completed (or had already completed).
-    mg_event_trigger(event);
-}
+// mg_redmule_wait() is defined as a static inline in mg_redmule.h so it folds
+// into its call sites (removing the call/return and the one-time cold I-cache
+// miss, and letting constant-propagation drop the callback tail where NULL).

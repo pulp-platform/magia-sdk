@@ -18,7 +18,11 @@
  * crt0, so no initializer is given here.
  */
 static uint8_t mg_idma_issued[2] __attribute__((section(".tile_bss")));
-static uint8_t mg_idma_completed[2] __attribute__((section(".tile_bss")));
+// External linkage (declared in mg_idma.h): shared with the now-inlined
+// mg_idma_wait() so both the issue path (here) and the wait path observe a
+// single completion counter. Only the issue path touches mg_idma_issued, so it
+// stays file-static.
+uint8_t mg_idma_completed[2] __attribute__((section(".tile_bss")));
 
 // WORKAROUND: the current iDMA HW (at least in the GVSOC model) has no job
 // queue and holds only one in-flight transfer per direction; issuing a new
@@ -85,30 +89,6 @@ void mg_idma_memcpy_2d(idma_controller_t *idma,
     idma_memcpy_2d(idma, dir, axi_addr, obi_addr, len, std, reps);
 }
 
-void mg_idma_wait(eu_controller_t *eu, uint8_t dir, eu_wait_mode_t mode, mg_event_t *event)
-{
-    uint8_t idx    = dir ? 1 : 0;
-    uint8_t target = (uint8_t)(event->id + 1);
-
-    // the event may already be done - e.g. its completion pulse was
-    // consumed while waiting on a later id - in which case we must not
-    // wait on the hardware at all.
-    while (!mg_seq_ge(mg_idma_completed[idx], target)) {
-        // dnot yet the right one: spin back into the hardware wait.
-        uint32_t done;
-        if (dir) {
-            done = eu32_idma_wait_o2a(eu, mode);
-        } else {
-            done = eu32_idma_wait_a2o(eu, mode);
-        }
-        if (done) {
-            // update the completion counter whenever a pulse was seen: it
-            // always retires exactly one FIFO-ordered transfer, whether or
-            // not it is the one we are waiting for.
-            mg_idma_completed[idx]++;
-        }
-    }
-
-    // our event is the one that just completed (or had already completed).
-    mg_event_trigger(event);
-}
+// mg_idma_wait() is defined as a static inline in mg_idma.h so it folds into
+// its call sites (removing the call/return and the one-time cold I-cache miss,
+// and letting constant-propagation drop the callback tail where it is NULL).
