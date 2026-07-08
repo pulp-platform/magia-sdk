@@ -132,13 +132,28 @@ int redmule16_gemm_enqueue(redmule_controller_t *ctrl,
     redmule_mm_marith(
         y, w, x); // Launch GEMM with matrix addresses via memory-mapped HWPE registers
 #endif
-    redmule_mm_commit();
 
     return 0;
 }
 
 /**
- * Starts execution of an enqueued set of jobs
+ * Commits execution of an enqueued job on the HW queue.
+ *
+ * @param ctrl RedMulE controller handle (unused internally, reserved for API consistency).
+ *
+ * @return 0 on successful dispatch.
+ */
+int redmule16_gemm_commit(redmule_controller_t *ctrl)
+{
+#if REDMULE_MM != 0
+    redmule_mm_commit();
+#endif
+    return 0;
+}
+
+
+/**
+ * Starts execution of an enqueued set of jobs.
  *
  * @param ctrl RedMulE controller handle (unused internally, reserved for API consistency).
  *
