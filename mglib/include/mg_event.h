@@ -31,7 +31,8 @@ struct mg_event {
 /**
  * @brief Initialize an event with an id and callback.
  */
-static inline __ALWAYS_INLINE_ void mg_event_init(mg_event_t *event, int32_t id, mg_event_callback_t callback)
+static inline __ALWAYS_INLINE_ void
+mg_event_init(mg_event_t *event, int32_t id, mg_event_callback_t callback)
 {
     event->id       = id;
     event->callback = callback;
@@ -54,5 +55,5 @@ static inline __ALWAYS_INLINE_ void mg_event_trigger(mg_event_t *event)
  */
 static inline int mg_seq_ge(uint8_t a, uint8_t b)
 {
-    return (int8_t) (a - b) >= 0;
+    return (int8_t)(a - b) >= 0;
 }
