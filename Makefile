@@ -131,7 +131,7 @@ ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
 endif
 	$(CMAKE) -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz) -B $(CMAKE_BUILDDIR) $(if $(filter 1,$(verbose)),--trace-expand,)
-	$(CMAKE) --build $(CMAKE_BUILDDIR) $(if $(filter 1,$(verbose)),--verbose,) $(if $(test),--target $(test),)
+	$(CMAKE) --build $(CMAKE_BUILDDIR) $(if $(filter 1,$(verbose)),--verbose,) $(if $(test),--target $(test),) -- --no-print-directory
 
 set_mesh:
 ifeq ($(tiles), 1)
