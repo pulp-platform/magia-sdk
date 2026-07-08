@@ -22,16 +22,16 @@
  * frees and a fresh id can be acquired.
  */
 extern void mg_redmule_gemm(redmule_controller_t *ctrl,
-                             eu_controller_t *eu,
-                             eu_wait_mode_t mode,
-                             uint32_t x,
-                             uint32_t w,
-                             uint32_t y,
-                             uint16_t m,
-                             uint16_t n,
-                             uint16_t k,
-                             mg_event_t *event,
-                             mg_event_callback_t callback);
+                            eu_controller_t *eu,
+                            eu_wait_mode_t mode,
+                            uint32_t x,
+                            uint32_t w,
+                            uint32_t y,
+                            uint16_t m,
+                            uint16_t n,
+                            uint16_t k,
+                            mg_event_t *event,
+                            mg_event_callback_t callback);
 
 /**
  * Block (per `mode`) until `event` (as produced by mg_redmule_gemm) has

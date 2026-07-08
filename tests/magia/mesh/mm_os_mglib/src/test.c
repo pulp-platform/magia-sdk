@@ -151,19 +151,45 @@ int main(void)
          * Load the static output tile
          * And then the t0 weight and input tiles
          */
-        mg_idma_memcpy_2d(&idma_ctrl, &eu_ctrl, WAIT_MODE, 0, axi_addr_y, obi_addr_y, len_y, std_y,
-                          reps_y, &idma_evt_y, NULL);
+        mg_idma_memcpy_2d(&idma_ctrl,
+                          &eu_ctrl,
+                          WAIT_MODE,
+                          0,
+                          axi_addr_y,
+                          obi_addr_y,
+                          len_y,
+                          std_y,
+                          reps_y,
+                          &idma_evt_y,
+                          NULL);
 
         // printf("Recieved this data: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile
         // uint16_t*)(obi_addr_y + 2));
 
-        mg_idma_memcpy_2d(&idma_ctrl, &eu_ctrl, WAIT_MODE, 0, axi_addr_x, obi_addr_x_0, len_x, std_x,
-                          reps_x, &idma_evt_x, NULL);
+        mg_idma_memcpy_2d(&idma_ctrl,
+                          &eu_ctrl,
+                          WAIT_MODE,
+                          0,
+                          axi_addr_x,
+                          obi_addr_x_0,
+                          len_x,
+                          std_x,
+                          reps_x,
+                          &idma_evt_x,
+                          NULL);
 
-        mg_idma_memcpy_2d(&idma_ctrl, &eu_ctrl, WAIT_MODE, 0, axi_addr_w, obi_addr_w_0, len_w, std_w,
-                          reps_w, &idma_evt_w, NULL);
-        
-        
+        mg_idma_memcpy_2d(&idma_ctrl,
+                          &eu_ctrl,
+                          WAIT_MODE,
+                          0,
+                          axi_addr_w,
+                          obi_addr_w_0,
+                          len_w,
+                          std_w,
+                          reps_w,
+                          &idma_evt_w,
+                          NULL);
+
         mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_x);
         mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_w);
         mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_y);
@@ -197,7 +223,7 @@ int main(void)
              * Call redmule while loading the weight of the next timeslot.
              */
             if (i < (timeslots - 1)) {
-                if(i != 0) {
+                if (i != 0) {
                     mg_idma_wait(&eu_ctrl, 1, WAIT_MODE, &idma_evt_y);
                 }
                 mg_idma_memcpy_2d(&idma_ctrl,
@@ -262,8 +288,17 @@ int main(void)
         /**
          * 5. Store the output data-tile back to L2
          */
-        mg_idma_memcpy_2d(&idma_ctrl, &eu_ctrl, WAIT_MODE, 1, axi_addr_y, obi_addr_y, len_y, std_y,
-                          reps_y, &idma_evt_y, NULL);
+        mg_idma_memcpy_2d(&idma_ctrl,
+                          &eu_ctrl,
+                          WAIT_MODE,
+                          1,
+                          axi_addr_y,
+                          obi_addr_y,
+                          len_y,
+                          std_y,
+                          reps_y,
+                          &idma_evt_y,
+                          NULL);
     }
 
     /**

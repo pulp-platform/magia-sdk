@@ -24,16 +24,16 @@
 static uint8_t mg_redmule_completed __attribute__((section(".tile_bss")));
 
 void mg_redmule_gemm(redmule_controller_t *ctrl,
-                      eu_controller_t *eu,
-                      eu_wait_mode_t mode,
-                      uint32_t x,
-                      uint32_t w,
-                      uint32_t y,
-                      uint16_t m,
-                      uint16_t n,
-                      uint16_t k,
-                      mg_event_t *event,
-                      mg_event_callback_t callback)
+                     eu_controller_t *eu,
+                     eu_wait_mode_t mode,
+                     uint32_t x,
+                     uint32_t w,
+                     uint32_t y,
+                     uint16_t m,
+                     uint16_t n,
+                     uint16_t k,
+                     mg_event_t *event,
+                     mg_event_callback_t callback)
 {
     int32_t id;
     while ((id = redmule_acquire(ctrl)) < 0) {
@@ -49,7 +49,7 @@ void mg_redmule_gemm(redmule_controller_t *ctrl,
 
 void mg_redmule_wait(eu_controller_t *eu, eu_wait_mode_t mode, mg_event_t *event)
 {
-    uint8_t target = (uint8_t) (event->id + 1);
+    uint8_t target = (uint8_t)(event->id + 1);
 
     // the event may already be done - e.g. its completion pulse was consumed
     // while waiting on a later id - in which case we must not wait on the
