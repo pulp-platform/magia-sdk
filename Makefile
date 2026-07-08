@@ -81,7 +81,9 @@ GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 profile_tile		?=
 PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=tile-$(profile_tile)-idma-ctrl-mm,)
 gvsoc_trace			?= 0
-GVSOC_TRACE_ARG		= $(if $(filter 1,$(gvsoc_trace)),--trace='tile-\d+-cv32-core:$(GVSOC_WORK_DIR)/cv32_trace.log',)
+GVSOC_TRACE_IDS		= $(shell seq 0 $$(( $(tiles_2) - 1 )))
+# NB: the trace file path is resolved relative to the GVSoC work-dir (like all.vcd), so it is a bare filename.
+GVSOC_TRACE_ARG		= $(if $(filter 1,$(gvsoc_trace)),$(foreach t,$(GVSOC_TRACE_IDS),--trace='tile-$(t)-cv32-core/insn:cv32_trace_tile$(t).log'),)
 
 # GVSOC VCD to Perfetto converter scripts (Python version kept but unused currently)
 GVSOC2PERFETTO_SCRIPT  ?= scripts/gvsoc2perfetto.py

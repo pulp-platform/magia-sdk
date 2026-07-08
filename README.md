@@ -247,11 +247,11 @@ This appends `--trace=tile-<tile_id>-idma-ctrl-mm` to the GVSoC command. For exa
 If `profile_tile` is not specified, no tile-specific trace filter is applied.
 The traces will be available in `$(GVSOC_WORK_DIR)/trace.perfetto-trace` (default: `gvsoc_work/trace.perfetto-trace`) and can be visualized with [Perfetto](https://ui.perfetto.dev/) (also available as [Perfetto Trace VSCode extension](https://marketplace.visualstudio.com/items?itemName=drain99.perfetto-trace)).
 
-To additionally dump the CV32 cores' instruction execution trace, pass `gvsoc_trace=1` (default: `0`):
+To additionally dump the cv32 cores' instruction execution trace, pass `gvsoc_trace=1` (default: `0`):
 
 `make run_profiling test=<test_name> tiles=<N> gvsoc_trace=1`
 
-This appends `--trace='tile-\d+-cv32-core:$(GVSOC_WORK_DIR)/cv32_trace.log'` to the GVSoC command, enabling GVSoC traces for the cv32 cores and writing them to `$(GVSOC_WORK_DIR)/cv32_trace.log` (default: `gvsoc_work/cv32_trace.log`).
+This enables GVSoC instruction traces for the cv32 cores by appending one `--trace='tile-<id>-cv32-core:...'` per tile to the GVSoC command, writing **one trace file per tile** to `$(GVSOC_WORK_DIR)/cv32_trace_tile<id>.log` (default: `gvsoc_work/cv32_trace_tile<id>.log`).
 
 ![Example of Perfetto traces](.img/perfetto_traces.png)
 
