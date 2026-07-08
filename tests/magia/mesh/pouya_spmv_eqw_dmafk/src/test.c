@@ -6,7 +6,7 @@
 #include "eventunit.h"
 
 
-//#include "sme3Da.h"
+#include "sme3Da.h"
 //#include "poisson3Da.h"
 //#include "raefsky5.h"
 //#include "ex6.h"
@@ -17,7 +17,7 @@
 //#include "e18.h"
 //#include "scfxm1-2b.h"
 //#include "sctap1-2b.h"
-#include "testbig.h"
+//#include "testbig.h"
 
 //#include "test.h"
 
@@ -384,8 +384,7 @@ int main(void)
 
     dma_wait_end = perf_get_cycles();
 
-    dma_wait_time +=
-        dma_wait_end - dma_wait_start;
+    //dma_wait_time += dma_wait_end - dma_wait_start;
 
     /*
     ==============================================================
@@ -579,7 +578,7 @@ int main(void)
             dma_wait_start = perf_get_cycles();
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
             dma_wait_end = perf_get_cycles();
-            dma_wait_time += dma_wait_end - dma_wait_start;
+            //dma_wait_time += dma_wait_end - dma_wait_start;
         }
 
         /*
@@ -608,7 +607,7 @@ int main(void)
     dma_wait_start = perf_get_cycles();
     eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
     dma_wait_end = perf_get_cycles();
-    dma_wait_time += dma_wait_end - dma_wait_start;
+    //dma_wait_time += dma_wait_end - dma_wait_start;
 
     uint32_t compute_end = perf_get_cycles();
     computed_time = compute_end - compute_start;

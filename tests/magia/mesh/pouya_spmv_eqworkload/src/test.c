@@ -7,13 +7,13 @@
 
 
 //#include "sme3Da.h"
-//#include "poisson3Da.h"
+#include "poisson3Da.h"
 //#include "raefsky5.h"
 //#include "ex6.h"
 //#include "cavity05.h"
 //#include "g7jac140.h"
 //#include "fxm4_6.h"
-#include "scsd8-2r.h"
+//#include "scsd8-2r.h"
 //#include "e18.h"
 //#include "scfxm1-2b.h"
 //#include "sctap1-2b.h"
@@ -371,6 +371,8 @@ int main(void)
     //uint32_t fsync_wait_end = perf_get_cycles();
     //uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start;
 
+    uint32_t computed_time_pure = 0;
+    uint32_t computed_time_pure_start = 0;
     uint32_t computed_time = 0;
     uint32_t compute_start = perf_get_cycles();
 
@@ -478,6 +480,8 @@ int main(void)
         */
         second_for_loop_iteration += tile_row_end - tile_row_start;
 
+        computed_time_pure_start = perf_get_cycles();
+
         for (uint32_t i = tile_row_start;
              i < tile_row_end;
              i++) {
@@ -535,6 +539,7 @@ int main(void)
 
             local_y[i] = sum;
         }
+        computed_time_pure += perf_get_cycles() - computed_time_pure_start;
 
         /*
         ==========================================================
@@ -607,12 +612,13 @@ int main(void)
     rowptr_l2[start_row];
 
     printf(
-        "core %u rows=%u nnz=%u runtime=%u compute=%u fsync=%u dmaC=%u dmaB=%u dma/cycle=%u\n",
+        "core %u rows=%u nnz=%u runtime=%u compute=%u PureComp=%u fsync=%u dmaC=%u dmaB=%u dma/cycle=%u\n",
         hartid,
         local_rows,
         local_nnz,
         run_time_cycle[hartid],
         compute_cycle[hartid],
+        computed_time_pure,
         fsync_wait_cycle[hartid],
         DMA_wait_cycle[hartid],
         DMA_bytes[hartid],
