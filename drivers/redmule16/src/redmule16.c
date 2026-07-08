@@ -43,6 +43,19 @@ int32_t redmule16_acquire(redmule_controller_t *ctrl)
 }
 
 /**
+ * Writes the hardware COMMIT_TRIGGER register, which commits and triggers
+ * a hardware job.
+ */
+int32_t redmule16_trigger(redmule_controller_t *ctrl)
+{
+#if REDMULE_MM == 1
+    redmule_mm_trigger();
+#else
+    return 0;
+#endif
+}
+
+/**
  * Configure and launch an FP16 GEMM on the RedMulE accelerator.
  * Computes: Y = X * W + Y  where X is [M x N], W is [N x K], Y is [M x K].
  *
@@ -77,7 +90,65 @@ int redmule16_gemm(redmule_controller_t *ctrl,
     redmule_mm_marith(
         y, w, x); // Launch GEMM with matrix addresses via memory-mapped HWPE registers
 #endif
+    redmule_mm_commit_trigger();
 
+    return 0;
+}
+
+/**
+ * Configure and launch an FP16 GEMM on the RedMulE accelerator.
+ * Computes: Y = X * W + Y  where X is [M x N], W is [N x K], Y is [M x K].
+ *
+ * The function issues the configuration and arithmetic commands to RedMulE
+ * via custom RISC-V instructions (REDMULE_MM=0) or memory-mapped HWPE
+ * registers (REDMULE_MM=1), then returns immediately. The caller must wait
+ * for completion (e.g. via eu_redmule_wait).
+ *
+ * This variant enqueues the job without triggering it.
+ *
+ * @param ctrl RedMulE controller handle (unused internally, reserved for API consistency).
+ * @param x    OBI (L1) address of input matrix X [M x N].
+ * @param w    OBI (L1) address of weight matrix W [N x K].
+ * @param y    OBI (L1) address of bias/output matrix Y [M x K]. Accumulated in-place.
+ * @param m    Number of rows of X and Y.
+ * @param n    Number of columns of X / rows of W (inner dimension).
+ * @param k    Number of columns of W and Y.
+ *
+ * @return 0 on successful dispatch.
+ */
+int redmule16_gemm_enqueue(redmule_controller_t *ctrl,
+                   uint32_t x,
+                   uint32_t w,
+                   uint32_t y,
+                   uint16_t m,
+                   uint16_t n,
+                   uint16_t k)
+{
+#if REDMULE_MM == 0
+    redmule_mcnfig(k, m, n); // Set GEMM dimensions via custom RISC-V instruction
+    redmule_marith(y, w, x); // Launch GEMM with matrix addresses via custom RISC-V instruction
+#else
+    redmule_mm_mcnfig(k, m, n); // Set GEMM dimensions via memory-mapped HWPE registers
+    redmule_mm_marith(
+        y, w, x); // Launch GEMM with matrix addresses via memory-mapped HWPE registers
+#endif
+    redmule_mm_commit();
+
+    return 0;
+}
+
+/**
+ * Starts execution of an enqueued set of jobs
+ *
+ * @param ctrl RedMulE controller handle (unused internally, reserved for API consistency).
+ *
+ * @return 0 on successful dispatch.
+ */
+int redmule16_gemm_start(redmule_controller_t *ctrl)
+{
+#if REDMULE_MM != 0
+    redmule_mm_trigger();
+#endif
     return 0;
 }
 
