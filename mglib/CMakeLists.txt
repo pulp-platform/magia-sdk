@@ -16,9 +16,21 @@ add_library(mglib STATIC ${SOURCES})
 # mglib builds at -O0.)
 target_compile_options(mglib PRIVATE -O2 -flto -ffat-lto-objects)
 
+# Keep the profiling hooks (stnl_*_f) alive in the inlined wait copies pulled in
+# via eventunit32.h; these defines otherwise only reach the `runtime` target,
+# which mglib does not link.
+target_compile_options(mglib PRIVATE
+  -DPROFILE_CMP=${PROFILE_CMP}
+  -DPROFILE_CMI=${PROFILE_CMI}
+  -DPROFILE_CMO=${PROFILE_CMO}
+  -DPROFILE_SNC=${PROFILE_SNC}
+)
+
 target_include_directories(mglib
   PUBLIC
   "include"
+  "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include"
+  "${CMAKE_SOURCE_DIR}/drivers/eventunit32/include"
 )
 
 target_link_libraries(mglib
