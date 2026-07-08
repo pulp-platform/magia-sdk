@@ -14,8 +14,16 @@
 /**
  * Issue an asynchronous 1D iDMA transfer and stamp `event` with the id needed
  * to later wait for its completion via mg_idma_wait().
+ *
+ * WORKAROUND: the current iDMA HW holds only one in-flight transfer per
+ * direction, so this may block (per `mode`, draining `eu` completion pulses)
+ * until a previously issued same-direction transfer has drained before it can
+ * issue - a software-emulated depth-1 job queue. See MG_IDMA_HW_QUEUE_DEPTH in
+ * mg_idma.c.
  */
 extern void mg_idma_memcpy_1d(idma_controller_t *idma,
+                               eu_controller_t *eu,
+                               eu_wait_mode_t mode,
                                uint8_t dir,
                                uint32_t axi_addr,
                                uint32_t obi_addr,
@@ -26,8 +34,14 @@ extern void mg_idma_memcpy_1d(idma_controller_t *idma,
 /**
  * Issue an asynchronous 2D iDMA transfer and stamp `event` with the id needed
  * to later wait for its completion via mg_idma_wait().
+ *
+ * WORKAROUND: as for mg_idma_memcpy_1d(), this may block (per `mode`, draining
+ * `eu` completion pulses) until a previously issued same-direction transfer has
+ * drained before it can issue - a software-emulated depth-1 job queue.
  */
 extern void mg_idma_memcpy_2d(idma_controller_t *idma,
+                               eu_controller_t *eu,
+                               eu_wait_mode_t mode,
                                uint8_t dir,
                                uint32_t axi_addr,
                                uint32_t obi_addr,
