@@ -39,7 +39,7 @@ void mg_redmule_gemm(redmule_controller_t *ctrl,
     while ((id = redmule_acquire(ctrl)) < 0) {
         // Hardware queue (depth 2) is full: drain one completion pulse to
         // free a slot before retrying the acquire.
-        if (eu_redmule_wait(eu, mode)) {
+        if (eu32_redmule_wait(eu, mode)) {
             mg_redmule_completed++;
         }
     }
@@ -56,7 +56,7 @@ void mg_redmule_wait(eu_controller_t *eu, eu_wait_mode_t mode, mg_event_t *event
     // hardware at all.
     while (!mg_seq_ge(mg_redmule_completed, target)) {
         // not yet the right one: spin back into the hardware wait.
-        if (eu_redmule_wait(eu, mode)) {
+        if (eu32_redmule_wait(eu, mode)) {
             // update the completion counter whenever a pulse was seen: it
             // always retires exactly one FIFO-ordered job, whether or not it
             // is the one we are waiting for.
