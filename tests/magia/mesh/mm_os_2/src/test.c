@@ -98,7 +98,7 @@ int main(void)
      * Weight data-tile: (t_size x tile_w) * data_dim
      * Output data-tile: ((tile_h x tile_w) * data_dim)
      */
-    uint8_t timeslots = 2;
+    uint8_t timeslots = 8;
     uint8_t t_size    = N_SIZE / timeslots;
 
     /**
