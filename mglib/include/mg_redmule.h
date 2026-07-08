@@ -7,7 +7,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "eventunit.h"
+#include "eventunit32.h"
 #include "redmule.h"
 #include "mg_event.h"
 
