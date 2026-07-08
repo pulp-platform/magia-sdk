@@ -109,6 +109,10 @@ The following *optional* parameters can be specified when running the make comma
 
 `spatz`: **0**|**1** (**Default**: 1). Enable compilation of GVSoC and tests with Spatz enabled
 
+`verbose`: **0**|**1** (**Default**: 0). When 1, `make build` restores the full CMake configure trace and per-file compiler command lines. Leave at 0 for concise progress output.
+
+`test`: When set on `make build` (e.g. `make build test=<test_name>`), builds only that single test target instead of the whole test suite. The name is the same test binary name used by `make run test=...`.
+
 Once the [Prerequisites](#prerequisites) are in place:
 
 1. Initialize the GVSoC submodule:
@@ -130,6 +134,10 @@ Once the [Prerequisites](#prerequisites) are in place:
 3. To compile and build the test binaries for a desired architecture run:
 
     `make clean build <target_platform> <tiles> <compiler> <eval>`
+
+    To build a single test instead of the whole suite, pass `test=<test_name>`; add `verbose=1` for full compiler/CMake output:
+
+    `make build test=<test_name>` (or `make build verbose=1`)
 
     To run one of the tests:
 
@@ -238,6 +246,12 @@ This appends `--trace=tile-<tile_id>-idma-ctrl-mm` to the GVSoC command. For exa
 
 If `profile_tile` is not specified, no tile-specific trace filter is applied.
 The traces will be available in `$(GVSOC_WORK_DIR)/trace.perfetto-trace` (default: `gvsoc_work/trace.perfetto-trace`) and can be visualized with [Perfetto](https://ui.perfetto.dev/) (also available as [Perfetto Trace VSCode extension](https://marketplace.visualstudio.com/items?itemName=drain99.perfetto-trace)).
+
+To additionally dump the cv32 cores' instruction execution trace, pass `gvsoc_trace=1` (default: `0`):
+
+`make run_profiling test=<test_name> tiles=<N> gvsoc_trace=1`
+
+This enables GVSoC instruction traces for the cv32 cores by appending one `--trace='tile-<id>-cv32-core:...'` per tile to the GVSoC command, writing **one trace file per tile** to `$(GVSOC_WORK_DIR)/cv32_trace_tile<id>.log` (default: `gvsoc_work/cv32_trace_tile<id>.log`).
 
 ![Example of Perfetto traces](.img/perfetto_traces.png)
 

@@ -8,6 +8,8 @@
 #ifndef HAL_REDMULE_H
 #define HAL_REDMULE_H
 
+#include <stdint.h>
+
 /** Forward declaration of the Redmule controller instance and API structure. */
 typedef struct redmule_controller redmule_controller_t;
 typedef struct redmule_controller_api redmule_controller_api_t;
@@ -17,9 +19,9 @@ typedef struct redmule_controller_api redmule_controller_api_t;
  * Holds the API function pointers, base address and controller-specific configuration.
  */
 struct redmule_controller {
-    redmule_controller_api_t *api;  /**< Function pointers for this interface. */
-    uint32_t base;                  /**< MMIO base address (if applicable). */
-    void *cfg;                      /**< Driver‑specific configuration. */
+    redmule_controller_api_t *api; /**< Function pointers for this interface. */
+    uint32_t base;                 /**< MMIO base address (if applicable). */
+    void *cfg;                     /**< Driver‑specific configuration. */
 };
 
 /**
@@ -28,7 +30,7 @@ struct redmule_controller {
  * This structure holds the configuration settings for Redmule initialization.
  */
 typedef struct {
-    uint32_t hartid;   /**< Mesh Tile ID. */
+    uint32_t hartid; /**< Mesh Tile ID. */
 } redmule_config_t;
 
 extern int redmule_init(redmule_controller_t *ctrl);
@@ -36,10 +38,23 @@ extern int redmule_init(redmule_controller_t *ctrl);
 /* extern void redmule_wait(); */
 
 /**
+ * Reads the hardware ACQUIRE register, which locks the controller and
+ * returns a fresh job id. Returns -1 if the hardware job queue (depth 2)
+ * is already full.
+ */
+extern int32_t redmule_acquire(redmule_controller_t *ctrl);
+
+/**
  * This function prepares and execute an accelerated generic matrix multiplication.
  * (N x M * M x K) + (N x K) = (N x K)
  */
-extern int redmule_gemm(redmule_controller_t *ctrl, uint32_t x, uint32_t w, uint32_t y, uint16_t m, uint16_t n, uint16_t k);
+extern int redmule_gemm(redmule_controller_t *ctrl,
+                        uint32_t x,
+                        uint32_t w,
+                        uint32_t y,
+                        uint16_t m,
+                        uint16_t n,
+                        uint16_t k);
 
 /**
  * WIP
@@ -47,8 +62,15 @@ extern int redmule_gemm(redmule_controller_t *ctrl, uint32_t x, uint32_t w, uint
  */
 struct redmule_controller_api {
     int (*init)(redmule_controller_t *ctrl);
-/*     void (*wait)(); */
-    int (*gemm)(redmule_controller_t *ctrl, uint32_t x, uint32_t w, uint32_t y, uint16_t m, uint16_t n, uint16_t k);
+    /*     void (*wait)(); */
+    int32_t (*acquire)(redmule_controller_t *ctrl);
+    int (*gemm)(redmule_controller_t *ctrl,
+                uint32_t x,
+                uint32_t w,
+                uint32_t y,
+                uint16_t m,
+                uint16_t n,
+                uint16_t k);
 };
 
 /*
@@ -56,4 +78,4 @@ struct redmule_controller_api {
  */
 extern redmule_controller_api_t redmule_api;
 
-#endif //HAL_REDMULE_H
+#endif // HAL_REDMULE_H

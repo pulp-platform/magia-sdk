@@ -14,7 +14,6 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_COMPILER_WORKS 1)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
-set(CMAKE_VERBOSE_MAKEFILE TRUE)
 
 set(CMAKE_EXE_LINKER_FLAGS_INIT "--specs=nosys.specs")
 set(CMAKE_LINK_LIBRARY_USING_WHOLE_ARCHIVE
@@ -39,6 +38,19 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 project(magia-sdk LANGUAGES C ASM)
+
+# Speed up rebuilds with ccache when available (opt-out via -DUSE_CCACHE=OFF).
+option(USE_CCACHE "Use ccache to speed up (re)compilation if available" ON)
+if (USE_CCACHE)
+    find_program(CCACHE_PROGRAM ccache)
+    if (CCACHE_PROGRAM)
+        message(STATUS "[MAGIA-SDK] ccache                  : ${CCACHE_PROGRAM}")
+        set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+        set(CMAKE_ASM_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    else()
+        message(STATUS "[MAGIA-SDK] ccache                  : not found (disabled)")
+    endif()
+endif()
 
 set(ABI ilp32)
 if (TARGET_PLATFORM STREQUAL "magia_v1")

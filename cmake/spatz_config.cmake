@@ -55,6 +55,8 @@ set(CV32_COMPILE_FLAGS
     ${CV32_MABI}
     "-D__riscv__"
     "-O2"
+    "-flto"
+    "-ffat-lto-objects"
     "-g"
     "-Wall"
     "-Wextra"
@@ -76,6 +78,10 @@ set(CV32_LINK_FLAGS
     "-MMD"
     "-MP"
     "-nostdlib"
+    "-flto"
+    # io.c's libc stubs are compiled into multiple libs; identical source, so under
+    # LTO's stricter symbol resolution take the first (matches the Spatz link path).
+    "-Wl,--allow-multiple-definition"
     "-Wl,--gc-sections"
 )
 
