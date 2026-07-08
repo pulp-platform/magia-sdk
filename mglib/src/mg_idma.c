@@ -41,7 +41,7 @@ static inline __ALWAYS_INLINE_ void mg_idma_issue(eu_controller_t *eu,
     // completion pulse here shares mg_idma_completed[idx] with mg_idma_wait();
     // that is safe because same-direction transfers retire strictly FIFO.
     while ((uint8_t)(mg_idma_issued[idx] - mg_idma_completed[idx]) >= MG_IDMA_HW_QUEUE_DEPTH) {
-        uint32_t done = dir ? eu_idma_wait_o2a(eu, mode) : eu_idma_wait_a2o(eu, mode);
+        uint32_t done = dir ? eu32_idma_wait_o2a(eu, mode) : eu32_idma_wait_a2o(eu, mode);
         if (done) {
             mg_idma_completed[idx]++;
         }
@@ -97,9 +97,9 @@ void mg_idma_wait(eu_controller_t *eu, uint8_t dir, eu_wait_mode_t mode, mg_even
         // dnot yet the right one: spin back into the hardware wait.
         uint32_t done;
         if (dir) {
-            done = eu_idma_wait_o2a(eu, mode);
+            done = eu32_idma_wait_o2a(eu, mode);
         } else {
-            done = eu_idma_wait_a2o(eu, mode);
+            done = eu32_idma_wait_a2o(eu, mode);
         }
         if (done) {
             // update the completion counter whenever a pulse was seen: it
