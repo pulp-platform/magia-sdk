@@ -22,14 +22,14 @@
  * mg_idma.c.
  */
 extern void mg_idma_memcpy_1d(idma_controller_t *idma,
-                               eu_controller_t *eu,
-                               eu_wait_mode_t mode,
-                               uint8_t dir,
-                               uint32_t axi_addr,
-                               uint32_t obi_addr,
-                               uint32_t len,
-                               mg_event_t *event,
-                               mg_event_callback_t callback);
+                              eu_controller_t *eu,
+                              eu_wait_mode_t mode,
+                              uint8_t dir,
+                              uint32_t axi_addr,
+                              uint32_t obi_addr,
+                              uint32_t len,
+                              mg_event_t *event,
+                              mg_event_callback_t callback);
 
 /**
  * Issue an asynchronous 2D iDMA transfer and stamp `event` with the id needed
@@ -40,16 +40,16 @@ extern void mg_idma_memcpy_1d(idma_controller_t *idma,
  * drained before it can issue - a software-emulated depth-1 job queue.
  */
 extern void mg_idma_memcpy_2d(idma_controller_t *idma,
-                               eu_controller_t *eu,
-                               eu_wait_mode_t mode,
-                               uint8_t dir,
-                               uint32_t axi_addr,
-                               uint32_t obi_addr,
-                               uint32_t len,
-                               uint32_t std,
-                               uint32_t reps,
-                               mg_event_t *event,
-                               mg_event_callback_t callback);
+                              eu_controller_t *eu,
+                              eu_wait_mode_t mode,
+                              uint8_t dir,
+                              uint32_t axi_addr,
+                              uint32_t obi_addr,
+                              uint32_t len,
+                              uint32_t std,
+                              uint32_t reps,
+                              mg_event_t *event,
+                              mg_event_callback_t callback);
 
 /**
  * Block (per `mode`) until `event` (as produced by mg_idma_memcpy_1d/2d for

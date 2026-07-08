@@ -17,7 +17,7 @@
  * copy). The .tile_bss section is private per tile and zeroed by every hart in
  * crt0, so no initializer is given here.
  */
-static uint8_t mg_idma_issued[2]    __attribute__((section(".tile_bss")));
+static uint8_t mg_idma_issued[2] __attribute__((section(".tile_bss")));
 static uint8_t mg_idma_completed[2] __attribute__((section(".tile_bss")));
 
 // WORKAROUND: the current iDMA HW (at least in the GVSOC model) has no job
@@ -40,25 +40,25 @@ static inline __ALWAYS_INLINE_ void mg_idma_issue(eu_controller_t *eu,
     // the (software-emulated) HW job queue before issuing. Draining a
     // completion pulse here shares mg_idma_completed[idx] with mg_idma_wait();
     // that is safe because same-direction transfers retire strictly FIFO.
-    while ((uint8_t) (mg_idma_issued[idx] - mg_idma_completed[idx]) >= MG_IDMA_HW_QUEUE_DEPTH) {
+    while ((uint8_t)(mg_idma_issued[idx] - mg_idma_completed[idx]) >= MG_IDMA_HW_QUEUE_DEPTH) {
         uint32_t done = dir ? eu_idma_wait_o2a(eu, mode) : eu_idma_wait_a2o(eu, mode);
         if (done) {
             mg_idma_completed[idx]++;
         }
     }
-    mg_event_init(event, (int32_t) mg_idma_issued[idx], callback);
+    mg_event_init(event, (int32_t)mg_idma_issued[idx], callback);
     mg_idma_issued[idx]++;
 }
 
 void mg_idma_memcpy_1d(idma_controller_t *idma,
-                        eu_controller_t *eu,
-                        eu_wait_mode_t mode,
-                        uint8_t dir,
-                        uint32_t axi_addr,
-                        uint32_t obi_addr,
-                        uint32_t len,
-                        mg_event_t *event,
-                        mg_event_callback_t callback)
+                       eu_controller_t *eu,
+                       eu_wait_mode_t mode,
+                       uint8_t dir,
+                       uint32_t axi_addr,
+                       uint32_t obi_addr,
+                       uint32_t len,
+                       mg_event_t *event,
+                       mg_event_callback_t callback)
 {
     // May block until a prior same-direction transfer drains (see
     // mg_idma_issue() and the MG_IDMA_HW_QUEUE_DEPTH workaround).
@@ -68,16 +68,16 @@ void mg_idma_memcpy_1d(idma_controller_t *idma,
 }
 
 void mg_idma_memcpy_2d(idma_controller_t *idma,
-                        eu_controller_t *eu,
-                        eu_wait_mode_t mode,
-                        uint8_t dir,
-                        uint32_t axi_addr,
-                        uint32_t obi_addr,
-                        uint32_t len,
-                        uint32_t std,
-                        uint32_t reps,
-                        mg_event_t *event,
-                        mg_event_callback_t callback)
+                       eu_controller_t *eu,
+                       eu_wait_mode_t mode,
+                       uint8_t dir,
+                       uint32_t axi_addr,
+                       uint32_t obi_addr,
+                       uint32_t len,
+                       uint32_t std,
+                       uint32_t reps,
+                       mg_event_t *event,
+                       mg_event_callback_t callback)
 {
     // May block until a prior same-direction transfer drains (see
     // mg_idma_issue() and the MG_IDMA_HW_QUEUE_DEPTH workaround).
@@ -88,7 +88,7 @@ void mg_idma_memcpy_2d(idma_controller_t *idma,
 void mg_idma_wait(eu_controller_t *eu, uint8_t dir, eu_wait_mode_t mode, mg_event_t *event)
 {
     uint8_t idx    = dir ? 1 : 0;
-    uint8_t target = (uint8_t) (event->id + 1);
+    uint8_t target = (uint8_t)(event->id + 1);
 
     // the event may already be done - e.g. its completion pulse was
     // consumed while waiting on a later id - in which case we must not
@@ -96,7 +96,7 @@ void mg_idma_wait(eu_controller_t *eu, uint8_t dir, eu_wait_mode_t mode, mg_even
     while (!mg_seq_ge(mg_idma_completed[idx], target)) {
         // dnot yet the right one: spin back into the hardware wait.
         uint32_t done;
-        if(dir) {
+        if (dir) {
             done = eu_idma_wait_o2a(eu, mode);
         } else {
             done = eu_idma_wait_a2o(eu, mode);
