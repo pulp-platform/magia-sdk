@@ -31,6 +31,7 @@ llvm/
 
 # Generated test inputs
 tests/magia/mesh/gemm/*/include/*
+tests/magia/mesh/mm_generator/include/*
 
 # Editor
 .vscode/
