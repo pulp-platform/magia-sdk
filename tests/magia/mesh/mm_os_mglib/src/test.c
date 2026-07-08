@@ -226,6 +226,17 @@ int main(void)
                 if (i != 0) {
                     mg_idma_wait(&eu_ctrl, 1, WAIT_MODE, &idma_evt_y);
                 }
+                mg_redmule_gemm(&redmule_ctrl,
+                                &eu_ctrl,
+                                WAIT_MODE,
+                                input_pt,
+                                weight_pt,
+                                obi_addr_y,
+                                (uint16_t)tile_h,
+                                (uint16_t)t_size,
+                                (uint16_t)tile_w,
+                                &redmule_evt,
+                                NULL);
                 mg_idma_memcpy_2d(&idma_ctrl,
                                   &eu_ctrl,
                                   WAIT_MODE,
@@ -249,19 +260,9 @@ int main(void)
                                   reps_w,
                                   &idma_evt_w,
                                   NULL);
-
-                mg_redmule_gemm(&redmule_ctrl,
-                                &eu_ctrl,
-                                WAIT_MODE,
-                                input_pt,
-                                weight_pt,
-                                obi_addr_y,
-                                (uint16_t)tile_h,
-                                (uint16_t)t_size,
-                                (uint16_t)tile_w,
-                                &redmule_evt,
-                                NULL);
                 mg_redmule_wait(&eu_ctrl, WAIT_MODE, &redmule_evt);
+                mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_x);
+                mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_w);
 
                 // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile
                 // uint16_t*)(obi_addr_y + 2));
@@ -281,8 +282,6 @@ int main(void)
                 // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile
                 // uint16_t*)(obi_addr_y + 2));
             }
-            mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_x);
-            mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_w);
         }
 
         /**
