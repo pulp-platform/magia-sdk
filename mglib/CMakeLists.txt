@@ -26,11 +26,19 @@ target_compile_options(mglib PRIVATE
   -DPROFILE_SNC=${PROFILE_SNC}
 )
 
+# The redmule16.h inline helpers (redmule16_gemm_enqueue/_commit/_start) pulled
+# into mg_redmule.c select their code path with #if REDMULE_MM. That define is
+# PUBLIC only on the `runtime` target, which mglib does not link, so re-pass it
+# here (like the PROFILE_* defines above) - otherwise it would default to 0 and
+# silently mismatch a redmule_mm=1 build.
+target_compile_options(mglib PRIVATE -DREDMULE_MM=${REDMULE_MM})
+
 target_include_directories(mglib
   PUBLIC
   "include"
   "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include"
   "${CMAKE_SOURCE_DIR}/drivers/eventunit32/include"
+  "${CMAKE_SOURCE_DIR}/drivers/redmule16/include"
 )
 
 target_link_libraries(mglib

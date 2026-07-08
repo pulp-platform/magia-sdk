@@ -52,6 +52,13 @@ extern void mg_idma_memcpy_2d(idma_controller_t *idma,
                               mg_event_callback_t callback);
 
 /**
+ * Per-direction completion counter (index 0 = A2O/L2->L1, 1 = O2A/L1->L2).
+ * Defined in mg_idma.c and advanced from both the issue path (mg_idma_issue)
+ * and mg_idma_wait() below; shared so both observe a single instance.
+ */
+extern uint8_t mg_idma_completed[2];
+
+/**
  * Block (per `mode`) until `event` (as produced by mg_idma_memcpy_1d/2d for
  * direction `dir`) has completed, then run its callback if set.
  *
@@ -61,5 +68,35 @@ extern void mg_idma_memcpy_2d(idma_controller_t *idma,
  * `event`'s id. That may happen immediately, if the transfer already
  * completed while waiting on a later event, or only after spinning on new
  * pulses.
+ *
+ * Defined here as a static inline (rather than out-of-line in mg_idma.c) so it
+ * folds into its call sites under -O/-flto.
  */
-extern void mg_idma_wait(eu_controller_t *eu, uint8_t dir, eu_wait_mode_t mode, mg_event_t *event);
+static inline __ALWAYS_INLINE_ void
+mg_idma_wait(eu_controller_t *eu, uint8_t dir, eu_wait_mode_t mode, mg_event_t *event)
+{
+    uint8_t idx    = dir ? 1 : 0;
+    uint8_t target = (uint8_t)(event->id + 1);
+
+    // the event may already be done - e.g. its completion pulse was
+    // consumed while waiting on a later id - in which case we must not
+    // wait on the hardware at all.
+    while (!mg_seq_ge(mg_idma_completed[idx], target)) {
+        // dnot yet the right one: spin back into the hardware wait.
+        uint32_t done;
+        if (dir) {
+            done = eu32_idma_wait_o2a(eu, mode);
+        } else {
+            done = eu32_idma_wait_a2o(eu, mode);
+        }
+        if (done) {
+            // update the completion counter whenever a pulse was seen: it
+            // always retires exactly one FIFO-ordered transfer, whether or
+            // not it is the one we are waiting for.
+            mg_idma_completed[idx]++;
+        }
+    }
+
+    // our event is the one that just completed (or had already completed).
+    mg_event_trigger(event);
+}
