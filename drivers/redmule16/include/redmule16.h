@@ -38,14 +38,13 @@
  *
  * @return 0 on successful dispatch.
  */
-static inline __attribute__((always_inline)) int
-redmule16_gemm_enqueue(redmule_controller_t *ctrl,
-                       uint32_t x,
-                       uint32_t w,
-                       uint32_t y,
-                       uint16_t m,
-                       uint16_t n,
-                       uint16_t k)
+static inline __attribute__((always_inline)) int redmule16_gemm_enqueue(redmule_controller_t *ctrl,
+                                                                        uint32_t x,
+                                                                        uint32_t w,
+                                                                        uint32_t y,
+                                                                        uint16_t m,
+                                                                        uint16_t n,
+                                                                        uint16_t k)
 {
 #if REDMULE_MM == 0
     redmule_mcnfig(k, m, n); // Set GEMM dimensions via custom RISC-V instruction
@@ -66,8 +65,7 @@ redmule16_gemm_enqueue(redmule_controller_t *ctrl,
  *
  * @return 0 on successful dispatch.
  */
-static inline __attribute__((always_inline)) int
-redmule16_gemm_commit(redmule_controller_t *ctrl)
+static inline __attribute__((always_inline)) int redmule16_gemm_commit(redmule_controller_t *ctrl)
 {
 #if REDMULE_MM != 0
     redmule_mm_commit();
@@ -82,8 +80,7 @@ redmule16_gemm_commit(redmule_controller_t *ctrl)
  *
  * @return 0 on successful dispatch.
  */
-static inline __attribute__((always_inline)) int
-redmule16_gemm_start(redmule_controller_t *ctrl)
+static inline __attribute__((always_inline)) int redmule16_gemm_start(redmule_controller_t *ctrl)
 {
 #if REDMULE_MM != 0
     redmule_mm_trigger();
