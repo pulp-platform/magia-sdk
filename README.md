@@ -109,6 +109,10 @@ The following *optional* parameters can be specified when running the make comma
 
 `spatz`: **0**|**1** (**Default**: 1). Enable compilation of GVSoC and tests with Spatz enabled
 
+`verbose`: **0**|**1** (**Default**: 0). When 1, `make build` restores the full CMake configure trace and per-file compiler command lines. Leave at 0 for concise progress output.
+
+`test`: When set on `make build` (e.g. `make build test=<test_name>`), builds only that single test target instead of the whole test suite. The name is the same test binary name used by `make run test=...`.
+
 Once the [Prerequisites](#prerequisites) are in place:
 
 1. Initialize the GVSoC submodule:
@@ -130,6 +134,10 @@ Once the [Prerequisites](#prerequisites) are in place:
 3. To compile and build the test binaries for a desired architecture run:
 
     `make clean build <target_platform> <tiles> <compiler> <eval>`
+
+    To build a single test instead of the whole suite, pass `test=<test_name>`; add `verbose=1` for full compiler/CMake output:
+
+    `make build test=<test_name>` (or `make build verbose=1`)
 
     To run one of the tests:
 
