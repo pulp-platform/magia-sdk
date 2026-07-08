@@ -29,6 +29,7 @@ nb = [
 ]
 gemm = [
     "torch",
+    "tqdm"
 ]
 
 [tool.setuptools.packages.find]
