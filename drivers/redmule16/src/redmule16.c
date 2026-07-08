@@ -36,7 +36,7 @@ int redmule16_init(redmule_controller_t *ctrl)
 int32_t redmule16_acquire(redmule_controller_t *ctrl)
 {
 #if REDMULE_MM == 1
-    return (int32_t) HWPE_READ(REDMULE_REG_OFFS + REDMULE_ACQUIRE);
+    return (int32_t)HWPE_READ(REDMULE_REG_OFFS + REDMULE_ACQUIRE);
 #else
     return 0;
 #endif
@@ -98,7 +98,7 @@ extern int redmule_gemm(redmule_controller_t *ctrl,
 
 /* Export the RedmulE-specific controller API */
 redmule_controller_api_t redmule_api = {
-    .init = redmule16_init,
+    .init    = redmule16_init,
     .acquire = redmule16_acquire,
-    .gemm = redmule16_gemm,
+    .gemm    = redmule16_gemm,
 };
