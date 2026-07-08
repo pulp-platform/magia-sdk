@@ -109,7 +109,6 @@ inline int redmule_mm_marith(volatile uint32_t y_base, volatile uint32_t w_base,
   #if PROFILE_CMP == 1
   stnl_cmp_s();
   #endif
-  HWPE_WRITE(0, REDMULE_TRIGGER); 
   #if STALLING == 1
   volatile uint32_t status;
   do {
@@ -120,6 +119,18 @@ inline int redmule_mm_marith(volatile uint32_t y_base, volatile uint32_t w_base,
   #endif
   #endif
   return 0;
+}
+
+inline int redmule_mm_commit_trigger(){
+  HWPE_WRITE(0, REDMULE_TRIGGER); 
+}
+
+inline int redmule_mm_commit(){
+  HWPE_WRITE(1, REDMULE_TRIGGER); 
+}
+
+inline int redmule_mm_trigger(){
+  HWPE_WRITE(2, REDMULE_TRIGGER); 
 }
 
 #endif /*REDMULE_ISA_UTILS_H*/
