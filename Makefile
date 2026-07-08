@@ -80,6 +80,8 @@ GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
 GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 profile_tile		?=
 PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=tile-$(profile_tile)-idma-ctrl-mm,)
+gvsoc_trace			?= 0
+GVSOC_TRACE_ARG		= $(if $(filter 1,$(gvsoc_trace)),--trace='tile-\d+-cv32-core:$(GVSOC_WORK_DIR)/cv32_trace.log',)
 
 # GVSOC VCD to Perfetto converter scripts (Python version kept but unused currently)
 GVSOC2PERFETTO_SCRIPT  ?= scripts/gvsoc2perfetto.py
@@ -181,7 +183,7 @@ endif
 ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
 	$(error No test found with name: $(test))
 endif
-	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG)
+	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG) $(GVSOC_TRACE_ARG)
 	$(GVSOC2PERFETTO_BIN) $(GVSOC2PERFETTO_VCD) \
 		-o $(GVSOC2PERFETTO_OUT) \
 		--state-map 'fsm_state=0:idle,1:preload,2:routine,3:storing,4:finished,5:acknowledge' \
