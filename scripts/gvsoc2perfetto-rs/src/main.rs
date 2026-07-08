@@ -1251,7 +1251,12 @@ fn parse_args() -> Result<Args, String> {
             "--no-intern" => a.no_intern = true,
             "--gzip" => a.gzip = true,
             "--pid-depth" => {
-                a.pid_depth = take_val(&mut i)?.parse().map_err(|_| "--pid-depth: bad int".to_string())?
+                a.pid_depth = take_val(&mut i)?
+                    .parse()
+                    .map_err(|_| "--pid-depth: bad int".to_string())?;
+                if a.pid_depth == 0 {
+                    return Err("--pid-depth must be >= 1".to_string());
+                }
             }
             "--include" => a.include = Some(take_val(&mut i)?),
             "--exclude" => a.exclude = Some(take_val(&mut i)?),
