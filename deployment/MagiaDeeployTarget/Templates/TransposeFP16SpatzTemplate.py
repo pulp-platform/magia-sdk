@@ -14,9 +14,11 @@ class _MagiaTransposeFP16Spatz(NodeTemplate):
         data_out_shape = operatorRepresentation['data_out_shape']
         perm = operatorRepresentation['perm']
 
-        assert len(data_in_shape) == 4, f"Only 4D Transpose supported on Spatz kernel! Got {len(data_in_shape)}D."
+        assert perm[0] == 0, f"Transpose Spatz kernel requires perm[0] == 0 (axis-0 sharding). Got perm={list(perm)}."
 
+        rank = len(data_in_shape)
         iterations = data_out_shape[0]
+        operatorRepresentation['rank'] = rank
         operatorRepresentation['iterations'] = iterations
 
         # from python list to C array
@@ -28,5 +30,5 @@ class _MagiaTransposeFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaTransposeFP16Spatz("""
 // Magia Transpose FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
-MAGIA_transpose_fp16_spatz(${data_in}, ${data_out}, (uint32_t[]) ${c_perm}, (uint32_t[])${input_shape}, (uint32_t[])${output_shape}, ${iterations});
+MAGIA_transpose_fp16_spatz(${data_in}, ${data_out}, (uint32_t[]) ${c_perm}, (uint32_t[])${input_shape}, (uint32_t[])${output_shape}, ${rank}, ${iterations});
 """)

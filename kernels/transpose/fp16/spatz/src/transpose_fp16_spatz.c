@@ -10,11 +10,16 @@
 
 #define HID get_hartid()
 
-static int alloc_l1(void **params, uint32_t in_shape[4], uint32_t out_shape[4], uint32_t iterations, uint32_t *out_shard_in_elems, uint32_t *out_shard_out_elems)
+static int alloc_l1(void **params, uint32_t *in_shape, uint32_t *out_shape, uint32_t rank, uint32_t iterations, uint32_t *out_shard_in_elems, uint32_t *out_shard_out_elems)
 {
     volatile transpose_fp16_spatz_params_t *trans_params;
+
     uintptr_t shard_input;
     uintptr_t shard_output;
+    uintptr_t out_shape_l1;
+    uintptr_t in_strides_l1;
+    uintptr_t perm_l1;
+    uintptr_t coord_l1;
 
     uint32_t shard_in_elems;
     uint32_t shard_out_elems;
@@ -23,9 +28,14 @@ static int alloc_l1(void **params, uint32_t in_shape[4], uint32_t out_shape[4], 
     uint32_t iter_len;
     uint32_t shard;
     uint32_t left;
+    uint32_t stride;
 
-    shard_in_elems  = in_shape[1] * in_shape[2] * in_shape[3];
-    shard_out_elems = out_shape[1] * out_shape[2] * out_shape[3];
+    shard_in_elems  = 1;
+    shard_out_elems = 1;
+    for (uint32_t i = 1; i < rank; i++) {
+        shard_in_elems  *= in_shape[i];
+        shard_out_elems *= out_shape[i];
+    }
 
     shard = iterations / NUM_HARTS;
     left  = iterations % NUM_HARTS;
@@ -48,20 +58,40 @@ static int alloc_l1(void **params, uint32_t in_shape[4], uint32_t out_shape[4], 
     if (!shard_output)
         return ENOMEM;
 
-    trans_params->shard_input    = shard_input;
-    trans_params->shard_output   = shard_output;
+    out_shape_l1 = l1_alloc(rank * sizeof(uint32_t));
+    if (!out_shape_l1)
+        return ENOMEM;
+
+    in_strides_l1 = l1_alloc(rank * sizeof(uint32_t));
+    if (!in_strides_l1)
+        return ENOMEM;
+
+    perm_l1 = l1_alloc(rank * sizeof(uint32_t));
+    if (!perm_l1)
+        return ENOMEM;
+
+    coord_l1 = l1_alloc(rank * sizeof(uint32_t));
+    if (!coord_l1)
+        return ENOMEM;
+
+    trans_params->shard_input     = shard_input;
+    trans_params->shard_output    = shard_output;
+    trans_params->out_shape       = out_shape_l1;
+    trans_params->in_strides      = in_strides_l1;
+    trans_params->perm            = perm_l1;
+    trans_params->coord           = coord_l1;
+    trans_params->rank            = rank;
     trans_params->iteration_start = iter_start;
     trans_params->iteration_len   = iter_len;
 
-    trans_params->out_shape[0]   = out_shape[0];
-    trans_params->out_shape[1]   = out_shape[1];
-    trans_params->out_shape[2]   = out_shape[2];
-    trans_params->out_shape[3]   = out_shape[3];
+    for (uint32_t i = 0; i < rank; i++)
+        mmio32(out_shape_l1 + i * sizeof(uint32_t)) = out_shape[i];
 
-    trans_params->in_strides[0]  = in_shape[1] * in_shape[2] * in_shape[3];
-    trans_params->in_strides[1]  = in_shape[2] * in_shape[3];
-    trans_params->in_strides[2]  = in_shape[3];
-    trans_params->in_strides[3]  = 1;
+    stride = 1;
+    for (int i = (int) rank - 1; i >= 0; i--) {
+        mmio32(in_strides_l1 + i * sizeof(uint32_t)) = stride;
+        stride *= in_shape[i];
+    }
 
     *params = (void *) trans_params;
     *out_shard_in_elems = shard_in_elems;
@@ -75,12 +105,16 @@ static int init_input_params(void *params, const float16 *input, const uint32_t 
     volatile transpose_fp16_spatz_params_t *trans_params;
     uintptr_t shard_input_base;
     uintptr_t shard_output_base;
+    uintptr_t perm_base;
+    uint32_t rank;
     uint32_t total_in_elems;
     uint32_t total_out_elems;
 
     trans_params = (volatile transpose_fp16_spatz_params_t *) params;
     shard_input_base  = trans_params->shard_input;
     shard_output_base = trans_params->shard_output;
+    perm_base         = trans_params->perm;
+    rank              = trans_params->rank;
 
     total_in_elems  = trans_params->iteration_len * shard_in_elems;
     total_out_elems = trans_params->iteration_len * shard_out_elems;
@@ -100,8 +134,8 @@ static int init_input_params(void *params, const float16 *input, const uint32_t 
         l1_out_idx++;
     }
 
-    for (int i = 0; i < 4; i++)
-        trans_params->perm[i] = perm[i];
+    for (uint32_t i = 0; i < rank; i++)
+        mmio32(perm_base + i * sizeof(uint32_t)) = perm[i];
 
     return 0;
 }
@@ -157,14 +191,14 @@ static int store_result(void *params, float16 *output, uint32_t shard_out_elems)
     return 0;
 }
 
-void MAGIA_transpose_fp16_spatz(const float16 *input, float16 *output, uint32_t *perm, uint32_t in_shape[4], uint32_t out_shape[4], uint32_t iterations)
+void MAGIA_transpose_fp16_spatz(const float16 *input, float16 *output, uint32_t *perm, uint32_t *in_shape, uint32_t *out_shape, uint32_t rank, uint32_t iterations)
 {
     int ret;
     volatile transpose_fp16_spatz_params_t *params;
     uint32_t shard_in_elems;
     uint32_t shard_out_elems;
 
-    ret = alloc_l1((void **)&params, in_shape, out_shape, iterations, &shard_in_elems, &shard_out_elems);
+    ret = alloc_l1((void **)&params, in_shape, out_shape, rank, iterations, &shard_in_elems, &shard_out_elems);
     if (ret != 0) {
         printf("[CV32 (%d)] L1 allocation failed with error: %d\n", HID, ret);
         return;

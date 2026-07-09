@@ -24,11 +24,11 @@ def parse_perm(value_str):
     except ValueError:
         raise argparse.ArgumentTypeError(f"Permutation indices must be space-separated integers. Got: '{value_str}'")
 
-    if len(perm) != 4:
-        raise argparse.ArgumentTypeError(f"Transpose kernel strictly requires a 4D permutation vector. Got {len(perm)} elements.")
+    if sorted(perm) != list(range(len(perm))):
+        raise argparse.ArgumentTypeError(f"Invalid permutation indices {perm}. Must be a valid rearrangement of {list(range(len(perm)))}.")
 
-    if sorted(perm) != [0, 1, 2, 3]:
-        raise argparse.ArgumentTypeError(f"Invalid permutation indices {perm}. Must be a valid rearrangement of [0, 1, 2, 3].")
+    if perm[0] != 0:
+        raise argparse.ArgumentTypeError(f"Transpose kernel strictly requires perm[0] == 0 (axis-0 sharding). Got {perm}.")
 
     return perm
 
@@ -36,19 +36,26 @@ def parse_perm(value_str):
 def parse_args():
     parser = argparse.ArgumentParser(description="Generator of Input Data and Golden Model for Transpose test")
 
-    parser.add_argument("N", type=positive_int, help="Batch size")
-    parser.add_argument("C", type=positive_int, help="Number of input channels")
-    parser.add_argument("H", type=positive_int, help="Spatial height dimension")
-    parser.add_argument("W", type=positive_int, help="Spatial width dimension")
+    parser.add_argument("shape", type=positive_int, nargs='+', help="Input tensor shape as space-separated dimensions (rank = number of values)")
 
-    parser.add_argument("--perm", type=parse_perm, default=[0, 2, 3, 1], help="Space-separated 4D permutation vector, e.g., '0 2 3 1' (default: 0 2 3 1)")
+    parser.add_argument("--perm", type=parse_perm, default=None, help="Space-separated permutation vector with perm[0]=0, e.g. '0 2 1' (default: reverse all axes but axis 0)")
 
     args = parser.parse_args()
+
+    if args.perm is None:
+        args.perm = [0] + list(range(len(args.shape) - 1, 0, -1))
+
+    if len(args.perm) != len(args.shape):
+        parser.error(f"Permutation {args.perm} rank ({len(args.perm)}) must match input shape rank ({len(args.shape)}).")
+
+    if args.shape[args.perm[-1]] % 2 != 0:
+        parser.error(f"shape[perm[-1]] = {args.shape[args.perm[-1]]} (inner_len) must be even to keep the Spatz vector stores 4-byte aligned (RVV path).")
+
     return args
 
 
 def generate_input_data(args):
-    data_shape = (args.N, args.C, args.H, args.W)
+    data_shape = tuple(args.shape)
     data = np.random.randn(*data_shape).astype(np.float16)
 
     return data
@@ -88,7 +95,8 @@ def main():
 
     save_deployment_files(data, transposed, model_def)
 
-    print(f"Deployment files generated with input [N:{args.N}, C:{args.C}, H:{args.H}, W:{args.W}] - perm: {args.perm}")
+    print(f"Deployment files generated with input shape {list(args.shape)} - perm: {args.perm}")
+
 
 if __name__ == "__main__":
     main()

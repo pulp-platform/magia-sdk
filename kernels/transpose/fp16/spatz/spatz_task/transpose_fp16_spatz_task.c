@@ -20,50 +20,68 @@ static inline void transpose(const _Float16 *src, _Float16 *dst, const size_t le
     }
 }
 
+static inline void transpose_scalar(const _Float16 *src, _Float16 *dst, const size_t len, const size_t stride)
+{
+    for (size_t i = 0; i < len; i++)
+        dst[i] = src[i * stride];
+}
+
 int transpose_fp16_spatz_task(void)
 {
     volatile transpose_fp16_spatz_params_t *params;
     uintptr_t params_addr;
+
+
     const _Float16 *shard_input;
     _Float16 *shard_output;
-    uint32_t in_strides[4];
-    uint32_t out_shape[4];
-    uint32_t iter_start;
+    uint32_t *out_shape;
+    uint32_t *in_strides;
+    uint32_t *perm;
+    uint32_t *coord;
     uint32_t iter_len;
-    uint32_t perm[4];
+    uint32_t rank;
 
     params_addr = mmio32(SPATZ_DATA);
     params = (volatile transpose_fp16_spatz_params_t *) params_addr;
 
     shard_input  = (_Float16 *) params->shard_input;
     shard_output = (_Float16 *) params->shard_output;
-    iter_start   = params->iteration_start;
+    out_shape    = (uint32_t *) params->out_shape;
+    in_strides   = (uint32_t *) params->in_strides;
+    perm         = (uint32_t *) params->perm;
+    coord        = (uint32_t *) params->coord;
     iter_len     = params->iteration_len;
+    rank         = params->rank;
 
-    for (int i = 0; i < 4; i++) {
-        out_shape[i]  = params->out_shape[i];
-        in_strides[i] = params->in_strides[i];
-        perm[i]       = params->perm[i];
-    }
+    uint32_t inner_len    = out_shape[rank - 1];
+    uint32_t inner_stride = in_strides[perm[rank - 1]];
 
-    uint32_t coord_in[4] = {0, 0, 0, 0};
+    uint32_t middle_count = 1;
+    for (uint32_t k = 1; k + 1 < rank; k++)
+        middle_count *= out_shape[k];
 
     for (uint32_t i0 = 0; i0 < iter_len; i0++) {
-        for (uint32_t i1 = 0; i1 < out_shape[1]; i1++) {
-            for (uint32_t i2 = 0; i2 < out_shape[2]; i2++) {
-                coord_in[perm[0]] = i0;
-                coord_in[perm[1]] = i1;
-                coord_in[perm[2]] = i2;
-                coord_in[perm[3]] = 0;
+        for (uint32_t k = 1; k < rank; k++)
+            coord[k] = 0;
+        coord[0] = i0;
 
-                uint32_t base_in_offset = 0;
-                for (int j = 0; j < 4; j++) {
-                    base_in_offset += coord_in[j] * in_strides[j];
-                }
+        for (uint32_t m = 0; m < middle_count; m++) {
+            uint32_t base_in_offset = 0;
+            for (uint32_t k = 0; k < rank; k++)
+                base_in_offset += coord[k] * in_strides[perm[k]];
 
-                transpose(shard_input + base_in_offset, shard_output, out_shape[3], in_strides[perm[3]]);
+            /* Spatz VLSU corrupts vector stores to non 4-byte-aligned addresses */
+            if (((uintptr_t) shard_output & 3u) == 0)
+                transpose(shard_input + base_in_offset, shard_output, inner_len, inner_stride);
+            else
+                transpose_scalar(shard_input + base_in_offset, shard_output, inner_len, inner_stride);
 
-                shard_output += out_shape[3];
+            shard_output += inner_len;
+
+            for (int k = (int) rank - 2; k >= 1; k--) {
+                if (++coord[k] < out_shape[k])
+                    break;
+                coord[k] = 0;
             }
         }
     }
