@@ -7,7 +7,12 @@
 # Alberto Dequino <alberto.dequino@unibo.it>
 
 # Define mappings for tests
-if(SPATZ_TESTS)
+if(HOST_TESTS)
+set(TEST_MAPPINGS
+        magia_v1:magia
+        magia_v2:magia_host
+    )
+elseif(SPATZ_TESTS)
     set(TEST_MAPPINGS
         magia_v1:magia
         magia_v2:magia,spatz_on_magia
