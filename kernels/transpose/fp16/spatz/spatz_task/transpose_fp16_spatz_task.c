@@ -20,11 +20,13 @@ static inline void transpose(const _Float16 *src, _Float16 *dst, const size_t le
     }
 }
 
+#if 0
 static inline void transpose_scalar(const _Float16 *src, _Float16 *dst, const size_t len, const size_t stride)
 {
     for (size_t i = 0; i < len; i++)
         dst[i] = src[i * stride];
 }
+#endif
 
 int transpose_fp16_spatz_task(void)
 {
@@ -70,11 +72,15 @@ int transpose_fp16_spatz_task(void)
             for (uint32_t k = 0; k < rank; k++)
                 base_in_offset += coord[k] * in_strides[perm[k]];
 
-            /* Spatz VLSU corrupts vector stores to non 4-byte-aligned addresses */
+#if 0
+            /* Spatz VLSU corrupts vector stores to non-aligned addresses */
             if (((uintptr_t) shard_output & 3u) == 0)
                 transpose(shard_input + base_in_offset, shard_output, inner_len, inner_stride);
             else
                 transpose_scalar(shard_input + base_in_offset, shard_output, inner_len, inner_stride);
+#else
+            transpose(shard_input + base_in_offset, shard_output, inner_len, inner_stride);
+#endif
 
             shard_output += inner_len;
 

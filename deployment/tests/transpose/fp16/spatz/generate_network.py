@@ -48,8 +48,8 @@ def parse_args():
     if len(args.perm) != len(args.shape):
         parser.error(f"Permutation {args.perm} rank ({len(args.perm)}) must match input shape rank ({len(args.shape)}).")
 
-    if args.shape[args.perm[-1]] % 2 != 0:
-        parser.error(f"shape[perm[-1]] = {args.shape[args.perm[-1]]} (inner_len) must be even to keep the Spatz vector stores 4-byte aligned (RVV path).")
+    # if args.shape[args.perm[-1]] % 2 != 0:
+    #     parser.error(f"shape[perm[-1]] = {args.shape[args.perm[-1]]} (inner_len) must be even to keep the Spatz vector stores 4-byte aligned (RVV path).")
 
     return args
 
