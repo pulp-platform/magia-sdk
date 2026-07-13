@@ -173,7 +173,7 @@ else ifeq ($(platform), rtl)
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
 	cd $(MAGIA_RTL_DIR) 												&& \
-	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv)
+	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv) fast_sim=$(fast_sim)
 else
 	$(error Only rtl and gvsoc are supported as platforms.)
 endif

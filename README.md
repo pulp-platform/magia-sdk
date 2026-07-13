@@ -24,7 +24,9 @@ The following steps assume the default target platform, `magia_v2`, on which Spa
 
     After you have done that, you can install a python environment with all the necessary requirements by running:
 
-    `make gvsoc_pyenv`
+    `pyenv install 3.12`
+
+    `make gvsoc_venv`
 
     In both cases, to activate the generated environment, run:
 
