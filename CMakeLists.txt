@@ -56,7 +56,11 @@ set(ABI ilp32)
 if (TARGET_PLATFORM STREQUAL "magia_v1")
     set(ISA rv32imac)
 elseif (TARGET_PLATFORM STREQUAL "magia_v2")
-    set(ISA rv32imc_xcvalu_xcvbi_xcvbitmanip_xcvhwlp_xcvmac_xcvmem_xcvsimd_xcvelw_zfinx_zhinxmin)
+    set(ISA rv32imcxgap9)
+elseif (TARGET_PLATFORM STREQUAL "magia_v3")
+    set(ISA rv32imcxgap9)
+elseif (TARGET_PLATFORM STREQUAL "pulp")
+    set(ISA rv32imcxgap9)
 endif ()
 
 message(STATUS "[MAGIA-SDK] ABI                     : ${ABI}")
@@ -70,11 +74,13 @@ endif()
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 
 # Spatz support
-if (SPATZ_TESTS STREQUAL "1")
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/spatz_config.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/spatz_helpers.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/bootrom_helpers.cmake)
-endif()
+
+# PULP cluster support
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/pulp_config.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/pulp_helpers.cmake)
 
 ################################################################################
 # Add subdirectories                                                           #

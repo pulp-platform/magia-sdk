@@ -131,19 +131,22 @@ function(add_spatz_task)
     # --------------------------------------------------------------------------
     # Target and exported variables
     # --------------------------------------------------------------------------
-    add_custom_target(${ARG_TEST_NAME}_spatz_header ALL
+    string(MD5 _spatz_scope_hash "${CMAKE_CURRENT_SOURCE_DIR}_${ARG_TEST_NAME}")
+    string(SUBSTRING "${_spatz_scope_hash}" 0 8 _spatz_scope_hash)
+    set(_spatz_header_target "spatz_header_${ARG_TEST_NAME}_${_spatz_scope_hash}")
+
+    add_custom_target(${_spatz_header_target} ALL
         DEPENDS
             ${TASK_HEADER}
             ${TASK_BIN}
-    )
-    add_custom_target(${ARG_TEST_NAME}_spatz_dump
-        DEPENDS ${TASK_DUMP}
+            ${TASK_DUMP}
     )
 
-    set(${ARG_TEST_NAME}_SPATZ_HEADER ${TASK_HEADER} PARENT_SCOPE)
-    set(${ARG_TEST_NAME}_TASK_BIN ${TASK_BIN} PARENT_SCOPE)
-    set(${ARG_TEST_NAME}_TASK_HEADER ${TASK_HEADER} PARENT_SCOPE)
-    set(${ARG_TEST_NAME}_SPATZ_OUTPUT_DIR ${SPATZ_OUTPUT_DIR} PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_SPATZ_HEADER        ${TASK_HEADER}          PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_SPATZ_TARGET        ${_spatz_header_target} PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_TASK_BIN            ${TASK_BIN}             PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_TASK_HEADER         ${TASK_HEADER}          PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_SPATZ_OUTPUT_DIR    ${SPATZ_OUTPUT_DIR}     PARENT_SCOPE)
 endfunction()
 
 # add_cv32_executable_with_spatz(

@@ -27,4 +27,3 @@ add_subdirectory(onnx_sigmoid)
 add_subdirectory(onnx_softmax)
 add_subdirectory(onnx_sub)
 add_subdirectory(onnx_swish)
-

@@ -81,7 +81,7 @@ The following steps assume the default target platform, `magia_v2`, on which Spa
 
 The following *optional* parameters can be specified when running the make command:
 
-`target_platform`: **magia_v1**|**magia_v2** (**Default**: magia_v2). Selects the target platform to build and run tests on. Magia V1 is the legacy mode using the CV32E40X core, whereas magia_v2 is the new platform using CV32E40P. No future support for magia_v1 is planned.
+`target_platform`: **magia_v1**|**magia_v2**|**magia_v3** (**Default**: magia_v3). Selects the target platform to build and run tests on. Magia V1 is the legacy mode using the CV32E40X core, whereas magia_v2 is the platform using CV32E40P. Magia_v3 extends V2 with per-tile PULP cluster. No future support for magia_v1 is planned.
 
 `build_mode`: **update**|**profile**|**synth** (**Default**: profile). Selects the mode that the MAGIA architecture is built.
 
@@ -110,6 +110,8 @@ The following *optional* parameters can be specified when running the make comma
 `profile_cmp|cmi|cmo|snc`: **0**|**1** (**Default**: 0). Activates the profiling utilities for computing|comunication(input line)|comunication(output line)|synchronization
 
 `spatz`: **0**|**1** (**Default**: 1). Enable compilation of GVSoC and tests with Spatz enabled
+
+`pulp_cluster`: **0**|**1** (**Default**: 1). Enable compilation of GVSoC and tests with PULP clusters enabled.
 
 `verbose`: **0**|**1** (**Default**: 0). When 1, `make build` restores the full CMake configure trace and per-file compiler command lines. Leave at 0 for concise progress output.
 

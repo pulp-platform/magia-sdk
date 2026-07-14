@@ -67,8 +67,6 @@ static int run_spatz_task()
     eu_spatz_init(&eu_ctrl, 0);
 
     spatz_init(SPATZ_BINARY_START);
-    printf("[CV32] Random print just to slow down CV32 between Spatz init and run\n"); // TODOs:
-                                                                                       // remove me
     spatz_run_task_with_params(ONNX_ADD_TASK, ONNX_ADD_PARAMS_BASE);
 
     eu_spatz_wait(&eu_ctrl, WFE);

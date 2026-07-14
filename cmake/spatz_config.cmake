@@ -14,8 +14,8 @@ set(SPATZ_OBJDUMP "${SPATZ_LLVM_PATH}/bin/llvm-objdump" CACHE PATH "Path to Spat
 # ==============================================================================
 # BOOTROM settings (used by add_spatz_bootrom)
 # ==============================================================================
-set(SPATZ_BOOTROM_SRC "${CMAKE_SOURCE_DIR}/targets/magia_v2/spatz/bootrom/spatz_init.S" CACHE PATH "Spatz bootrom source")
-set(SPATZ_BOOTROM_LINK_SCRIPT "${CMAKE_SOURCE_DIR}/targets/magia_v2/spatz/bootrom/spatz_init.ld" CACHE PATH "Spatz bootrom linker script")
+set(SPATZ_BOOTROM_SRC "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/spatz/bootrom/spatz_init.S" CACHE PATH "Spatz bootrom source")
+set(SPATZ_BOOTROM_LINK_SCRIPT "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/spatz/bootrom/spatz_init.ld" CACHE PATH "Spatz bootrom linker script")
 set(SPATZ_BOOTROM_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin/bootrom")
 set(SPATZ_BOOTROM_ELF "${SPATZ_BOOTROM_OUTPUT_DIR}/spatz_init.elf")
 set(SPATZ_BOOTROM_BIN "${SPATZ_BOOTROM_OUTPUT_DIR}/spatz_init.bin")
@@ -26,13 +26,13 @@ set(SPATZ_BOOTROM_DUMP "${SPATZ_BOOTROM_OUTPUT_DIR}/spatz_init.dump")
 # ==============================================================================
 
 # Paths
-set(CV32_CRT0_SRC "${CMAKE_SOURCE_DIR}/targets/magia_v2/src/crt0.S" CACHE PATH "CV32 CRT0 assembly")
-set(MAGIA_IO_SRC "${CMAKE_SOURCE_DIR}/targets/magia_v2/src/io.c")
+set(CV32_CRT0_SRC "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/src/crt0.S" CACHE PATH "CV32 CRT0 assembly")
+set(MAGIA_IO_SRC "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/src/io.c")
 set(MAGIA_TARGET_INCLUDE_DIRS
-    "${CMAKE_SOURCE_DIR}/targets/magia_v2/include"
-    "${CMAKE_SOURCE_DIR}/targets/magia_v2/include/utils"
-    "${CMAKE_SOURCE_DIR}/targets/magia_v2/include/addr_map"
-    "${CMAKE_SOURCE_DIR}/targets/magia_v2/include/regs"
+    "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include"
+    "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include/utils"
+    "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include/addr_map"
+    "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include/regs"
     "${CMAKE_SOURCE_DIR}/tests/common"
 )
 set(MAGIA_CV32_EXTRA_INCLUDE_DIRS
@@ -82,6 +82,7 @@ set(CV32_LINK_FLAGS
     # io.c's libc stubs are compiled into multiple libs; identical source, so under
     # LTO's stricter symbol resolution take the first (matches the Spatz link path).
     "-Wl,--allow-multiple-definition"
+    "-nostartfiles"
     "-Wl,--gc-sections"
 )
 
@@ -90,8 +91,8 @@ set(CV32_LINK_FLAGS
 # ==============================================================================
 
 # Paths
-set(SPATZ_CRT0_SRC "${CMAKE_SOURCE_DIR}/targets/magia_v2/spatz/src/spatz_crt0.S" CACHE PATH "Spatz CRT0 assembly")
-set(SPATZ_LINK_SCRIPT "${CMAKE_SOURCE_DIR}/targets/magia_v2/spatz/src/spatz_program.ld" CACHE PATH "Spatz linker script")
+set(SPATZ_CRT0_SRC "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/spatz/src/spatz_crt0.S" CACHE PATH "Spatz CRT0 assembly")
+set(SPATZ_LINK_SCRIPT "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/spatz/src/spatz_program.ld" CACHE PATH "Spatz linker script")
 
 # Spatz arch configuration options [MAGIA/Makefile]
 set(SPATZ_RVD 0 CACHE INT "0: 32-bit TCDM w/ ELEN=32, 1: 64-bit TCDM w/ ELEN=64")
@@ -139,6 +140,7 @@ set(SPATZ_ARCH_FLAGS
 set(SPATZ_COMPILE_FLAGS
     ${SPATZ_ARCH_FLAGS}
     "-static"
+    "-nostartfiles"
     "-nostdlib"
     "-O3"
     "-g"
@@ -164,13 +166,14 @@ set(SPATZ_CFLAGS_DEFINES
 )
 set(SPATZ_LINK_FLAGS
     "--ld-path=${SPATZ_LLVM_PATH}/bin/ld.lld"
+    "-fuse-ld=${SPATZ_LLVM_PATH}/bin/ld.lld"
     "-Wl,-z,norelro"
     "-Wl,--allow-multiple-definition"
 )
 
 # add_spatz_task defaults
 set(SPATZ_TASK_DEFINE "-DSPATZ_TARGET")
-set(SPATZ_TASK_OUTPUT_ROOT "${CMAKE_BINARY_DIR}/bin/spatz_on_magia")
+set(SPATZ_TASK_OUTPUT_ROOT "${CMAKE_BINARY_DIR}/bin/${TARGET_PLATFORM}")
 set(SPATZ_TASK_BIN2HEADER_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/bin2header.py")
 set(SPATZ_TASK_EXTRACT_SYMBOLS_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/extract_task_symbols.sh")
 set(SPATZ_TASK_HEADER_SECTION ".spatz_binary")

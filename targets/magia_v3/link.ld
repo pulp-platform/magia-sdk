@@ -1,0 +1,166 @@
+/*
+ * Copyright (C) 2018-2019 ETH Zurich and University of Bologna
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+SEARCH_DIR(.)
+__DYNAMIC  =  0;
+
+MEMORY
+{
+    instrram    : ORIGIN = 0xcc000000, LENGTH = 0x8000
+    dataram     : ORIGIN = 0xcc100000, LENGTH = 0xF00000
+    stack       : ORIGIN = 0x00010000, LENGTH = 0x4000 /* 16K for control core CV32 */
+}
+
+/* Stack information variables */
+_min_stack     = 0x1000;   /* 4K - minimum stack space to reserve */
+_stack_len     = LENGTH(stack);
+_stack_start   = ORIGIN(stack) + LENGTH(stack);
+
+/* We have to align each sector to word boundaries as our current s19->slm
+ * conversion scripts are not able to handle non-word aligned sections. */
+
+PHDRS
+{
+    text PT_LOAD;
+    data PT_LOAD;
+}
+
+SECTIONS
+{
+    .vectors :
+    {
+        . = ALIGN(4);
+        KEEP(*(.vectors))
+    } > instrram :text
+
+    .text : {
+        . = ALIGN(4);
+        _stext = .;
+        *(.text)
+        _etext  =  .;
+        __CTOR_LIST__ = .;
+        LONG((__CTOR_END__ - __CTOR_LIST__) / 4 - 2)
+        *(.ctors)
+        LONG(0)
+        __CTOR_END__ = .;
+        __DTOR_LIST__ = .;
+        LONG((__DTOR_END__ - __DTOR_LIST__) / 4 - 2)
+        *(.dtors)
+        LONG(0)
+        __DTOR_END__ = .;
+        *(.lit)
+        *(.shdata)
+        _endtext = .;
+    }  > instrram :text
+	
+	/* Spatz embedded binary - inlined from header file */
+    /* Positioned right after CV32 .text in instrram */
+
+    . = ALIGN(4);
+    _spatz_binary_start = .;
+
+    .spatz_binary : {
+        KEEP(*(.spatz_binary))
+    } > instrram :text
+
+    _spatz_binary_end = .;
+    _spatz_binary_size = _spatz_binary_end - _spatz_binary_start;
+
+    /* PULP embedded binary - inlined from header file */
+    /* Positioned right after Spatz binary in instrram */
+
+    . = ALIGN(4);
+    _pulp_binary_start = .;
+
+    .pulp_binary : {
+        KEEP(*(.pulp_binary))
+    } > instrram :text
+
+    _pulp_binary_end = .;
+    _pulp_binary_size = _pulp_binary_end - _pulp_binary_start;
+
+    /*--------------------------------------------------------------------*/
+    /* Global constructor/destructor segment                              */
+    /*--------------------------------------------------------------------*/
+
+    .preinit_array     :
+    {
+      PROVIDE_HIDDEN (__preinit_array_start = .);
+      KEEP (*(.preinit_array))
+      PROVIDE_HIDDEN (__preinit_array_end = .);
+    } > dataram :data
+
+    .init_array     :
+    {
+      PROVIDE_HIDDEN (__init_array_start = .);
+      KEEP (*(SORT(.init_array.*)))
+      KEEP (*(.init_array ))
+      PROVIDE_HIDDEN (__init_array_end = .);
+    } > dataram :data
+
+    .fini_array     :
+    {
+      PROVIDE_HIDDEN (__fini_array_start = .);
+      KEEP (*(SORT(.fini_array.*)))
+      KEEP (*(.fini_array ))
+      PROVIDE_HIDDEN (__fini_array_end = .);
+    } > dataram :data
+
+    .data : {
+        . = ALIGN(4);
+        sdata  =  .;
+        _sdata  =  .;
+        *(.data);
+        *(.data.*)
+        edata  =  .;
+        _edata  =  .;
+    } > dataram :data
+
+    .rodata : {
+        . = ALIGN(4);
+        *(.rodata);
+        *(.rodata.*)
+    } > dataram :data
+
+    .shbss :
+    {
+        . = ALIGN(4);
+        *(.shbss)
+    } > dataram :data
+
+    .bss :
+    {
+        . = ALIGN(4);
+        _bss_start = .;
+        *(.bss)
+        *(.bss.*)
+        *(.sbss)
+        *(.sbss.*)
+        *(COMMON)
+        _bss_end = .;
+    } > dataram :data
+
+    /* ensure there is enough room for stack */
+    .stack (NOLOAD): {
+        . = ALIGN(4);
+        . = . + _min_stack ;
+        . = ALIGN(4);
+        stack = . ;
+        _stack = . ;
+    } > stack :NONE
+
+}
