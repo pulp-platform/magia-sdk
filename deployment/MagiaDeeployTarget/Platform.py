@@ -111,6 +111,7 @@ class MagiaVariableBuffer(VariableBuffer):
             "name": self.name,
             "size": int(np.prod(self.shape)),
             "_memoryLevel": getattr(self, "_memoryLevel", None),
+            "is_io": bool(getattr(self, "is_input", False) or getattr(self, "is_output", False)),
         }
         return buffRepr
 
@@ -127,6 +128,7 @@ class MagiaTransientBuffer(TransientBuffer):
             "name": self.name,
             "size": self.size,
             "_memoryLevel": getattr(self, "_memoryLevel", None),
+            "is_io": False,
         }
         return buffRepr
 
