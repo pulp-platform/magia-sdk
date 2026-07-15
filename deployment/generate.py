@@ -55,7 +55,7 @@ def generate_array_size(array: NDArray, name: Optional[str] = None) -> str:
     _str = f"#define {name}_NDIM {array.ndim}\n"
     for i, dim in enumerate(array.shape):
         _str += f"#define {name}_DIM{i} {dim}\n"
-    _str += f"#define {name}_SIZE {np.prod(array.shape)}\n"
+    _str += f"#define {name}_SIZE {int(np.prod(array.shape))}\n"
     _str += f"#define {name}_TYPE {array.dtype}_t\n"
     return _str
 
