@@ -20,8 +20,8 @@ __DYNAMIC  =  0;
 
 MEMORY
 {
-    instrram    : ORIGIN = 0xcc000000, LENGTH = 0x8000
-    dataram     : ORIGIN = 0xcc010000, LENGTH = 0xF00000    /* TODOs: restore ORIGIN addr to 0xcc100000 when RTL will be aligned */
+    instrram    : ORIGIN = 0xcc000000, LENGTH = 0x20000
+    dataram     : ORIGIN = 0xcc020000, LENGTH = 0xF00000    /* TODOs: restore ORIGIN addr to 0xcc100000 when RTL will be aligned */
     stack       : ORIGIN = 0x00010000, LENGTH = 0xC000
 }
 
@@ -135,7 +135,7 @@ SECTIONS
         _bss_end = .;
     } > dataram
 
-    /* .l2_heap : 
+    /* .l2_heap :
     {
         . = ALIGN(4);
         sl2_heap  =  .;
