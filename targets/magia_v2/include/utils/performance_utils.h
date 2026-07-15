@@ -160,36 +160,33 @@ static inline void stnl_r()
     asm volatile("addi x0, x0, 0x5EE" ::);
 }
 
-// LEGACY PROFILING UTILITIES //
-// /**
-//  * @brief Starts all performance counters
-//  */
-// static inline void perf_start(void) {
-//     // enable all counters
-//     asm volatile("csrw 0x7E0, %0" :: "r"(0x1));  // Enable PCCR[0]
-//     asm volatile("csrw 0x7E1, %0" :: "r"(0x1));  // Enable counting, , no saturation
-// }
+/**
+ * @brief Starts all performance counters
+ */
+static inline void perf_start(void)
+{
+    // GVSoC: mcycle count unconditionally; PULP PCER/PCMR (0x7E0/0x7E1) are unmodeled, so do not
+    // touch them here.
+    asm volatile("csrw 0xB00, %0" : : "r"(0)); // mcycle
+}
 
-// /**
-//  * @brief Stops all performance counters
-//  */
-// static inline void perf_stop(void) {
-//     asm volatile("csrw 0x320, %0" : : "r"(0xffffffff));
-// }
+/**
+ * @brief Stops all performance counters
+ */
+static inline void perf_stop(void)
+{
+    asm volatile("csrw 0x320, %0" : : "r"(0xffffffff)); // mcountinhibit: stop standard counters
+}
 
-// /**
-//  * @brief Resets all performance counters to 0 without stopping them
-//  */
-// static inline void perf_reset(void) {
-//     asm volatile("csrw 0xB00, %0" : : "r"(0));
-// }
-// /**
-//  * @brief Returns the n. instructions of the performance counter
-//  */
-// static inline unsigned int perf_get_instr(){
-//     unsigned int value = 0;
-//     asm volatile ("csrr %0, 0xB02" : "=r" (value));
-//     return value;
-// }
+/**
+ * @brief Resets all performance counters to 0 without stopping them
+ */
+static inline void perf_reset(void)
+{
+    asm volatile("csrw 0xB00, %0" : : "r"(0));
+}
+
+/* Accumulate elapsed cycles since t0 into acc. */
+#define PERF_DELTA(acc, t0) ((acc) += perf_get_cycles() - (t0))
 
 #endif
