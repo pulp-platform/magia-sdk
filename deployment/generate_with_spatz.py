@@ -100,6 +100,31 @@ def generate_cmakelist_with_spatz(test: str, operators: list, format: str, arch:
     return text
 
 
+def generate_task_bin_shims(operators: list, test: str, format: str, arch: str, dst_inc_dir: Path) -> None:
+    """Each operator host source hardcodes `#include "<op>_<fmt>_<arch>_task_bin.h"`,
+    but add_spatz_task emits a single combined header `<test>_task_bin.h`. Drop a
+    shim per operator that forwards to the combined header, so the existing kernels
+    are reused untouched. Exactly one shim defines the embedded binary array; the
+    others opt out via SPATZ_BINARY_NO_DEFINE to avoid multiple-definition."""
+    combined = f"{test}_task_bin.h"
+    array_defined = False
+    for op in operators:
+        shim = f"{op}_{format}_{arch}_task_bin.h"
+        if shim == combined:
+            # Single-operator build: the host includes the combined header
+            # directly and defines the array itself. No shim needed.
+            array_defined = True
+            continue
+        if not array_defined:
+            content = f'#include "{combined}"\n'
+            array_defined = True
+        else:
+            content = ('#define SPATZ_BINARY_NO_DEFINE\n'
+                       f'#include "{combined}"\n'
+                       '#undef SPATZ_BINARY_NO_DEFINE\n')
+        with open(dst_inc_dir / shim, "w") as f:
+            f.write(content)
+
 def main(test) -> None:
 
     print(f"test: {test}")
@@ -208,6 +233,9 @@ def main(test) -> None:
     cmakelist = generate_cmakelist_with_spatz(test, operators, format, arch)
     with open(cmakelists_path, "w") as f:
         f.write(cmakelist)
+
+    # per-operator shim headers forwarding to the single combined task-bin header
+    generate_task_bin_shims(operators, test, format, arch, dst_inc_dir)
 
 if __name__ == "__main__":
 

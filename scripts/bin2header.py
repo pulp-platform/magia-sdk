@@ -36,7 +36,11 @@ def generate_header(binary_path, output_path, array_name, section_name, address)
         f.write(f"#include <stdint.h>\n\n")
         
         # Binary array with section attribute
+        # Guarded so a network build can embed the array in a single translation
+        # unit while every other unit that includes this header only gets the
+        # task/entry macros (avoids multiple-definition of the array symbol).
         f.write(f"/* Binary array in {section_name} section (target: {address}) */\n")
+        f.write("#ifndef SPATZ_BINARY_NO_DEFINE\n")
         f.write(f"const uint32_t {array_name}[] ")
         f.write(f"__attribute__((section(\"{section_name}\"), aligned(4), used)) = {{\n")
         
@@ -46,7 +50,8 @@ def generate_header(binary_path, output_path, array_name, section_name, address)
             f.write("    " + ", ".join(line))
             f.write(",\n" if i + 8 < len(words) else "\n")
         
-        f.write("};\n\n")
+        f.write("};\n")
+        f.write("#endif /* SPATZ_BINARY_NO_DEFINE */\n\n")
         f.write(f"#endif /* {guard} */\n")
     
     print(f"Generated: {output_path} ({len(data)} bytes = {len(words)} words)")
