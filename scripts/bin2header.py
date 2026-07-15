@@ -5,6 +5,7 @@ Generates a header with the binary as uint32_t array in custom linker section.
 """
 
 import argparse
+import re
 
 def bytes_to_words(data):
     """Convert bytes to uint32_t words (little-endian)."""
@@ -25,7 +26,9 @@ def generate_header(binary_path, output_path, array_name, section_name, address)
     
     # Convert to words
     words = bytes_to_words(data)
-    guard = f"__{array_name.upper()}_H__"
+    # Sanitize into a valid C identifier (e.g. 'tiny-vit' -> 'tiny_vit')
+    c_name = re.sub(r'[^0-9A-Za-z_]', '_', array_name)
+    guard = f"__{c_name.upper()}_H__"
     
     # Write header file
     with open(output_path, 'w') as f:
@@ -41,7 +44,7 @@ def generate_header(binary_path, output_path, array_name, section_name, address)
         # task/entry macros (avoids multiple-definition of the array symbol).
         f.write(f"/* Binary array in {section_name} section (target: {address}) */\n")
         f.write("#ifndef SPATZ_BINARY_NO_DEFINE\n")
-        f.write(f"const uint32_t {array_name}[] ")
+        f.write(f"const uint32_t {c_name}[] ")
         f.write(f"__attribute__((section(\"{section_name}\"), aligned(4), used)) = {{\n")
         
         # Write words (8 per line for readability)
