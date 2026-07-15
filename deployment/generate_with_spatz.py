@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 from pathlib import Path
 from argparse import ArgumentParser
@@ -22,8 +23,13 @@ from Deeploy.CommonExtensions import DataTypes
 def normalize_spatz_types(code: str) -> str:
     return code.replace("float16_t", "float16")
 
-def add_kernel_include(code: str, test: str) -> str:
-    return code.replace('#include <stdint.h>\n', f'#include <stdint.h>\n#include "{test}.h"\n', 1)
+def extract_operators(network_source: str, format: str, arch: str) -> list:
+    pattern = re.compile(rf"MAGIA_([a-z0-9]+)_{format}_{arch}\s*\(")
+    return sorted(set(pattern.findall(network_source)))
+
+def add_kernel_includes(code: str, operators: list, format: str, arch: str) -> str:
+    includes = "".join(f'#include "{op}_{format}_{arch}.h"\n' for op in operators)
+    return code.replace('#include <stdint.h>\n', f'#include <stdint.h>\n{includes}', 1)
 
 def split_test_header_definitions(header: str) -> tuple[str, str]:
     header_lines = []
@@ -43,26 +49,34 @@ def split_test_header_definitions(header: str) -> tuple[str, str]:
 
     return "\n".join(header_lines) + "\n", "\n".join(source_lines) + "\n"
 
-def generate_cmakelist_with_spatz(test: str, operand: str, format: str, arch: str) -> str:
+def generate_cmakelist_with_spatz(test: str, operators: list, format: str, arch: str) -> str:
+    kernels_root = "${CMAKE_CURRENT_SOURCE_DIR}/../../../kernels"
+    kernel_common_path = f"{kernels_root}/common"
+
+    def kernel_root(op):
+        return f"{kernels_root}/{op}/{format}/{arch}"
+
+    task_sources  = [f"{kernel_root(op)}/spatz_task/{op}_{format}_{arch}_task.c" for op in operators]
+    host_sources  = [f"{kernel_root(op)}/src/{op}_{format}_{arch}.c" for op in operators]
+    include_paths = [f"{kernel_root(op)}/include" for op in operators]
+    first_task    = f"{operators[0]}_{format}_{arch}_task"
+
     text = copyright_comment('#')
     text += "\n"
     text += f"set(TEST_NAME {test})\n"
     text += "\n"
 
-    kernel_root = f"${{CMAKE_CURRENT_SOURCE_DIR}}/../../../kernels/{operand}/{format}/{arch}"
-    kernel_task_path = f"{kernel_root}/spatz_task/{test}_task.c"
-    kernel_source_path = f"{kernel_root}/src/{test}.c"
-    kernel_include_path = f"{kernel_root}/include"
-    kernel_common_path = f"${{CMAKE_CURRENT_SOURCE_DIR}}/../../../kernels/common"
-
     text += "# Step 1: Compile the Spatz task and generate the C header\n"
     text += "add_spatz_task(\n"
-    text += f"    TEST_NAME ${{TEST_NAME}}\n"
-    text += f"    TASK_SOURCES {kernel_task_path}\n"
-    text += f"    FIRST_TASK_NAME {test}_task\n"
+    text += "    TEST_NAME ${TEST_NAME}\n"
+    text += "    TASK_SOURCES\n"
+    for src in task_sources:
+        text += f"        {src}\n"
+    text += f"    FIRST_TASK_NAME {first_task}\n"
     text += "    INCLUDE_DIRS\n"
     text += f"        {kernel_common_path}\n"
-    text += f"        {kernel_include_path}\n"
+    for inc in include_paths:
+        text += f"        {inc}\n"
     text += "        ${CMAKE_CURRENT_SOURCE_DIR}/include\n"
     text += ")\n\n"
 
@@ -70,14 +84,21 @@ def generate_cmakelist_with_spatz(test: str, operand: str, format: str, arch: st
     text += "add_cv32_executable_with_spatz(\n"
     text += "    TARGET_NAME ${TEST_NAME}\n"
     text += "    SPATZ_HEADER ${SPATZ_HEADER}\n"
-    text += f"    SOURCES {kernel_source_path} src/network.c src/main.c src/data.c\n"
+    text += "    SOURCES\n"
+    for src in host_sources:
+        text += f"        {src}\n"
+    text += "        src/network.c\n"
+    text += "        src/main.c\n"
+    text += "        src/data.c\n"
     text += "    INCLUDE_DIRS\n"
-    text += f"        {kernel_include_path}\n"
+    for inc in include_paths:
+        text += f"        {inc}\n"
     text += f"        {kernel_common_path}\n"
     text += "        ${CMAKE_CURRENT_SOURCE_DIR}/include\n"
     text += ")\n\n"
 
     return text
+
 
 def main(test) -> None:
 
@@ -143,26 +164,36 @@ def main(test) -> None:
         f.write(data_source)
     os.system(clang_cmd(data_header_path))
 
-    # header for network
-    network_header_path = dst_inc_dir / 'network.h'
-    logger.debug(f"generating {network_header_path}")
-    network_header = generate_network_header(deployer)
-    network_header = add_kernel_include(network_header, test)
-    network_header = allocator_patch(network_header, inputs, outputs)
-    network_header = normalize_spatz_types(network_header)
-    with open(network_header_path, "w") as f:
-        f.write(network_header)
-    os.system(clang_cmd(network_header_path))
-
-    # source for network
+    # source for network (generated first so we can discover which kernels it calls)
     network_source_path = dst_src_dir / 'network.c'
     logger.debug(f"generating {network_source_path}")
     network_source = generate_network_source(deployer)
     network_source = allocator_patch(network_source, inputs, outputs)
     network_source = normalize_spatz_types(network_source)
+
+    # discover the operators actually used and validate their kernels exist
+    operators = extract_operators(network_source, format, arch)
+    if not operators:
+        raise RuntimeError(f"No MAGIA_<op>_{format}_{arch}(...) calls found in the generated network.")
+    missing = [op for op in operators if not (Path("kernels") / op / format / arch).is_dir()]
+    if missing:
+        raise FileNotFoundError(f"Missing kernels for operators {missing} (looked in kernels/<op>/{format}/{arch}).")
+    logger.info(f"network operators ({len(operators)}): {operators}")
+
     with open(network_source_path, "w") as f:
         f.write(network_source)
     os.system(clang_cmd(network_source_path))
+
+    # header for network
+    network_header_path = dst_inc_dir / 'network.h'
+    logger.debug(f"generating {network_header_path}")
+    network_header = generate_network_header(deployer)
+    network_header = add_kernel_includes(network_header, operators, format, arch)
+    network_header = allocator_patch(network_header, inputs, outputs)
+    network_header = normalize_spatz_types(network_header)
+    with open(network_header_path, "w") as f:
+        f.write(network_header)
+    os.system(clang_cmd(network_header_path))
 
     # main
     deployment_root = Path(__file__).parent
@@ -171,10 +202,10 @@ def main(test) -> None:
     shutil.copyfile(main_src_path, main_dst_path)
     os.system(clang_cmd(main_dst_path))
 
-    # CMakeLilsts.txt
+    # CMakeLists.txt
     cmakelists_path = dst_dir / 'CMakeLists.txt'
     logger.debug(f"generating {cmakelists_path}")
-    cmakelist = generate_cmakelist_with_spatz(test, operand, format, arch)
+    cmakelist = generate_cmakelist_with_spatz(test, operators, format, arch)
     with open(cmakelists_path, "w") as f:
         f.write(cmakelist)
 
