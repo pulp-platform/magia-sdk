@@ -45,24 +45,29 @@
 #define PULP_START            (PULP_CTRL_BASE + 0x18)
 #define PULP_READY            (PULP_CTRL_BASE + 0x1C)
 
-static inline void pulp_set_binary(uint32_t addr) {
+static inline void pulp_set_binary(uint32_t addr)
+{
     mmio32(PULP_BINARY) = addr;
 }
 
-static inline void pulp_set_nb_cores_to_wait(uint32_t nb_cores) {
+static inline void pulp_set_nb_cores_to_wait(uint32_t nb_cores)
+{
     mmio32(PULP_NB_CORES_TO_WAIT) = nb_cores;
 }
 
-static inline void pulp_set_func(uint32_t addr) {
+static inline void pulp_set_func(uint32_t addr)
+{
     mmio32(PULP_TASKBIN) = addr;
 }
 
-static inline void pulp_pass_params(uint32_t params_ptr) {
+static inline void pulp_pass_params(uint32_t params_ptr)
+{
     mmio32(PULP_DATA) = params_ptr;
 }
 
 /* Write entry point, broadcast clock enable to ALL cores, poll until all booted. */
-static inline void pulp_init(uint32_t binary_start) {
+static inline void pulp_init(uint32_t binary_start)
+{
     pulp_set_binary(binary_start);
     mmio32(PULP_CLK_EN) = 1;
     while (mmio32(PULP_READY) == 0) {
@@ -72,15 +77,19 @@ static inline void pulp_init(uint32_t binary_start) {
 
 /* Set nb_cores_to_wait, dispatch task to cores selected by one-hot core_mask,
  * then poll until all selected cores have ack'd (PULP_START == 0). */
-static inline void pulp_run_task(uint32_t task_addr, uint32_t core_mask) {
+static inline void pulp_run_task(uint32_t task_addr, uint32_t core_mask)
+{
     pulp_set_nb_cores_to_wait(__builtin_popcount(core_mask));
     pulp_set_func(task_addr);
     mmio32(PULP_START) = core_mask;
-    while (mmio32(PULP_START) != 0);
+    while (mmio32(PULP_START) != 0)
+        ;
 }
 
 /* Pass context pointer and dispatch task in one call. */
-static inline void pulp_run_task_with_params(uint32_t task_addr, uint32_t params_ptr, uint32_t core_mask) {
+static inline void
+pulp_run_task_with_params(uint32_t task_addr, uint32_t params_ptr, uint32_t core_mask)
+{
     pulp_pass_params(params_ptr);
     pulp_run_task(task_addr, core_mask);
 }

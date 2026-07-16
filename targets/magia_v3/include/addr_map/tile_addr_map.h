@@ -24,117 +24,112 @@
 #ifndef _TILE_ADDR_MAP_INCLUDE_GUARD_
 #define _TILE_ADDR_MAP_INCLUDE_GUARD_
 
+#define NUM_L1_BANKS          (32)
+#define WORDS_BANK            (8192)
+#define BITS_WORD             (32)
+#define BITS_BYTE             (8)
 
-#define NUM_L1_BANKS (32)
-#define WORDS_BANK   (8192)
-#define BITS_WORD    (32)
-#define BITS_BYTE    (8)
+#define IDMA_BASE_AXI2OBI (IDMA_BASE)         // direction=0, L2 to L1
+#define IDMA_BASE_OBI2AXI (IDMA_BASE + 0x200) // direction=1, L1 to L2
 
 
-#define REDMULE_BASE   (0x00000100)
-#define REDMULE_END    (0x000001FF)
-#define IDMA_BASE      (0x00000200)
-#define IDMA_END       (0x000005FF)
-#define FSYNC_BASE     (0x00000600)
-#define FSYNC_END      (0x000006FF)
-#define EU_BASE        (0x00000700)
-#define EU_END         (0x000016FF)
-#define SPATZ_CTRL_BASE (0x00001700)
-#define SPATZ_CTRL_END  (0x0000173C)
-#define PULP_CTRL_BASE (0x00001740)
-#define PULP_CTRL_END  (0x000017FF)
-
-// PULP cluster configuration
-#define PULP_CORE_COUNT       (8)
-#define PULP_STACK_SLICE_SIZE (0x800)     /* 2 KB per hart */
-#define PULP_STACK_MAX_CORES  (16)
-
-#if (PULP_CORE_COUNT < 1) || (PULP_CORE_COUNT > PULP_STACK_MAX_CORES)
-#error "PULP_CORE_COUNT must be between 1 and 16"
-#endif
-
-// PULP hart ID mapping (CV32 tiles occupy [0, NUM_HARTS), PULP starts after)
-#define NUM_PULP_CORES    (PULP_CORE_COUNT)
-#define PULP_HARTID_BASE  (2 * NUM_HARTS)
-#define TOTAL_PULP_HARTS  (NUM_HARTS * NUM_PULP_CORES)
+#define REDMULE_BASE          (0x00000100)
+#define REDMULE_END           (0x000001FF)
+#define IDMA_BASE             (0x00000200)
+#define IDMA_END              (0x000005FF)
+#define FSYNC_BASE            (0x00000600)
+#define FSYNC_END             (0x000006FF)
+#define EU_BASE               (0x00000700)
+#define EU_END                (0x000016FF)
+#define SPATZ_CTRL_BASE       (0x00001700)
+#define SPATZ_CTRL_END        (0x0000173F)
+#define PULP_CTRL_BASE        (0x00001740)
+#define PULP_CTRL_END         (0x000017FF)
 
 // PULP hart ID helpers
 #define GET_PULP_GLOBAL_ID(mhartid) ((mhartid) - PULP_HARTID_BASE)
 #define GET_PULP_LOCAL_ID(mhartid)  (GET_PULP_GLOBAL_ID(mhartid) % NUM_PULP_CORES)
 #define GET_PULP_TILE_ID(mhartid)   (GET_PULP_GLOBAL_ID(mhartid) / NUM_PULP_CORES)
-#define RESERVED_START (0x00001800)
-#define RESERVED_END   (0x0000FFFF)
-#define STACK_START    (0x00010000)
-#define STACK_END      (0x0001FFFF)
-#define L1_BASE        (0x00020000)
-#define L1_SIZE        (0x000DFFFF)
-#define L1_TILE_OFFSET (0x00100000)
-#define L2_BASE        (0xCC000000)
-#define TEST_END_ADDR  (0xCCFF0000)
-#define PRINT_ADDR     (0xFFFF0004)
-#define MHARTID_OFFSET (0x00100000)
+#define RESERVED_START              (0x00001800)
+#define RESERVED_END                (0x0000FFFF)
+#define STACK_START                 (0x00010000)
+#define STACK_END                   (0x0001FFFF)
+#define L1_BASE                     (0x00020000)
+#define L1_SIZE                     (0x000DFFFF)
+#define L1_TILE_OFFSET              (0x00100000)
+#define L2_BASE                     (0xCC000000)
+#define TEST_END_ADDR               (0xCCFF0000)
+#define PRINT_ADDR                  (0xFFFF0004)
+#define MHARTID_OFFSET              (0x00100000)
+#include "tile_config.h"
 
-#define IDMA_BASE_AXI2OBI (IDMA_BASE)           // direction=0, L2 to L1
-#define IDMA_BASE_OBI2AXI (IDMA_BASE + 0x200)   // direction=1, L1 to L2
+// PULP cluster configuration
+#define PULP_STACK_SLICE_SIZE (0x800) /* 2 KB per hart */
+#define PULP_STACK_MAX_CORES  (16)
 
-#define MESH_X_TILES 1
-#define MESH_Y_TILES 1
-#define NUM_HARTS    (MESH_X_TILES*MESH_Y_TILES)
-#define MAX_SYNC_LVL 0
-#define MESH_2_POWER 0
+// PULP hart ID mapping (CV32 tiles occupy [0, NUM_HARTS), PULP starts after)
+#define NUM_PULP_CORES              (PULP_CORE_COUNT)
+#define PULP_HARTID_BASE            (2 * NUM_HARTS)
+#define TOTAL_PULP_HARTS            (NUM_HARTS * NUM_PULP_CORES)
 
-#define STR_OFFSET  (0x00000000)
-#define STR_BASE    (RESERVED_START + STR_OFFSET)
-#define SYNC_OFFSET (0x0000F000)
-#define SYNC_BASE   (RESERVED_START + SYNC_OFFSET)
-#define SYNC_EN     (SYNC_BASE + 0x4)
+#if (PULP_CORE_COUNT < 1) || (PULP_CORE_COUNT > PULP_STACK_MAX_CORES)
+#error "PULP_CORE_COUNT must be between 1 and 16"
+#endif
 
-#define GET_X_ID(mhartid)  ((mhartid)%MESH_Y_TILES)
-#define GET_Y_ID(mhartid)  ((mhartid)/MESH_Y_TILES)
-#define GET_ID(y_id, x_id) (((y_id)*MESH_Y_TILES)+(x_id))
+#define NUM_HARTS                         (MESH_X_TILES * MESH_Y_TILES)
+
+#define STR_OFFSET                        (0x00000000)
+#define STR_BASE                          (RESERVED_START + STR_OFFSET)
+#define SYNC_OFFSET                       (0x0000F000)
+#define SYNC_BASE                         (RESERVED_START + SYNC_OFFSET)
+#define SYNC_EN                           (SYNC_BASE + 0x4)
+
+#define GET_X_ID(mhartid)                 ((mhartid) % MESH_Y_TILES)
+#define GET_Y_ID(mhartid)                 ((mhartid) / MESH_Y_TILES)
+#define GET_ID(y_id, x_id)                (((y_id) * MESH_Y_TILES) + (x_id))
 
 //=============================================================================
 // Event Unit Register Map - Base addresses and offsets
 //=============================================================================
 
 // Core Event Unit registers - Main control and status
-#define EU_CORE_MASK                        (EU_BASE + 0x00)          // R/W: Event mask (enables event lines)
-#define EU_CORE_MASK_AND                    (EU_BASE + 0x04)          // W: Clear bits in mask
-#define EU_CORE_MASK_OR                     (EU_BASE + 0x08)          // W: Set bits in mask
-#define EU_CORE_IRQ_MASK                    (EU_BASE + 0x0C)          // R/W: IRQ event mask
-#define EU_CORE_IRQ_MASK_AND                (EU_BASE + 0x10)          // W: Clear IRQ mask bits
-#define EU_CORE_IRQ_MASK_OR                 (EU_BASE + 0x14)          // W: Set IRQ mask bits
-#define EU_CORE_STATUS                      (EU_BASE + 0x18)          // R: Core clock status
-#define EU_CORE_BUFFER                      (EU_BASE + 0x1C)          // R: Event buffer
-#define EU_CORE_BUFFER_MASKED               (EU_BASE + 0x20)          // R: Buffer with mask applied
-#define EU_CORE_BUFFER_IRQ_MASKED           (EU_BASE + 0x24)          // R: Buffer with IRQ mask
-#define EU_CORE_BUFFER_CLEAR                (EU_BASE + 0x28)          // W: Clear received events
-#define EU_CORE_SW_EVENTS_MASK              (EU_BASE + 0x2C)          // R/W: SW event target mask
-#define EU_CORE_SW_EVENTS_MASK_AND          (EU_BASE + 0x30)          // W: Clear SW target bits
-#define EU_CORE_SW_EVENTS_MASK_OR           (EU_BASE + 0x34)          // W: Set SW target bits
+#define EU_CORE_MASK                      (EU_BASE + 0x00) // R/W: Event mask (enables event lines)
+#define EU_CORE_MASK_AND                  (EU_BASE + 0x04) // W: Clear bits in mask
+#define EU_CORE_MASK_OR                   (EU_BASE + 0x08) // W: Set bits in mask
+#define EU_CORE_IRQ_MASK                  (EU_BASE + 0x0C) // R/W: IRQ event mask
+#define EU_CORE_IRQ_MASK_AND              (EU_BASE + 0x10) // W: Clear IRQ mask bits
+#define EU_CORE_IRQ_MASK_OR               (EU_BASE + 0x14) // W: Set IRQ mask bits
+#define EU_CORE_STATUS                    (EU_BASE + 0x18) // R: Core clock status
+#define EU_CORE_BUFFER                    (EU_BASE + 0x1C) // R: Event buffer
+#define EU_CORE_BUFFER_MASKED             (EU_BASE + 0x20) // R: Buffer with mask applied
+#define EU_CORE_BUFFER_IRQ_MASKED         (EU_BASE + 0x24) // R: Buffer with IRQ mask
+#define EU_CORE_BUFFER_CLEAR              (EU_BASE + 0x28) // W: Clear received events
+#define EU_CORE_SW_EVENTS_MASK            (EU_BASE + 0x2C) // R/W: SW event target mask
+#define EU_CORE_SW_EVENTS_MASK_AND        (EU_BASE + 0x30) // W: Clear SW target bits
+#define EU_CORE_SW_EVENTS_MASK_OR         (EU_BASE + 0x34) // W: Set SW target bits
 
 // Core Event Unit wait registers - Sleep functionality
-#define EU_CORE_EVENT_WAIT                  (EU_BASE + 0x38)          // R: Sleep until event
-#define EU_CORE_EVENT_WAIT_CLEAR            (EU_BASE + 0x3C)          // R: Sleep + clear buffer
+#define EU_CORE_EVENT_WAIT                (EU_BASE + 0x38) // R: Sleep until event
+#define EU_CORE_EVENT_WAIT_CLEAR          (EU_BASE + 0x3C) // R: Sleep + clear buffer
 
 // Hardware barrier registers (0x20 * barr_id offset)
-#define HW_BARR_TRIGGER_MASK                (EU_BASE + 0x400)         // R/W: Barrier trigger mask
-#define HW_BARR_STATUS                      (EU_BASE + 0x404)         // R: Barrier status
-#define HW_BARR_TARGET_MASK                 (EU_BASE + 0x40C)         // R/W: Barrier target mask
-#define HW_BARR_TRIGGER                     (EU_BASE + 0x410)         // W: Manual barrier trigger
-#define HW_BARR_TRIGGER_SELF                (EU_BASE + 0x414)         // R: Automatic trigger
-#define HW_BARR_TRIGGER_WAIT                (EU_BASE + 0x418)         // R: Trigger + sleep
-#define HW_BARR_TRIGGER_WAIT_CLEAR          (EU_BASE + 0x41C)         // R: Trigger + sleep + clear
+#define HW_BARR_TRIGGER_MASK              (EU_BASE + 0x400) // R/W: Barrier trigger mask
+#define HW_BARR_STATUS                    (EU_BASE + 0x404) // R: Barrier status
+#define HW_BARR_TARGET_MASK               (EU_BASE + 0x40C) // R/W: Barrier target mask
+#define HW_BARR_TRIGGER                   (EU_BASE + 0x410) // W: Manual barrier trigger
+#define HW_BARR_TRIGGER_SELF              (EU_BASE + 0x414) // R: Automatic trigger
+#define HW_BARR_TRIGGER_WAIT              (EU_BASE + 0x418) // R: Trigger + sleep
+#define HW_BARR_TRIGGER_WAIT_CLEAR        (EU_BASE + 0x41C) // R: Trigger + sleep + clear
 
 // Software event trigger registers (0x04 * sw_event_id offset)
-#define EU_CORE_TRIGG_SW_EVENT              (EU_BASE + 0x600)         // W: Generate SW event
-#define EU_CORE_TRIGG_SW_EVENT_WAIT         (EU_BASE + 0x640)         // R: Generate event + sleep
-#define EU_CORE_TRIGG_SW_EVENT_WAIT_CLEAR   (EU_BASE + 0x680)         // R: Generate event + sleep + clear
+#define EU_CORE_TRIGG_SW_EVENT            (EU_BASE + 0x600) // W: Generate SW event
+#define EU_CORE_TRIGG_SW_EVENT_WAIT       (EU_BASE + 0x640) // R: Generate event + sleep
+#define EU_CORE_TRIGG_SW_EVENT_WAIT_CLEAR (EU_BASE + 0x680) // R: Generate event + sleep + clear
 
 // SoC event FIFO register
-#define EU_CORE_CURRENT_EVENT               (EU_BASE + 0x700)         // R: SoC event FIFO
+#define EU_CORE_CURRENT_EVENT             (EU_BASE + 0x700) // R: SoC event FIFO
 
 // Hardware mutex registers (0x04 * mutex_id offset)
-#define EU_CORE_HW_MUTEX                    (EU_BASE + 0x0C0)         // R/W: HW mutex management
+#define EU_CORE_HW_MUTEX                  (EU_BASE + 0x0C0) // R/W: HW mutex management
 
 #endif // _TILE_ADDR_MAP_INCLUDE_GUARD_

@@ -16,9 +16,9 @@ int main(void)
 
     int test = NULL;
 
-    // volatile float16alt a = -12.0456f;
-    // volatile float16alt b = 4.0f;
-    // volatile float16alt c = (a + b);
+    // volatile float a = -12.0456f;
+    // volatile float b = 4.0f;
+    // volatile float c = (a + b);
     int test_integer = -123;
 
     // uint32_t *v = (uint32_t *) &c;

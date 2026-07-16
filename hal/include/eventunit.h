@@ -41,7 +41,7 @@ typedef struct {
 extern void eu_init(eu_controller_t *ctrl);
 
 //=============================================================================
-// PULP-cluster-specific Event Functions  
+// PULP-cluster-specific Event Functions
 //=============================================================================
 
 /**

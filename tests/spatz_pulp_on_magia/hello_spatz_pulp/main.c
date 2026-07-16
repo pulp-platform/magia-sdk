@@ -1,10 +1,11 @@
 #include "tile.h"
 #include "eventunit.h"
 
-#include "hello_spatz_task_bin.h"  /* Spatz: SPATZ_BINARY_START, HELLO_TASK */
+#include "hello_spatz_task_bin.h" /* Spatz: SPATZ_BINARY_START, HELLO_TASK */
 #include "hello_pulp_task_bin.h"  /* PULP:  PULP_BINARY_START              */
 
-int main(void) {
+int main(void)
+{
     eu_config_t eu_cfg;
     eu_controller_t eu_ctrl;
     int errors = 0;

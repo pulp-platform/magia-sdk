@@ -59,8 +59,10 @@ elseif (TARGET_PLATFORM STREQUAL "magia_v2")
     set(ISA rv32imcxgap9)
 elseif (TARGET_PLATFORM STREQUAL "magia_v3")
     set(ISA rv32imcxgap9)
-elseif (TARGET_PLATFORM STREQUAL "pulp")
-    set(ISA rv32imcxgap9)
+endif ()
+
+if (COMPILER STREQUAL "GCC_MULTILIB")
+    set(ISA rv32imc_xcvalu_xcvbi_xcvbitmanip_xcvhwlp_xcvmac_xcvmem_xcvsimd_xcvelw_zfinx_zhinxmin)
 endif ()
 
 message(STATUS "[MAGIA-SDK] ABI                     : ${ABI}")

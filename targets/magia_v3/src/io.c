@@ -17,7 +17,7 @@
  *
  * Authors:
  * Alberto Dequino <alberto.dequino@unibo.it>
- * 
+ *
  * IO
  */
 
@@ -29,49 +29,44 @@ void *memset(void *m, int c, size_t n)
 {
     char *s = (char *)m;
     while (n--)
-        *s++ = (char) c;
+        *s++ = (char)c;
 
     return m;
 }
 
 char *strchr(const char *s, int c)
 {
-    char tmp = (char) c;
+    char tmp = (char)c;
 
     while ((*s != tmp) && (*s != '\0'))
         s++;
 
-    return (*s == tmp) ? (char *) s : NULL;
+    return (*s == tmp) ? (char *)s : NULL;
 }
 
 void *memcpy(void *dst0, const void *src0, size_t len0)
 {
     void *save = dst0;
 
-    char src_aligned = (((size_t) src0) & 3) == 0;
-    char dst_aligned = (((size_t) dst0) & 3) == 0;
+    char src_aligned     = (((size_t)src0) & 3) == 0;
+    char dst_aligned     = (((size_t)dst0) & 3) == 0;
     char copy_full_words = (len0 & 3) == 0;
 
-    if (src_aligned && dst_aligned && copy_full_words)
-    {
+    if (src_aligned && dst_aligned && copy_full_words) {
         // all accesses are aligned => can copy full words
-        uint32_t *dst = (uint32_t *) dst0;
-        uint32_t *src = (uint32_t *) src0;
+        uint32_t *dst = (uint32_t *)dst0;
+        uint32_t *src = (uint32_t *)src0;
 
-        while (len0)
-        {
+        while (len0) {
             *dst++ = *src++;
             len0 -= 4;
         }
-    }
-    else
-    {
+    } else {
         // copy bytewise
-        char *dst = (char *) dst0;
-        char *src = (char *) src0;
+        char *dst = (char *)dst0;
+        char *src = (char *)src0;
 
-        while (len0)
-        {
+        while (len0) {
             *dst++ = *src++;
             len0--;
         }
@@ -82,27 +77,22 @@ void *memcpy(void *dst0, const void *src0, size_t len0)
 
 void *memmove(void *d, const void *s, size_t n)
 {
-    char *dest = d;
-    const char *src  = s;
+    char *dest      = d;
+    const char *src = s;
 
-    if ((size_t) (dest - src) < n)
-    {
+    if ((size_t)(dest - src) < n) {
         /*
          * The <src> buffer overlaps with the start of the <dest> buffer.
          * Copy backwards to prevent the premature corruption of <src>.
          */
 
-        while (n > 0)
-        {
+        while (n > 0) {
             n--;
             dest[n] = src[n];
         }
-    }
-    else
-    {
+    } else {
         /* It is safe to perform a forward-copy */
-        while (n > 0)
-        {
+        while (n > 0) {
             *dest = *src;
             dest++;
             src++;

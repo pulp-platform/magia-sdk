@@ -11,9 +11,13 @@ set(PULP_LINK_SCRIPT "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/pulp/src/pu
 # PULP cluster configuration
 set(PULP_CORE_COUNT 8 CACHE STRING "Number of PULP cores per cluster")
 
-# ISA/ABI — same toolchain as CV32 (GCC_PULP)
-set(PULP_MARCH ${CV32_MARCH})
-set(PULP_MABI  ${CV32_MABI})
+# ISA/ABI — same toolchain as CV32 Controller
+set(PULP_ARCH rv CACHE STRING "PULP32 ARCH prefix")
+set(PULP_XLEN 32 CACHE STRING "PULP32 XLEN")
+set(PULP_XTEN imc_xcvalu_xcvbi_xcvbitmanip_xcvhwlp_xcvmac_xcvmem_xcvsimd_xcvelw_zfinx_zhinxmin CACHE STRING "PULP32 ISA extensions")
+set(PULP_ABI ilp CACHE STRING "PULP32 ABI prefix")
+set(PULP_MARCH "-march=${PULP_ARCH}${PULP_XLEN}${PULP_XTEN}")
+set(PULP_MABI "-mabi=${PULP_ABI}${PULP_XLEN}")
 
 # Compiler flags for PULP task binary (position-independent, bare-metal)
 set(PULP_COMPILE_FLAGS
@@ -40,6 +44,7 @@ set(PULP_COMPILE_FLAGS
 set(PULP_CFLAGS_DEFINES
     "-DPULP_CORE_COUNT=${PULP_CORE_COUNT}"
     "-DPULP_TARGET"
+    "-save-temps"
 )
 
 set(PULP_LINK_FLAGS

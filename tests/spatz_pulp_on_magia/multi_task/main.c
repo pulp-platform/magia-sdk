@@ -13,54 +13,56 @@
 #include "multi_pulp_task_bin.h"
 
 /* ---- L1 memory layout -------------------------------------------------- */
-#define SPATZ_ADD_PARAMS_ADDR  (L1_BASE + 0x000)   /* spatz_add_params_t  */
-#define SPATZ_RELU_PARAMS_ADDR (L1_BASE + 0x020)   /* spatz_relu_params_t */
-#define A_ADDR                 (L1_BASE + 0x040)   /* fp16[8] add input A */
-#define B_ADDR                 (L1_BASE + 0x050)   /* fp16[8] add input B */
-#define C_ADDR                 (L1_BASE + 0x060)   /* fp16[8] add output  */
-#define X_ADDR                 (L1_BASE + 0x070)   /* fp16[8] relu input  */
-#define Y_ADDR                 (L1_BASE + 0x080)   /* fp16[8] relu output */
-#define PULP_PARAMS_ADDR       (L1_BASE + 0x100)   /* pulp_task_params_t  */
-#define IN_A_ADDR              (L1_BASE + 0x120)   /* int32_t[8]          */
-#define IN_B_ADDR              (L1_BASE + 0x140)   /* int32_t[8]          */
-#define OUT_ADDR               (L1_BASE + 0x160)   /* int32_t[8]          */
+#define SPATZ_ADD_PARAMS_ADDR  (L1_BASE + 0x000) /* spatz_add_params_t  */
+#define SPATZ_RELU_PARAMS_ADDR (L1_BASE + 0x020) /* spatz_relu_params_t */
+#define A_ADDR                 (L1_BASE + 0x040) /* fp16[8] add input A */
+#define B_ADDR                 (L1_BASE + 0x050) /* fp16[8] add input B */
+#define C_ADDR                 (L1_BASE + 0x060) /* fp16[8] add output  */
+#define X_ADDR                 (L1_BASE + 0x070) /* fp16[8] relu input  */
+#define Y_ADDR                 (L1_BASE + 0x080) /* fp16[8] relu output */
+#define PULP_PARAMS_ADDR       (L1_BASE + 0x100) /* pulp_task_params_t  */
+#define IN_A_ADDR              (L1_BASE + 0x120) /* int32_t[8]          */
+#define IN_B_ADDR              (L1_BASE + 0x140) /* int32_t[8]          */
+#define OUT_ADDR               (L1_BASE + 0x160) /* int32_t[8]          */
 
-#define VEC_LEN 8
+#define VEC_LEN                8
 
 /* fp16 IEEE 754 half-precision bit patterns */
-#define FP16_0_0   ((uint16_t)0x0000)  /*  0.0 */
-#define FP16_1_0   ((uint16_t)0x3C00)  /*  1.0 */
-#define FP16_2_0   ((uint16_t)0x4000)  /*  2.0 */
-#define FP16_3_0   ((uint16_t)0x4200)  /*  3.0 */
-#define FP16_4_0   ((uint16_t)0x4400)  /*  4.0 */
-#define FP16_5_0   ((uint16_t)0x4500)  /*  5.0 */
-#define FP16_6_0   ((uint16_t)0x4600)  /*  6.0 */
-#define FP16_7_0   ((uint16_t)0x4700)  /*  7.0 */
-#define FP16_8_0   ((uint16_t)0x4800)  /*  8.0 */
-#define FP16_9_0   ((uint16_t)0x4880)  /*  9.0 */
-#define FP16_N1_0  ((uint16_t)0xBC00)  /* -1.0 */
-#define FP16_N2_0  ((uint16_t)0xC000)  /* -2.0 */
-#define FP16_N3_0  ((uint16_t)0xC200)  /* -3.0 */
-#define FP16_N4_0  ((uint16_t)0xC400)  /* -4.0 */
+#define FP16_0_0               ((uint16_t)0x0000) /*  0.0 */
+#define FP16_1_0               ((uint16_t)0x3C00) /*  1.0 */
+#define FP16_2_0               ((uint16_t)0x4000) /*  2.0 */
+#define FP16_3_0               ((uint16_t)0x4200) /*  3.0 */
+#define FP16_4_0               ((uint16_t)0x4400) /*  4.0 */
+#define FP16_5_0               ((uint16_t)0x4500) /*  5.0 */
+#define FP16_6_0               ((uint16_t)0x4600) /*  6.0 */
+#define FP16_7_0               ((uint16_t)0x4700) /*  7.0 */
+#define FP16_8_0               ((uint16_t)0x4800) /*  8.0 */
+#define FP16_9_0               ((uint16_t)0x4880) /*  9.0 */
+#define FP16_N1_0              ((uint16_t)0xBC00) /* -1.0 */
+#define FP16_N2_0              ((uint16_t)0xC000) /* -2.0 */
+#define FP16_N3_0              ((uint16_t)0xC200) /* -3.0 */
+#define FP16_N4_0              ((uint16_t)0xC400) /* -4.0 */
 
-static inline void write_fp16(uint32_t addr, uint16_t bits) {
+static inline void write_fp16(uint32_t addr, uint16_t bits)
+{
     *(volatile uint16_t *)addr = bits;
 }
 
-static inline uint16_t read_fp16(uint32_t addr) {
+static inline uint16_t read_fp16(uint32_t addr)
+{
     return *(volatile uint16_t *)addr;
 }
 
 static void init_spatz_data(void)
 {
     /* A = [1, 2, 3, 4, 5, 6, 7, 8], B = [8, 7, 6, 5, 4, 3, 2, 1] → C = [9, ..., 9] */
-    static const uint16_t A[8] = {FP16_1_0, FP16_2_0, FP16_3_0, FP16_4_0,
-                                   FP16_5_0, FP16_6_0, FP16_7_0, FP16_8_0};
-    static const uint16_t B[8] = {FP16_8_0, FP16_7_0, FP16_6_0, FP16_5_0,
-                                   FP16_4_0, FP16_3_0, FP16_2_0, FP16_1_0};
+    static const uint16_t A[8] = {
+        FP16_1_0, FP16_2_0, FP16_3_0, FP16_4_0, FP16_5_0, FP16_6_0, FP16_7_0, FP16_8_0};
+    static const uint16_t B[8] = {
+        FP16_8_0, FP16_7_0, FP16_6_0, FP16_5_0, FP16_4_0, FP16_3_0, FP16_2_0, FP16_1_0};
     /* X = [-4, 2, -1, 3, 0, -2, 5, -3] → Y = [0, 2, 0, 3, 0, 0, 5, 0] */
-    static const uint16_t X[8] = {FP16_N4_0, FP16_2_0, FP16_N1_0, FP16_3_0,
-                                   FP16_0_0,  FP16_N2_0, FP16_5_0, FP16_N3_0};
+    static const uint16_t X[8] = {
+        FP16_N4_0, FP16_2_0, FP16_N1_0, FP16_3_0, FP16_0_0, FP16_N2_0, FP16_5_0, FP16_N3_0};
 
     for (int i = 0; i < VEC_LEN; i++) {
         write_fp16(A_ADDR + i * 2, A[i]);
@@ -71,15 +73,15 @@ static void init_spatz_data(void)
     }
 
     volatile spatz_add_params_t *add_p = (volatile spatz_add_params_t *)SPATZ_ADD_PARAMS_ADDR;
-    add_p->A   = A_ADDR;
-    add_p->B   = B_ADDR;
-    add_p->C   = C_ADDR;
-    add_p->len = VEC_LEN;
+    add_p->A                           = A_ADDR;
+    add_p->B                           = B_ADDR;
+    add_p->C                           = C_ADDR;
+    add_p->len                         = VEC_LEN;
 
     volatile spatz_relu_params_t *relu_p = (volatile spatz_relu_params_t *)SPATZ_RELU_PARAMS_ADDR;
-    relu_p->X   = X_ADDR;
-    relu_p->Y   = Y_ADDR;
-    relu_p->len = VEC_LEN;
+    relu_p->X                            = X_ADDR;
+    relu_p->Y                            = Y_ADDR;
+    relu_p->len                          = VEC_LEN;
 }
 
 static int check_spatz_add(void)
@@ -97,8 +99,8 @@ static int check_spatz_add(void)
 
 static int check_spatz_relu(void)
 {
-    static const uint16_t expected[8] = {FP16_0_0, FP16_2_0, FP16_0_0, FP16_3_0,
-                                          FP16_0_0, FP16_0_0, FP16_5_0, FP16_0_0};
+    static const uint16_t expected[8] = {
+        FP16_0_0, FP16_2_0, FP16_0_0, FP16_3_0, FP16_0_0, FP16_0_0, FP16_5_0, FP16_0_0};
     for (int i = 0; i < VEC_LEN; i++) {
         uint16_t got = read_fp16(Y_ADDR + i * 2);
         if (got != expected[i]) {
@@ -109,15 +111,15 @@ static int check_spatz_relu(void)
     return 0;
 }
 
-static void setup_pulp_params(uintptr_t in_a, uintptr_t in_b, uintptr_t out,
-                               uint32_t len, uint32_t scale)
+static void
+setup_pulp_params(uintptr_t in_a, uintptr_t in_b, uintptr_t out, uint32_t len, uint32_t scale)
 {
     volatile pulp_task_params_t *p = (volatile pulp_task_params_t *)PULP_PARAMS_ADDR;
-    p->in_a  = in_a;
-    p->in_b  = in_b;
-    p->out   = out;
-    p->len   = len;
-    p->scale = scale;
+    p->in_a                        = in_a;
+    p->in_b                        = in_b;
+    p->out                         = out;
+    p->len                         = len;
+    p->scale                       = scale;
 }
 
 int main(void)
@@ -179,9 +181,12 @@ int main(void)
     /* --- Task 1: vec_sum on cores 0+1 (mask=0x03) --------------------- */
     {
         static const int32_t a[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-        volatile int32_t *in_a = (volatile int32_t *)IN_A_ADDR;
-        volatile int32_t *out  = (volatile int32_t *)OUT_ADDR;
-        for (int i = 0; i < 8; i++) { in_a[i] = a[i]; out[i] = 0; }
+        volatile int32_t *in_a    = (volatile int32_t *)IN_A_ADDR;
+        volatile int32_t *out     = (volatile int32_t *)OUT_ADDR;
+        for (int i = 0; i < 8; i++) {
+            in_a[i] = a[i];
+            out[i]  = 0;
+        }
         setup_pulp_params(IN_A_ADDR, 0, OUT_ADDR, 8, 0);
 
         printf("[CV32] PULP task 1: vec_sum (cores 0+1)\n");
@@ -202,10 +207,14 @@ int main(void)
         /* dot([1,1,1,1,1,1,1,1], [1,2,3,4,5,6,7,8]) = 36 */
         static const int32_t a[8] = {1, 1, 1, 1, 1, 1, 1, 1};
         static const int32_t b[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-        volatile int32_t *in_a = (volatile int32_t *)IN_A_ADDR;
-        volatile int32_t *in_b = (volatile int32_t *)IN_B_ADDR;
-        volatile int32_t *out  = (volatile int32_t *)OUT_ADDR;
-        for (int i = 0; i < 8; i++) { in_a[i] = a[i]; in_b[i] = b[i]; out[i] = 0; }
+        volatile int32_t *in_a    = (volatile int32_t *)IN_A_ADDR;
+        volatile int32_t *in_b    = (volatile int32_t *)IN_B_ADDR;
+        volatile int32_t *out     = (volatile int32_t *)OUT_ADDR;
+        for (int i = 0; i < 8; i++) {
+            in_a[i] = a[i];
+            in_b[i] = b[i];
+            out[i]  = 0;
+        }
         setup_pulp_params(IN_A_ADDR, IN_B_ADDR, OUT_ADDR, 8, 0);
 
         printf("[CV32] PULP task 2: vec_dot (cores 2+3)\n");
@@ -225,9 +234,12 @@ int main(void)
     {
         /* [1..8] × 3 → out[0]=3, out[7]=24 */
         static const int32_t a[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-        volatile int32_t *in_a = (volatile int32_t *)IN_A_ADDR;
-        volatile int32_t *out  = (volatile int32_t *)OUT_ADDR;
-        for (int i = 0; i < 8; i++) { in_a[i] = a[i]; out[i] = 0; }
+        volatile int32_t *in_a    = (volatile int32_t *)IN_A_ADDR;
+        volatile int32_t *out     = (volatile int32_t *)OUT_ADDR;
+        for (int i = 0; i < 8; i++) {
+            in_a[i] = a[i];
+            out[i]  = 0;
+        }
         setup_pulp_params(IN_A_ADDR, 0, OUT_ADDR, 8, 3);
 
         printf("[CV32] PULP task 3: vec_scale (cores 4+5, scale=3)\n");
@@ -236,7 +248,8 @@ int main(void)
 
         if (out[0] != 3 || out[7] != 24) {
             printf("[CV32] SCALE FAIL: out[0]=%d (exp 3), out[7]=%d (exp 24)\n",
-                   (int)out[0], (int)out[7]);
+                   (int)out[0],
+                   (int)out[7]);
             errors++;
         } else {
             printf("[CV32] PULP SCALE OK\n");
@@ -247,9 +260,12 @@ int main(void)
     {
         /* absmax([-5,3,-1,4,-2,-7,6,-3]) = 7 */
         static const int32_t a[8] = {-5, 3, -1, 4, -2, -7, 6, -3};
-        volatile int32_t *in_a = (volatile int32_t *)IN_A_ADDR;
-        volatile int32_t *out  = (volatile int32_t *)OUT_ADDR;
-        for (int i = 0; i < 8; i++) { in_a[i] = a[i]; out[i] = 0; }
+        volatile int32_t *in_a    = (volatile int32_t *)IN_A_ADDR;
+        volatile int32_t *out     = (volatile int32_t *)OUT_ADDR;
+        for (int i = 0; i < 8; i++) {
+            in_a[i] = a[i];
+            out[i]  = 0;
+        }
         setup_pulp_params(IN_A_ADDR, 0, OUT_ADDR, 8, 0);
 
         printf("[CV32] PULP task 4: vec_absmax (cores 6+7)\n");
@@ -266,6 +282,8 @@ int main(void)
     }
 
     printf("[CV32] ===== %s (%d error%s) =====\n",
-           errors ? "FAILED" : "PASSED", errors, errors == 1 ? "" : "s");
+           errors ? "FAILED" : "PASSED",
+           errors,
+           errors == 1 ? "" : "s");
     return errors;
 }

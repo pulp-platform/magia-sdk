@@ -17,11 +17,13 @@
 #include "utils/idma_isa_utils.h"
 #include "utils/redmule_isa_utils.h"
 #include "utils/fsync_isa_utils.h"
-//#include "utils/attention_utils.h"
+// #include "utils/attention_utils.h"
 #include "utils/performance_utils.h"
-//#include "utils/amo_utils.h"
+// #include "utils/amo_utils.h"
 #include "utils/eu_isa_utils.h"
 #include "utils/magia_spatz_utils.h"
 #include "utils/magia_pulp_utils.h"
+#include "utils/alloc.h"
+#include "utils/typedefs.h"
 
 #endif //_TILE_INCLUDE_GUARD_

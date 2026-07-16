@@ -32,17 +32,18 @@ void eu32_init(eu_controller_t *ctrl)
 }
 
 //=============================================================================
-// PULP-specific Event Functions  
+// PULP-specific Event Functions
 //=============================================================================
 
 /**
  * @brief Initialize Event Unit for PULP cluster events
  * @param enable_irq If true, enable IRQ for PULP cluster completion
  */
-void eu32_pulp_init(eu_controller_t *ctrl, uint32_t enable_irq) {
+void eu32_pulp_init(eu_controller_t *ctrl, uint32_t enable_irq)
+{
     // Enable PULP cluster events
     eu_enable_events(EU_PULP_EVT_MASK);
-    
+
     // Optionally enable IRQ for PULP cluster completion
     if (enable_irq) {
         eu_enable_irq(EU_PULP_EVT_MASK);
@@ -54,11 +55,12 @@ void eu32_pulp_init(eu_controller_t *ctrl, uint32_t enable_irq) {
  * @param mode Wait mode (polling, WFE, etc.)
  * @return Non-zero if Pulp cluster completed, 0 if timeout/error
  */
-uint32_t eu32_pulp_wait(eu_controller_t *ctrl, eu_wait_mode_t mode) {
+uint32_t eu32_pulp_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
+{
     uint32_t retval = eu_wait_events(EU_PULP_EVT_MASK, mode, 1000000);
-    #if PROFILE_CMI == 1
+#if PROFILE_CMI == 1
     stnl_cmi_f();
-    #endif
+#endif
     return retval;
 }
 
