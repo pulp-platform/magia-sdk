@@ -9,6 +9,7 @@
 #include "reducemean_fp16_spatz_task_bin.h"
 
 #define HID get_hartid()
+#define KERNEL_NAME "reducemean_fp16_spatz"
 
 static int alloc_l1(void **params, uint32_t outer_dim, uint32_t reduce_dim, uint32_t inner_dim)
 {
@@ -110,24 +111,24 @@ void MAGIA_reducemean_fp16_spatz(const float16 *X, float16 *Y, uint32_t outer_di
 
     ret = alloc_l1(&params, outer_dim, reduce_dim, inner_dim);
     if (ret != 0) {
-        printf("[CV32 (%d)] L1 allocation failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = init_input_params(params, X);
     if (ret != 0) {
-        printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = offload_spatz_task(params);
     if (ret != 0) {
-        printf("[CV32 (%d)] Spatz task offloading failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = store_result(params, Y);
     if (ret != 0) {
-        printf("[CV32 (%d)] Result write back failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }
 }

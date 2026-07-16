@@ -9,6 +9,7 @@
 #include "col2im_fp16_spatz_task_bin.h"
 
 #define HID get_hartid()
+#define KERNEL_NAME "col2im_fp16_spatz"
 
 static int allocate_l1(void **params, uint32_t batch, uint32_t channels, uint32_t image_h, uint32_t image_w, uint32_t block_h, uint32_t block_w, uint32_t pad_h, uint32_t pad_w, uint32_t stride_h, uint32_t stride_w, uint32_t dilation_h, uint32_t dilation_w, uint32_t l_len)
 {
@@ -142,7 +143,7 @@ static int offload_spatz_task(void *params)
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] Wait on Spatz task completion failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
         goto exit;
     }
 
@@ -199,24 +200,24 @@ void MAGIA_col2im_fp16_spatz(const float16 *input, float16 *output, uint32_t bat
 
     ret = allocate_l1(&params, batch, channels, image_h, image_w, block_h, block_w, pad_h, pad_w, stride_h, stride_w, dilation_h, dilation_w, l_len);
     if (ret != 0) {
-        printf("[CV32 (%d)] L1 allocation failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = init_input_params(params, input);
     if (ret != 0) {
-        printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = offload_spatz_task((void *)params);
     if (ret != 0) {
-        printf("[CV32 (%d)] Spatz task offloading failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = store_result((void *)params, output);
     if (ret != 0) {
-        printf("[CV32 (%d)] Result write back failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }
 }

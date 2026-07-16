@@ -9,6 +9,7 @@
 #include "gather_fp16_spatz_task_bin.h"
 
 #define HID get_hartid()
+#define KERNEL_NAME "gather_fp16_spatz"
 
 static int alloc_l1(void **params, uint32_t in_shape[4], uint32_t batch, uint32_t gather_dim_size, uint32_t axis_length, uint32_t index, uint32_t axis)
 {
@@ -120,7 +121,7 @@ static int offload_spatz_task(void *params)
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] Wait on Spatz task completion failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
         goto exit;
     }
 
@@ -167,30 +168,30 @@ void MAGIA_gather_fp16_spatz(const float16 *data, uint32_t in_shape[4], float16 
     volatile gather_fp16_spatz_params_t *params;
 
     if (axis == 0) {
-        printf("[CV32 (%d)] Axis 0 gather is not supported on Spatz kernel! Handle via flat L2 DMA copy.\n", HID);
+        printf("[CV32 (%d)] [%s] Axis 0 gather is not supported on Spatz kernel! Handle via flat L2 DMA copy.\n", HID, KERNEL_NAME);
         return;
     }
 
     ret = alloc_l1((void **)&params, in_shape, batch, gather_dim_size, axis_length, index, axis);
     if (ret != 0) {
-        printf("[CV32 (%d)] L1 allocation failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = init_input_params((void *)params, data);
     if (ret != 0) {
-        printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = offload_spatz_task((void *)params);
     if (ret != 0) {
-        printf("[CV32 (%d)] Spatz task offloading failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = store_result((void *)params, output);
     if (ret != 0) {
-        printf("[CV32 (%d)] Result write back failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }
 }

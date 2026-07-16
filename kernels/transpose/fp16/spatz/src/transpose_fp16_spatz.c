@@ -9,6 +9,7 @@
 #include "transpose_fp16_spatz_task_bin.h"
 
 #define HID get_hartid()
+#define KERNEL_NAME "transpose_fp16_spatz"
 
 static int alloc_l1(void **params, uint32_t *in_shape, uint32_t *out_shape, uint32_t rank, uint32_t iterations, uint32_t *out_shard_in_elems, uint32_t *out_shard_out_elems)
 {
@@ -155,7 +156,7 @@ static int offload_spatz_task(void *params)
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] Wait on Spatz task completion failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
         goto exit;
     }
 
@@ -198,24 +199,24 @@ void MAGIA_transpose_fp16_spatz(const float16 *input, float16 *output, uint32_t 
 
     ret = alloc_l1((void **)&params, in_shape, out_shape, rank, iterations, &shard_in_elems, &shard_out_elems);
     if (ret != 0) {
-        printf("[CV32 (%d)] L1 allocation failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = init_input_params((void *)params, input, perm, shard_in_elems, shard_out_elems);
     if (ret != 0) {
-        printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = offload_spatz_task((void *)params);
     if (ret != 0) {
-        printf("[CV32 (%d)] Spatz task offloading failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = store_result((void *)params, output, shard_out_elems);
     if (ret != 0) {
-        printf("[CV32 (%d)] Result write back failed with error: %d\n", HID, ret);
+        printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }
 }
