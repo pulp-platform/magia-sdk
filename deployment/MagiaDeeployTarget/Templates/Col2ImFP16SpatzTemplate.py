@@ -16,5 +16,8 @@ class _MagiaCol2ImFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaCol2ImFP16Spatz("""
 // Magia Col2Im FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_col2im_fp16_spatz(${data_in},  ${data_out},  ${batch_size},  ${channels},  ${image_shape[0]},  ${image_shape[1]},  ${block_shape[0]},  ${block_shape[1]},  ${pads[0]},  ${pads[1]},  ${strides[0]},  ${strides[1]},  ${dilations[0]},  ${dilations[1]},  ${l_len});
 """)

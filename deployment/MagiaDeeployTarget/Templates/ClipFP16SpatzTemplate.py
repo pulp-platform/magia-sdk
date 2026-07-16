@@ -16,5 +16,8 @@ class _MagiaClipFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaClipFP16Spatz("""
 // Magia Clip FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_clip_fp16_spatz(${data_in}, ${data_out}, ${min_val}, ${max_val}, ${size});
 """)

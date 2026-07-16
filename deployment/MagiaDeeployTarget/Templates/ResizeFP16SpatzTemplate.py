@@ -18,5 +18,8 @@ class _MagiaResizeFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaResizeFP16Spatz("""
 // Magia Resize Nearest Neighbor FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_resize_fp16_spatz(${data_in}, ${data_out}, ${batch_size}, ${channels}, ${in_h}, ${in_w}, ${out_h}, ${out_w});
 """)

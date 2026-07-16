@@ -23,5 +23,8 @@ class _MagiaGatherFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaGatherFP16Spatz("""
 // Magia Gather FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_gather_fp16_spatz(${data_in}, (uint32_t[])${input_shape}, ${data_out}, ${batch}, ${gather_dim_size}, ${axis_length}, ${index}, ${axis});
 """)

@@ -32,5 +32,8 @@ class _MagiaSliceFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaSliceFP16Spatz("""
 // Magia Slice FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_slice_fp16_spatz(${data_in}, ${data_out}, ${outer_dim}, ${slice_dim}, ${inner_dim}, ${start_idx}, ${out_slice_dim});
 """)

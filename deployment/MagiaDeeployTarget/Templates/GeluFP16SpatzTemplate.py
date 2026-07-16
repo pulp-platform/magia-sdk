@@ -13,5 +13,8 @@ class _MagiaGeluFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaGeluFP16Spatz("""
 // Magia Gelu FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_gelu_fp16_spatz(${data_in}, ${data_out}, ${size});
 """)

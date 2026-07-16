@@ -14,5 +14,8 @@ class _MagiaSoftmaxFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaSoftmaxFP16Spatz("""
 // Magia Softmax FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_softmax_fp16_spatz(${data_in}, ${data_out}, (uint32_t[])${input_shape});
 """)

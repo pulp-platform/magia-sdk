@@ -19,5 +19,8 @@ class _MagiaBatchNormFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaBatchNormFP16Spatz("""
 // Magia BatchNorm FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_batchnorm_fp16_spatz(${data_in}, ${scale}, ${bias}, ${mean}, ${variance}, ${epsilon}, ${data_out}, (uint32_t[])${shape});
 """)

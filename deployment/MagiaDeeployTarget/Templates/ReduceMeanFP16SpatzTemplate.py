@@ -28,5 +28,8 @@ class _MagiaReduceMeanFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaReduceMeanFP16Spatz("""
 // Magia ReduceMean FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_reducemean_fp16_spatz(${data_in}, ${data_out}, ${outer_dim}, ${reduce_dim}, ${inner_dim});
 """)

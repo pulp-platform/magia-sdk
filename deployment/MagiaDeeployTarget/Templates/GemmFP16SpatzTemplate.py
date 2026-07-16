@@ -20,5 +20,8 @@ class _MagiaGemmFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaGemmFP16Spatz("""
 // Magia Gemm FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_gemm_fp16_spatz(${A}, ${B}, ${C}, ${alpha}, ${beta}, ${transA}, ${transB}, (uint32_t[])${A_shape}, (uint32_t[])${B_shape}, (uint32_t[])${C_shape}, (uint32_t[])${Y_shape}, ${data_out});
 """)

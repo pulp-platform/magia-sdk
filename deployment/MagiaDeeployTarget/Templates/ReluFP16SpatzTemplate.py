@@ -13,5 +13,8 @@ class _MagiaRELUFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaRELUFP16Spatz("""
 // Magia RELU FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_relu_fp16_spatz(${data_in}, ${data_out}, ${size});
 """)

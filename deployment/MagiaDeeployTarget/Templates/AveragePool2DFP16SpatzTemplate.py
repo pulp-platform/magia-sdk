@@ -16,5 +16,8 @@ class _MagiaAveragePool2DFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaAveragePool2DFP16Spatz("""
 // Magia AveragePool2D FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_averagepool2d_fp16_spatz(${data_in}, ${data_out}, (uint32_t[])${input_shape}, (uint32_t[])${output_shape}, ${kernel_shape[0]}, ${kernel_shape[1]}, ${strides[0]}, ${strides[1]}, ${pads[0]}, ${pads[1]});
 """)

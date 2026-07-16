@@ -12,5 +12,8 @@ class _MagiaMulFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaMulFP16Spatz("""
 // Magia Mul FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_mul_fp16_spatz(${A}, ${B}, ${C}, ${size});
 """)

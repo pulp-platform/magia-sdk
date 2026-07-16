@@ -13,5 +13,8 @@ class _MagiaHardSwishFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaHardSwishFP16Spatz("""
 // Magia HardSwish FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_hardswish_fp16_spatz(${data_in}, ${data_out}, ${size});
 """)

@@ -25,5 +25,8 @@ class _MagiaConvTransposeFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaConvTransposeFP16Spatz("""
 // Magia ConvTranspose FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_convtranspose_fp16_spatz(${data_in}, ${weight}, ${data_out}, (uint32_t[])${_input_shape}, (uint32_t[])${_output_shape}, ${kernel_shape[0]}, ${kernel_shape[1]}, ${strides[0]}, ${strides[1]}, ${pads[0]}, ${pads[1]}, ${group});
 """)

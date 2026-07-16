@@ -17,5 +17,8 @@ class _MagiaLayerNormFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaLayerNormFP16Spatz("""
 // Magia LayerNorm FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_layernorm_fp16_spatz(${data_in}, ${weight}, ${bias}, ${epsilon}, (uint32_t[])${input_shape}, ${data_out});
 """)

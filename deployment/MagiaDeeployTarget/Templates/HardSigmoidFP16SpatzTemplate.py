@@ -13,5 +13,8 @@ class _MagiaHardSigmoidFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaHardSigmoidFP16Spatz("""
 // Magia HardSigmoid FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_hardsigmoid_fp16_spatz(${data_in}, ${data_out}, ${alpha}, ${beta}, ${size});
 """)

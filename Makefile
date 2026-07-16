@@ -281,6 +281,10 @@ endif
 ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
+ifdef enable_node_logs
+	python3 deployment/generate_with_spatz.py -t $(test) -vv --enable-node-logs
+else
 	python3 deployment/generate_with_spatz.py -t $(test) -vv
+endif
 	make clean build tiles=$(tiles) compiler=$(compiler) eval=$(eval) target_platform=magia_v2 spatz_tests=1
 	make run_with_spatz test=$(test) platform=$(platform) tiles=$(tiles)

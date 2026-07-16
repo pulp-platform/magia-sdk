@@ -17,5 +17,8 @@ class _MagiaAddFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaAddFP16Spatz("""
 // Magia Add FP 16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_add_fp16_spatz(${data_in_1}, ${data_in_2}, ${data_out}, ${size});
 """)

@@ -31,6 +31,11 @@ def add_kernel_includes(code: str, operators: list, format: str, arch: str) -> s
     includes = "".join(f'#include "{op}_{format}_{arch}.h"\n' for op in operators)
     return code.replace('#include <stdint.h>\n', f'#include <stdint.h>\n{includes}', 1)
 
+def add_node_logs_define(code: str) -> str:
+    # The per-node "Running node" prints in network.c are guarded by
+    # #ifdef ENABLE_NODE_LOGS. Define the macro at the top so they compile in.
+    return code.replace('#include "tile.h"\n', '#define ENABLE_NODE_LOGS\n\n#include "tile.h"\n', 1)
+
 def add_spatz_binary_include(code: str, test: str) -> str:
     # main.c calls spatz_init(SPATZ_BINARY_START), so it needs the combined
     # task-bin header. It only needs the macros (not the embedded array, which is
@@ -134,7 +139,7 @@ def generate_task_bin_shims(operators: list, test: str, format: str, arch: str, 
         with open(dst_inc_dir / shim, "w") as f:
             f.write(content)
 
-def main(test) -> None:
+def main(test, enable_node_logs=False) -> None:
 
     print(f"test: {test}")
 
@@ -214,6 +219,9 @@ def main(test) -> None:
         raise FileNotFoundError(f"Missing kernels for operators {missing} (looked in kernels/<op>/{format}/{arch}).")
     logger.info(f"network operators ({len(operators)}): {operators}")
 
+    if enable_node_logs:
+        network_source = add_node_logs_define(network_source)
+
     with open(network_source_path, "w") as f:
         f.write(network_source)
     os.system(clang_cmd(network_source_path))
@@ -255,6 +263,8 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('-t', '--test', type=str, required=True)
     parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('--enable-node-logs', action='store_true',
+                        help='define ENABLE_NODE_LOGS in network.c to print each node as it runs')
 
     args = parser.parse_args()
 
@@ -279,4 +289,4 @@ if __name__ == "__main__":
     logger.addHandler(stream_handler)
 
     logger.debug(f"args: {args}")
-    main(args.test)
+    main(args.test, args.enable_node_logs)

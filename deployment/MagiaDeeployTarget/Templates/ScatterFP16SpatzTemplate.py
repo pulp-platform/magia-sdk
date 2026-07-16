@@ -34,5 +34,8 @@ class _MagiaScatterFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaScatterFP16Spatz("""
 // Magia Scatter FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_scatter_fp16_spatz(${data_in}, ${indices}, ${updates}, ${data_out}, ${outer_size}, ${inner_size}, ${axis}, ${data_axis_dim}, ${indices_axis_dim});
 """)

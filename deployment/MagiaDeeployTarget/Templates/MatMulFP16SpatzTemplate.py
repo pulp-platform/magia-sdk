@@ -16,6 +16,9 @@ class _MagiaMatMulFP16Spatz(NodeTemplate):
         return ctxt, operatorRepresentation, []
 
 referenceTemplate = _MagiaMatMulFP16Spatz("""
-// Magia MatMul FP16 Spatz (Name: ${nodeName}, Op: {nodeOp})
+// Magia MatMul FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_matmul_fp16_spatz(${A}, ${B}, ${data_out}, ${M}, ${N}, ${O}, ${batch});
 """)

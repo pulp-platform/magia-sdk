@@ -30,5 +30,8 @@ class _MagiaTransposeFP16Spatz(NodeTemplate):
 
 referenceTemplate = _MagiaTransposeFP16Spatz("""
 // Magia Transpose FP16 Spatz (Name: ${nodeName}, Op: ${nodeOp})
+#ifdef ENABLE_NODE_LOGS
+printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
+#endif
 MAGIA_transpose_fp16_spatz(${data_in}, ${data_out}, (uint32_t[]) ${c_perm}, (uint32_t[])${input_shape}, (uint32_t[])${output_shape}, ${rank}, ${iterations});
 """)
