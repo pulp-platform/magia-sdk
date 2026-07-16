@@ -3,7 +3,8 @@
 
 #include "hello_pulp_task_bin.h"
 
-int main(void) {
+int main(void)
+{
     eu_config_t eu_cfg;
     eu_controller_t eu_ctrl;
     int errors = 0;

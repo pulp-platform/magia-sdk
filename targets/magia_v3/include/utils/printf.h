@@ -29,16 +29,16 @@
 
 static int printf(const char *format, ...)
 {
-	va_list vargs;
-	int     r;
+    va_list vargs;
+    int r;
 
-	va_start(vargs, format);
-	r = prf(pputc, format, vargs);
-	va_end(vargs);
+    va_start(vargs, format);
+    r = prf(pputc, format, vargs);
+    va_end(vargs);
 
-	return r;
+    return r;
 }
 
-//#define printf tfp_printf
+// #define printf tfp_printf
 
 #endif // PRINTF_H
