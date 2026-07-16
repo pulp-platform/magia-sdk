@@ -7,6 +7,7 @@ from Deeploy.AbstractDataTypes import PointerClass
 from Deeploy.CommonExtensions.DataTypes import float16_t, int8_t, int32_t, int64_t
 from Deeploy.DeeployTypes import CodeTransformation, NodeBinding
 from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, ConcatChecker, ConvChecker, DivChecker, DummyChecker, GatherChecker, GELUChecker, GEMMChecker, LayerNormChecker, MatMulChecker, MaxPoolChecker, MulChecker, PassThroughTypeChecker, ReduceMeanChecker, ReluChecker, ReshapeChecker, SliceChecker, TransposeChecker
+from MagiaDeeployTarget.CodeTransformationPasses.MagiaTileSync import MagiaSynchTilesPass
 from MagiaDeeployTarget.Templates import AddFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import AddTemplate
 from MagiaDeeployTarget.Templates import AveragePool2DFP16SpatzTemplate
@@ -48,7 +49,7 @@ from MagiaDeeployTarget.Templates import SubFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SwishFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import TransposeFP16SpatzTemplate
 
-BasicTransformer = CodeTransformation([])
+BasicTransformer = CodeTransformation([MagiaSynchTilesPass()])
 
 MagiaAddBindings = [
     NodeBinding(

@@ -158,7 +158,7 @@ MagiaOptimizer = TopologyOptimizer(
     ],
     name = "MagiaOptimizer")
 
-_includeList = ["tile.h", "idma.h", "redmule.h", "eventunit.h"]
+_includeList = ["tile.h", "idma.h", "redmule.h", "eventunit.h", "fsync.h"]
 
 
 class MagiaMeshEngine(DeploymentEngine):

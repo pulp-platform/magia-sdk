@@ -11,6 +11,8 @@ from Deeploy.AbstractDataTypes import Pointer
 from Deeploy.CommonExtensions.NetworkDeployers.SignPropDeployer import SignPropDeployer
 from Deeploy.DeeployTypes import ConstantBuffer, DeploymentPlatform, NodeTemplate, TopologyOptimizer, VariableBuffer
 
+from MagiaDeeployTarget.CodeTransformationPasses.MagiaTileSync import magiaSyncTilesFunctionTemplate
+
 
 class MagiaDeployer(SignPropDeployer):
 
@@ -44,3 +46,11 @@ class MagiaDeployer(SignPropDeployer):
             # It seems to be different than the "normal" optimization passes
             # defined on the Platform.
         ]
+
+    def bind(self) -> bool:
+        if not super().bind():
+            return False
+
+        self.ctxt.hoistGlobalDefinition("magia_sync_tiles", magiaSyncTilesFunctionTemplate.generate({}))
+
+        return True
