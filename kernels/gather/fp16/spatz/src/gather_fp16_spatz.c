@@ -116,7 +116,6 @@ static int offload_spatz_task(void *params)
     eu_ctrl.cfg = &eu_cfg;
     eu_ctrl.api = &eu_api;
 
-    spatz_init(SPATZ_BINARY_START);
     spatz_run_task_with_params(GATHER_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
@@ -126,7 +125,6 @@ static int offload_spatz_task(void *params)
     }
 
     ret = spatz_get_exit_code();
-    spatz_clk_dis();
 
 exit:
     return ret;

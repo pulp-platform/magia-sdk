@@ -31,6 +31,15 @@ def add_kernel_includes(code: str, operators: list, format: str, arch: str) -> s
     includes = "".join(f'#include "{op}_{format}_{arch}.h"\n' for op in operators)
     return code.replace('#include <stdint.h>\n', f'#include <stdint.h>\n{includes}', 1)
 
+def add_spatz_binary_include(code: str, test: str) -> str:
+    # main.c calls spatz_init(SPATZ_BINARY_START), so it needs the combined
+    # task-bin header. It only needs the macros (not the embedded array, which is
+    # defined by one operator shim), so opt out of the array with SPATZ_BINARY_NO_DEFINE.
+    include = ('#define SPATZ_BINARY_NO_DEFINE\n'
+               f'#include "{test}_task_bin.h"\n'
+               '#undef SPATZ_BINARY_NO_DEFINE\n')
+    return code.replace('#include "data.h"\n', f'#include "data.h"\n\n{include}', 1)
+
 def split_test_header_definitions(header: str) -> tuple[str, str]:
     header_lines = []
     source_lines = [copyright_comment('//'), "", '#include "data.h"', ""]
@@ -224,7 +233,11 @@ def main(test) -> None:
     deployment_root = Path(__file__).parent
     main_src_path = deployment_root / 'main.c'
     main_dst_path = dst_src_dir / 'main.c'
-    shutil.copyfile(main_src_path, main_dst_path)
+    with open(main_src_path) as f:
+        main_source = f.read()
+    main_source = add_spatz_binary_include(main_source, test)
+    with open(main_dst_path, "w") as f:
+        f.write(main_source)
     os.system(clang_cmd(main_dst_path))
 
     # CMakeLists.txt

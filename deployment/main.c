@@ -39,6 +39,20 @@ int init_event_unit(eu_controller_t *eu_ctrl)
     return 0;
 }
 
+int init_spatz()
+{
+    spatz_init(SPATZ_BINARY_START);
+
+    return 0;
+}
+
+int deinit_spatz()
+{
+    spatz_clk_dis();
+
+    return 0;
+}
+
 void sync(fsync_controller_t *fsynct_ctrl, eu_controller_t *eu_ctrl)
 {
     fsync_sync_global(fsynct_ctrl);
@@ -83,6 +97,12 @@ int main(void)
         return ret;
     }
 
+    ret = init_spatz();
+    if (ret) {
+        printf("[CV32 (%d)] Spatz initialization failed with errno: %d\n", HID, ret);
+        return ret;
+    }
+
     sync(&fsync_ctrl, &eu_ctrl);
 
     if (hid == 0)
@@ -98,6 +118,12 @@ int main(void)
     RunNetwork();
 
     sync(&fsync_ctrl, &eu_ctrl);
+
+    ret = deinit_spatz();
+    if (ret) {
+        printf("[CV32 (%d)] Spatz deinitialization failed with errno: %d\n", HID, ret);
+        return ret;
+    }
 
     if (hid == 0) {
         ret = check_result();
