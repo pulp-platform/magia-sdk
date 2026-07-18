@@ -1,30 +1,7 @@
 #include "tile.h"
 #include "onnx_gemm_params.h"
 
-// static inline uint16_t get_raw(const _Float16 val)
-// {
-//     uint16_t raw;
-//     memcpy(&raw, &val, sizeof(raw));
-//     return raw;
-// }
 
-// static inline void print_vector_raw(const _Float16 *vec, size_t len)
-// {
-//     for (size_t i = 0; i < len; i++) {
-//         printf("%d) %x\n", i, get_raw(vec[i]));
-//     }
-// }
-
-// static inline void print_matrix_raw(const _Float16 *mat, size_t rows, size_t cols)
-// {
-//     for (size_t r = 0; r < rows; r++) {
-//         for (size_t c = 0; c < cols; c++) {
-//             size_t i = r * cols + c;
-//             printf("%x ", get_raw(mat[i]));
-//         }
-//         printf("\n");
-//     }
-// }
 
 static void gemm(const _Float16 *A,
                  const _Float16 *B,

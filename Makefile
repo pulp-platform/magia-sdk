@@ -123,7 +123,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVSOC_DIR)/install/bin/gvrun --target magia_v2 --work-dir $(GVSOC_ABS_PATH)/Documents/test --param binary=$(BIN_ABS_PATH)/$(test) --trace-level=trace run --attr magia/n_tiles_x=$(tiles) --attr magia/n_tiles_y=$(tiles) --trace=magia-tile-0/tile-0-cv32-core/insn:trace.txt
+	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
