@@ -247,7 +247,7 @@ int main(void)
              * Call redmule while loading the weight of the next timeslot.
              */
             if (i < (timeslots - 1)) {
-                // trigger current timeslot job
+                // trigger current timeslot job if not already started
                 mg_redmule_gemm_start(&redmule_ctrl);
 
                 // DMA copy-in for next timeslot
@@ -295,8 +295,8 @@ int main(void)
                 mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_x);
                 mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_w);
 
-                // commit next timeslot job to hardware queue
-                mg_redmule_gemm_commit(&redmule_ctrl);
+                // commit & start next timeslot job to hardware queue
+                mg_redmule_gemm_commit_start(&redmule_ctrl);
 
                 // wait for current timeslot redmule
                 mg_redmule_wait(&eu_ctrl, WAIT_MODE, redmule_evt_curr);

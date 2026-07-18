@@ -43,6 +43,7 @@ extern void mg_redmule_gemm_enqueue(redmule_controller_t *ctrl,
                                     uint16_t k,
                                     mg_event_t *event,
                                     mg_event_callback_t callback);
+extern void mg_redmule_gemm_commit_start(redmule_controller_t *ctrl);
 extern void mg_redmule_gemm_start(redmule_controller_t *ctrl);
 extern void mg_redmule_gemm_commit(redmule_controller_t *ctrl);
 
