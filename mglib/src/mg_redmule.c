@@ -75,6 +75,11 @@ void mg_redmule_gemm_enqueue(redmule_controller_t *ctrl,
     redmule16_gemm_enqueue(ctrl, x, w, y, m, n, k);
 }
 
+void mg_redmule_gemm_commit_start(redmule_controller_t *ctrl)
+{
+    redmule16_gemm_commit_start(ctrl);
+}
+
 void mg_redmule_gemm_commit(redmule_controller_t *ctrl)
 {
     redmule16_gemm_commit(ctrl);

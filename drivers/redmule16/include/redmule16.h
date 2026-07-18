@@ -74,6 +74,21 @@ static inline __attribute__((always_inline)) int redmule16_gemm_commit(redmule_c
 }
 
 /**
+ * Commits and starts execution of an enqueued job on the HW queue.
+ *
+ * @param ctrl RedMulE controller handle (unused internally, reserved for API consistency).
+ *
+ * @return 0 on successful dispatch.
+ */
+static inline __attribute__((always_inline)) int redmule16_gemm_commit_start(redmule_controller_t *ctrl)
+{
+#if REDMULE_MM != 0
+    redmule_mm_commit_trigger();
+#endif
+    return 0;
+}
+
+/**
  * Starts execution of an enqueued set of jobs.
  *
  * @param ctrl RedMulE controller handle (unused internally, reserved for API consistency).
