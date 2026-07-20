@@ -33,22 +33,19 @@ def positive_float(value):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Generator of Input Data and Golden Model for BatchNormalization test")
+    parser = argparse.ArgumentParser(description="Generator of Input Data and Golden Model for LayerNorm test")
 
-    parser.add_argument("N", type=positive_int, help="Batch size")
-    parser.add_argument("C", type=positive_int, help="Number of input channels")
-    parser.add_argument("H", type=positive_int, help="Spatial height dimension")
-    parser.add_argument("W", type=positive_int, help="Spatial width dimension")
+    parser.add_argument("shape", type=positive_int, nargs='+', help="Input tensor shape as space-separated dimensions (rank = number of values). LayerNorm normalizes over the last dimension.")
 
-    parser.add_argument("--epsilon", type=positive_float, default=1e-05, help="Epsilon value for BatchNorm (default: 1e-05)")
+    parser.add_argument("--epsilon", type=positive_float, default=1e-05, help="Epsilon value for LayerNorm (default: 1e-05)")
 
     args = parser.parse_args()
     return args
 
 
 def generate_input_data(args):
-    input_shape = (args.N, args.C, args.H, args.W)
-    param_shape = (args.W,)
+    input_shape = tuple(args.shape)
+    param_shape = (args.shape[-1],)
 
     X = np.random.randn(*input_shape).astype(np.float16)
     scale = (0.5 + 0.5 * np.random.randn(*param_shape).astype(np.float16))
@@ -92,7 +89,7 @@ def main():
 
     save_deployment_files(X, scale, B, G, model_def)
 
-    print(f"Deployment files generated with [N:{args.N}, C:{args.C}, H:{args.H}, W:{args.W}]")
+    print(f"Deployment files generated with shape {list(args.shape)}")
 
 
 if __name__ == "__main__":

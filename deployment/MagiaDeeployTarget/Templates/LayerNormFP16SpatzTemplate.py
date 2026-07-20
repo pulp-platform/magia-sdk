@@ -9,7 +9,10 @@ class _MagiaLayerNormFP16Spatz(NodeTemplate):
         ctxt.lookup(operatorRepresentation['bias'])
         ctxt.lookup(operatorRepresentation['data_out'])
 
-        operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, data_in.shape)) + "}"
+        # Deeploy's LayerNorm parser ignores the ONNX attribute and always assumes axis == -1 (see lastDimLength)
+        data_in_shape = data_in.shape
+        operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, data_in_shape)) + "}"
+        operatorRepresentation['rank'] = len(data_in_shape)
 
         operatorRepresentation['offset'] = 0
 
@@ -20,5 +23,5 @@ referenceTemplate = _MagiaLayerNormFP16Spatz("""
 #ifdef ENABLE_NODE_LOGS
 printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
 #endif
-MAGIA_layernorm_fp16_spatz(${data_in}, ${weight}, ${bias}, ${epsilon}, (uint32_t[])${input_shape}, ${data_out});
+MAGIA_layernorm_fp16_spatz(${data_in}, ${weight}, ${bias}, ${epsilon}, (uint32_t[])${input_shape}, ${rank}, ${data_out});
 """)

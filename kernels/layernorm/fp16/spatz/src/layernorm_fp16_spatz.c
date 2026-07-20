@@ -11,7 +11,7 @@
 #define HID get_hartid()
 #define KERNEL_NAME "layernorm_fp16_spatz"
 
-static int alloc_l1(void **params, uint32_t input_shape[4], float16 epsilon)
+static int alloc_l1(void **params, uint32_t *input_shape, uint32_t rank, float16 epsilon)
 {
     volatile layernorm_fp16_spatz_params_t *layernorm_params;
     uintptr_t shard_X;
@@ -29,8 +29,13 @@ static int alloc_l1(void **params, uint32_t input_shape[4], float16 epsilon)
     size_t w_len;
     size_t local_shard_size;
 
-    total_rows = input_shape[0] * input_shape[1] * input_shape[2];
-    w_len = input_shape[3];
+    /* LayerNorm normalizes over the last axis (axis == -1): the last dimension
+       is the row length, the product of the leading dimensions is the number of
+       rows. This is rank-agnostic (any tensor rank). */
+    w_len = input_shape[rank - 1];
+    total_rows = 1;
+    for (uint32_t d = 0; d < rank - 1; d++)
+        total_rows *= input_shape[d];
 
     shard = total_rows / NUM_HARTS;
     left = total_rows % NUM_HARTS;
@@ -173,12 +178,12 @@ static int store_result(void *params, float16 *Y)
     return 0;
 }
 
-void MAGIA_layernorm_fp16_spatz(const float16 *X, const float16 *scale, const float16 *B, const float16 epsilon, uint32_t input_shape[4], float16 *Y)
+void MAGIA_layernorm_fp16_spatz(const float16 *X, const float16 *scale, const float16 *B, const float16 epsilon, uint32_t *input_shape, uint32_t rank, float16 *Y)
 {
     int ret;
     volatile layernorm_fp16_spatz_params_t *params;
 
-    ret = alloc_l1(&params, input_shape, epsilon);
+    ret = alloc_l1(&params, input_shape, rank, epsilon);
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
