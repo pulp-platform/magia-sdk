@@ -503,6 +503,9 @@ int gemm_fp16_spatz_task(void)
     N = params->N;
     K = params->K;
 
+    if (M == 0)
+        return 0;
+
     if (transA && transB)
         gemm_ABtrans(A, B, C, Y, alpha, beta, M, N, K);
     else if (transA)
