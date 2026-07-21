@@ -1,6 +1,8 @@
 #include "tile.h"
 #include "conv2d_fp16_spatz_params.h"
 
+// #define SCALAR
+
 static inline void compute_window_boundaries(const int out_idx, const uint32_t stride, const uint32_t pad, const uint32_t shape, const uint32_t in_len, int *win_start, int *win_len, int *ker_start)
 {
     int logical_start = (out_idx * stride) - pad;
@@ -26,6 +28,7 @@ static inline void compute_window_boundaries(const int out_idx, const uint32_t s
         *win_len = 0;
 }
 
+#ifdef SCALAR
 static inline void conv2d_scalar(const _Float16 *src, const _Float16 *weight, const _Float16 *bias, const uint32_t c_in_g, const uint32_t c_out_g, const uint32_t h_in, const uint32_t w_in, const uint32_t h_out, const uint32_t w_out, const uint32_t kernel_h, const uint32_t kernel_w, const uint32_t stride_h, const uint32_t stride_w, const uint32_t pad_h, const uint32_t pad_w, const uint32_t iter_start, const uint32_t iter_len, const uint32_t c_out, const uint32_t has_bias, _Float16 *dst)
 {
     uint32_t in_hw  = h_in * w_in;
@@ -82,6 +85,7 @@ static inline void conv2d_scalar(const _Float16 *src, const _Float16 *weight, co
         }
     }
 }
+#endif
 
 static inline void conv2d_rvv(const _Float16 *src, const _Float16 *weight, const _Float16 *bias, const uint32_t c_in_g, const uint32_t c_out_g, const uint32_t h_in, const uint32_t w_in, const uint32_t h_out, const uint32_t w_out, const uint32_t kernel_h, const uint32_t kernel_w, const uint32_t stride_h, const uint32_t stride_w, const uint32_t pad_h, const uint32_t pad_w, const uint32_t iter_start, const uint32_t iter_len, const uint32_t c_out, const uint32_t has_bias, _Float16 *dst)
 {
@@ -204,9 +208,11 @@ int conv2d_fp16_spatz_task(void)
     c_out_g     = params->c_out_g;
     has_bias    = params->has_bias;
 
-    /* Notice: For the time being the scalar version is used because the reduction in fp16 introduces a significant difference wrt the golden model */
-    // conv2d_rvv(src, weight, bias, c_in_g, c_out_g, h_in, w_in, h_out, w_out, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, iter_start, iter_len, c_out, has_bias, dst);
+#ifdef SCALAR
     conv2d_scalar(src, weight, bias, c_in_g, c_out_g, h_in, w_in, h_out, w_out, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, iter_start, iter_len, c_out, has_bias, dst);
+#else
+    conv2d_rvv(src, weight, bias, c_in_g, c_out_g, h_in, w_in, h_out, w_out, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w, iter_start, iter_len, c_out, has_bias, dst);
+#endif
 
     return 0;
 }
