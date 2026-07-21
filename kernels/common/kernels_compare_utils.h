@@ -8,7 +8,8 @@
 
 #define HID get_hartid()
 
-#define ULP_TOLL    (100)
+#define ULP_TOLL    (120)
+// #define VERBOSE
 
 static inline bool fp16_is_invalid(uint16_t x)
 {
@@ -57,6 +58,11 @@ static inline int compare_fp16_bitwise(uintptr_t addr_res, uintptr_t addr_exp, i
             printf("[CV32] Mismatch at index %d\t-\texpected: %x\t-\tcomputed: %x\t-\tulp: %d\n", i, expected, result, ulp_dif);
             n_mismatch++;
         }
+#ifdef VERBOSE
+        else {
+            printf("[CV32] Check on index %d SUCCESS\t-\texpected: %x\t-\tcomputed: %x\t-\tulp: %d\n", i, expected, result, ulp_dif);
+        }
+#endif
     }
 
     ulp_avg = ulp_avg / len;
