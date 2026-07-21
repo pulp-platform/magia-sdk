@@ -34,7 +34,7 @@ static void gemm(const _Float16 *A, const _Float16 *B, const _Float16 *C, _Float
 
             if (alpha != 0.0f) {
                 /* 1) Unroll over two elements of each A-col at time (same B-row) */
-                for (int k = 0; k < dim_K; k += 2) {
+                for (int k = 0; k < (int) dim_K - 1; k += 2) {
                     B_row1 = B + (k * dim_N + n);
                     B_row2 = B + ((k + 1) * dim_N + n);
                     A_col1_elem1 = A + (m * dim_K + k);
@@ -87,7 +87,7 @@ static void gemm(const _Float16 *A, const _Float16 *B, const _Float16 *C, _Float
             asm volatile ("vfmv.v.f v0, %0" :: "f"(ZERO));
 
             if (alpha != 0.0f) {
-                for (int k = 0; k < dim_K; k += 2) {
+                for (int k = 0; k < (int) dim_K - 1; k += 2) {
                     B_row1 = B + (k * dim_N + n);
                     B_row2 = B + ((k + 1) * dim_N + n);
                     A_col1_elem1 = A + ((dim_M - 1) * dim_K + k);
@@ -107,7 +107,6 @@ static void gemm(const _Float16 *A, const _Float16 *B, const _Float16 *C, _Float
 
                     asm volatile ("vle16.v v16, (%0)" :: "r"(B_row1));
                     asm volatile ("vfmacc.vf v0, %0, v16" :: "f"(*A_col1_elem1));
-                    asm volatile ("vfmacc.vf v0, %0, v16" :: "f"(*A_col1_elem2));
                 }
 
                 /* acc = alpha * A @ B */
@@ -155,7 +154,7 @@ static void gemm_Atrans(const _Float16 *A, const _Float16 *B, const _Float16 *C,
             asm volatile ("vfmv.v.f v8, %0" :: "f"(ZERO));
 
             if (alpha != 0.0f) {
-                for (int k = 0; k < dim_K; k += 2) {
+                for (int k = 0; k < (int) dim_K - 1; k += 2) {
                     B_row1 = B + (k * dim_N + n);
                     B_row2 = B + ((k + 1) * dim_N + n);
                     A_row1_elem1 = A + (k * dim_M + m);
@@ -205,7 +204,7 @@ static void gemm_Atrans(const _Float16 *A, const _Float16 *B, const _Float16 *C,
             asm volatile ("vfmv.v.f v8, %0" :: "f"(ZERO));
 
             if (alpha != 0.0f) {
-                for (int k = 0; k < dim_K; k += 2) {
+                for (int k = 0; k < (int) dim_K - 1; k += 2) {
                     B_row1 = B + (k * dim_N + n);
                     B_row2 = B + ((k + 1) * dim_N + n);
                     A_row1_elem1 = A + (k * dim_M + (dim_M - 1));
@@ -271,7 +270,7 @@ static void gemm_Btrans(const _Float16 *A, const _Float16 *B, const _Float16 *C,
             asm volatile ("vfmv.v.f v8, %0" :: "f"(ZERO));
 
             if (alpha != 0.0f) {
-                for (int k = 0; k < dim_K; k += 2) {
+                for (int k = 0; k < (int) dim_K - 1; k += 2) {
                     B_col1 = B + (n * dim_K + k);
                     B_col2 = B + (n * dim_K + (k + 1));
                     A_col1_elem1 = A + (m * dim_K + k);
@@ -320,7 +319,7 @@ static void gemm_Btrans(const _Float16 *A, const _Float16 *B, const _Float16 *C,
             asm volatile ("vfmv.v.f v0, %0" :: "f"(ZERO));
 
             if (alpha != 0.0f) {
-                for (int k = 0; k < dim_K; k += 2) {
+                for (int k = 0; k < (int) dim_K - 1; k += 2) {
                     B_col1 = B + (n * dim_K + k);
                     B_col2 = B + (n * dim_K + (k + 1));
                     A_col1_elem1 = A + ((dim_M - 1) * dim_K + k);
@@ -389,7 +388,7 @@ static void gemm_ABtrans(const _Float16 *A, const _Float16 *B, const _Float16 *C
             asm volatile ("vfmv.v.f v8, %0" :: "f"(ZERO));
 
             if (alpha != 0.0f) {
-                for (int k = 0; k < dim_K; k += 2) {
+                for (int k = 0; k < (int) dim_K - 1; k += 2) {
                     B_col1 = B + (n * dim_K + k);
                     B_col2 = B + (n * dim_K + (k + 1));
                     A_row1_elem1 = A + (k * dim_M + m);
@@ -438,7 +437,7 @@ static void gemm_ABtrans(const _Float16 *A, const _Float16 *B, const _Float16 *C
             asm volatile ("vfmv.v.f v0, %0" :: "f"(ZERO));
 
             if (alpha != 0.0f) {
-                for (int k = 0; k < dim_K; k += 2) {
+                for (int k = 0; k < (int) dim_K - 1; k += 2) {
                     B_col1 = B + (n * dim_K + k);
                     B_col2 = B + (n * dim_K + (k + 1));
                     A_row1_elem1 = A + (k * dim_M + (dim_M - 1));
