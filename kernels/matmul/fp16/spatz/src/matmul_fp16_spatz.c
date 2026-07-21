@@ -63,7 +63,7 @@ static int alloc_l1(void **params, uint32_t M, uint32_t K, uint32_t O, uint32_t 
     return 0;
 }
 
-static int init_input_params(void *params, const float16 *A, const float16 *B)
+static int init_input_params(void *params, const float16 *A, const float16 *B, uint32_t a_batched, uint32_t b_batched)
 {
     volatile matmul_fp16_spatz_params_t *matmul_params;
     uintptr_t shard_A_base;
@@ -87,9 +87,10 @@ static int init_input_params(void *params, const float16 *A, const float16 *B)
     K           = matmul_params->K;
     O           = matmul_params->O;
 
+    /* A shared (a_batched == 0, e.g. broadcast weight) is read once for every batch. */
     local_idx = 0;
     for (uint32_t b = 0; b < batch_len; b++) {
-        uint32_t offset_A_2d = (batch_start + b) * (M * K);
+        uint32_t offset_A_2d = (a_batched ? (batch_start + b) : 0) * (M * K);
         for (uint32_t m = 0; m < M; m++) {
             uint32_t row_base = m * K;
             for (uint32_t k = 0; k < K; k++) {
@@ -101,9 +102,10 @@ static int init_input_params(void *params, const float16 *A, const float16 *B)
         }
     }
 
+    /* B shared (b_batched == 0, e.g. broadcast weight) is read once for every batch. */
     local_idx = 0;
     for (uint32_t b = 0; b < batch_len; b++) {
-        uint32_t offset_B_2d = (batch_start + b) * (K * O);
+        uint32_t offset_B_2d = (b_batched ? (batch_start + b) : 0) * (K * O);
         for (uint32_t k = 0; k < K; k++) {
             uint32_t row_base = k * O;
             for (uint32_t o = 0; o < O; o++) {
@@ -188,7 +190,7 @@ static int store_result(void *params, float16 *Y)
     return 0;
 }
 
-void MAGIA_matmul_fp16_spatz(const float16 *A, const float16 *B, float16 *Y, uint32_t M, uint32_t K, uint32_t O, uint32_t total_batches)
+void MAGIA_matmul_fp16_spatz(const float16 *A, const float16 *B, float16 *Y, uint32_t M, uint32_t K, uint32_t O, uint32_t total_batches, uint32_t a_batched, uint32_t b_batched)
 {
     int ret;
     volatile matmul_fp16_spatz_params_t *params;
@@ -199,7 +201,7 @@ void MAGIA_matmul_fp16_spatz(const float16 *A, const float16 *B, float16 *Y, uin
         return;
     }
 
-    ret = init_input_params((void *)params, A, B);
+    ret = init_input_params((void *)params, A, B, a_batched, b_batched);
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
