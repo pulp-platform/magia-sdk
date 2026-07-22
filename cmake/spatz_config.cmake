@@ -43,7 +43,7 @@ set(MAGIA_CV32_EXTRA_INCLUDE_DIRS
 # ISA setup [MAGIA/Makefile]
 set(CV32_ARCH rv CACHE STRING "CV32 ARCH prefix")
 set(CV32_XLEN 32 CACHE STRING "CV32 XLEN")
-set(CV32_XTEN imcxgap9 CACHE STRING "CV32 ISA extensions")
+set(CV32_XTEN imc_xcvalu_xcvbi_xcvbitmanip_xcvhwlp_xcvmac_xcvmem_xcvsimd_xcvelw_zfinx_zhinxmin CACHE STRING "CV32 ISA extensions")
 set(CV32_ABI ilp CACHE STRING "CV32 ABI prefix")
 set(CV32_XABI f CACHE STRING "CV32 ABI extension")
 set(CV32_MARCH "-march=${CV32_ARCH}${CV32_XLEN}${CV32_XTEN}")

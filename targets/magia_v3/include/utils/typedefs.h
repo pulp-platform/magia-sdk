@@ -2,7 +2,7 @@
 #define TYPEDEFS_H_
 
 // GCC_MULTILIB doesn't know what a float16 is.
-#if COMPILER == GCC_MULTILIB
+#if CV32E40P
 typedef _Float16 float16;
 #endif
 

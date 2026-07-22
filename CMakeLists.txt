@@ -63,6 +63,7 @@ endif ()
 
 if (COMPILER STREQUAL "GCC_MULTILIB")
     set(ISA rv32imc_xcvalu_xcvbi_xcvbitmanip_xcvhwlp_xcvmac_xcvmem_xcvsimd_xcvelw_zfinx_zhinxmin)
+    set(CV32E40P 1)
 endif ()
 
 message(STATUS "[MAGIA-SDK] ABI                     : ${ABI}")

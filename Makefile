@@ -172,8 +172,13 @@ else ifeq ($(platform), rtl)
 	cd $(BUILD_DIR_ABS)													&& \
 	cp -sf "$(MAGIA_DIR_ABS)/sim/modelsim.ini" modelsim.ini    			&& \
 	ln -sfn "$(MAGIA_DIR_ABS)/sim/work" work
+ifeq ($(compiler), GCC_MULTILIB)
+	riscv64-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
+	riscv64-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
+else
 	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
+endif
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
 	cd $(MAGIA_RTL_DIR) 												&& \
 	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv) fast_sim=$(fast_sim)
