@@ -27,12 +27,17 @@ function(add_pulp_task)
     set(PULP_OUTPUT_DIR "${PULP_TASK_OUTPUT_ROOT}/${ARG_TEST_NAME}/pulp_task")
     file(MAKE_DIRECTORY "${PULP_OUTPUT_DIR}")
 
-    set(FILE_PREFIX "${ARG_TEST_NAME}_task")
+    string(REGEX MATCH "_task$" HAS_TASK_SUFFIX "${ARG_TEST_NAME}")
+    if(HAS_TASK_SUFFIX)
+        set(FILE_PREFIX "${ARG_TEST_NAME}")
+    else()
+        set(FILE_PREFIX "${ARG_TEST_NAME}_task")
+    endif()
 
-    set(TASK_CRT0_OBJ "${PULP_OUTPUT_DIR}/${ARG_TEST_NAME}_crt0.o")
-    set(TASK_ELF      "${PULP_OUTPUT_DIR}/${ARG_TEST_NAME}.elf")
-    set(TASK_BIN      "${PULP_OUTPUT_DIR}/${ARG_TEST_NAME}.bin")
-    set(TASK_DUMP     "${PULP_OUTPUT_DIR}/${ARG_TEST_NAME}.dump")
+    set(TASK_CRT0_OBJ "${PULP_OUTPUT_DIR}/${FILE_PREFIX}_crt0.o")
+    set(TASK_ELF      "${PULP_OUTPUT_DIR}/${FILE_PREFIX}.elf")
+    set(TASK_BIN      "${PULP_OUTPUT_DIR}/${FILE_PREFIX}.bin")
+    set(TASK_DUMP     "${PULP_OUTPUT_DIR}/${FILE_PREFIX}.dump")
     set(TASK_HEADER   "${PULP_OUTPUT_DIR}/${FILE_PREFIX}_bin.h")
 
     set(TASK_INCLUDE_FLAGS "")
@@ -43,6 +48,16 @@ function(add_pulp_task)
         list(APPEND TASK_INCLUDE_FLAGS "-I${INCLUDE_DIR}")
     endforeach()
 
+    message(NOTICE "FLAGS : ${TASK_INCLUDE_FLAGS}")
+
+    set(TASK_UNDEF_FLAGS "")
+    foreach(TASK_SOURCE ${ARG_TASK_SOURCES})
+        get_filename_component(TASK_NAME "${TASK_SOURCE}" NAME_WE)
+        list(APPEND TASK_UNDEF_FLAGS "-Wl,--undefined=${TASK_NAME}")
+    endforeach()
+
+    message(NOTICE "FLAGS : ${TASK_UNDEF_FLAGS}")
+
     # --------------------------------------------------------------------------
     # Custom commands
     # --------------------------------------------------------------------------
@@ -51,9 +66,8 @@ function(add_pulp_task)
     add_custom_command(
         OUTPUT ${TASK_CRT0_OBJ}
         COMMAND ${CMAKE_C_COMPILER}
-            ${PULP_MARCH}
-            ${PULP_MABI}
-            ${PULP_CFLAGS_DEFINES}
+            ${PULP_ARCH_FLAGS}
+            -DPULP_CORE_COUNT=${PULP_CORE_COUNT}
             -c -o ${TASK_CRT0_OBJ}
             ${PULP_CRT0_SRC}
         DEPENDS ${PULP_CRT0_SRC}
@@ -69,7 +83,8 @@ function(add_pulp_task)
             ${PULP_CFLAGS_DEFINES}
             ${TASK_INCLUDE_FLAGS}
             ${PULP_LINK_FLAGS}
-            -T${PULP_LINK_SCRIPT}
+            ${TASK_UNDEF_FLAGS}
+            # -T${PULP_LINK_SCRIPT}
             -o ${TASK_ELF}
             ${TASK_CRT0_OBJ}
             ${MAGIA_IO_SRC}

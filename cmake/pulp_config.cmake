@@ -19,15 +19,13 @@ set(PULP_ABI ilp CACHE STRING "PULP32 ABI prefix")
 set(PULP_MARCH "-march=${PULP_ARCH}${PULP_XLEN}${PULP_XTEN}")
 set(PULP_MABI "-mabi=${PULP_ABI}${PULP_XLEN}")
 
-# Compiler flags for PULP task binary (position-independent, bare-metal)
-set(PULP_COMPILE_FLAGS
+# Compiler and linker flags [MAGIA/sw/kernel_pulp/Makefile]
+set(PULP_ARCH_FLAGS
     ${PULP_MARCH}
     ${PULP_MABI}
-    "-fPIC"
-    "-mcmodel=medany"
-    "-static"
-    "-nostartfiles"
-    "-nostdlib"
+)
+set(PULP_COMPILE_FLAGS
+    ${PULP_ARCH_FLAGS}
     "-O2"
     "-g"
     "-Wall"
@@ -35,24 +33,79 @@ set(PULP_COMPILE_FLAGS
     "-Wno-unused-parameter"
     "-Wno-unused-variable"
     "-Wno-unused-function"
-    "-fno-common"
+    "-Wundef"
     "-ffunction-sections"
     "-fdata-sections"
+    "-fPIC"
+    "-mcmodel=medany"
     "-fno-builtin"
+    "-fno-jump-tables"
+    "-fno-common"
+    "-msmall-data-limit=0"
+    "-DPULP_CORE_COUNT=${PULP_CORE_COUNT}"
+    "-DCV32E40P"
+    "-nostartfiles"
+    "-nostdlib"
+    "-U__riscv__"
+    "-static"
 )
-
 set(PULP_CFLAGS_DEFINES
     "-DPULP_CORE_COUNT=${PULP_CORE_COUNT}"
     "-DPULP_TARGET"
-    "-save-temps"
+    "-DCV32E40P"
+    # "-save-temps"
 )
-
-set(PULP_LINK_FLAGS
+ set(PULP_LINK_FLAGS
+    ${PULP_ARCH_FLAGS}
     "-nostartfiles"
     "-nostdlib"
-    "-Wl,-z,norelro"
+    "-Wl,--gc-sections"
     "-Wl,--allow-multiple-definition"
+    "-T${PULP_LINK_SCRIPT}"
+    "-flto"
+    "-Wl,-z,norelro"
 )
+# # Compiler flags for PULP task binary (position-independent, bare-metal)
+# set(PULP_COMPILE_FLAGS
+#     ${PULP_MARCH}
+#     ${PULP_MABI}
+#     "-fPIC"
+#     "-mcmodel=medany"
+#     "-static"
+#     "-nostartfiles"
+#     "-nostdlib"
+#     "-O2"
+#     "-g"
+#     "-Wall"
+#     "-Wextra"
+#     "-Wno-unused-parameter"
+#     "-Wno-unused-variable"
+#     "-Wno-unused-function"
+#     "-Wundef"
+#     "-fno-common"
+#     "-ffunction-sections"
+#     "-fdata-sections"
+#     "-fno-builtin"
+#     "-fno-jump-tables"
+#     "-msmall-data-limit=0"
+# )
+
+# set(PULP_CFLAGS_DEFINES
+#     "-DPULP_CORE_COUNT=${PULP_CORE_COUNT}"
+#     "-DPULP_TARGET"
+#     "-DCV32E40P=${CV32E40P}"
+#     "-save-temps"
+# )
+
+# set(PULP_LINK_FLAGS
+#     "-nostartfiles"
+#     "-nostdlib"
+#     "-Wl,-z,norelro"
+#     "-Wl,--allow-multiple-definition"
+#     "-flto"
+#     "-Wl,--gc-sections"
+#     "-Wl,--undefined=hello_task"
+# )
 
 # add_pulp_task defaults
 set(PULP_TASK_OUTPUT_ROOT "${CMAKE_BINARY_DIR}/bin/${TARGET_PLATFORM}")
