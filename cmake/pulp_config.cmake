@@ -14,7 +14,11 @@ set(PULP_CORE_COUNT 8 CACHE STRING "Number of PULP cores per cluster")
 # ISA/ABI — same toolchain as CV32 Controller
 set(PULP_ARCH rv CACHE STRING "PULP32 ARCH prefix")
 set(PULP_XLEN 32 CACHE STRING "PULP32 XLEN")
+if (${COMPILER_NAME} STREQUAL "riscv64-unknown-elf-gcc")
 set(PULP_XTEN imc_xcvalu_xcvbi_xcvbitmanip_xcvhwlp_xcvmac_xcvmem_xcvsimd_xcvelw_zfinx_zhinxmin CACHE STRING "PULP32 ISA extensions")
+else ()
+set(PULP_XTEN imcxgap9 CACHE STRING "PULP32 ISA extensions")
+endif ()
 set(PULP_ABI ilp CACHE STRING "PULP32 ABI prefix")
 set(PULP_MARCH "-march=${PULP_ARCH}${PULP_XLEN}${PULP_XTEN}")
 set(PULP_MABI "-mabi=${PULP_ABI}${PULP_XLEN}")
@@ -24,6 +28,7 @@ set(PULP_ARCH_FLAGS
     ${PULP_MARCH}
     ${PULP_MABI}
 )
+
 set(PULP_COMPILE_FLAGS
     ${PULP_ARCH_FLAGS}
     "-O2"
@@ -38,74 +43,28 @@ set(PULP_COMPILE_FLAGS
     "-fdata-sections"
     "-fPIC"
     "-mcmodel=medany"
-    "-fno-builtin"
     "-fno-jump-tables"
-    "-fno-common"
     "-msmall-data-limit=0"
     "-DPULP_CORE_COUNT=${PULP_CORE_COUNT}"
-    "-DCV32E40P"
     "-nostartfiles"
     "-nostdlib"
     "-U__riscv__"
-    "-static"
 )
+
 set(PULP_CFLAGS_DEFINES
     "-DPULP_CORE_COUNT=${PULP_CORE_COUNT}"
     "-DPULP_TARGET"
-    "-DCV32E40P"
+    "-DCV32E40P=${CV32E40P}"
     # "-save-temps"
 )
- set(PULP_LINK_FLAGS
-    ${PULP_ARCH_FLAGS}
+ 
+set(PULP_LINK_FLAGS
+    ${PULP_ARCH_FLAGS}      
     "-nostartfiles"
     "-nostdlib"
-    "-Wl,--gc-sections"
-    "-Wl,--allow-multiple-definition"
-    "-T${PULP_LINK_SCRIPT}"
-    "-flto"
     "-Wl,-z,norelro"
+    "-Wl,--allow-multiple-definition"
 )
-# # Compiler flags for PULP task binary (position-independent, bare-metal)
-# set(PULP_COMPILE_FLAGS
-#     ${PULP_MARCH}
-#     ${PULP_MABI}
-#     "-fPIC"
-#     "-mcmodel=medany"
-#     "-static"
-#     "-nostartfiles"
-#     "-nostdlib"
-#     "-O2"
-#     "-g"
-#     "-Wall"
-#     "-Wextra"
-#     "-Wno-unused-parameter"
-#     "-Wno-unused-variable"
-#     "-Wno-unused-function"
-#     "-Wundef"
-#     "-fno-common"
-#     "-ffunction-sections"
-#     "-fdata-sections"
-#     "-fno-builtin"
-#     "-fno-jump-tables"
-#     "-msmall-data-limit=0"
-# )
-
-# set(PULP_CFLAGS_DEFINES
-#     "-DPULP_CORE_COUNT=${PULP_CORE_COUNT}"
-#     "-DPULP_TARGET"
-#     "-DCV32E40P=${CV32E40P}"
-#     "-save-temps"
-# )
-
-# set(PULP_LINK_FLAGS
-#     "-nostartfiles"
-#     "-nostdlib"
-#     "-Wl,-z,norelro"
-#     "-Wl,--allow-multiple-definition"
-#     "-flto"
-#     "-Wl,--gc-sections"
-#     "-Wl,--undefined=hello_task"
-# )
 
 # add_pulp_task defaults
 set(PULP_TASK_OUTPUT_ROOT "${CMAKE_BINARY_DIR}/bin/${TARGET_PLATFORM}")

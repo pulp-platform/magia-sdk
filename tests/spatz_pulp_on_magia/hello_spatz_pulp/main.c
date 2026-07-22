@@ -33,7 +33,7 @@ int main(void)
     pulp_init(PULP_BINARY_START);
 
     printf("[CV32] Launching Spatz task\n");
-    spatz_run_task(HELLO_SPATZ_TASK);
+    spatz_run_task(HELLO_TASK);
 
     eu_spatz_wait(&eu_ctrl, WFE);
     if (spatz_get_exit_code() != 0) {

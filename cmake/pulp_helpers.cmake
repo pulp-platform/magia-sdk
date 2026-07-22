@@ -84,7 +84,7 @@ function(add_pulp_task)
             ${TASK_INCLUDE_FLAGS}
             ${PULP_LINK_FLAGS}
             ${TASK_UNDEF_FLAGS}
-            # -T${PULP_LINK_SCRIPT}
+            -T${PULP_LINK_SCRIPT}
             -o ${TASK_ELF}
             ${TASK_CRT0_OBJ}
             ${MAGIA_IO_SRC}
@@ -198,8 +198,8 @@ function(add_cv32_executable_with_pulp)
         ${PULP_HEADER_DIR}
     )
 
-    target_compile_options(${ARG_TARGET_NAME} PRIVATE ${CV32_COMPILE_FLAGS})
-    target_link_options(${ARG_TARGET_NAME} PRIVATE ${CV32_LINK_FLAGS})
+    target_compile_options(${ARG_TARGET_NAME} PRIVATE ${PULP_COMPILE_FLAGS})
+    target_link_options(${ARG_TARGET_NAME} PRIVATE ${PULP_LINK_FLAGS})
     target_link_libraries(${ARG_TARGET_NAME} PUBLIC runtime hal)
 
     add_dependencies(${ARG_TARGET_NAME} ${${ARG_TARGET_NAME}_PULP_TARGET})
@@ -273,8 +273,8 @@ function(add_cv32_executable_with_pulp_and_spatz)
         ${PULP_HEADER_DIR}
     )
 
-    target_compile_options(${ARG_TARGET_NAME} PRIVATE ${CV32_COMPILE_FLAGS})
-    target_link_options(${ARG_TARGET_NAME} PRIVATE ${CV32_LINK_FLAGS})
+    target_compile_options(${ARG_TARGET_NAME} PRIVATE ${PULP_COMPILE_FLAGS})
+    target_link_options(${ARG_TARGET_NAME} PRIVATE ${PULP_LINK_FLAGS})
     target_link_libraries(${ARG_TARGET_NAME} PUBLIC runtime hal)
 
     add_dependencies(${ARG_TARGET_NAME}
