@@ -26,7 +26,7 @@ echo "#define PULP_BINARY_START ((uint32_t)&_pulp_binary_start)" >> "${TASK_HEAD
 # Add task function entry points (all global functions with 'task' in their name)
 echo "" >> "${TASK_HEADER}"
 echo "/* Task function entry points - OFFSETS from PULP_BINARY_START */" >> "${TASK_HEADER}"
-"${OBJDUMP}" -t "${TASK_ELF}" | awk '$2 == "g" && $NF ~ /task/ {print $1, $NF}' | while read addr name; do
+"${OBJDUMP}" -t "${TASK_ELF}" | grep -E "F .text.*task" | awk '{print $1, $NF}' | while read addr name; do
     if [[ "$name" != "__first_task" ]]; then
     TASK_NAME=$(echo "$name" | tr 'a-z' 'A-Z')
     echo "#define ${TASK_NAME} (PULP_BINARY_START + 0x${addr})" >> "${TASK_HEADER}"

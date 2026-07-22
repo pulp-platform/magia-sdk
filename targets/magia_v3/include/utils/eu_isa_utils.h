@@ -151,9 +151,13 @@ static inline uint32_t eu_wait_events_polling(uint32_t event_mask, uint32_t time
 static inline unsigned int evt_read32(unsigned int addr)
 {
     unsigned int value;
-// Direct p.elw inline assembly for PULP cores (RI5CY, CV32E40P)
+// Direct p.elw inline assembly for PULP cores (CV32E40P)
 #if STALLING == 0
+#if CV32E40P == 1
     __asm__ __volatile__("cv.elw %0, 0(%1)" : "=r"(value) : "r"(addr) : "memory");
+#else
+    __asm__ __volatile__("p.elw %0, 0(%1)" : "=r"(value) : "r"(addr) : "memory");
+#endif
 #endif
     return value;
 }
