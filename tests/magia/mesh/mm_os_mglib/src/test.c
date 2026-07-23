@@ -8,16 +8,19 @@
 #include "test.h"
 
 #include "tile.h"
-#include "idma.h"
-#include "redmule.h"
-#include "eventunit.h"
+#include "mg_idma.h"
+#include "mg_redmule.h"
+#include "mg_event.h"
 
 #define N_ITERATIONS 1
+#define N_TIMESLOTS  8
 #define WAIT_MODE    WFE
 
 /**
  * This test aims to verify the functionality of MAGIA as a systolic array for matrix
- * multiplications, following the output-static mechanism.
+ * multiplications, following the output-static mechanism. It is a copy of the mm_os_2
+ * test, but issues transfers/jobs through the mglib layer (mg_idma / mg_redmule /
+ * mg_event) instead of calling the hal/drivers API directly.
  */
 int main(void)
 {
@@ -44,7 +47,6 @@ int main(void)
     idma_init(&idma_ctrl);
     redmule_init(&redmule_ctrl);
 
-#if STALLING == 0
     eu_config_t eu_cfg      = {.hartid = hartid};
     eu_controller_t eu_ctrl = {
         .base = NULL,
@@ -54,7 +56,6 @@ int main(void)
     eu_init(&eu_ctrl);
     eu_redmule_init(&eu_ctrl, 0);
     eu_idma_init(&eu_ctrl, 0);
-#endif
 
     uint32_t y_id         = GET_Y_ID(hartid);
     uint32_t x_id         = GET_X_ID(hartid);
@@ -98,7 +99,7 @@ int main(void)
      * Weight data-tile: (t_size x tile_w) * data_dim
      * Output data-tile: ((tile_h x tile_w) * data_dim)
      */
-    uint8_t timeslots = 8;
+    uint8_t timeslots = N_TIMESLOTS;
     uint8_t t_size    = N_SIZE / timeslots;
 
     /**
@@ -140,6 +141,10 @@ int main(void)
     volatile uint32_t input_pt_next;
     volatile uint32_t weight_pt_next;
 
+    mg_event_t idma_evt_x, idma_evt_y, idma_evt_w;
+    mg_event_t redmule_evt_0, redmule_evt_1;
+    mg_event_t *redmule_evt_next, *redmule_evt_curr;
+
     /**
      * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
      */
@@ -148,23 +153,66 @@ int main(void)
          * Load the static output tile
          * And then the t0 weight and input tiles
          */
-        idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
-#if STALLING == 0
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
-#endif
+        mg_idma_memcpy_2d(&idma_ctrl,
+                          &eu_ctrl,
+                          WAIT_MODE,
+                          0,
+                          axi_addr_y,
+                          obi_addr_y,
+                          len_y,
+                          std_y,
+                          reps_y,
+                          &idma_evt_y,
+                          NULL);
 
         // printf("Recieved this data: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile
         // uint16_t*)(obi_addr_y + 2));
 
-        idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x_0, len_x, std_x, reps_x);
-#if STALLING == 0
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
-#endif
+        mg_idma_memcpy_2d(&idma_ctrl,
+                          &eu_ctrl,
+                          WAIT_MODE,
+                          0,
+                          axi_addr_x,
+                          obi_addr_x_0,
+                          len_x,
+                          std_x,
+                          reps_x,
+                          &idma_evt_x,
+                          NULL);
 
-        idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w, obi_addr_w_0, len_w, std_w, reps_w);
-#if STALLING == 0
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
-#endif
+        mg_idma_memcpy_2d(&idma_ctrl,
+                          &eu_ctrl,
+                          WAIT_MODE,
+                          0,
+                          axi_addr_w,
+                          obi_addr_w_0,
+                          len_w,
+                          std_w,
+                          reps_w,
+                          &idma_evt_w,
+                          NULL);
+
+        mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_x);
+        mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_w);
+        mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_y);
+
+        // enqueue first redmule job, without triggering
+        mg_redmule_gemm_enqueue(&redmule_ctrl,
+                                &eu_ctrl,
+                                WAIT_MODE,
+                                obi_addr_x_0,
+                                obi_addr_w_0,
+                                obi_addr_y,
+                                (uint16_t)tile_h,
+                                (uint16_t)t_size,
+                                (uint16_t)tile_w,
+                                &redmule_evt_0,
+                                NULL);
+
+        // commit it to the hardware queue (its inputs are already loaded above);
+        // this unlocks the controller for the next enqueue and lets the i=0 start
+        // actually launch it.
+        mg_redmule_gemm_commit(&redmule_ctrl);
 
         /**
          * 4. Cycle over the timeslots.
@@ -180,76 +228,100 @@ int main(void)
              * 4a. Select the correct pointer for the current timeslot
              */
             if (i % 2) {
-                input_pt       = obi_addr_x_1;
-                input_pt_next  = obi_addr_x_0;
-                weight_pt      = obi_addr_w_1;
-                weight_pt_next = obi_addr_w_0;
+                input_pt         = obi_addr_x_1;
+                input_pt_next    = obi_addr_x_0;
+                weight_pt        = obi_addr_w_1;
+                weight_pt_next   = obi_addr_w_0;
+                redmule_evt_curr = &redmule_evt_1;
+                redmule_evt_next = &redmule_evt_0;
             } else {
-                input_pt       = obi_addr_x_0;
-                input_pt_next  = obi_addr_x_1;
-                weight_pt      = obi_addr_w_0;
-                weight_pt_next = obi_addr_w_1;
+                input_pt         = obi_addr_x_0;
+                input_pt_next    = obi_addr_x_1;
+                weight_pt        = obi_addr_w_0;
+                weight_pt_next   = obi_addr_w_1;
+                redmule_evt_curr = &redmule_evt_0;
+                redmule_evt_next = &redmule_evt_1;
             }
             /**
              * 4. IDMA to load the input and weight data-tile for next timeslot (if there is one)
              * Call redmule while loading the weight of the next timeslot.
              */
             if (i < (timeslots - 1)) {
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
-                               axi_addr_x + (t_size * (i + 1) * 2),
-                               input_pt_next,
-                               len_x,
-                               std_x,
-                               reps_x);
-#if STALLING == 0
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
-#endif
+                // trigger current timeslot job if not already started
+                mg_redmule_gemm_start(&redmule_ctrl);
 
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
-                               axi_addr_w + (t_size * K_SIZE * (i + 1) * 2),
-                               weight_pt_next,
-                               len_w,
-                               std_w,
-                               reps_w);
-                redmule_gemm(&redmule_ctrl,
-                             input_pt,
-                             weight_pt,
-                             obi_addr_y,
-                             (uint16_t)tile_h,
-                             (uint16_t)t_size,
-                             (uint16_t)tile_w);
-#if STALLING == 0
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
-                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
-#endif
+                // DMA copy-in for next timeslot
+                mg_idma_memcpy_2d(&idma_ctrl,
+                                  &eu_ctrl,
+                                  WAIT_MODE,
+                                  0,
+                                  axi_addr_x + (t_size * (i + 1) * 2),
+                                  input_pt_next,
+                                  len_x,
+                                  std_x,
+                                  reps_x,
+                                  &idma_evt_x,
+                                  NULL);
 
-                // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile
-                // uint16_t*)(obi_addr_y + 2));
+                // enqueue next timeslot job
+                // it is convenient to do this here because mg_idma_memcpy_2d currently has a
+                // depth=1 queue!
+                mg_redmule_gemm_enqueue(&redmule_ctrl,
+                                        &eu_ctrl,
+                                        WAIT_MODE,
+                                        input_pt_next,
+                                        weight_pt_next,
+                                        obi_addr_y,
+                                        (uint16_t)tile_h,
+                                        (uint16_t)t_size,
+                                        (uint16_t)tile_w,
+                                        redmule_evt_next,
+                                        NULL);
+
+                // DMA copy-in for next timeslot
+                mg_idma_memcpy_2d(&idma_ctrl,
+                                  &eu_ctrl,
+                                  WAIT_MODE,
+                                  0,
+                                  axi_addr_w + (t_size * K_SIZE * (i + 1) * 2),
+                                  weight_pt_next,
+                                  len_w,
+                                  std_w,
+                                  reps_w,
+                                  &idma_evt_w,
+                                  NULL);
+
+                // wait for the next timeslot's inputs before commiting its job
+                mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_x);
+                mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_w);
+
+                // commit & start next timeslot job to hardware queue
+                mg_redmule_gemm_commit_start(&redmule_ctrl);
+
+                // wait for current timeslot redmule
+                mg_redmule_wait(&eu_ctrl, WAIT_MODE, redmule_evt_curr);
+
             } else {
-                redmule_gemm(&redmule_ctrl,
-                             input_pt,
-                             weight_pt,
-                             obi_addr_y,
-                             (uint16_t)tile_h,
-                             (uint16_t)t_size,
-                             (uint16_t)tile_w);
-#if STALLING == 0
-                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
-#endif
-                // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile
-                // uint16_t*)(obi_addr_y + 2));
+                mg_redmule_gemm_start(&redmule_ctrl);
+                mg_redmule_wait(&eu_ctrl, WAIT_MODE, redmule_evt_curr);
             }
         }
 
         /**
          * 5. Store the output data-tile back to L2
          */
-        idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
-#if STALLING == 0
-        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
-#endif
+        mg_idma_memcpy_2d(&idma_ctrl,
+                          &eu_ctrl,
+                          WAIT_MODE,
+                          1,
+                          axi_addr_y,
+                          obi_addr_y,
+                          len_y,
+                          std_y,
+                          reps_y,
+                          &idma_evt_y,
+                          NULL);
+        mg_idma_wait(&eu_ctrl, 1, WAIT_MODE, &idma_evt_y);
     }
 
     /**

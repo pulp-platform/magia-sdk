@@ -32,6 +32,12 @@ The following steps assume the default target platform, `magia_v2`, on which Spa
 
     From the SDK's root directory. If you have done it correctly, you'll see a "(gvsoc_venv)" preceding your terminal command line.
 
+    If you intend to generate new GEMM tests (`tests/magia/mesh/mm_generator`, which relies on PyTorch), pass `TORCH=1` to also install PyTorch (CPU build) into the environment:
+
+    `make gvsoc_uv TORCH=1`  (or `make gvsoc_pyenv TORCH=1`)
+
+    This is not needed to build or run the existing tests, so it is disabled by default to keep the environment lightweight.
+
 1. RISC-V GCC toolchain: make sure it is installed and visible in the `$PATH` environment variable. You can check if and where the compiler is installed by running the following command on your root (`/`) directory:
 
     `find . ! -readable -prune -o -name "riscv32-unknown-elf-gcc" -print`

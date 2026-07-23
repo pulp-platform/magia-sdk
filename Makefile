@@ -292,17 +292,23 @@ gvsoc_init:
 	git fetch origin $(GVSOC_GVRUN_COMMIT) && \
 	git checkout $(GVSOC_GVRUN_COMMIT)
 
+# Set TORCH=1 to also install the "gemm" extra (torch, CPU build via uv).
+TORCH ?= 0
+ifeq ($(TORCH),1)
+PIP_EXTRAS := [gemm]
+endif
+
 gvsoc_uv:
 	uv venv --python 3.12 gvsoc_venv && \
 	source gvsoc_venv/bin/activate && \
-	uv pip install .
+	uv pip install .$(PIP_EXTRAS)
 
 gvsoc_venv:
 	eval "$(pyenv init -)" && \
 	pyenv local 3.12 && \
 	python -m venv gvsoc_venv && \
 	source gvsoc_venv/bin/activate && \
-	pip install .
+	pip install .$(PIP_EXTRAS)
 
 llvm:
 	mkdir -p $(LLVM_DIR)

@@ -51,20 +51,6 @@ void eu32_redmule_init(eu_controller_t *ctrl, uint32_t enable_irq)
 }
 
 /**
- * @brief Wait for RedMulE completion using specified mode
- * @param mode Wait mode (polling, WFE, etc.)
- * @return Non-zero if RedMulE completed, 0 if timeout/error
- */
-uint32_t eu32_redmule_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
-{
-    uint32_t retval = eu_wait_events(EU_REDMULE_DONE_MASK, mode, 1000000);
-#if PROFILE_CMP == 1
-    stnl_cmp_f();
-#endif
-    return retval; // 1M cycle timeout
-}
-
-/**
  * @brief Check if RedMulE is currently busy
  * @return Non-zero if RedMulE is busy
  */
@@ -102,16 +88,6 @@ void eu32_idma_init(eu_controller_t *ctrl, uint32_t enable_irq)
 }
 
 /**
- * @brief Wait for any iDMA completion using specified mode
- * @param mode Wait mode (polling, WFE, etc.)
- * @return Non-zero if any iDMA completed, 0 if timeout/error
- */
-uint32_t eu32_idma_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
-{
-    return eu_wait_events(EU_IDMA_ALL_DONE_MASK, mode, 1000000); // 1M cycle timeout
-}
-
-/**
  * @brief Wait for specific iDMA direction completion
  * @param direction 0 = L2->L1 (A2O), 1 = L1->L2 (O2A)
  * @param mode Wait mode (polling, WFE, etc.)
@@ -132,33 +108,9 @@ uint32_t eu32_idma_wait_direction(eu_controller_t *ctrl, uint32_t direction, eu_
     return retval; // 1M cycle timeout
 }
 
-/**
- * @brief Wait for L2->L1 (AXI2OBI) completion specifically
- * @param mode Wait mode (polling, WFE, etc.)
- * @return Non-zero if L2->L1 completed, 0 if timeout/error
- */
-uint32_t eu32_idma_wait_a2o(eu_controller_t *ctrl, eu_wait_mode_t mode)
-{
-    uint32_t retval = eu_wait_events(EU_IDMA_A2O_DONE_MASK, mode, 1000000);
-#if PROFILE_CMI == 1
-    stnl_cmi_f();
-#endif
-    return retval;
-}
-
-/**
- * @brief Wait for L1->L2 (OBI2AXI) completion specifically
- * @param mode Wait mode (polling, WFE, etc.)
- * @return Non-zero if L1->L2 completed, 0 if timeout/error
- */
-uint32_t eu32_idma_wait_o2a(eu_controller_t *ctrl, eu_wait_mode_t mode)
-{
-    uint32_t retval = eu_wait_events(EU_IDMA_O2A_DONE_MASK, mode, 1000000);
-#if PROFILE_CMO == 1
-    stnl_cmo_f();
-#endif
-    return retval;
-}
+// eu32_idma_wait_a2o / eu32_idma_wait_o2a are now static inline (see
+// eventunit32.h), so they cannot be alias targets; the external symbols are
+// exposed via thin wrappers further down for legacy/test callers.
 
 /**
  * @brief Check if any iDMA transfer has completed
@@ -344,14 +296,28 @@ extern void eu_init(eu_controller_t *ctrl)
     __attribute__((alias("eu32_init"), used, visibility("default")));
 extern void eu_redmule_init(eu_controller_t *ctrl, uint32_t enable_irq)
     __attribute__((alias("eu32_redmule_init"), used, visibility("default")));
-extern uint32_t eu_redmule_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
-    __attribute__((alias("eu32_redmule_wait"), used, visibility("default")));
+// eu32_redmule_wait is now a static inline (see eventunit32.h), so it cannot be an
+// alias target; expose the external symbol via a thin wrapper for legacy/test callers.
+uint32_t __attribute__((used, visibility("default"))) eu_redmule_wait(eu_controller_t *ctrl,
+                                                                      eu_wait_mode_t mode)
+{
+    return eu32_redmule_wait(ctrl, mode);
+}
 extern void eu_idma_init(eu_controller_t *ctrl, uint32_t enable_irq)
     __attribute__((alias("eu32_idma_init"), used, visibility("default")));
-extern uint32_t eu_idma_wait_a2o(eu_controller_t *ctrl, eu_wait_mode_t mode)
-    __attribute__((alias("eu32_idma_wait_a2o"), used, visibility("default")));
-extern uint32_t eu_idma_wait_o2a(eu_controller_t *ctrl, eu_wait_mode_t mode)
-    __attribute__((alias("eu32_idma_wait_o2a"), used, visibility("default")));
+// eu32_idma_wait_a2o / eu32_idma_wait_o2a are now static inlines (see
+// eventunit32.h), so they cannot be alias targets; expose the external symbols
+// via thin wrappers for legacy/test callers.
+uint32_t __attribute__((used, visibility("default"))) eu_idma_wait_a2o(eu_controller_t *ctrl,
+                                                                       eu_wait_mode_t mode)
+{
+    return eu32_idma_wait_a2o(ctrl, mode);
+}
+uint32_t __attribute__((used, visibility("default"))) eu_idma_wait_o2a(eu_controller_t *ctrl,
+                                                                       eu_wait_mode_t mode)
+{
+    return eu32_idma_wait_o2a(ctrl, mode);
+}
 extern void eu_fsync_init(eu_controller_t *ctrl, uint32_t enable_irq)
     __attribute__((alias("eu32_fsync_init"), used, visibility("default")));
 extern uint32_t eu_fsync_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
@@ -397,13 +363,13 @@ extern uint32_t eu_spatz_is_done(eu_controller_t *ctrl)
 eu_controller_api_t eu_api = {
     .init                = eu32_init,
     .redmule_init        = eu32_redmule_init,
-    .redmule_wait        = eu32_redmule_wait,
+    .redmule_wait        = eu_redmule_wait,
     .redmule_is_busy     = eu32_redmule_is_busy,
     .redmule_is_done     = eu32_redmule_is_done,
     .idma_init           = eu32_idma_init,
     .idma_wait_direction = eu32_idma_wait_direction,
-    .idma_wait_a2o       = eu32_idma_wait_a2o,
-    .idma_wait_o2a       = eu32_idma_wait_o2a,
+    .idma_wait_a2o       = eu_idma_wait_a2o,
+    .idma_wait_o2a       = eu_idma_wait_o2a,
     .idma_is_done        = eu32_idma_is_done,
     .idma_a2o_is_done    = eu32_idma_a2o_is_done,
     .idma_o2a_is_done    = eu32_idma_o2a_is_done,

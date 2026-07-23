@@ -43,6 +43,19 @@ int32_t redmule16_acquire(redmule_controller_t *ctrl)
 }
 
 /**
+ * Writes the hardware COMMIT_TRIGGER register, which commits and triggers
+ * a hardware job.
+ */
+int32_t redmule16_trigger(redmule_controller_t *ctrl)
+{
+#if REDMULE_MM == 1
+    redmule_mm_trigger();
+#else
+    return 0;
+#endif
+}
+
+/**
  * Configure and launch an FP16 GEMM on the RedMulE accelerator.
  * Computes: Y = X * W + Y  where X is [M x N], W is [N x K], Y is [M x K].
  *
@@ -77,9 +90,13 @@ int redmule16_gemm(redmule_controller_t *ctrl,
     redmule_mm_marith(
         y, w, x); // Launch GEMM with matrix addresses via memory-mapped HWPE registers
 #endif
+    redmule_mm_commit_trigger();
 
     return 0;
 }
+
+// redmule16_gemm_enqueue / _commit / _start are defined as static inline in
+// redmule16.h so they fold into their mglib call sites (see the note there).
 
 extern int redmule_init(redmule_controller_t *ctrl)
     __attribute__((alias("redmule16_init"), used, visibility("default")));
