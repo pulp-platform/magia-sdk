@@ -80,7 +80,8 @@ static inline __attribute__((always_inline)) int redmule16_gemm_commit(redmule_c
  *
  * @return 0 on successful dispatch.
  */
-static inline __attribute__((always_inline)) int redmule16_gemm_commit_start(redmule_controller_t *ctrl)
+static inline __attribute__((always_inline)) int
+redmule16_gemm_commit_start(redmule_controller_t *ctrl)
 {
 #if REDMULE_MM != 0
     redmule_mm_commit_trigger();
