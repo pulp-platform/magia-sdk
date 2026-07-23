@@ -13,6 +13,8 @@
 #ifndef _TEST_GEMM_INCLUDE_GUARD_
 #define _TEST_GEMM_INCLUDE_GUARD_
 
+#include "utils/typedefs.h"
+
 #define DIM_A (80)
 #define DIM_B (200)
 #define DIM_C (60)

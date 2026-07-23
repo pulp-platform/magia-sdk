@@ -32,6 +32,39 @@ void eu32_init(eu_controller_t *ctrl)
 }
 
 //=============================================================================
+// PULP-specific Event Functions
+//=============================================================================
+
+/**
+ * @brief Initialize Event Unit for PULP cluster events
+ * @param enable_irq If true, enable IRQ for PULP cluster completion
+ */
+void eu32_pulp_init(eu_controller_t *ctrl, uint32_t enable_irq)
+{
+    // Enable PULP cluster events
+    eu_enable_events(EU_PULP_EVT_MASK);
+
+    // Optionally enable IRQ for PULP cluster completion
+    if (enable_irq) {
+        eu_enable_irq(EU_PULP_EVT_MASK);
+    }
+}
+
+/**
+ * @brief Wait for Pulp cluster completion specifically
+ * @param mode Wait mode (polling, WFE, etc.)
+ * @return Non-zero if Pulp cluster completed, 0 if timeout/error
+ */
+uint32_t eu32_pulp_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
+{
+    uint32_t retval = eu_wait_events(EU_PULP_EVT_MASK, mode, 1000000);
+#if PROFILE_CMI == 1
+    stnl_cmi_f();
+#endif
+    return retval;
+}
+
+//=============================================================================
 // RedMulE-specific Event Functions
 //=============================================================================
 
@@ -342,6 +375,10 @@ uint32_t eu32_spatz_is_done(eu_controller_t *ctrl)
 
 extern void eu_init(eu_controller_t *ctrl)
     __attribute__((alias("eu32_init"), used, visibility("default")));
+extern void eu_pulp_init(eu_controller_t *ctrl, uint32_t enable_irq)
+    __attribute__((alias("eu32_pulp_init"), used, visibility("default")));
+extern uint32_t eu_pulp_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)
+    __attribute__((alias("eu32_pulp_wait"), used, visibility("default")));
 extern void eu_redmule_init(eu_controller_t *ctrl, uint32_t enable_irq)
     __attribute__((alias("eu32_redmule_init"), used, visibility("default")));
 extern uint32_t eu_redmule_wait(eu_controller_t *ctrl, eu_wait_mode_t mode)

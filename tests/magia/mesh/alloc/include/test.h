@@ -7,6 +7,8 @@
 #ifndef _TEST_ALLOC_INCLUDE_GUARD_
 #define _TEST_ALLOC_INCLUDE_GUARD_
 
+#include "utils/typedefs.h"
+
 // Some random L2 data
 static const float16 l2_vect[] = {0.2296142578125f,
                                   -0.380615234375f,

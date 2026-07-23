@@ -62,4 +62,4 @@ inline uint32_t get_l1_base(uint32_t hartid)
     return L1_BASE + hartid * L1_TILE_OFFSET;
 }
 
-#endif /* MAGIA_UTILS_H */
+#endif
