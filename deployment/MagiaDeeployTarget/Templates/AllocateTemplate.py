@@ -12,8 +12,15 @@ from Deeploy.DeeployTypes import NodeTemplate
 # (goes to .bss) or they would blow the small per-tile stack. I/O buffers are
 # emitted at file scope and are 'extern'-ed in network.h, so they stay
 # non-static (external linkage).
+# Aliased buffers (e.g. a Reshape output) share the producer's storage. Deeploy
+# expresses this as `out = in`, but here buffers are ARRAYS, not pointers (no
+# allocator yet), and a C array can't be reassigned. So an alias is emitted as a
+# pointer to the source array instead. Once MAGIA gets an allocator and buffers
+# become pointers, this can go back to the plain `out = in`.
 magiaInitTemplate = NodeTemplate("""\
-% if is_io:
+% if alias is not None:
+${type.referencedType.typeName} *${name} = ${alias};
+% elif is_io:
 ${type.referencedType.typeName} ${name}[${size}];
 % else:
 static ${type.referencedType.typeName} ${name}[${size}];
