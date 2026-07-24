@@ -12,18 +12,18 @@
 #include "multi_spatz_task_bin.h"
 #include "multi_pulp_task_bin.h"
 
-/* ---- L1 memory layout -------------------------------------------------- */
-#define SPATZ_ADD_PARAMS_ADDR  (L1_BASE + 0x000) /* spatz_add_params_t  */
-#define SPATZ_RELU_PARAMS_ADDR (L1_BASE + 0x020) /* spatz_relu_params_t */
-#define A_ADDR                 (L1_BASE + 0x040) /* fp16[8] add input A */
-#define B_ADDR                 (L1_BASE + 0x050) /* fp16[8] add input B */
-#define C_ADDR                 (L1_BASE + 0x060) /* fp16[8] add output  */
-#define X_ADDR                 (L1_BASE + 0x070) /* fp16[8] relu input  */
-#define Y_ADDR                 (L1_BASE + 0x080) /* fp16[8] relu output */
-#define PULP_PARAMS_ADDR       (L1_BASE + 0x100) /* pulp_task_params_t  */
-#define IN_A_ADDR              (L1_BASE + 0x120) /* int32_t[8]          */
-#define IN_B_ADDR              (L1_BASE + 0x140) /* int32_t[8]          */
-#define OUT_ADDR               (L1_BASE + 0x160) /* int32_t[8]          */
+#define TILE_L1_BASE           (get_l1_base(get_hartid()))
+#define SPATZ_ADD_PARAMS_ADDR  (TILE_L1_BASE + 0x000) /* spatz_add_params_t  */
+#define SPATZ_RELU_PARAMS_ADDR (TILE_L1_BASE + 0x020) /* spatz_relu_params_t */
+#define A_ADDR                 (TILE_L1_BASE + 0x040) /* fp16[8] add input A */
+#define B_ADDR                 (TILE_L1_BASE + 0x050) /* fp16[8] add input B */
+#define C_ADDR                 (TILE_L1_BASE + 0x060) /* fp16[8] add output  */
+#define X_ADDR                 (TILE_L1_BASE + 0x070) /* fp16[8] relu input  */
+#define Y_ADDR                 (TILE_L1_BASE + 0x080) /* fp16[8] relu output */
+#define PULP_PARAMS_ADDR       (TILE_L1_BASE + 0x100) /* pulp_task_params_t  */
+#define IN_A_ADDR              (TILE_L1_BASE + 0x120) /* int32_t[8]          */
+#define IN_B_ADDR              (TILE_L1_BASE + 0x140) /* int32_t[8]          */
+#define OUT_ADDR               (TILE_L1_BASE + 0x160) /* int32_t[8]          */
 
 #define VEC_LEN                8
 

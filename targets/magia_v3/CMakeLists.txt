@@ -33,6 +33,11 @@ target_include_directories(runtime
 target_compile_options(runtime
   PUBLIC
   -O3
+  # Prevent GCC from turning the hand-written memset/memcpy/memmove loops in
+  # io.c into calls to memset/memcpy/memmove (infinite self-recursion → stack
+  # overflow). -ffreestanding does NOT disable this; -O2/-O3 enable
+  # -ftree-loop-distribute-patterns which does the loop->libcall rewrite.
+  -fno-tree-loop-distribute-patterns
   -DEVAL=${EVAL}
   -DFSYNC_MM=${FSYNC_MM}
   -DIDMA_MM=${IDMA_MM}

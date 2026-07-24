@@ -1,7 +1,7 @@
 #include "tile.h"
 #include "eventunit.h"
 
-#include "hello_spatz_task_bin.h" /* Spatz: SPATZ_BINARY_START, HELLO_TASK */
+#include "hello_spatz_task_bin.h" /* Spatz: SPATZ_BINARY_START, HELLO_SPATZ_TASK */
 #include "hello_pulp_task_bin.h"  /* PULP:  PULP_BINARY_START              */
 
 int main(void)
@@ -33,7 +33,7 @@ int main(void)
     pulp_init(PULP_BINARY_START);
 
     printf("[CV32] Launching Spatz task\n");
-    spatz_run_task(HELLO_TASK);
+    spatz_run_task(HELLO_SPATZ_TASK);
 
     eu_spatz_wait(&eu_ctrl, WFE);
     if (spatz_get_exit_code() != 0) {
