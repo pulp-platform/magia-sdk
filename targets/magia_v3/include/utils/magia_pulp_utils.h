@@ -82,8 +82,7 @@ static inline void pulp_run_task(uint32_t task_addr, uint32_t core_mask)
     pulp_set_nb_cores_to_wait(__builtin_popcount(core_mask));
     pulp_set_func(task_addr);
     mmio32(PULP_START) = core_mask;
-    while (mmio32(PULP_START) != 0)
-        ;
+    while (mmio32(PULP_START) != 0);
 }
 
 /* Pass context pointer and dispatch task in one call. */

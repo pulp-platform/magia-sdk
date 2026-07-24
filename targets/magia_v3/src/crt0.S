@@ -81,8 +81,10 @@ _start:
 
 skip_bss_clear:
 
-  /* Stack initialization */
-  la   x2, stack
+  /* Stack initialization: top of the CV32 stack band (0x14000), grows down.
+   * Must use _stack_start (region top), NOT `stack` (region bottom + _min_stack),
+   * otherwise sp starts near the floor and underflows past 0x10000. */
+  la   x2, _stack_start
 
 .section .text
 
