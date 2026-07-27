@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "matmul_fp16_spatz.h"
 #include "matmul_fp16_spatz_params.h"
@@ -66,67 +69,40 @@ static int alloc_l1(void **params, uint32_t M, uint32_t K, uint32_t O, uint32_t 
 static int init_input_params(void *params, const float16 *A, const float16 *B, uint32_t a_batched, uint32_t b_batched)
 {
     volatile matmul_fp16_spatz_params_t *matmul_params;
-    uintptr_t shard_A_base;
-    uintptr_t shard_B_base;
-    uintptr_t shard_Y_base;
-    uint32_t local_idx;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t batch_start;
     uint32_t batch_len;
-    uint32_t M;
-    uint32_t K;
-    uint32_t O;
+    uint32_t a_elems;
+    uint32_t b_elems;
 
     matmul_params = (volatile matmul_fp16_spatz_params_t *) params;
-    shard_A_base = matmul_params->shard_A;
-    shard_B_base = matmul_params->shard_B;
-    shard_Y_base = matmul_params->shard_Y;
-
     batch_start = matmul_params->batch_start;
     batch_len   = matmul_params->batch_len;
-    M           = matmul_params->M;
-    K           = matmul_params->K;
-    O           = matmul_params->O;
+    a_elems     = matmul_params->M * matmul_params->K;
+    b_elems     = matmul_params->K * matmul_params->O;
 
-    /* A shared (a_batched == 0, e.g. broadcast weight) is read once for every batch. */
-    local_idx = 0;
-    for (uint32_t b = 0; b < batch_len; b++) {
-        uint32_t offset_A_2d = (a_batched ? (batch_start + b) : 0) * (M * K);
-        for (uint32_t m = 0; m < M; m++) {
-            uint32_t row_base = m * K;
-            for (uint32_t k = 0; k < K; k++) {
-                uint32_t global_idx = offset_A_2d + row_base + k;
-                uint32_t offset = local_idx * sizeof(float16);
-                mmio_fp16(shard_A_base + offset) = A[global_idx];
-                local_idx++;
-            }
-        }
-    }
+    if (batch_len == 0)
+        return 0;
 
-    /* B shared (b_batched == 0, e.g. broadcast weight) is read once for every batch. */
-    local_idx = 0;
-    for (uint32_t b = 0; b < batch_len; b++) {
-        uint32_t offset_B_2d = (b_batched ? (batch_start + b) : 0) * (K * O);
-        for (uint32_t k = 0; k < K; k++) {
-            uint32_t row_base = k * O;
-            for (uint32_t o = 0; o < O; o++) {
-                uint32_t global_idx = offset_B_2d + row_base + o;
-                uint32_t offset = local_idx * sizeof(float16);
-                mmio_fp16(shard_B_base + offset) = B[global_idx];
-                local_idx++;
-            }
-        }
-    }
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-    local_idx = 0;
-    for (uint32_t b = 0; b < batch_len; b++) {
-        for (uint32_t m = 0; m < M; m++) {
-            for (uint32_t o = 0; o < O; o++) {
-                uint32_t offset = local_idx * sizeof(float16);
-                mmio_fp16(shard_Y_base + offset) = 0;
-                local_idx++;
-            }
-        }
-    }
+    /* batched == 1: this tile's batches are a contiguous L2 block -> a 1D transfer.
+       batched == 0 (shared/broadcast weight): replicate the single 2D matrix into every
+       batch slot with a 2D transfer whose source stride is 0. The Spatz task overwrites
+       the whole output shard, so shard_Y is not zeroed here. */
+    if (a_batched)
+        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (A + batch_start * a_elems), (uint32_t) matmul_params->shard_A, batch_len * a_elems * sizeof(float16));
+    else
+        idma_memcpy_2d(&idma_ctrl, 0, (uint32_t) A, (uint32_t) matmul_params->shard_A, a_elems * sizeof(float16), 0, batch_len);
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
+
+    if (b_batched)
+        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (B + batch_start * b_elems), (uint32_t) matmul_params->shard_B, batch_len * b_elems * sizeof(float16));
+    else
+        idma_memcpy_2d(&idma_ctrl, 0, (uint32_t) B, (uint32_t) matmul_params->shard_B, b_elems * sizeof(float16), 0, batch_len);
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -134,13 +110,9 @@ static int init_input_params(void *params, const float16 *A, const float16 *B, u
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
+    eu_ctrl_init(&eu_ctrl);
 
     spatz_run_task_with_params(MATMUL_FP16_SPATZ_TASK, (uint32_t)params);
 
@@ -159,33 +131,26 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile matmul_fp16_spatz_params_t *matmul_params;
-    uintptr_t shard_Y_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t batch_start;
     uint32_t batch_len;
-    uint32_t local_idx;
-    uint32_t M;
-    uint32_t O;
+    uint32_t y_elems;
 
     matmul_params = (volatile matmul_fp16_spatz_params_t *) params;
-    shard_Y_base = matmul_params->shard_Y;
     batch_start = matmul_params->batch_start;
     batch_len = matmul_params->batch_len;
-    M = matmul_params->M;
-    O = matmul_params->O;
+    y_elems = matmul_params->M * matmul_params->O;
 
-    local_idx = 0;
-    for (uint32_t b = 0; b < batch_len; b++) {
-        uint32_t offset_Y_2d = (batch_start + b) * (M * O);
-        for (uint32_t m = 0; m < M; m++) {
-            uint32_t row_base = m * O;
-            for (uint32_t o = 0; o < O; o++) {
-                uint32_t global_idx = offset_Y_2d + row_base + o;
-                uint32_t offset = local_idx * sizeof(float16);
-                Y[global_idx] = mmio_fp16(shard_Y_base + offset);
-                local_idx++;
-            }
-        }
-    }
+    if (batch_len == 0)
+        return 0;
+
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* Y is always batched: this tile's batches are a contiguous L2 block -> a 1D transfer. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (Y + batch_start * y_elems), (uint32_t) matmul_params->shard_Y, batch_len * y_elems * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
