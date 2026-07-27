@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "conv2dgemm_fp16_spatz.h"
 #include "conv2dgemm_fp16_spatz_params.h"
@@ -112,50 +115,60 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shap
 static int init_input_params(void *params, const float16 *W, const float16 *B)
 {
     volatile conv2dgemm_fp16_spatz_params_t *conv_params;
-    uintptr_t shard_A;
-    uintptr_t shard_C;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t M;
     uint32_t N;
     uint32_t K;
     uint32_t oc_start;
+    uint32_t group;
     uint32_t cout_g;
     uint32_t K_g;
 
     conv_params = (volatile conv2dgemm_fp16_spatz_params_t *) params;
-    shard_A = conv_params->shard_A;
-    shard_C = conv_params->shard_C;
     M = conv_params->M;
     N = conv_params->N;
     K = conv_params->K;
     oc_start = conv_params->oc_start;
-    cout_g = conv_params->c_out / conv_params->group;   /* output channels per group */
-    K_g = K / conv_params->group;                       /* (C_in / group) * K_h * K_w */
+    group = conv_params->group;
+    cout_g = conv_params->c_out / group;   /* output channels per group */
+    K_g = K / group;                       /* (C_in / group) * K_h * K_w */
+
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
     /* GEMM does Y = alpha * A @ B + beta * C; beta gates the bias term. */
     mmio_fp16(conv_params->alpha) = (float16) 1.0f;
     mmio_fp16(conv_params->beta)  = conv_params->has_bias ? (float16) 1.0f : (float16) 0.0f;
 
-    /* Weights: ONNX W is [C_out, C_in/group, K_h, K_w] = [C_out, K_g] contiguous. Output
-       channel oc belongs to group g = oc / cout_g and only touches the im2col rows of that
-       group, so its K_g compact weights go into A's block [g*K_g, (g+1)*K_g) and the rest
-       of the row is zero (block-diagonal A -> plain dense GEMM). group == 1 fills the whole
-       row (g = 0, K_g = K), matching the standard convolution with no zero padding. */
-    for (uint32_t m = 0; m < M; m++) {
-        uint32_t oc = oc_start + m;
-        uint32_t g = oc / cout_g;
-        const float16 *w_row = W + (uintptr_t) oc * K_g;
-        for (uint32_t k = 0; k < K; k++)
-            mmio_fp16(shard_A + (m * K + k) * sizeof(float16)) = (float16) 0.0f;
-        for (uint32_t kk = 0; kk < K_g; kk++)
-            mmio_fp16(shard_A + (m * K + g * K_g + kk) * sizeof(float16)) = w_row[kk];
-    }
+    if (M > 0) {
+        /* Weights A = [M, K]. group == 1 (K_g == K) -> A is exactly the contiguous rows
+           W[oc_start : oc_start+M], a plain 1D DMA. For grouped convs A is block-diagonal
+           (each row's K_g compact weights in its group block, the rest zero) -> a scatter,
+           not a copy, so it is built scalar. */
+        if (group == 1) {
+            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (W + oc_start * K), (uint32_t) conv_params->shard_A, M * K * sizeof(float16));
+            eu_idma_wait_a2o(&eu_ctrl, WFE);
+        } else {
+            for (uint32_t m = 0; m < M; m++) {
+                uint32_t oc = oc_start + m;
+                uint32_t g = oc / cout_g;
+                const float16 *w_row = W + (uintptr_t) oc * K_g;
+                for (uint32_t k = 0; k < K; k++)
+                    mmio_fp16(conv_params->shard_A + (m * K + k) * sizeof(float16)) = (float16) 0.0f;
+                for (uint32_t kk = 0; kk < K_g; kk++)
+                    mmio_fp16(conv_params->shard_A + (m * K + g * K_g + kk) * sizeof(float16)) = w_row[kk];
+            }
+        }
 
-    /* Bias: broadcast the per-output-channel value over the N columns of C. */
-    if (conv_params->has_bias) {
-        for (uint32_t m = 0; m < M; m++) {
-            float16 b = B[oc_start + m];
-            for (uint32_t n = 0; n < N; n++)
-                mmio_fp16(shard_C + (m * N + n) * sizeof(float16)) = b;
+        /* Bias: broadcast the per-output-channel value over the N columns of C (a
+           broadcast, not a plain copy -> scalar). */
+        if (conv_params->has_bias) {
+            for (uint32_t m = 0; m < M; m++) {
+                float16 b = B[oc_start + m];
+                for (uint32_t n = 0; n < N; n++)
+                    mmio_fp16(conv_params->shard_C + (m * N + n) * sizeof(float16)) = b;
+            }
         }
     }
 
@@ -218,13 +231,9 @@ static void im2col(void *params, const float16 *X)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
+    eu_ctrl_init(&eu_ctrl);
 
     spatz_run_task_with_params(CONV2DGEMM_FP16_SPATZ_TASK, (uint32_t) params);
 
@@ -243,7 +252,8 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile conv2dgemm_fp16_spatz_params_t *conv_params;
-    uintptr_t shard_Y;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t n_batches;
     uint32_t c_out;
     uint32_t M;
@@ -251,22 +261,24 @@ static int store_result(void *params, float16 *Y)
     uint32_t oc_start;
 
     conv_params = (volatile conv2dgemm_fp16_spatz_params_t *) params;
-    shard_Y = conv_params->shard_Y;
     n_batches = conv_params->n_batches;
     c_out = conv_params->c_out;
     M = conv_params->M;
     N = conv_params->N;
     oc_start = conv_params->oc_start;
 
-    for (uint32_t b = 0; b < n_batches; b++) {
-        float16 *Y_b = Y + (uintptr_t) b * c_out * N;
-        uintptr_t shard_Y_b = shard_Y + (uintptr_t) b * M * N * sizeof(float16);
-        for (uint32_t m = 0; m < M; m++) {
-            float16 *y_row = Y_b + (oc_start + m) * N;
-            for (uint32_t n = 0; n < N; n++)
-                y_row[n] = mmio_fp16(shard_Y_b + (m * N + n) * sizeof(float16));
-        }
-    }
+    if (M == 0)
+        return 0;
+
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* shard_Y is [n_batches, M, N] contiguous in L1; each batch's M*N block goes to
+       Y[b, oc_start:oc_start+M, :] which is contiguous within a batch but c_out*N apart
+       across batches -> one 2D transfer (reps = n_batches). */
+    idma_memcpy_2d(&idma_ctrl, 1, (uint32_t) (Y + oc_start * N), (uint32_t) conv_params->shard_Y,
+                   M * N * sizeof(float16), c_out * N * sizeof(float16), n_batches);
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
