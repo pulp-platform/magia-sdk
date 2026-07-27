@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "slice_fp16_spatz.h"
 #include "slice_fp16_spatz_params.h"
@@ -67,39 +70,34 @@ static int alloc_l1(void **params, uint32_t outer_dim, uint32_t slice_dim, uint3
 static int init_input_params(void *params, const float16 *data)
 {
     volatile slice_fp16_spatz_params_t *slice_params;
-    uint32_t shard_X;
-    uint32_t shard_Y;
-
-    size_t slice_dim;
-    size_t inner_dim;
-    size_t start_outer;
-    size_t len_outer;
-    size_t x_size;
-    size_t y_size;
-    size_t global_offset;
-    size_t out_slice_dim;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t start_outer;
+    uint32_t len_outer;
+    uint32_t slice_dim;
+    uint32_t inner_dim;
+    uint32_t global_offset;
+    uint32_t x_bytes;
 
     slice_params = (volatile slice_fp16_spatz_params_t *) params;
-
-    shard_X = slice_params->shard_X;
-    shard_Y = slice_params->shard_Y;
     start_outer = slice_params->start_outer;
     len_outer = slice_params->len_outer;
     slice_dim = slice_params->slice_dim;
     inner_dim = slice_params->inner_dim;
-    out_slice_dim = slice_params->out_slice_dim;
 
-    x_size = len_outer * slice_dim * inner_dim;
-    y_size = len_outer * out_slice_dim * inner_dim;
+    if (len_outer == 0)
+        return 0;
+
     global_offset = start_outer * slice_dim * inner_dim;
+    x_bytes = len_outer * slice_dim * inner_dim * sizeof(float16);
 
-    for (uint32_t i = 0; i < x_size; i++) {
-        mmio_fp16(shard_X + i * sizeof(float16)) = data[global_offset + i];
-    }
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-    for (uint32_t i = 0; i < y_size; i++) {
-        mmio_fp16(shard_Y + i * sizeof(float16)) = 0;
-    }
+    /* Load this tile's contiguous [len_outer, slice_dim, inner] block; the Spatz
+       task extracts the slice and fully writes shard_Y (so no zeroing needed). */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (data + global_offset), (uint32_t) slice_params->shard_X, x_bytes);
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -107,13 +105,9 @@ static int init_input_params(void *params, const float16 *data)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
+    eu_ctrl_init(&eu_ctrl);
 
     spatz_run_task_with_params(SLICE_FP16_SPATZ_TASK, params);
 
@@ -132,32 +126,31 @@ exit:
 static int store_result(void *params, float16 *sliced)
 {
     volatile slice_fp16_spatz_params_t *slice_params;
-    uint32_t shard_Y_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t start_outer;
-    uint32_t out_stride;
     uint32_t len_outer;
-    uint32_t out_slice_dim;
-    uint32_t inner_dim;
+    uint32_t out_stride;
+    uint32_t global_offset;
+    uint32_t y_bytes;
 
     slice_params = (volatile slice_fp16_spatz_params_t *) params;
-    shard_Y_base = slice_params->shard_Y;
     start_outer = slice_params->start_outer;
     len_outer = slice_params->len_outer;
-    out_slice_dim = slice_params->out_slice_dim;
-    inner_dim = slice_params->inner_dim;
+    out_stride = slice_params->out_slice_dim * slice_params->inner_dim;
 
-    out_stride = out_slice_dim * inner_dim;
+    if (len_outer == 0)
+        return 0;
 
-    uint32_t l1_elem_idx = 0;
+    global_offset = start_outer * out_stride;
+    y_bytes = len_outer * out_stride * sizeof(float16);
 
-    for (uint32_t o = 0; o < len_outer; o++) {
-        uint32_t global_element_offset = (start_outer + o) * out_stride;
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-        for (uint32_t i = 0; i < out_stride; i++) {
-            sliced[global_element_offset + i] = mmio_fp16(shard_Y_base + l1_elem_idx * sizeof(float16));
-            l1_elem_idx++;
-        }
-    }
+    /* This tile's output rows [start_outer, start_outer+len_outer) are contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (sliced + global_offset), (uint32_t) slice_params->shard_Y, y_bytes);
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
