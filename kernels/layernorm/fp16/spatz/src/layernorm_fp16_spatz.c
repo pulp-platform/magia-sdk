@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "layernorm_fp16_spatz.h"
 #include "layernorm_fp16_spatz_params.h"
@@ -89,42 +92,35 @@ static int alloc_l1(void **params, uint32_t *input_shape, uint32_t rank, float16
 static int init_input_params(void *params, const float16 *X, const float16 *scale, const float16 *B, const float16 epsilon)
 {
     volatile layernorm_fp16_spatz_params_t *layernorm_params;
-    uintptr_t shard_X;
-    uintptr_t shard_Y;
-    uintptr_t gamma;
-    uintptr_t beta;
-    uintptr_t eps;
-    uint32_t local_idx;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t r_start;
+    uint32_t w_len;
+    uint32_t rows_bytes;
 
     layernorm_params = (volatile layernorm_fp16_spatz_params_t *) params;
-    shard_X = layernorm_params->shard_X;
-    shard_Y = layernorm_params->shard_Y;
-    gamma = layernorm_params->gamma;
-    beta = layernorm_params->beta;
-    eps = layernorm_params->eps;
+    r_start = layernorm_params->r_start;
+    w_len   = layernorm_params->w_len;
+    rows_bytes = layernorm_params->r_len * w_len * sizeof(float16);
 
-    local_idx = 0;
-    for (uint32_t r = layernorm_params->r_start; r < (layernorm_params->r_start + layernorm_params->r_len); r++) {
-        uint32_t r_base = r * layernorm_params->w_len;
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-        for (uint32_t i = 0; i < layernorm_params->w_len; i++) {
-            uint32_t global_idx = r_base + i;
-            uint32_t offset = local_idx * sizeof(float16);
-
-            mmio_fp16(shard_X + offset) = X[global_idx];
-            mmio_fp16(shard_Y + offset) = 0;
-
-            local_idx++;
-        }
+    /* This tile's rows [r_start, r_start+r_len) are contiguous in L2, so X, gamma,
+       beta and the output shard are plain 1D transfers. The Spatz task overwrites
+       the whole output shard, so it does not need zeroing here. */
+    if (rows_bytes > 0) {
+        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (X + r_start * w_len), (uint32_t) layernorm_params->shard_X, rows_bytes);
+        eu_idma_wait_a2o(&eu_ctrl, WFE);
     }
 
-    for (uint32_t i = 0; i < layernorm_params->w_len; i++) {
-        uint32_t offset = i * sizeof(float16);
-        mmio_fp16(gamma + offset) = scale[i];
-        mmio_fp16(beta + offset) = B[i];
-    }
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) scale, (uint32_t) layernorm_params->gamma, w_len * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
-    mmio_fp16(eps) = epsilon;
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) B, (uint32_t) layernorm_params->beta, w_len * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
+
+    mmio_fp16(layernorm_params->eps) = epsilon;
 
     return 0;
 }
@@ -132,13 +128,9 @@ static int init_input_params(void *params, const float16 *X, const float16 *scal
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
+    eu_ctrl_init(&eu_ctrl);
 
     spatz_run_task_with_params(LAYERNORM_FP16_SPATZ_TASK, (uint32_t)params);
 
@@ -157,23 +149,26 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile layernorm_fp16_spatz_params_t *layernorm_params;
-    uintptr_t shard_Y_base;
-    uint32_t local_idx;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t r_start;
+    uint32_t w_len;
+    uint32_t rows_bytes;
 
     layernorm_params = (volatile layernorm_fp16_spatz_params_t *) params;
-    shard_Y_base = layernorm_params->shard_Y;
-    local_idx = 0;
+    r_start = layernorm_params->r_start;
+    w_len   = layernorm_params->w_len;
+    rows_bytes = layernorm_params->r_len * w_len * sizeof(float16);
 
-    for (uint32_t r = 0; r < layernorm_params->r_len; r++) {
-        uint32_t global_r = layernorm_params->r_start + r;
-        uint32_t global_row_offset = global_r * layernorm_params->w_len;
+    if (rows_bytes == 0)
+        return 0;
 
-        for (uint32_t i = 0; i < layernorm_params->w_len; i++) {
-            uint32_t offset = local_idx * sizeof(float16);
-            Y[global_row_offset + i] = mmio_fp16(shard_Y_base + offset);
-            local_idx++;
-        }
-    }
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's output rows are contiguous in L2 -> single 1D transfer (L1->L2). */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (Y + r_start * w_len), (uint32_t) layernorm_params->shard_Y, rows_bytes);
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }

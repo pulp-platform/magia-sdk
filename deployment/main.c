@@ -2,6 +2,7 @@
 
 #include "eventunit.h"
 #include "fsync.h"
+#include "idma.h"
 #include "tile.h"
 
 #include "kernels_compare_utils.h"
@@ -31,6 +32,20 @@ int init_fsync(fsync_controller_t *fsync_ctrl)
     return 0;
 }
 
+int init_idma(idma_controller_t *idma_ctrl)
+{
+    idma_config_t idma_cfg;
+
+    idma_cfg.hartid = get_hartid();
+    idma_ctrl->base = NULL;
+    idma_ctrl->cfg = &idma_cfg;
+    idma_ctrl->api = &idma_api;
+
+    idma_init(idma_ctrl);
+
+    return 0;
+}
+
 int init_event_unit(eu_controller_t *eu_ctrl)
 {
     eu_config_t eu_cfg;
@@ -43,6 +58,7 @@ int init_event_unit(eu_controller_t *eu_ctrl)
     eu_init(eu_ctrl);
     eu_spatz_init(eu_ctrl, 0);
     eu_fsync_init(eu_ctrl, 0);
+    eu_idma_init(eu_ctrl, 0);
 
     return 0;
 }
@@ -87,6 +103,7 @@ int check_result()
 int main(void)
 {
     fsync_controller_t fsync_ctrl;
+    idma_controller_t idma_ctrl;
     eu_controller_t eu_ctrl;
     uint32_t cycle_start;
     uint32_t cycle_stop;
@@ -104,6 +121,12 @@ int main(void)
     ret = init_event_unit(&eu_ctrl);
     if (ret) {
         printf("[CV32 (%d)] Event Unit initialization failed with errno: %d\n", HID, ret);
+        return ret;
+    }
+
+    ret = init_idma(&idma_ctrl);
+    if (ret) {
+        printf("[CV32 (%d)] iDMA initialization failed with errno: %d\n", HID, ret);
         return ret;
     }
 
