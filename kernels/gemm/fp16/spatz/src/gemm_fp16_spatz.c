@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "gemm_fp16_spatz.h"
 #include "gemm_fp16_spatz_params.h"
@@ -102,64 +105,46 @@ static int alloc_l1(void **params, uint32_t A_shape[2], uint32_t B_shape[2], uin
 static int init_input_params(void *params, const float16 *A, const float16 *B, const float16 *C, const float16 alpha_val, const float16 beta_val, uint32_t A_shape[2], uint32_t B_shape[2], uint32_t C_shape[2], uint32_t Y_shape[2])
 {
     volatile gemm_fp16_spatz_params_t *gemm_params;
-    uintptr_t shard_A;
-    uintptr_t shard_B;
-    uintptr_t shard_C;
-    uintptr_t shard_Y;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t m_start;
-    uint32_t m_end;
     uint32_t m_len;
-    uint32_t local_idx;
-    uint32_t b_size;
+    uint32_t K;
+    uint32_t N;
+    uint32_t b_bytes;
 
     gemm_params = (volatile gemm_fp16_spatz_params_t *) params;
-    shard_A = gemm_params->shard_A;
-    shard_B = gemm_params->shard_B;
-    shard_C = gemm_params->shard_C;
-    shard_Y = gemm_params->shard_Y;
     m_start = gemm_params->m_start;
     m_len   = gemm_params->m_len;
-    m_end   = m_start + m_len;
+    K = gemm_params->K;
+    N = gemm_params->N;
+    b_bytes = B_shape[0] * B_shape[1] * sizeof(float16);
 
-    local_idx = 0;
-    if (!gemm_params->transA) {
-        for (uint32_t m = m_start; m < m_end; m++) {
-            uint32_t row_base = m * gemm_params->K;
-            for (uint32_t k = 0; k < gemm_params->K; k++) {
-                uint32_t global_idx = row_base + k;
-                uint32_t offset = local_idx * sizeof(float16);
-                mmio_fp16(shard_A + offset) = A[global_idx];
-                local_idx++;
-            }
-        }
-    } else {
-        for (uint32_t k = 0; k < A_shape[0]; k++) {
-            for (uint32_t m = 0; m < m_len; m++) {
-                uint32_t m_global = m_start + m;
-                uint32_t global_idx = k * A_shape[1] + m_global;
-                uint32_t offset = local_idx * sizeof(float16);
-                mmio_fp16(shard_A + offset) = A[global_idx];
-                local_idx++;
-            }
-        }
-    }
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-    b_size = B_shape[0] * B_shape[1];
-    for (uint32_t i = 0; i < b_size; i++) {
-        uint32_t offset = i * sizeof(float16);
-        mmio_fp16(shard_B + offset) = B[i];
-    }
-
-    local_idx = 0;
-    for (uint32_t m = m_start; m < m_end; m++) {
-        uint32_t row_base = m * gemm_params->N;
-        for (uint32_t n = 0; n < gemm_params->N; n++) {
-            uint32_t global_idx = row_base + n;
-            uint32_t offset = local_idx * sizeof(float16);
-            mmio_fp16(shard_C + offset) = C[global_idx];
-            mmio_fp16(shard_Y + offset) = 0;
-            local_idx++;
+    if (m_len > 0) {
+        /* A: this tile's rows [m_start, m_end). transA == 0 -> A is [M, K], rows are
+           contiguous (1D). transA == 1 -> A is [K, M], each of the K rows contributes
+           m_len contiguous elements (starting at A[k*M + m_start]) spaced M apart: a
+           strided 2D transfer packed contiguously into shard_A ([K, m_len]). */
+        if (!gemm_params->transA) {
+            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (A + m_start * K), (uint32_t) gemm_params->shard_A, m_len * K * sizeof(float16));
+            eu_idma_wait_a2o(&eu_ctrl, WFE);
+        } else {
+            idma_memcpy_2d(&idma_ctrl, 0, (uint32_t) (A + m_start), (uint32_t) gemm_params->shard_A,
+                           m_len * sizeof(float16), A_shape[1] * sizeof(float16), A_shape[0]);
+            eu_idma_wait_a2o(&eu_ctrl, WFE);
         }
+
+        /* B: full matrix, contiguous. */
+        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) B, (uint32_t) gemm_params->shard_B, b_bytes);
+        eu_idma_wait_a2o(&eu_ctrl, WFE);
+
+        /* C: this tile's rows [m_start, m_end) of [M, N] are contiguous. The Spatz task
+           overwrites the whole output shard, so shard_Y is not zeroed here. */
+        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (C + m_start * N), (uint32_t) gemm_params->shard_C, m_len * N * sizeof(float16));
+        eu_idma_wait_a2o(&eu_ctrl, WFE);
     }
 
     mmio_fp16(gemm_params->alpha) = alpha_val;
@@ -171,13 +156,9 @@ static int init_input_params(void *params, const float16 *A, const float16 *B, c
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
+    eu_ctrl_init(&eu_ctrl);
 
     spatz_run_task_with_params(GEMM_FP16_SPATZ_TASK, (uint32_t)params);
 
@@ -196,27 +177,26 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile gemm_fp16_spatz_params_t *gemm_params;
-    uintptr_t shard_Y_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t m_start;
     uint32_t m_len;
-    uint32_t local_idx;
+    uint32_t N;
 
     gemm_params = (volatile gemm_fp16_spatz_params_t *) params;
-    shard_Y_base = gemm_params->shard_Y;
     m_start = gemm_params->m_start;
     m_len   = gemm_params->m_len;
+    N = gemm_params->N;
 
-    local_idx = 0;
-    for (uint32_t m = 0; m < m_len; m++) {
-        uint32_t global_m = m_start + m;
-        uint32_t row_base = global_m * gemm_params->N;
-        for (uint32_t n = 0; n < gemm_params->N; n++) {
-            uint32_t global_idx = row_base + n;
-            uint32_t offset = local_idx * sizeof(float16);
-            Y[global_idx] = mmio_fp16(shard_Y_base + offset);
-            local_idx++;
-        }
-    }
+    if (m_len == 0)
+        return 0;
+
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's output rows [m_start, m_end) of [M, N] are contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (Y + m_start * N), (uint32_t) gemm_params->shard_Y, m_len * N * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
