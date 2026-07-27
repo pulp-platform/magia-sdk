@@ -11,7 +11,8 @@ from Deeploy.AbstractDataTypes import Pointer
 from Deeploy.CommonExtensions.NetworkDeployers.SignPropDeployer import SignPropDeployer
 from Deeploy.DeeployTypes import ConstantBuffer, DeploymentPlatform, NodeTemplate, TopologyOptimizer, VariableBuffer
 
-from MagiaDeeployTarget.CodeTransformationPasses.MagiaTileSync import magiaSyncTilesFunctionTemplate
+from MagiaDeeployTarget.CodeTransformationPasses.MagiaTileSync import magiaSyncTilesFunctionTemplate, \
+    magiaSyncTilesPrologueTemplate
 
 
 class MagiaDeployer(SignPropDeployer):
@@ -54,3 +55,6 @@ class MagiaDeployer(SignPropDeployer):
         self.ctxt.hoistGlobalDefinition("magia_sync_tiles", magiaSyncTilesFunctionTemplate.generate({}))
 
         return True
+
+    def generateInferenceInitializationCode(self) -> str:
+        return magiaSyncTilesPrologueTemplate.generate({}) + super().generateInferenceInitializationCode()
