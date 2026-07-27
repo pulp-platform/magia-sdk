@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "averagepool2d_fp16_spatz.h"
 #include "averagepool2d_fp16_spatz_params.h"
@@ -89,43 +92,27 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shap
 static int init_input_params(void *params, const float16 *X)
 {
     volatile averagepool2d_fp16_spatz_params_t *averagepool_params;
-    uintptr_t shard_X;
-    uintptr_t shard_Y;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t c_start;
-    uint32_t c_end;
     uint32_t c_len;
     uint32_t in_hw_len;
-    uint32_t out_hw_len;
 
     averagepool_params = (volatile averagepool2d_fp16_spatz_params_t *) params;
-
-    shard_X = averagepool_params->shard_X;
-    shard_Y = averagepool_params->shard_Y;
-
     c_start = averagepool_params->c_start;
     c_len = averagepool_params->c_len;
-    c_end = c_start + c_len;
     in_hw_len = averagepool_params->h_in * averagepool_params->w_in;
-    out_hw_len = averagepool_params->h_out * averagepool_params->w_out;
 
-    uint32_t local_idx = 0;
-    for (uint32_t c = c_start; c < c_end; c++) {
-        uint32_t c_base = c * in_hw_len;
+    if (c_len == 0)
+        return 0;
 
-        for (uint32_t i = 0; i < in_hw_len; i++) {
-            uint32_t global_idx = c_base + i;
-            uint32_t offset = local_idx * sizeof(float16);
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-            mmio_fp16(shard_X + offset) = X[global_idx];
-            local_idx++;
-        }
-    }
-
-    uint32_t total_out_elements = c_len * out_hw_len;
-    for (uint32_t i = 0; i < total_out_elements; i++) {
-        uint32_t offset = i * sizeof(float16);
-        mmio_fp16(shard_Y + offset) = 0;
-    }
+    /* This tile's channels [c_start, c_end) are contiguous in L2 (NCHW). The Spatz
+       task writes every output element, so shard_Y is not zeroed here. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (X + c_start * in_hw_len), (uint32_t) averagepool_params->shard_X, c_len * in_hw_len * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -133,13 +120,9 @@ static int init_input_params(void *params, const float16 *X)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
+    eu_ctrl_init(&eu_ctrl);
 
     spatz_run_task_with_params(AVERAGEPOOL2D_FP16_SPATZ_TASK, params);
 
@@ -158,35 +141,26 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile averagepool2d_fp16_spatz_params_t *averagepool_params;
-    uint32_t shard_Y_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t c_start;
+    uint32_t c_len;
     uint32_t out_hw_len;
-    uint32_t local_idx;
 
     averagepool_params = (volatile averagepool2d_fp16_spatz_params_t *) params;
-    shard_Y_base = averagepool_params->shard_Y;
-
+    c_start = averagepool_params->c_start;
+    c_len = averagepool_params->c_len;
     out_hw_len = averagepool_params->h_out * averagepool_params->w_out;
-    local_idx = 0;
 
-    for (uint32_t c = 0; c < averagepool_params->c_len; c++) {
-        uint32_t c_base;
-        uint32_t c_idx;
+    if (c_len == 0)
+        return 0;
 
-        c_idx = averagepool_params->c_start + c;
-        c_base = c_idx * out_hw_len;
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-        for (uint32_t i = 0; i < out_hw_len; i++) {
-            uint32_t global_idx;
-            uint32_t offset;
-
-            global_idx = c_base + i;
-            offset = local_idx * sizeof(float16);
-
-            Y[global_idx] = mmio_fp16(shard_Y_base + offset);
-
-            local_idx++;
-        }
-    }
+    /* This tile's output channels [c_start, c_end) are contiguous in L2 (NCHW). */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (Y + c_start * out_hw_len), (uint32_t) averagepool_params->shard_Y, c_len * out_hw_len * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
