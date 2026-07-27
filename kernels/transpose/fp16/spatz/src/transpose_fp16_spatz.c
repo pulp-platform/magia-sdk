@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "transpose_fp16_spatz.h"
 #include "transpose_fp16_spatz_params.h"
@@ -104,39 +107,37 @@ static int alloc_l1(void **params, uint32_t *in_shape, uint32_t *out_shape, uint
 static int init_input_params(void *params, const float16 *input, const uint32_t *perm, uint32_t shard_in_elems, uint32_t shard_out_elems)
 {
     volatile transpose_fp16_spatz_params_t *trans_params;
-    uintptr_t shard_input_base;
-    uintptr_t shard_output_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uintptr_t perm_base;
     uint32_t rank;
-    uint32_t total_in_elems;
-    uint32_t total_out_elems;
+    uint32_t iter_len;
+    uint32_t global_offset;
+    uint32_t in_bytes;
 
     trans_params = (volatile transpose_fp16_spatz_params_t *) params;
-    shard_input_base  = trans_params->shard_input;
-    shard_output_base = trans_params->shard_output;
-    perm_base         = trans_params->perm;
-    rank              = trans_params->rank;
+    perm_base = trans_params->perm;
+    rank      = trans_params->rank;
+    iter_len  = trans_params->iteration_len;
 
-    total_in_elems  = trans_params->iteration_len * shard_in_elems;
-    total_out_elems = trans_params->iteration_len * shard_out_elems;
-
-    uint32_t l1_in_idx = 0;
-    uint32_t global_idx_in = trans_params->iteration_start * shard_in_elems;
-    for (uint32_t i = 0; i < total_in_elems; i++) {
-        uint32_t offset = l1_in_idx * sizeof(float16);
-        mmio_fp16(shard_input_base + offset) = input[global_idx_in + i];
-        l1_in_idx++;
-    }
-
-    uint32_t l1_out_idx = 0;
-    for (uint32_t i = 0; i < total_out_elems; i++) {
-        uint32_t offset = l1_out_idx * sizeof(float16);
-        mmio_fp16(shard_output_base + offset) = 0;
-        l1_out_idx++;
-    }
-
+    /* Control metadata: small rank-sized arrays, staged scalar. */
     for (uint32_t i = 0; i < rank; i++)
         mmio32(perm_base + i * sizeof(uint32_t)) = perm[i];
+
+    if (iter_len == 0)
+        return 0;
+
+    global_offset = trans_params->iteration_start * shard_in_elems;
+    in_bytes = iter_len * shard_in_elems * sizeof(float16);
+
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* perm[0] == 0, so this tile's slice of the outer axis is contiguous in L2. The
+       Spatz task performs the (strided) transpose and fully writes shard_output, so
+       shard_output is not zeroed here. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (input + global_offset), (uint32_t) trans_params->shard_input, in_bytes);
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -144,14 +145,9 @@ static int init_input_params(void *params, const float16 *input, const uint32_t 
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
-
+    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(TRANSPOSE_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
@@ -169,23 +165,27 @@ exit:
 static int store_result(void *params, float16 *output, uint32_t shard_out_elems)
 {
     volatile transpose_fp16_spatz_params_t *trans_params;
-    uintptr_t shard_output_base;
-    uint32_t total_out_elems;
-    uint32_t global_idx_base;
-    uint32_t out_idx;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t iter_len;
+    uint32_t global_offset;
+    uint32_t out_bytes;
 
     trans_params = (volatile transpose_fp16_spatz_params_t *) params;
-    shard_output_base = trans_params->shard_output;
+    iter_len = trans_params->iteration_len;
 
-    total_out_elems = trans_params->iteration_len * shard_out_elems;
-    global_idx_base = trans_params->iteration_start * shard_out_elems;
-    out_idx = 0;
+    if (iter_len == 0)
+        return 0;
 
-    for (uint32_t i = 0; i < total_out_elems; i++) {
-        uint32_t offset = out_idx * sizeof(float16);
-        output[global_idx_base + i] = mmio_fp16(shard_output_base + offset);
-        out_idx++;
-    }
+    global_offset = trans_params->iteration_start * shard_out_elems;
+    out_bytes = iter_len * shard_out_elems * sizeof(float16);
+
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's output slice of the outer axis is contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (output + global_offset), (uint32_t) trans_params->shard_output, out_bytes);
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }

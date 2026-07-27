@@ -108,7 +108,6 @@ static int offload_spatz_task(void *params)
     int ret;
 
     eu_ctrl_init(&eu_ctrl);
-
     spatz_run_task_with_params(SLICE_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);

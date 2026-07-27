@@ -131,7 +131,6 @@ static int offload_spatz_task(void *params)
     int ret;
 
     eu_ctrl_init(&eu_ctrl);
-
     spatz_run_task_with_params(LAYERNORM_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
