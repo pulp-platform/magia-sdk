@@ -89,7 +89,6 @@ SECTIONS
         _pulp_binary_end = .;
     } > instrram :text
 
-    
     _pulp_binary_size = _pulp_binary_end - _pulp_binary_start;
 
     /*--------------------------------------------------------------------*/
