@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "maxpool2d_fp16_spatz.h"
 #include "maxpool2d_fp16_spatz_params.h"
@@ -74,36 +77,25 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shap
 static int init_input_params(void *params, const float16 *X, uint32_t kernel_h, uint32_t kernel_w, uint32_t stride_h, uint32_t stride_w, uint32_t pad_h, uint32_t pad_w)
 {
     volatile maxpool2d_fp16_spatz_params_t *maxpool_params;
-    uintptr_t shard_X;
-    uintptr_t shard_Y;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t in_hw_len;
-    uint32_t out_hw_len;
-    uint32_t local_idx;
+    uint32_t c_start;
+    uint32_t c_len;
 
     maxpool_params = (volatile maxpool2d_fp16_spatz_params_t *) params;
-    shard_X = maxpool_params->shard_X;
-    shard_Y = maxpool_params->shard_Y;
+    in_hw_len = maxpool_params->h_in * maxpool_params->w_in;
+    c_start   = maxpool_params->c_start;
+    c_len     = maxpool_params->c_len;
 
-    in_hw_len  = maxpool_params->h_in * maxpool_params->w_in;
-    out_hw_len = maxpool_params->h_out * maxpool_params->w_out;
+    if (c_len > 0) {
+        idma_ctrl_init(&idma_ctrl);
+        eu_ctrl_init(&eu_ctrl);
 
-    local_idx = 0;
-    for (uint32_t c = maxpool_params->c_start; c < (maxpool_params->c_start + maxpool_params->c_len); c++) {
-        uint32_t c_base = c * in_hw_len;
-
-        for (uint32_t i = 0; i < in_hw_len; i++) {
-            uint32_t global_idx = c_base + i;
-            uint32_t offset = local_idx * sizeof(float16);
-
-            mmio_fp16(shard_X + offset) = X[global_idx];
-            local_idx++;
-        }
-    }
-
-    uint32_t total_out_elements = maxpool_params->c_len * out_hw_len;
-    for (uint32_t i = 0; i < total_out_elements; i++) {
-        uint32_t offset = i * sizeof(float16);
-        mmio_fp16(shard_Y + offset) = 0;
+        /* This tile's channels [c_start, c_start+c_len) are contiguous in L2. The Spatz task
+           writes every output (one max per window), so shard_Y is not zeroed here. */
+        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (X + c_start * in_hw_len), (uint32_t) maxpool_params->shard_X, c_len * in_hw_len * sizeof(float16));
+        eu_idma_wait_a2o(&eu_ctrl, WFE);
     }
 
     maxpool_params->kernel_h  = kernel_h;
@@ -119,14 +111,9 @@ static int init_input_params(void *params, const float16 *X, uint32_t kernel_h, 
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
-
+    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(MAXPOOL2D_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
@@ -144,28 +131,26 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile maxpool2d_fp16_spatz_params_t *maxpool_params;
-    uintptr_t shard_Y_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t out_hw_len;
-    uint32_t local_idx;
+    uint32_t c_start;
+    uint32_t c_len;
 
     maxpool_params = (volatile maxpool2d_fp16_spatz_params_t *) params;
-    shard_Y_base = maxpool_params->shard_Y;
-
     out_hw_len = maxpool_params->h_out * maxpool_params->w_out;
-    local_idx = 0;
+    c_start    = maxpool_params->c_start;
+    c_len      = maxpool_params->c_len;
 
-    for (uint32_t c = 0; c < maxpool_params->c_len; c++) {
-        uint32_t c_idx = maxpool_params->c_start + c;
-        uint32_t c_base = c_idx * out_hw_len;
+    if (c_len == 0)
+        return 0;
 
-        for (uint32_t i = 0; i < out_hw_len; i++) {
-            uint32_t global_idx = c_base + i;
-            uint32_t offset = local_idx * sizeof(float16);
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-            Y[global_idx] = mmio_fp16(shard_Y_base + offset);
-            local_idx++;
-        }
-    }
+    /* This tile's output channels [c_start, c_start+c_len) are contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (Y + c_start * out_hw_len), (uint32_t) maxpool_params->shard_Y, c_len * out_hw_len * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
