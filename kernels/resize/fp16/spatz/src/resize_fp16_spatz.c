@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "resize_fp16_spatz.h"
 #include "resize_fp16_spatz_params.h"
@@ -63,42 +66,27 @@ static int alloc_l1(void **params, uint32_t batch_size, uint32_t channels, uint3
 static int init_input_params(void *params, const float16 *X)
 {
     volatile resize_fp16_spatz_params_t *resize_params;
-    uintptr_t shard_X;
-    uintptr_t shard_Y;
-    size_t it_start;
-    size_t it_len;
-    size_t in_hw;
-    size_t out_hw;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t it_start;
+    uint32_t it_len;
+    uint32_t in_hw;
 
     resize_params = (volatile resize_fp16_spatz_params_t *) params;
-
-    shard_X  = resize_params->shard_X;
-    shard_Y  = resize_params->shard_Y;
     it_start = resize_params->iteration_start;
     it_len   = resize_params->iteration_len;
+    in_hw    = resize_params->in_h * resize_params->in_w;
 
-    in_hw  = resize_params->in_h * resize_params->in_w;
-    out_hw = resize_params->out_h * resize_params->out_w;
+    if (it_len == 0)
+        return 0;
 
-    uint32_t local_idx = 0;
-    for (uint32_t i = 0; i < it_len; i++) {
-        uint32_t global_channel_idx = it_start + i;
-        uint32_t global_base = global_channel_idx * in_hw;
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-        for (uint32_t pixel = 0; pixel < in_hw; pixel++) {
-            uint32_t global_idx = global_base + pixel;
-            uint32_t offset = local_idx * sizeof(float16);
-
-            mmio_fp16(shard_X + offset) = X[global_idx];
-            local_idx++;
-        }
-    }
-
-    size_t total_out_elements = it_len * out_hw;
-    for (uint32_t i = 0; i < total_out_elements; i++) {
-        uint32_t offset = i * sizeof(float16);
-        mmio_fp16(shard_Y + offset) = 0;
-    }
+    /* This tile's (batch,channel) planes [it_start, it_start+it_len) are contiguous in L2.
+       The Spatz task writes every output pixel, so shard_Y is not zeroed here. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (X + it_start * in_hw), (uint32_t) resize_params->shard_X, it_len * in_hw * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -106,14 +94,9 @@ static int init_input_params(void *params, const float16 *X)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
-
+    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(RESIZE_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
@@ -131,30 +114,26 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile resize_fp16_spatz_params_t *resize_params;
-    uintptr_t shard_Y_base;
-    size_t it_start;
-    size_t it_len;
-    size_t out_hw;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t it_start;
+    uint32_t it_len;
+    uint32_t out_hw;
 
     resize_params = (volatile resize_fp16_spatz_params_t *) params;
-    shard_Y_base  = resize_params->shard_Y;
-    it_start      = resize_params->iteration_start;
-    it_len        = resize_params->iteration_len;
-    out_hw        = resize_params->out_h * resize_params->out_w;
+    it_start = resize_params->iteration_start;
+    it_len   = resize_params->iteration_len;
+    out_hw   = resize_params->out_h * resize_params->out_w;
 
-    uint32_t local_idx = 0;
-    for (uint32_t i = 0; i < it_len; i++) {
-        uint32_t global_channel_idx = it_start + i;
-        uint32_t global_base = global_channel_idx * out_hw;
+    if (it_len == 0)
+        return 0;
 
-        for (uint32_t pixel = 0; pixel < out_hw; pixel++) {
-            uint32_t global_idx = global_base + pixel;
-            uint32_t offset = local_idx * sizeof(float16);
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-            Y[global_idx] = mmio_fp16(shard_Y_base + offset);
-            local_idx++;
-        }
-    }
+    /* This tile's output (batch,channel) planes [it_start, it_start+it_len) are contiguous. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (Y + it_start * out_hw), (uint32_t) resize_params->shard_Y, it_len * out_hw * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
