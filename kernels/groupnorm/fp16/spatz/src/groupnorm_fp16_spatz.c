@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "groupnorm_fp16_spatz.h"
 #include "groupnorm_fp16_spatz_params.h"
@@ -105,32 +108,29 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t num_groups,
 static int init_input_params(void *params, const float16 *X, const float16 *scale, const float16 *B, const float16 epsilon)
 {
     volatile groupnorm_fp16_spatz_params_t *groupnorm_params;
-    uintptr_t shard_X;
-    uintptr_t shard_Y;
-    uintptr_t gamma;
-    uintptr_t beta;
-    uintptr_t eps;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t input_len;
+    uint32_t c_out;
 
     groupnorm_params = (volatile groupnorm_fp16_spatz_params_t *) params;
-    shard_X = groupnorm_params->shard_X;
-    shard_Y = groupnorm_params->shard_Y;
-    gamma = groupnorm_params->gamma;
-    beta = groupnorm_params->beta;
-    eps = groupnorm_params->eps;
+    input_len = groupnorm_params->input_len;
+    c_out = groupnorm_params->c_out;
 
-    for (uint32_t i = 0; i < groupnorm_params->input_len; i++)
-        mmio_fp16(shard_X + i * sizeof(float16)) = X[i];
+    mmio_fp16(groupnorm_params->eps) = epsilon;
 
-    for (uint32_t i = 0; i < groupnorm_params->output_len; i++)
-        mmio_fp16(shard_Y + i * sizeof(float16)) = 0;
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-    for (uint32_t i = 0; i < groupnorm_params->c_out; i++) {
-        uint32_t offset = i * sizeof(float16);
-        mmio_fp16(gamma + offset) = scale[i];
-        mmio_fp16(beta + offset) = B[i];
-    }
-
-    mmio_fp16(eps) = epsilon;
+    /* Every tile needs the full input (group means/vars span all its channels), contiguous
+       in L2 -> a 1D transfer. Per-channel gamma/beta (full c_out, contiguous) load likewise.
+       The Spatz task fully writes shard_Y, so it is not zeroed here. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) X, (uint32_t) groupnorm_params->shard_X, input_len * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) scale, (uint32_t) groupnorm_params->gamma, c_out * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) B, (uint32_t) groupnorm_params->beta, c_out * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -138,14 +138,9 @@ static int init_input_params(void *params, const float16 *X, const float16 *scal
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
-
+    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(GROUPNORM_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
@@ -163,25 +158,26 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile groupnorm_fp16_spatz_params_t *groupnorm_params;
-    uintptr_t shard_Y_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t elements_per_group;
-    uint32_t local_idx;
+    uint32_t g_start;
+    uint32_t g_len;
 
     groupnorm_params = (volatile groupnorm_fp16_spatz_params_t *) params;
-    shard_Y_base = groupnorm_params->shard_Y;
     elements_per_group = groupnorm_params->c_per_g * groupnorm_params->hw_len;
-    local_idx = 0;
+    g_start = groupnorm_params->g_start;
+    g_len = groupnorm_params->g_len;
 
-    for (uint32_t g = 0; g < groupnorm_params->g_len; g++) {
-        uint32_t global_g = groupnorm_params->g_start + g;
-        uint32_t global_group_offset = global_g * elements_per_group;
+    if (g_len == 0)
+        return 0;
 
-        for (uint32_t i = 0; i < elements_per_group; i++) {
-            uint32_t offset = local_idx * sizeof(float16);
-            Y[global_group_offset + i] = mmio_fp16(shard_Y_base + (uintptr_t)offset);
-            local_idx++;
-        }
-    }
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's groups [g_start, g_start+g_len) are contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (Y + g_start * elements_per_group), (uint32_t) groupnorm_params->shard_Y, g_len * elements_per_group * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
