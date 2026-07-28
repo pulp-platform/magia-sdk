@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "batchnorm_fp16_spatz.h"
 #include "batchnorm_fp16_spatz_params.h"
@@ -99,66 +102,45 @@ static int alloc_l1(void **params, uint32_t shape[4])
 static int init_input_params(void *params, const float16 *X, const float16 *scale, const float16 *B, const float16 *input_mean, const float16* input_var, const float16 epsilon)
 {
     volatile batchnorm_fp16_spatz_params_t *batchnorm_params;
-    uint32_t shard_X;
-    uint32_t shard_Y;
-    uintptr_t gamma;
-    uintptr_t beta;
-    uintptr_t mean;
-    uintptr_t var;
-    uintptr_t eps;
-
-    size_t channels;
-    size_t c_start;
-    size_t c_end;
-    size_t c_len;
-    size_t hw;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t channels;
+    uint32_t c_start;
+    uint32_t c_len;
+    uint32_t hw;
 
     batchnorm_params = (volatile batchnorm_fp16_spatz_params_t *) params;
-
-    shard_X = batchnorm_params->shard_X;
-    shard_Y = batchnorm_params->shard_Y;
-    gamma = batchnorm_params->gamma;
-    beta = batchnorm_params->beta;
-    mean = batchnorm_params->mean;
-    var = batchnorm_params->var;
-    eps = batchnorm_params->eps;
-
+    channels = batchnorm_params->channels;
     c_start = batchnorm_params->c_start;
     c_len = batchnorm_params->c_len;
-    c_end = c_start + c_len;
     hw = batchnorm_params->hw_len;
-    channels = batchnorm_params->channels;
 
-    uint32_t local_idx = 0;
-    for (uint32_t c = c_start; c < c_end; c++) {
-        uint32_t c_base;
+    mmio_fp16(batchnorm_params->eps) = epsilon;
 
-        c_base = c * hw;
+    if (c_len == 0)
+        return 0;
 
-        for (uint32_t i = 0; i < hw; i++) {
-            uint32_t global_idx;
-            uint32_t offset;
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-            global_idx = c_base + i;
-            offset = local_idx * sizeof(float16);
+    /* X: this tile's [c_start, c_end) planes are contiguous in L2 (NCHW). The Spatz task
+       writes every output element, so shard_Y is not zeroed here. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (X + c_start * hw), (uint32_t) batchnorm_params->shard_X, c_len * hw * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
-            mmio_fp16(shard_X + offset) = X[global_idx];
-            mmio_fp16(shard_Y + offset) = 0;
+    /* Per-channel params (full C, contiguous). Every tile needs them all (channel index
+       wraps mod C). */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) input_mean, (uint32_t) batchnorm_params->mean, channels * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
-            local_idx++;
-        }
-    }
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) input_var, (uint32_t) batchnorm_params->var, channels * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
-    for (uint32_t i = 0; i < channels; i++) {
-        uint32_t offset = i * sizeof(float16);
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) scale, (uint32_t) batchnorm_params->gamma, channels * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
-        mmio_fp16(mean + offset) = input_mean[i];
-        mmio_fp16(var + offset) = input_var[i];
-        mmio_fp16(gamma + offset) = scale[i];
-        mmio_fp16(beta + offset) = B[i];
-    }
-
-    mmio_fp16(eps) = epsilon;
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) B, (uint32_t) batchnorm_params->beta, channels * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -166,13 +148,9 @@ static int init_input_params(void *params, const float16 *X, const float16 *scal
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
+    eu_ctrl_init(&eu_ctrl);
 
     spatz_run_task_with_params(BATCHNORM_FP16_SPATZ_TASK, params);
 
@@ -191,32 +169,26 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile batchnorm_fp16_spatz_params_t *batchnorm_params;
-    uint32_t shard_Y_base;
-    uint32_t local_idx;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t c_start;
+    uint32_t c_len;
+    uint32_t hw;
 
     batchnorm_params = (volatile batchnorm_fp16_spatz_params_t *) params;
-    shard_Y_base = batchnorm_params->shard_Y;
-    local_idx = 0;
+    c_start = batchnorm_params->c_start;
+    c_len = batchnorm_params->c_len;
+    hw = batchnorm_params->hw_len;
 
-    for (uint32_t c = 0; c < batchnorm_params->c_len; c++) {
-        uint32_t c_base;
-        uint32_t c_idx;
+    if (c_len == 0)
+        return 0;
 
-        c_idx = batchnorm_params->c_start + c;
-        c_base = c_idx * batchnorm_params->hw_len;
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-        for (uint32_t i = 0; i < batchnorm_params->hw_len; i++) {
-            uint32_t global_idx;
-            uint32_t offset;
-
-            global_idx = c_base + i;
-            offset = local_idx * sizeof(float16);
-
-            Y[global_idx] = mmio_fp16(shard_Y_base + offset);
-
-            local_idx++;
-        }
-    }
+    /* This tile's output planes [c_start, c_end) are contiguous in L2 (NCHW). */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (Y + c_start * hw), (uint32_t) batchnorm_params->shard_Y, c_len * hw * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
