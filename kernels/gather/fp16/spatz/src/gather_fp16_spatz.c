@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "gather_fp16_spatz.h"
 #include "gather_fp16_spatz_params.h"
@@ -67,41 +70,29 @@ static int alloc_l1(void **params, uint32_t in_shape[4], uint32_t batch, uint32_
 static int init_input_params(void *params, const float16 *data)
 {
     volatile gather_fp16_spatz_params_t *gather_params;
-    uintptr_t shard_input_base;
-    uintptr_t shard_output_base;
-    uint32_t batch_start;
-    uint32_t batch_end;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+
     uint32_t in_batch_stride;
-    uint32_t l1_in_idx;
-    uint32_t l1_out_idx;
+    uint32_t batch_start;
+    uint32_t batch_len;
 
     gather_params = (volatile gather_fp16_spatz_params_t *) params;
-    shard_input_base  = gather_params->shard_input;
-    shard_output_base = gather_params->shard_output;
-
-    batch_start = gather_params->batch_start;
-    batch_end   = batch_start + gather_params->batch_len;
     in_batch_stride = gather_params->gather_dim_size * gather_params->axis_length;
+    batch_start = gather_params->batch_start;
+    batch_len   = gather_params->batch_len;
 
-    l1_in_idx = 0;
-    l1_out_idx = 0;
+    if (batch_len == 0)
+        return 0;
 
-    for (uint32_t b = batch_start; b < batch_end; b++) {
-        uint32_t global_idx_in = b * in_batch_stride;
-        uint32_t offset;
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-        for (uint32_t i = 0; i < in_batch_stride; i++) {
-            offset = l1_in_idx * sizeof(float16);
-            mmio_fp16(shard_input_base + offset) = data[global_idx_in + i];
-            l1_in_idx++;
-        }
-
-        for (uint32_t i = 0; i < gather_params->axis_length; i++) {
-            offset = l1_out_idx * sizeof(float16);
-            mmio_fp16(shard_output_base + offset) = 0;
-            l1_out_idx++;
-        }
-    }
+    /* This tile's batches [batch_start, batch_start+batch_len) are a contiguous L2 block.
+       The Spatz task fully writes shard_output (axis_length per batch), so it is not zeroed
+       here. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (data + batch_start * in_batch_stride), (uint32_t) gather_params->shard_input, batch_len * in_batch_stride * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -109,13 +100,9 @@ static int init_input_params(void *params, const float16 *data)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
+    eu_ctrl_init(&eu_ctrl);
 
     spatz_run_task_with_params(GATHER_FP16_SPATZ_TASK, (uint32_t)params);
 
@@ -134,30 +121,26 @@ exit:
 static int store_result(void *params, float16 *gather_result)
 {
     volatile gather_fp16_spatz_params_t *gather_params;
-    uintptr_t shard_output_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t axis_length;
     uint32_t start;
     uint32_t len;
-    uint32_t out_idx;
 
     gather_params = (volatile gather_fp16_spatz_params_t *) params;
-    shard_output_base = gather_params->shard_output;
     axis_length = gather_params->axis_length;
     start = gather_params->batch_start;
     len = gather_params->batch_len;
 
-    out_idx = 0;
+    if (len == 0)
+        return 0;
 
-    for (uint32_t b = 0; b < len; b++) {
-        uint32_t global_batch = start + b;
-        uint32_t global_idx_base = global_batch * axis_length;
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-        for (uint32_t i = 0; i < axis_length; i++) {
-            uint32_t offset = out_idx * sizeof(float16);
-            gather_result[global_idx_base + i] = mmio_fp16(shard_output_base + offset);
-            out_idx++;
-        }
-    }
+    /* This tile's output batches [batch_start, batch_start+batch_len) are contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (gather_result + start * axis_length), (uint32_t) gather_params->shard_output, len * axis_length * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
