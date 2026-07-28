@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "softmax_fp16_spatz.h"
 #include "softmax_fp16_spatz_params.h"
@@ -63,30 +66,27 @@ static int alloc_l1(void **params, uint32_t input_shape[4])
 static int init_input_params(void *params, const float16 *input)
 {
     volatile softmax_fp16_spatz_params_t *softmax_params;
-    uintptr_t shard_input_base;
-    uintptr_t shard_output_base;
-    uint32_t r_end;
-    uint32_t local_idx;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t r_start;
+    uint32_t r_len;
+    uint32_t w_len;
 
     softmax_params = (volatile softmax_fp16_spatz_params_t *) params;
-    shard_input_base  = softmax_params->shard_input;
-    shard_output_base = softmax_params->shard_output;
-    r_end             = softmax_params->r_start + softmax_params->r_len;
+    r_start = softmax_params->r_start;
+    r_len   = softmax_params->r_len;
+    w_len   = softmax_params->w_len;
 
-    local_idx = 0;
-    for (uint32_t r = softmax_params->r_start; r < r_end; r++) {
-        uint32_t r_base = r * softmax_params->w_len;
+    if (r_len == 0)
+        return 0;
 
-        for (uint32_t i = 0; i < softmax_params->w_len; i++) {
-            uint32_t global_idx = r_base + i;
-            uint32_t offset = local_idx * sizeof(float16);
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-            mmio_fp16(shard_input_base + offset) = input[global_idx];
-            mmio_fp16(shard_output_base + offset) = 0;
-
-            local_idx++;
-        }
-    }
+    /* This tile's rows [r_start, r_start+r_len) are contiguous in L2. The Spatz task writes
+       every output element, so shard_output is not zeroed here. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (input + r_start * w_len), (uint32_t) softmax_params->shard_input, r_len * w_len * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -94,14 +94,9 @@ static int init_input_params(void *params, const float16 *input)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
-
+    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(SOFTMAX_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
@@ -119,26 +114,26 @@ exit:
 static int store_result(void *params, float16 *output)
 {
     volatile softmax_fp16_spatz_params_t *softmax_params;
-    uintptr_t shard_out_base;
-    uint32_t local_idx;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t r_start;
+    uint32_t r_len;
+    uint32_t w_len;
 
     softmax_params = (volatile softmax_fp16_spatz_params_t *) params;
-    shard_out_base = softmax_params->shard_output;
-    local_idx = 0;
+    r_start = softmax_params->r_start;
+    r_len   = softmax_params->r_len;
+    w_len   = softmax_params->w_len;
 
-    for (uint32_t r = 0; r < softmax_params->r_len; r++) {
-        uint32_t r_idx = softmax_params->r_start + r;
-        uint32_t r_base = r_idx * softmax_params->w_len;
+    if (r_len == 0)
+        return 0;
 
-        for (uint32_t i = 0; i < softmax_params->w_len; i++) {
-            uint32_t global_idx = r_base + i;
-            uint32_t offset = local_idx * sizeof(float16);
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-            output[global_idx] = mmio_fp16(shard_out_base + offset);
-
-            local_idx++;
-        }
-    }
+    /* This tile's output rows [r_start, r_start+r_len) are contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (output + r_start * w_len), (uint32_t) softmax_params->shard_output, r_len * w_len * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
