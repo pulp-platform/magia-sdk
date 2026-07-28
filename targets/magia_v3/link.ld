@@ -83,14 +83,13 @@ SECTIONS
     /* PULP embedded binary - inlined from header file */
     /* Positioned right after Spatz binary in instrram */
 
-    . = ALIGN(4);
-    _pulp_binary_start = .;
-
-    .pulp_binary : {
+    .pulp_binary : ALIGN(256) {
+        _pulp_binary_start = .;
         KEEP(*(.pulp_binary))
+        _pulp_binary_end = .;
     } > instrram :text
 
-    _pulp_binary_end = .;
+    
     _pulp_binary_size = _pulp_binary_end - _pulp_binary_start;
 
     /*--------------------------------------------------------------------*/
