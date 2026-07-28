@@ -1,7 +1,4 @@
-#include "utils/magia_utils.h"
-#include "addr_map/tile_addr_map.h"
-#include "utils/printf.h"
-
+#include "tile.h"
 
 void hello_pulp_task(void)
 {

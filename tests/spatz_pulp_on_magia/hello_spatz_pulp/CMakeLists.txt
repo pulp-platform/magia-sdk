@@ -1,4 +1,4 @@
-set(TEST_NAME hello_spatz_pulp)
+set(TEST_NAME hello_spatz_pulp_2)
 
 # Compile Spatz task (generates hello_spatz_task_bin.h)
 add_spatz_task(

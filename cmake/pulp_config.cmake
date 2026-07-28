@@ -46,6 +46,7 @@ set(PULP_COMPILE_FLAGS
     "-fno-jump-tables"
     "-msmall-data-limit=0"
     "-DPULP_CORE_COUNT=${PULP_CORE_COUNT}"
+    "-DPULP_CLUSTER=${PULP_CLUSTER}"
     "-nostartfiles"
     "-nostdlib"
     "-U__riscv__"
@@ -53,6 +54,7 @@ set(PULP_COMPILE_FLAGS
 
 set(PULP_CFLAGS_DEFINES
     "-DPULP_CORE_COUNT=${PULP_CORE_COUNT}"
+    "-DPULP_CLUSTER=${PULP_CLUSTER}"
     "-DPULP_TARGET"
     "-DCV32E40P=${CV32E40P}"
     # "-save-temps"

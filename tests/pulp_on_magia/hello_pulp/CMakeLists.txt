@@ -1,4 +1,4 @@
-set(TEST_NAME hello_pulp)
+set(TEST_NAME hello_pulp_2)
 
 add_pulp_task(
     TEST_NAME ${TEST_NAME}

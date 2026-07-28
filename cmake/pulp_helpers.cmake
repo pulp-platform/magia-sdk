@@ -68,6 +68,7 @@ function(add_pulp_task)
         COMMAND ${CMAKE_C_COMPILER}
             ${PULP_ARCH_FLAGS}
             -DPULP_CORE_COUNT=${PULP_CORE_COUNT}
+            -DPULP_CLUSTER=${PULP_CLUSTER}
             -c -o ${TASK_CRT0_OBJ}
             ${PULP_CRT0_SRC}
         DEPENDS ${PULP_CRT0_SRC}
