@@ -132,8 +132,7 @@ static int init_input_params(void *params, const float16 *A, const float16 *B, c
             idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (A + m_start * K), (uint32_t) gemm_params->shard_A, m_len * K * sizeof(float16));
             eu_idma_wait_a2o(&eu_ctrl, WFE);
         } else {
-            idma_memcpy_2d(&idma_ctrl, 0, (uint32_t) (A + m_start), (uint32_t) gemm_params->shard_A,
-                           m_len * sizeof(float16), A_shape[1] * sizeof(float16), A_shape[0]);
+            idma_memcpy_2d(&idma_ctrl, 0, (uint32_t) (A + m_start), (uint32_t) gemm_params->shard_A, m_len * sizeof(float16), A_shape[1] * sizeof(float16), A_shape[0]);
             eu_idma_wait_a2o(&eu_ctrl, WFE);
         }
 

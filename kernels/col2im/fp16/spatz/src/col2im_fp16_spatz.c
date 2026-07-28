@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "col2im_fp16_spatz.h"
 #include "col2im_fp16_spatz_params.h"
@@ -77,6 +80,8 @@ static int allocate_l1(void **params, uint32_t batch, uint32_t channels, uint32_
 static int init_input_params(void *params, const float16 *input)
 {
     volatile col2im_fp16_spatz_params_t *col2im_params;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uintptr_t shard_X;
     uintptr_t shard_Y;
     uint32_t image_h;
@@ -88,6 +93,7 @@ static int init_input_params(void *params, const float16 *input)
     uint32_t c_len;
     uint32_t l_len;
     uint32_t tot_c;
+    uint32_t bbl;
 
     col2im_params = (volatile col2im_fp16_spatz_params_t *) params;
 
@@ -103,24 +109,21 @@ static int init_input_params(void *params, const float16 *input)
     l_len = col2im_params->l_len;
     tot_c = col2im_params->total_channels;
 
-    for (int n = 0; n < batch; n++) {
-        uint32_t n_offset_global = n * (tot_c * block_h * block_w * l_len);
-        uint32_t n_offset_local  = n * (c_len * block_h * block_w * l_len);
+    if (c_len == 0)
+        return 0;
 
-        for (int c = 0; c < c_len; c++) {
-            uint32_t global_c = c_start + c;
-            uint32_t global_c_offset = n_offset_global + (global_c * block_h * block_w * l_len);
-            uint32_t local_c_offset = n_offset_local + (c * block_h * block_w * l_len);
+    bbl = block_h * block_w * l_len;
 
-            for (int i = 0; i < block_h * block_w * l_len; i++) {
-                uint32_t global_idx = global_c_offset + i;
-                uint32_t local_offset = (local_c_offset + i) * sizeof(float16);
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-                mmio_fp16(shard_X + local_offset) = input[global_idx];
-            }
-        }
-    }
+    /* Column buffer: for each batch this tile's channels [c_start, c_start+c_len) are a
+       contiguous run of c_len*bbl elements. Gather them into the packed L1 shard with a 2D
+       transfer -- one run per batch, source stride spanning the full channel count. */
+    idma_memcpy_2d(&idma_ctrl, 0, (uint32_t) (input + c_start * bbl), (uint32_t) shard_X, c_len * bbl * sizeof(float16), tot_c * bbl * sizeof(float16), batch);
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
+    /* col2im scatters with accumulation, so the output shard must start zeroed. */
     for (uint32_t i = 0; i < (batch * c_len * image_h * image_w); i++) {
         mmio_fp16(shard_Y + (i * sizeof(float16))) = 0;
     }
@@ -131,13 +134,9 @@ static int init_input_params(void *params, const float16 *input)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
+    eu_ctrl_init(&eu_ctrl);
 
     spatz_run_task_with_params(COL2IM_FP16_SPATZ_TASK, params);
 
@@ -156,12 +155,16 @@ exit:
 static int store_result(void *params, float16 *output)
 {
     volatile col2im_fp16_spatz_params_t *col2im_params;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uintptr_t shard_Y;
     uint32_t image_h;
     uint32_t image_w;
     uint32_t c_start;
     uint32_t c_len;
+    uint32_t batch;
     uint32_t tot_c;
+    uint32_t ihw;
 
     col2im_params = (volatile col2im_fp16_spatz_params_t *) params;
 
@@ -170,25 +173,22 @@ static int store_result(void *params, float16 *output)
     image_w = col2im_params->image_w;
     c_start = col2im_params->c_start;
     c_len = col2im_params->c_len;
+    batch = col2im_params->batch;
     tot_c = col2im_params->total_channels;
 
-    for (int n = 0; n < col2im_params->batch; n++) {
-        uint32_t n_offset_global = n * (col2im_params->total_channels * image_h * image_w);
-        uint32_t n_offset_local  = n * (c_len * image_h * image_w);
+    if (c_len == 0)
+        return 0;
 
-        for (int c = 0; c < c_len; c++) {
-            uint32_t global_c = c_start + c;
-            uint32_t global_c_offset = n_offset_global + (global_c * image_h * image_w);
-            uint32_t local_c_offset  = n_offset_local + (c * image_h * image_w);
+    ihw = image_h * image_w;
 
-            for (int i = 0; i < image_h * image_w; i++) {
-                uint32_t global_idx = global_c_offset + i;
-                uint32_t local_offset = (local_c_offset + i) * sizeof(float16);
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-                output[global_idx] = mmio_fp16(shard_Y + local_offset);
-            }
-        }
-    }
+    /* For each batch this tile's output channels [c_start, c_start+c_len) are a contiguous
+       run of c_len*ihw elements in L2. Scatter the packed L1 shard back with a 2D transfer
+       -- one run per batch, dest stride spanning the full channel count. */
+    idma_memcpy_2d(&idma_ctrl, 1, (uint32_t) (output + c_start * ihw), (uint32_t) shard_Y, c_len * ihw * sizeof(float16), tot_c * ihw * sizeof(float16), batch);
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
