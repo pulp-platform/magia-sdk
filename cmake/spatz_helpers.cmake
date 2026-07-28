@@ -182,6 +182,12 @@ function(add_cv32_executable_with_spatz)
         ${MAGIA_IO_SRC}
     )
 
+    add_dependencies(${ARG_TARGET_NAME} ${${ARG_TARGET_NAME}_SPATZ_TARGET})
+
+    if(TARGET spatz_bootrom)
+        add_dependencies(${ARG_TARGET_NAME} spatz_bootrom)
+    endif()
+
     get_filename_component(SPATZ_HEADER_DIR "${${ARG_TARGET_NAME}_SPATZ_HEADER}" DIRECTORY)
     target_include_directories(${ARG_TARGET_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
