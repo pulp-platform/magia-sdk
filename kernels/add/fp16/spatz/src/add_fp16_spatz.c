@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "add_fp16_spatz.h"
 #include "add_fp16_spatz_params.h"
@@ -63,29 +66,27 @@ static int allocate_l1(void **params, uint32_t size)
 static int init_input_params(void *params, const float16 *A, const float16 *B)
 {
     volatile add_fp16_spatz_params_t *add_params;
-    uintptr_t shard_A;
-    uintptr_t shard_B;
-    uintptr_t shard_C;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t start;
     uint32_t len;
 
     add_params = (volatile add_fp16_spatz_params_t *) params;
-
-    shard_A = add_params->shard_A;
-    shard_B = add_params->shard_B;
-    shard_C = add_params->shard_C;
-
     start = add_params->start;
     len = add_params->len;
 
-    for (int i = 0; i < len; i++) {
-        uint32_t global_idx = start + i;
-        uint32_t offset = i * sizeof(float16);
+    if (len == 0)
+        return 0;
 
-        mmio_fp16(shard_A + offset) = A[global_idx];
-        mmio_fp16(shard_B + offset) = B[global_idx];
-        mmio_fp16(shard_C + offset) = 0;
-    }
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's slice [start, start+len) is contiguous in both operands. The Spatz task
+       writes every output (C = A + B), so shard_C is not zeroed here. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (A + start), (uint32_t) add_params->shard_A, len * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (B + start), (uint32_t) add_params->shard_B, len * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -93,14 +94,9 @@ static int init_input_params(void *params, const float16 *A, const float16 *B)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
-
+    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(ADD_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
@@ -118,20 +114,24 @@ exit:
 static int store_result(void* params, float16 *dst)
 {
     volatile add_fp16_spatz_params_t *add_params;
-    uint32_t shard_C_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t start;
     uint32_t len;
 
     add_params = (volatile add_fp16_spatz_params_t *) params;
-    shard_C_base = add_params->shard_C;
     start = add_params->start;
     len = add_params->len;
 
-    for (int i = 0; i < len; i++) {
-        uint32_t global_idx = start + i;
-        uint32_t offset = i * sizeof(float16);
-        dst[global_idx] = mmio_fp16(shard_C_base + offset);
-    }
+    if (len == 0)
+        return 0;
+
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's output slice [start, start+len) is contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (dst + start), (uint32_t) add_params->shard_C, len * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
