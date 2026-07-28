@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "convtranspose_fp16_spatz.h"
 #include "convtranspose_fp16_spatz_params.h"
@@ -81,19 +84,24 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shap
 static int init_input_params(void *params, const float16 *X, const float16 *W)
 {
     volatile convtranspose_fp16_spatz_params_t *conv_params = (volatile convtranspose_fp16_spatz_params_t *) params;
-
-    uintptr_t shard_X = conv_params->shard_X;
-    uintptr_t shard_W = conv_params->shard_W;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
 
     uint32_t total_in = conv_params->n_batches * conv_params->c_in * conv_params->h_in * conv_params->w_in;
-    for (uint32_t i = 0; i < total_in; i++)
-        mmio_fp16(shard_X + i * sizeof(float16)) = X[i];
-
-    uint32_t total_w = conv_params->c_in * conv_params->c_out_g * conv_params->kernel_h * conv_params->kernel_w;
-    for (uint32_t i = 0; i < total_w; i++)
-        mmio_fp16(shard_W + i * sizeof(float16)) = W[i];
-
+    uint32_t total_w  = conv_params->c_in * conv_params->c_out_g * conv_params->kernel_h * conv_params->kernel_w;
     uint32_t total_out = conv_params->iter_len * conv_params->h_out * conv_params->w_out;
+
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* Every tile needs the full input and full weights, both contiguous in L2 -> 1D transfers. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) X, (uint32_t) conv_params->shard_X, total_in * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) W, (uint32_t) conv_params->shard_W, total_w * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
+
+    /* ConvTranspose scatters with accumulation (the task reads-modifies-writes dst), so the
+       output shard must start zeroed. */
     for (uint32_t i = 0; i < total_out; i++)
         mmio_fp16(conv_params->shard_Y + i * sizeof(float16)) = 0.0f;
 
@@ -103,14 +111,9 @@ static int init_input_params(void *params, const float16 *X, const float16 *W)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
-
+    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(CONVTRANSPOSE_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
@@ -128,20 +131,22 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile convtranspose_fp16_spatz_params_t *conv_params = (volatile convtranspose_fp16_spatz_params_t *) params;
-    uintptr_t shard_Y_base = conv_params->shard_Y;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t out_hw_len = conv_params->h_out * conv_params->w_out;
-    uint32_t local_idx = 0;
+    uint32_t iter_start = conv_params->iter_start;
+    uint32_t iter_len = conv_params->iter_len;
 
-    for (uint32_t i = 0; i < conv_params->iter_len; i++) {
-        uint32_t global_iter = conv_params->iter_start + i;
-        uint32_t y_global_base = global_iter * out_hw_len;
+    if (iter_len == 0)
+        return 0;
 
-        for (uint32_t j = 0; j < out_hw_len; j++) {
-            uint32_t offset = local_idx * sizeof(float16);
-            Y[y_global_base + j] = mmio_fp16(shard_Y_base + (uintptr_t)offset);
-            local_idx++;
-        }
-    }
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's output planes [iter_start, iter_start+iter_len) are contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (Y + iter_start * out_hw_len), (uint32_t) conv_params->shard_Y, iter_len * out_hw_len * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
+
     return 0;
 }
 
