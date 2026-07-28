@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "concat_fp16_spatz.h"
 #include "concat_fp16_spatz_params.h"
@@ -65,54 +68,41 @@ static int alloc_l1(void **params, uint32_t in0_transfer_len,  uint32_t in1_tran
 static int init_input_params(void *params, const float16 *input0, const float16 *input1)
 {
     volatile concat_fp16_spatz_params_t *concat_params;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uintptr_t shard_input0;
     uintptr_t shard_input1;
-    uintptr_t shard_output;
-    size_t iter_start;
-    size_t iter_len;
-    size_t iter_end;
-    size_t len_in0;
-    size_t len_in1;
+    uint32_t iter_start;
+    uint32_t iter_len;
+    uint32_t len_in0;
+    uint32_t len_in1;
 
     concat_params = (volatile concat_fp16_spatz_params_t *) params;
 
     shard_input0 = concat_params->shard_input0;
     shard_input1 = concat_params->shard_input1;
-    shard_output = concat_params->shard_output;
 
     iter_start = concat_params->iter_start;
     iter_len = concat_params->iter_len;
-    iter_end = iter_start + iter_len;
     len_in0 = concat_params->len_input0;
     len_in1 = concat_params->len_input1;
 
-    uint32_t l1_in0_idx = 0;
-    uint32_t l1_in1_idx = 0;
-    uint32_t l1_out_idx = 0;
+    if (iter_len == 0)
+        return 0;
 
-    for (uint32_t iter = iter_start; iter < iter_end; iter++) {
-        uint32_t global_idx_in0 = iter * len_in0;
-        uint32_t global_idx_in1 = iter * len_in1;
-        uint32_t offset;
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-        for (uint32_t i = 0; i < len_in0; i++) {
-            offset = l1_in0_idx * sizeof(float16);
-            mmio_fp16(shard_input0 + offset) = input0[global_idx_in0 + i];
-            l1_in0_idx++;
-        }
-
-        for (uint32_t i = 0; i < len_in1; i++) {
-            offset = l1_in1_idx * sizeof(float16);
-            mmio_fp16(shard_input1 + offset) = input1[global_idx_in1 + i];
-            l1_in1_idx++;
-        }
-
-        uint32_t output_len = len_in0 + len_in1;
-        for (uint32_t i = 0; i < output_len; i++) {
-            offset = l1_out_idx * sizeof(float16);
-            mmio_fp16(shard_output + offset) = 0;
-            l1_out_idx++;
-        }
+    /* Each input's iterations are contiguous in L2, so this tile's [iter_start, iter_end)
+       slice is a single contiguous block per input. The Spatz task fully writes the output
+       shard (in0 || in1 per iteration), so shard_output is not zeroed here. */
+    if (len_in0) {
+        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (input0 + iter_start * len_in0), (uint32_t) shard_input0, iter_len * len_in0 * sizeof(float16));
+        eu_idma_wait_a2o(&eu_ctrl, WFE);
+    }
+    if (len_in1) {
+        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (input1 + iter_start * len_in1), (uint32_t) shard_input1, iter_len * len_in1 * sizeof(float16));
+        eu_idma_wait_a2o(&eu_ctrl, WFE);
     }
 
     return 0;
@@ -121,13 +111,9 @@ static int init_input_params(void *params, const float16 *input0, const float16 
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
+    eu_ctrl_init(&eu_ctrl);
 
     spatz_run_task_with_params(CONCAT_FP16_SPATZ_TASK, params);
 
@@ -146,33 +132,28 @@ exit:
 static int store_result(void *params, float16 *concat_result, const uint32_t iterations)
 {
     volatile concat_fp16_spatz_params_t *concat_params;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t shard_output_base;
-    uint32_t in0_len;
-    uint32_t in1_len;
     uint32_t out_len;
     uint32_t start;
     uint32_t len;
 
     concat_params = (volatile concat_fp16_spatz_params_t *) params;
     shard_output_base = concat_params->shard_output;
-    in0_len = concat_params->len_input0;
-    in1_len = concat_params->len_input1;
+    out_len = concat_params->len_input0 + concat_params->len_input1;
     start = concat_params->iter_start;
     len = concat_params->iter_len;
-    out_len = in0_len + in1_len;
 
-    uint32_t out_idx = 0;
+    if (len == 0)
+        return 0;
 
-    for (uint32_t iter = 0; iter < len; iter++) {
-        uint32_t global_iter = start + iter;
-        uint32_t global_idx_base = global_iter * out_len;
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
 
-        for (uint32_t i = 0; i < out_len; i++) {
-            uint32_t offset = out_idx * sizeof(float16);
-            concat_result[global_idx_base + i] = mmio_fp16(shard_output_base + offset);
-            out_idx++;
-        }
-    }
+    /* This tile's output rows [iter_start, iter_start+iter_len) are contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (concat_result + start * out_len), (uint32_t) shard_output_base, len * out_len * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
