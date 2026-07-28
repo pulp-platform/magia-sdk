@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "reducemean_fp16_spatz.h"
 #include "reducemean_fp16_spatz_params.h"
@@ -52,18 +55,24 @@ static int alloc_l1(void **params, uint32_t outer_dim, uint32_t reduce_dim, uint
 static int init_input_params(void *params, const float16 *X)
 {
     volatile reducemean_fp16_spatz_params_t *rm_params = (volatile reducemean_fp16_spatz_params_t *) params;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t src_base;
+    uint32_t in_elems;
 
-    uint32_t src_base = rm_params->outer_start * rm_params->reduce_dim * rm_params->inner_dim;
-    uint32_t total_input_bytes = rm_params->outer_len * rm_params->reduce_dim * rm_params->inner_dim * sizeof(float16);
+    if (rm_params->outer_len == 0)
+        return 0;
 
-    for (uint32_t i = 0; i < (total_input_bytes / sizeof(float16)); i++) {
-        mmio_fp16(rm_params->shard_X + i * sizeof(float16)) = X[src_base + i];
-    }
+    src_base = rm_params->outer_start * rm_params->reduce_dim * rm_params->inner_dim;
+    in_elems = rm_params->outer_len * rm_params->reduce_dim * rm_params->inner_dim;
 
-    uint32_t total_output_elems = rm_params->outer_len * rm_params->inner_dim;
-    for (uint32_t i = 0; i < total_output_elems; i++) {
-        mmio_fp16(rm_params->shard_Y + i * sizeof(float16)) = 0;
-    }
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's outer slice [outer_start, outer_start+outer_len) is contiguous in L2. The
+       Spatz task fully writes shard_Y (one mean per output), so it is not zeroed here. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (X + src_base), (uint32_t) rm_params->shard_X, in_elems * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -71,14 +80,9 @@ static int init_input_params(void *params, const float16 *X)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
-
+    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(REDUCEMEAN_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
@@ -93,13 +97,23 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile reducemean_fp16_spatz_params_t *rm_params = (volatile reducemean_fp16_spatz_params_t *) params;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t dst_base;
+    uint32_t out_elems;
 
-    uint32_t dst_base = rm_params->outer_start * rm_params->inner_dim;
-    uint32_t total_output_elems = rm_params->outer_len * rm_params->inner_dim;
+    if (rm_params->outer_len == 0)
+        return 0;
 
-    for (uint32_t i = 0; i < total_output_elems; i++) {
-        Y[dst_base + i] = mmio_fp16(rm_params->shard_Y + i * sizeof(float16));
-    }
+    dst_base = rm_params->outer_start * rm_params->inner_dim;
+    out_elems = rm_params->outer_len * rm_params->inner_dim;
+
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's output outer slice is contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (Y + dst_base), (uint32_t) rm_params->shard_Y, out_elems * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
