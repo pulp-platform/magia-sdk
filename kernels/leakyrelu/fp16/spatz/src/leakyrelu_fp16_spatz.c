@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "leakyrelu_fp16_spatz.h"
 #include "leakyrelu_fp16_spatz_params.h"
@@ -63,30 +66,27 @@ static int allocate_l1(void **params, uint32_t size)
 static int init_input_params(void *params, const float16 *X, float16 a)
 {
     volatile leakyrelu_fp16_spatz_params_t *leakyrelu_params;
-    uintptr_t shard_X;
-    uintptr_t shard_Y;
-    uintptr_t alpha;
-    size_t start;
-    size_t len;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
+    uint32_t start;
+    uint32_t len;
 
     leakyrelu_params = (volatile leakyrelu_fp16_spatz_params_t *) params;
-
-    shard_X = leakyrelu_params->shard_X;
-    shard_Y = leakyrelu_params->shard_Y;
-    alpha = leakyrelu_params->alpha;
-
     start = leakyrelu_params->start;
     len = leakyrelu_params->len;
 
-    for (int i = 0; i < leakyrelu_params->len; i++) {
-        uint32_t global_idx = start + i;
-        uint32_t offset = i * sizeof(float16);
+    mmio_fp16(leakyrelu_params->alpha) = a;
 
-        mmio_fp16(shard_X + offset) = X[global_idx];
-        mmio_fp16(shard_Y + offset) = 0;
-    }
+    if (len == 0)
+        return 0;
 
-    mmio_fp16(alpha) = a;
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's slice [start, start+len) is contiguous in L2. The Spatz task writes every
+       output (Y = leakyrelu(X, alpha)), so shard_Y is not zeroed here. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (X + start), (uint32_t) leakyrelu_params->shard_X, len * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -94,14 +94,9 @@ static int init_input_params(void *params, const float16 *X, float16 a)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
-
+    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(LEAKYRELU_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
@@ -119,20 +114,24 @@ exit:
 static int store_result(void* params, float16 *dst)
 {
     volatile leakyrelu_fp16_spatz_params_t *leakyrelu_params;
-    uint32_t shard_Y;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t start;
     uint32_t len;
 
     leakyrelu_params = (volatile leakyrelu_fp16_spatz_params_t *) params;
-    shard_Y = leakyrelu_params->shard_Y;
     start = leakyrelu_params->start;
     len = leakyrelu_params->len;
 
-    for (int i = 0; i < len; i++) {
-        uint32_t global_idx = start + i;
-        uint32_t offset = i * sizeof(float16);
-        dst[global_idx] = mmio_fp16(shard_Y + offset);
-    }
+    if (len == 0)
+        return 0;
+
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's output slice [start, start+len) is contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (dst + start), (uint32_t) leakyrelu_params->shard_Y, len * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
