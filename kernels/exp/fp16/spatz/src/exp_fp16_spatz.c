@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "exp_fp16_spatz.h"
 #include "exp_fp16_spatz_params.h"
@@ -57,25 +60,25 @@ static int alloc_l1(void **params, uint32_t size)
 static int init_input_params(void *params, const float16 *input)
 {
     volatile exp_fp16_spatz_params_t *exp_params;
-    uintptr_t shard_input_base;
-    uintptr_t shard_output_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t start;
     uint32_t len;
 
     exp_params = (volatile exp_fp16_spatz_params_t *) params;
-    shard_input_base  = exp_params->shard_input;
-    shard_output_base = exp_params->shard_output;
-
     start = exp_params->start;
     len   = exp_params->len;
 
-    for (uint32_t i = 0; i < len; i++) {
-        uint32_t global_idx = start + i;
-        uint32_t offset = i * sizeof(float16);
+    if (len == 0)
+        return 0;
 
-        mmio_fp16(shard_input_base + offset) = input[global_idx];
-        mmio_fp16(shard_output_base + offset) = 0;
-    }
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's slice [start, start+len) is contiguous in L2. The Spatz task writes every
+       output (Y = exp(X)), so shard_output is not zeroed here. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (input + start), (uint32_t) exp_params->shard_input, len * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -83,14 +86,9 @@ static int init_input_params(void *params, const float16 *input)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
-
+    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(EXP_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
@@ -108,20 +106,24 @@ exit:
 static int store_result(void *params, float16 *dst)
 {
     volatile exp_fp16_spatz_params_t *exp_params;
-    uintptr_t shard_out_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t start;
     uint32_t len;
 
     exp_params = (volatile exp_fp16_spatz_params_t *) params;
-    shard_out_base = exp_params->shard_output;
     start = exp_params->start;
     len = exp_params->len;
 
-    for (uint32_t i = 0; i < len; i++) {
-        uint32_t global_idx = start + i;
-        uint32_t offset = i * sizeof(float16);
-        dst[global_idx] = mmio_fp16(shard_out_base + offset);
-    }
+    if (len == 0)
+        return 0;
+
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's output slice [start, start+len) is contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (dst + start), (uint32_t) exp_params->shard_output, len * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
