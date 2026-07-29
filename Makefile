@@ -77,7 +77,7 @@ GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
 CMAKE ?= cmake
 
 GVSOC_WORK_DIR ?= ./gvsoc_work
-GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_WORK_DIR) --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --attr magia_v3/nb_pulp_cores=$(pulp_cores) --trace-level=trace --trace=kill-module
+GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)/n_tiles_x=$(tiles) --attr $(target_platform)/n_tiles_y=$(tiles) --attr $(target_platform)/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --attr $(target_platform)/nb_pulp_cores=$(pulp_cores) --trace-level=trace --trace=kill-module
 GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
 GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 profile_tile		?=
@@ -162,7 +162,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
+	$(GVRUN) --target $(target_platform) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
@@ -261,7 +261,7 @@ ifneq (,$(filter $(build_mode), update synth profile))
 	curl --proto '=https' --tlsv1.2 https://pulp-platform.github.io/bender/init -sSf | sh -s -- --local && \
 	export PATH=$$(pwd):$$PATH											&& \
 	python -m pip install --upgrade "setuptools<81"						&& \
-	make $(build_mode)-ips > $(build_mode)-ips.log mesh_dv=$(mesh_dv)	&& \
+	make vsim-scripts > vsim-scripts.log mesh_dv=$(mesh_dv)	&& \
 	make floonoc-patch || true											&& \
 	make build-hw > build-hw.log mesh_dv=$(mesh_dv) fast_sim=$(fast_sim)
 else
