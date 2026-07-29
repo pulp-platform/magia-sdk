@@ -41,7 +41,7 @@ endif()
 # add_subdirectory(pouya_spmv_ss_1)
 # add_subdirectory(pouya_spmv_profiling)
 add_subdirectory(pouya_spmv_eqworkload)
-add_subdirectory(pouya_spmv_eqw_dmafk)
+add_subdirectory(pouya_spmv_eq_no_pipeline)
 
 # add_subdirectory(fsync_levels)
 # add_subdirectory(fsync_rc)

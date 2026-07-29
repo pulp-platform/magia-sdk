@@ -11,7 +11,7 @@
 #define L1_BASE_TILE           (L1_BASE + (get_hartid() * L1_TILE_OFFSET))
 
 #define ROW_PTR_SIZE           ((DIM_M + 1) * sizeof(uint32_t))
-#define COL_IDX_SIZE           ((NNZ) * sizeof(uint32_t))
+#define COL_IDX_SIZE           ((NNZ) * sizeof(uint16_t))
 #define VALUES_SIZE            ((NNZ) * sizeof(float16))
 #define X_SIZE                 ((DIM_K) * sizeof(float16))
 #define M_SIZE                 ((DIM_M) * sizeof(float16))

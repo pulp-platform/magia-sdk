@@ -22,9 +22,10 @@ static int init_data(void *params)
     /* CSR column indices + values */
     for (int i = 0; i < NNZ; i++) {
         /* Pre-shift element index -> byte offset (fp16 = 2 bytes/elem) here
-         * on the host, so the Spatz kernel never needs to touch vtype more
-         * than once per row. */
-        mmio32(COL_IDX_BASE + i * sizeof(uint32_t))  = col_idx[i] * sizeof(float16);
+        * on the host, so the Spatz kernel never needs to touch vtype more
+        * than once per row. Stored as 16-bit now that col_idx is fully e16. */
+        mmio16(COL_IDX_BASE + i * sizeof(uint16_t)) =
+            (uint16_t)(col_idx[i] * sizeof(float16));
         mmio_fp16(VALUES_BASE + i * sizeof(float16)) = values[i];
     }
 

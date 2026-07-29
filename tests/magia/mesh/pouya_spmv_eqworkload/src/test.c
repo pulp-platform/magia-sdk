@@ -7,7 +7,7 @@
 
 
 //#include "sme3Da.h"
-#include "poisson3Da.h"
+//#include "poisson3Da.h"
 //#include "raefsky5.h"
 //#include "ex6.h"
 //#include "cavity05.h"
@@ -16,7 +16,7 @@
 //#include "scsd8-2r.h"
 //#include "e18.h"
 //#include "scfxm1-2b.h"
-//#include "sctap1-2b.h"
+#include "sctap1-2b.h"
 //#include "testbig.h"
 
 //#include "test.h"

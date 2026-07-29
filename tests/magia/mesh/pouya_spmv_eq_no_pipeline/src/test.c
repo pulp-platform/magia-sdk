@@ -6,13 +6,13 @@
 #include "eventunit.h"
 
 
-#include "sme3Da.h"
+//#include "sme3Da.h"
 //#include "poisson3Da.h"
 //#include "raefsky5.h"
 //#include "ex6.h"
 //#include "cavity05.h"
 //#include "g7jac140.h"
-//#include "fxm4_6.h"
+#include "fxm4_6.h"
 //#include "scsd8-2r.h"
 //#include "e18.h"
 //#include "scfxm1-2b.h"
@@ -24,7 +24,6 @@
 
 #define WAIT_MODE WFE
 #define clock_freq_MHz 1000
-#define DMA_FACTOR 4
 
 
 /*
@@ -231,9 +230,7 @@ int main(void)
     --------------------------------------------------
     */
     uint32_t tile_buffer_bytes =
-        DMA_FACTOR *
-        MAX_TILE_NNZ *
-        sizeof(csr_entry_t);
+        MAX_TILE_NNZ * sizeof(csr_entry_t);
 
     uint32_t addr_valcol_buf0 =
         addr_x + N * sizeof(int32_t);
@@ -321,70 +318,46 @@ int main(void)
         (local_rows + TILE_ROWS - 1)
         / TILE_ROWS;
 
-    uint32_t num_super_tiles =
-        (num_tiles + DMA_FACTOR - 1)
-        / DMA_FACTOR;
-
     /*
     ==============================================================
     Prefetch first tile
     ==============================================================
     */
-    uint32_t first_batch_start_tile = 0;
+    uint32_t first_tile_rows =
+        (local_rows > TILE_ROWS)
+        ? TILE_ROWS
+        : local_rows;
 
-    uint32_t first_batch_end_tile =
-        DMA_FACTOR;
-
-    if (first_batch_end_tile > num_tiles)
-        first_batch_end_tile = num_tiles;
-
-    uint32_t first_batch_start_row =
-        first_batch_start_tile * TILE_ROWS;
-
-    uint32_t first_batch_end_row =
-        first_batch_end_tile * TILE_ROWS;
-
-    if (first_batch_end_row > local_rows)
-        first_batch_end_row = local_rows;
-
-    uint32_t first_global_start =
-        start_row + first_batch_start_row;
-
-    uint32_t first_global_end =
-        start_row + first_batch_end_row;
+    uint32_t first_global_row_end =
+        start_row + first_tile_rows;
 
     uint32_t first_start_nnz =
-        rowptr_l2[first_global_start];
+        rowptr_l2[start_row];
 
     uint32_t first_end_nnz =
-        rowptr_l2[first_global_end];
+        rowptr_l2[first_global_row_end];
 
-    uint32_t first_batch_nnz =
+    uint32_t first_tile_nnz =
         first_end_nnz - first_start_nnz;
 
-    printf("first battch bytes = %d\n",first_batch_nnz*4);
-
+    /*
+    --------------------------------------------------
+    DMA first tile
+    --------------------------------------------------
+    */
     dma_wait_start = perf_get_cycles();
-
     idma_memcpy_1d(
         &idma_ctrl,
         0,
         (uint32_t)&valcol_l2[first_start_nnz],
         (uint32_t)valcol_buf[current_buf],
-        first_batch_nnz * sizeof(csr_entry_t)
+        first_tile_nnz * sizeof(csr_entry_t)
     );
-
-    dma_bytes +=
-        first_batch_nnz * sizeof(csr_entry_t);
-
-    eu_idma_wait_a2o(
-        &eu_ctrl,
-        WAIT_MODE
-    );
-
+    dma_bytes += first_tile_nnz * sizeof(csr_entry_t);
+    
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
     dma_wait_end = perf_get_cycles();
-
-    //dma_wait_time += dma_wait_end - dma_wait_start;
+    dma_wait_time += dma_wait_end - dma_wait_start;
 
     /*
     ==============================================================
@@ -398,6 +371,8 @@ int main(void)
     //uint32_t fsync_wait_end = perf_get_cycles();
     //uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start;
 
+    uint32_t computed_time_pure = 0;
+    uint32_t computed_time_pure_start = 0;
     uint32_t computed_time = 0;
     uint32_t compute_start = perf_get_cycles();
 
@@ -405,45 +380,142 @@ int main(void)
     uint32_t second_for_loop_iteration;
     uint32_t third_for_loop_iteration;
 
-    for (uint32_t batch = 0;
-     batch < num_super_tiles;
-     batch++) {
+    for (uint32_t tile = 0;
+         tile < num_tiles;
+         tile++) {
+
+        /*
+        --------------------------------------------------
+        Current tile row range (local)
+        --------------------------------------------------
+        */
+        uint32_t tile_row_start =
+            tile * TILE_ROWS;
+
+        uint32_t tile_row_end =
+            tile_row_start + TILE_ROWS;
+
+        if (tile_row_end > local_rows) {
+            tile_row_end = local_rows;
+        }
+
+        /*
+        --------------------------------------------------
+        Convert to global rows
+        --------------------------------------------------
+        */
+        uint32_t global_tile_start =
+            start_row + tile_row_start;
+
+        uint32_t global_tile_end =
+            start_row + tile_row_end;
+
+        /*
+        --------------------------------------------------
+        Current tile nnz range
+        --------------------------------------------------
+        */
+        uint32_t start_nnz =
+            rowptr_l2[global_tile_start];
+
+        uint32_t end_nnz =
+            rowptr_l2[global_tile_end];
+
+        uint32_t tile_nnz =
+            end_nnz - start_nnz;
+        
+
+        /*
+        ==========================================================
+        Compute current tile
+        ==========================================================
+        */
+        second_for_loop_iteration += tile_row_end - tile_row_start;
+
+        computed_time_pure_start = perf_get_cycles();
+
+        for (uint32_t i = tile_row_start;
+             i < tile_row_end;
+             i++) {
+
+            uint32_t global_row =
+                start_row + i;
+
+            int32_t sum = 0;
+
+            /*
+            ------------------------------------------------------
+            Convert global CSR offsets into local tile offsets
+            ------------------------------------------------------
+            */
+            uint32_t local_start =
+                rowptr_l2[global_row] - start_nnz;
+
+            uint32_t local_end =
+                rowptr_l2[global_row + 1] - start_nnz;
+
+            third_for_loop_iteration += local_end - local_start;
+
+            for (uint32_t j = local_start;
+                 j < local_end;
+                 j++) {
+
+                /*
+                --------------------------------------------------
+                Single 32-bit load
+                --------------------------------------------------
+                */
+                csr_entry_t packed =
+                    valcol_buf[current_buf][j];
+
+                /*
+                --------------------------------------------------
+                Unpack value and column
+                --------------------------------------------------
+                */
+                int16_t value =
+                    GET_VALUE(packed);
+
+                uint16_t col =
+                    GET_COL(packed);
+
+                /*
+                --------------------------------------------------
+                SpMV MAC
+                --------------------------------------------------
+                */
+                sum +=
+                    ((int32_t)value) *
+                    ((int32_t)local_x[col]);
+            }
+
+            local_y[i] = sum;
+        }
+        computed_time_pure += perf_get_cycles() - computed_time_pure_start;
+
 
         /*
         ==========================================================
         Launch DMA for NEXT tile
         ==========================================================
         */
-        if (batch + 1 < num_super_tiles) {
+        if (tile + 1 < num_tiles) {
 
-            uint32_t next_batch_start_tile =
-                (batch + 1) * DMA_FACTOR;
+            uint32_t next_row_start =
+                (tile + 1) * TILE_ROWS;
 
-            uint32_t next_batch_end_tile =
-                next_batch_start_tile +
-                DMA_FACTOR;
+            uint32_t next_row_end =
+                next_row_start + TILE_ROWS;
 
-            if (next_batch_end_tile > num_tiles)
-                next_batch_end_tile = num_tiles;
-
-            uint32_t next_batch_start_row =
-                next_batch_start_tile *
-                TILE_ROWS;
-
-            uint32_t next_batch_end_row =
-                next_batch_end_tile *
-                TILE_ROWS;
-
-            if (next_batch_end_row > local_rows)
-                next_batch_end_row = local_rows;
+            if (next_row_end > local_rows) {
+                next_row_end = local_rows;
+            }
 
             uint32_t next_global_start =
-                start_row +
-                next_batch_start_row;
+                start_row + next_row_start;
 
             uint32_t next_global_end =
-                start_row +
-                next_batch_end_row;
+                start_row + next_row_end;
 
             uint32_t next_start_nnz =
                 rowptr_l2[next_global_start];
@@ -451,122 +523,25 @@ int main(void)
             uint32_t next_end_nnz =
                 rowptr_l2[next_global_end];
 
-            uint32_t next_batch_nnz =
-                next_end_nnz -
-                next_start_nnz;
+            uint32_t next_tile_nnz =
+                next_end_nnz - next_start_nnz;
 
+            if(hartid==50)
+                printf("next_tile_nnz for core 0 = %d\n", next_tile_nnz);
+
+            /*
+            ------------------------------------------------------
+            Non-blocking DMA launch
+            ------------------------------------------------------
+            */
             idma_memcpy_1d(
                 &idma_ctrl,
                 0,
                 (uint32_t)&valcol_l2[next_start_nnz],
                 (uint32_t)valcol_buf[next_buf],
-                next_batch_nnz *
-                sizeof(csr_entry_t)
+                next_tile_nnz * sizeof(csr_entry_t)
             );
-
-            dma_bytes +=
-                next_batch_nnz *
-                sizeof(csr_entry_t);
-        }
-
-        /*
-        ==========================================================
-        Compute current tile
-        ==========================================================
-        */
-        
-        uint32_t batch_start_tile =
-            batch * DMA_FACTOR;
-
-        uint32_t batch_end_tile =
-            batch_start_tile +
-            DMA_FACTOR;
-
-        if (batch_end_tile > num_tiles)
-            batch_end_tile = num_tiles;
-
-        second_for_loop_iteration += batch_end_tile - batch_start_tile;
-
-        for (uint32_t tile = batch_start_tile;
-            tile < batch_end_tile;
-            tile++){
-
-            uint32_t tile_row_start =
-                tile * TILE_ROWS;
-
-            uint32_t tile_row_end =
-                tile_row_start + TILE_ROWS;
-
-            if (tile_row_end > local_rows) {
-                tile_row_end = local_rows;
-            }
-
-            for (uint32_t i = tile_row_start;
-                i < tile_row_end;
-                i++) {
-
-                uint32_t global_row =
-                    start_row + i;
-
-                int32_t sum = 0;
-
-                /*
-                ------------------------------------------------------
-                Convert global CSR offsets into local tile offsets
-                ------------------------------------------------------
-                */
-                uint32_t batch_start_nnz =
-                    rowptr_l2[
-                        start_row +
-                        batch_start_tile *
-                        TILE_ROWS
-                    ];
-
-                uint32_t local_start =
-                    rowptr_l2[global_row] -
-                    batch_start_nnz;
-
-                uint32_t local_end =
-                    rowptr_l2[global_row + 1] -
-                    batch_start_nnz;
-
-                third_for_loop_iteration += local_end - local_start;
-
-                for (uint32_t j = local_start;
-                    j < local_end;
-                    j++) {
-
-                    /*
-                    --------------------------------------------------
-                    Single 32-bit load
-                    --------------------------------------------------
-                    */
-                    csr_entry_t packed =
-                        valcol_buf[current_buf][j];
-
-                    /*
-                    --------------------------------------------------
-                    Unpack value and column
-                    --------------------------------------------------
-                    */
-                    int16_t value =
-                        GET_VALUE(packed);
-
-                    uint16_t col =
-                        GET_COL(packed);
-
-                    /*
-                    --------------------------------------------------
-                    SpMV MAC
-                    --------------------------------------------------
-                    */
-                    sum +=
-                        ((int32_t)value) *
-                        ((int32_t)local_x[col]);
-                }
-
-                local_y[i] = sum;
-            }
+            dma_bytes += next_tile_nnz * sizeof(csr_entry_t);
         }
 
         /*
@@ -574,11 +549,11 @@ int main(void)
         Wait for next tile DMA completion
         ==========================================================
         */
-        if (batch + 1 < num_super_tiles) {
+        if (tile + 1 < num_tiles) {
             dma_wait_start = perf_get_cycles();
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
             dma_wait_end = perf_get_cycles();
-            //dma_wait_time += dma_wait_end - dma_wait_start;
+            dma_wait_time += dma_wait_end - dma_wait_start;
         }
 
         /*
@@ -607,7 +582,7 @@ int main(void)
     dma_wait_start = perf_get_cycles();
     eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
     dma_wait_end = perf_get_cycles();
-    //dma_wait_time += dma_wait_end - dma_wait_start;
+    dma_wait_time += dma_wait_end - dma_wait_start;
 
     uint32_t compute_end = perf_get_cycles();
     computed_time = compute_end - compute_start;
@@ -640,12 +615,13 @@ int main(void)
     rowptr_l2[start_row];
 
     printf(
-        "core %u rows=%u nnz=%u runtime=%u compute=%u fsync=%u dmaC=%u dmaB=%u dma/cycle=%u\n",
+        "core %u rows=%u nnz=%u runtime=%u compute=%u PureComp=%u fsync=%u dmaC=%u dmaB=%u dma/cycle=%u\n",
         hartid,
         local_rows,
         local_nnz,
         run_time_cycle[hartid],
         compute_cycle[hartid],
+        computed_time_pure,
         fsync_wait_cycle[hartid],
         DMA_wait_cycle[hartid],
         DMA_bytes[hartid],

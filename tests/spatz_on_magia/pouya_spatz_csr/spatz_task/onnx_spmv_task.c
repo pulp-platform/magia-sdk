@@ -26,7 +26,7 @@
  */
 
 static void spmv(const uint32_t *row_ptr,
-                 const uint32_t *col_idx,
+                 const uint16_t *col_idx,
                  const _Float16 *values,
                  const _Float16 *x,
                  _Float16 *Y,
@@ -67,7 +67,7 @@ static void spmv(const uint32_t *row_ptr,
             asm volatile("vle16.v v8, (%0)" ::"r"(values + j));
             asm volatile("vle32.v v16, (%0)" ::"r"(col_idx + j));
 
-            asm volatile("vloxei32.v v10, (%0), v16" ::"r"(x));
+            asm volatile("vloxei16.v v10, (%0), v16" ::"r"(x));
 
             asm volatile("vfmacc.vv v12, v8, v10");
 
@@ -90,7 +90,7 @@ int onnx_spmv_task(void)
     volatile onnx_spmv_params_t *params;
     uintptr_t params_addr;
     uint32_t *row_ptr;
-    uint32_t *col_idx;
+    uint16_t *col_idx;
     _Float16 *values;
     _Float16 *x;
     _Float16 *Y;
@@ -100,7 +100,7 @@ int onnx_spmv_task(void)
     params      = (volatile onnx_spmv_params_t *)params_addr;
 
     row_ptr = (uint32_t *)params->addr_row_ptr;
-    col_idx = (uint32_t *)params->addr_col_idx;
+    col_idx = (uint16_t *)params->addr_col_idx;
     values  = (_Float16 *)params->addr_values;
     x       = (_Float16 *)params->addr_x;
     Y       = (_Float16 *)params->addr_Y;

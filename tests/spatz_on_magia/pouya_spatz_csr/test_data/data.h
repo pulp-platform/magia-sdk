@@ -12,8 +12,9 @@
 static const uint32_t row_ptr[] = {0, 2, 6, 10, 14, 18, 22, 26, 28};
 
 /* CSR column indices (NNZ entries). Padding entries (col=0) are harmless
- * since their paired value is 0.0. */
-static const uint32_t col_idx[] = {
+ * since their paired value is 0.0. Stored as uint16_t so the vector engine
+ * never has to mix EEW16 (values/x) with EEW32 (indices) in the same row. */
+static const uint16_t col_idx[] = {
     0, 1,                /* row0 */
     0, 1, 2, 0,          /* row1 (+pad) */
     1, 2, 3, 0,          /* row2 (+pad) */
