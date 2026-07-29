@@ -2,7 +2,10 @@
 #include <errno.h>
 
 #include "eventunit.h"
+#include "idma.h"
 #include "tile.h"
+
+#include "kernel_idma_utils.h"
 
 #include "sigmoid_fp16_spatz.h"
 #include "sigmoid_fp16_spatz_params.h"
@@ -57,25 +60,25 @@ static int alloc_l1(void **params, uint32_t size)
 static int init_input_params(void *params, const float16 *X)
 {
     volatile sigmoid_fp16_spatz_params_t *sigmoid_params;
-    uintptr_t shard_X_base;
-    uintptr_t shard_Y_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t start;
     uint32_t len;
 
     sigmoid_params = (volatile sigmoid_fp16_spatz_params_t *) params;
-    shard_X_base = sigmoid_params->shard_X;
-    shard_Y_base = sigmoid_params->shard_Y;
-
     start = sigmoid_params->start;
     len   = sigmoid_params->len;
 
-    for (uint32_t i = 0; i < len; i++) {
-        uint32_t global_idx = start + i;
-        uint32_t offset = i * sizeof(float16);
+    if (len == 0)
+        return 0;
 
-        mmio_fp16(shard_X_base + offset) = X[global_idx];
-        mmio_fp16(shard_Y_base + offset) = 0;
-    }
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's slice [start, start+len) is contiguous in L2. The Spatz task writes every
+       output (Y = sigmoid(X)), so shard_Y is not zeroed here. */
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (X + start), (uint32_t) sigmoid_params->shard_X, len * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
 }
@@ -83,14 +86,9 @@ static int init_input_params(void *params, const float16 *X)
 static int offload_spatz_task(void *params)
 {
     eu_controller_t eu_ctrl;
-    eu_config_t eu_cfg;
     int ret;
 
-    eu_cfg.hartid = HID;
-    eu_ctrl.base = NULL;
-    eu_ctrl.cfg = &eu_cfg;
-    eu_ctrl.api = &eu_api;
-
+    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(SIGMOID_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
@@ -108,20 +106,24 @@ exit:
 static int store_result(void *params, float16 *dst)
 {
     volatile sigmoid_fp16_spatz_params_t *sigmoid_params;
-    uintptr_t shard_Y_base;
+    idma_controller_t idma_ctrl;
+    eu_controller_t eu_ctrl;
     uint32_t start;
     uint32_t len;
 
     sigmoid_params = (volatile sigmoid_fp16_spatz_params_t *) params;
-    shard_Y_base = sigmoid_params->shard_Y;
     start = sigmoid_params->start;
     len = sigmoid_params->len;
 
-    for (uint32_t i = 0; i < len; i++) {
-        uint32_t global_idx = start + i;
-        uint32_t offset = i * sizeof(float16);
-        dst[global_idx] = mmio_fp16(shard_Y_base + offset);
-    }
+    if (len == 0)
+        return 0;
+
+    idma_ctrl_init(&idma_ctrl);
+    eu_ctrl_init(&eu_ctrl);
+
+    /* This tile's output slice [start, start+len) is contiguous in L2. */
+    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (dst + start), (uint32_t) sigmoid_params->shard_Y, len * sizeof(float16));
+    eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
