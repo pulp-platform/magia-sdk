@@ -77,17 +77,12 @@ set(CV32_COMPILE_FLAGS
 # Linker flags [MAGIA/Makefile: LD_OPTS]
 set(CV32_LINK_FLAGS
     ${CV32_MARCH}
-    ${CV32_MABI}
-    "-D__riscv__"
-    "-MMD"
-    "-MP"
-    "-nostdlib"
-    "-flto"
-    # io.c's libc stubs are compiled into multiple libs; identical source, so under
-    # LTO's stricter symbol resolution take the first (matches the Spatz link path).
-    "-Wl,--allow-multiple-definition"
+    ${CV32_MABI}     
     "-nostartfiles"
-    "-Wl,--gc-sections"
+    "-nostdlib"
+    "-Wl,-z,norelro"
+    "-Wl,--allow-multiple-definition"
+    "-Tlink.ld"
 )
 
 # ==============================================================================
