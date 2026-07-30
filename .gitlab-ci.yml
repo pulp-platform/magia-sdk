@@ -167,7 +167,7 @@ build_test_magia_v2_tiles_1:
   extends: [.base, .export_path]
   script:
     - export TESTLOG="${TESTNAME##*/}"
-    - make run MAGIA_RTL_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} > $TESTLOG.log
+    - make run MAGIA_RTL_DIR=$MAGIA platform=${platform} test=$TESTNAME tiles=${tiles} fast_sim=1 > $TESTLOG.log
     - ./scripts/sim_ret_errors.sh $TESTLOG.log
   artifacts:
     paths: [ "*.log" ]

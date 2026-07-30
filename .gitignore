@@ -47,6 +47,8 @@ scripts/gvsoc2perfetto-rs
 tests/spatz_pulp_on_magia/nn_is_bench/include/nn_is_data.h
 tests/spatz_pulp_on_magia/nn_is_bench/include/nn_is_size.h
 
+scripts/gvsoc2perfetto-rs
+
 # Editor
 .vscode/
 llvm/
