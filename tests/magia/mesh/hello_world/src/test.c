@@ -19,9 +19,9 @@ int main(void)
     volatile float16 a = -12.0456f;
     volatile float16 b = 4.0f;
     volatile float16 c = (a + b);
-    int test_integer = -123;
+    int test_integer   = -123;
 
-    uint32_t *v = (uint32_t *) &c;
+    uint32_t *v = (uint32_t *)&c;
     printf("Hello world! %#x\n", *v);
     // printf("Hello world! %f\n", c);
     printf("Hello world! %d\n", test_integer);

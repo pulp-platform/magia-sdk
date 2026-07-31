@@ -35,10 +35,10 @@
  * Derived geometry
  * ========================================================================== */
 
-#define NN_TH (NN_M / MESH_Y_TILES)
-#define NN_TW (NN_N / MESH_X_TILES)
-#define NN_TS (NN_K / NN_TIMESLOTS)
-#define NN_PB (NN_K / MESH_X_TILES)
+#define NN_TH                 (NN_M / MESH_Y_TILES)
+#define NN_TW                 (NN_N / MESH_X_TILES)
+#define NN_TS                 (NN_K / NN_TIMESLOTS)
+#define NN_PB                 (NN_K / MESH_X_TILES)
 
 /* ==========================================================================
  * Phase pipelining
@@ -61,9 +61,9 @@
  * owns a different set of elements.
  * ========================================================================== */
 
-#define NN_BLOCK_TS (NN_PB / NN_TS)              /* timeslots per column block */
-#define NN_ROUNDS   (NN_TIMESLOTS / NN_BLOCK_TS) /* == MESH_X_TILES            */
-#define NN_CH       (NN_TH / MESH_X_TILES)       /* chunk rows owned per round  */
+#define NN_BLOCK_TS           (NN_PB / NN_TS)              /* timeslots per column block */
+#define NN_ROUNDS             (NN_TIMESLOTS / NN_BLOCK_TS) /* == MESH_X_TILES            */
+#define NN_CH                 (NN_TH / MESH_X_TILES)       /* chunk rows owned per round  */
 
 /* How many rounds a tile must have finished past round r before block r is
  * guaranteed final in L2 -- with NO extra barrier.
@@ -91,7 +91,7 @@
  *
  * The golden check validates this: gathering a block early would see Z only
  * partially accumulated, and verify_chunk() would fail loudly. */
-#define NN_PIPE_LAG ((MESH_X_TILES - 1 + NN_BLOCK_TS - 1) / NN_BLOCK_TS)
+#define NN_PIPE_LAG           ((MESH_X_TILES - 1 + NN_BLOCK_TS - 1) / NN_BLOCK_TS)
 
 /* Rows of the chunk handled by each PULP core (SPMD split). */
 #define NN_PULP_ROWS_PER_CORE (NN_CH / PULP_CORE_COUNT)
@@ -143,18 +143,18 @@ typedef char nn_ct_lag[(NN_PIPE_LAG < NN_ROUNDS) ? 1 : -1];
  * L2 origin 0xC0000000 are what the BAR0 DMA engine wants as destination.
  * ========================================================================== */
 
-#define NN_L2_ORIGIN   (0xC0000000u)
-#define NN_SHM_BASE    (0xC8000000u)
-#define NN_SHM_L2_OFF  (NN_SHM_BASE - NN_L2_ORIGIN) /* 0x08000000 */
+#define NN_L2_ORIGIN    (0xC0000000u)
+#define NN_SHM_BASE     (0xC8000000u)
+#define NN_SHM_L2_OFF   (NN_SHM_BASE - NN_L2_ORIGIN) /* 0x08000000 */
 
-#define NN_HDR_ADDR    (NN_SHM_BASE + 0x00000000u) /* nn_hdr_t, 64 B         */
-#define NN_X_ADDR      (NN_SHM_BASE + 0x00001000u) /* fp16 [NN_M x NN_N]     */
-#define NN_W_ADDR      (NN_X_ADDR   + 0x00080000u) /* fp16 [NN_N x NN_K]     */
-#define NN_Y_ADDR      (NN_W_ADDR   + 0x00080000u) /* fp16 [NN_M x NN_K] i/o */
-#define NN_Q_ADDR      (NN_Y_ADDR   + 0x00080000u) /* int16 [NN_M x NN_K]    */
-#define NN_STAT_ADDR   (NN_Q_ADDR   + 0x00080000u) /* nn_tile_stats_t[16]    */
+#define NN_HDR_ADDR     (NN_SHM_BASE + 0x00000000u) /* nn_hdr_t, 64 B         */
+#define NN_X_ADDR       (NN_SHM_BASE + 0x00001000u) /* fp16 [NN_M x NN_N]     */
+#define NN_W_ADDR       (NN_X_ADDR + 0x00080000u)   /* fp16 [NN_N x NN_K]     */
+#define NN_Y_ADDR       (NN_W_ADDR + 0x00080000u)   /* fp16 [NN_M x NN_K] i/o */
+#define NN_Q_ADDR       (NN_Y_ADDR + 0x00080000u)   /* int16 [NN_M x NN_K]    */
+#define NN_STAT_ADDR    (NN_Q_ADDR + 0x00080000u)   /* nn_tile_stats_t[16]    */
 
-#define NN_MAGIC       (0x4D414731u) /* "MAG1" -- host-provided payload present */
+#define NN_MAGIC        (0x4D414731u) /* "MAG1" -- host-provided payload present */
 
 typedef struct {
     uint32_t magic;   /* NN_MAGIC when the host has staged a payload   */
@@ -184,21 +184,21 @@ typedef struct {
     uint32_t argmax;   /* argmax reported by PULP core 0          */
     uint32_t errors;
     uint32_t samples_checked;
-    uint32_t worst_dev;  /* worst fraction of a sample's fp16 error budget used,
-                          * in per-mille; 1000 == exactly at the bound */
-    uint32_t cyc_verify; /* golden check: debug only, excluded from cyc_total */
-    uint32_t cyc_post;   /* post-processing time NOT hidden under the GEMM     */
-    uint32_t cyc_overlap;/* sum(engine busy) - cyc_total; >0 proves overlap    */
-} nn_tile_stats_t; /* 64 B */
+    uint32_t worst_dev;   /* worst fraction of a sample's fp16 error budget used,
+                           * in per-mille; 1000 == exactly at the bound */
+    uint32_t cyc_verify;  /* golden check: debug only, excluded from cyc_total */
+    uint32_t cyc_post;    /* post-processing time NOT hidden under the GEMM     */
+    uint32_t cyc_overlap; /* sum(engine busy) - cyc_total; >0 proves overlap    */
+} nn_tile_stats_t;        /* 64 B */
 
 /* ==========================================================================
  * Spatz task parameter blocks
  * ========================================================================== */
 
 typedef struct {
-    uintptr_t src; /* fp16 in                       */
-    uintptr_t dst; /* fp16 out (may alias src)      */
-    uint32_t len;  /* element count, multiple of 8   */
+    uintptr_t src;  /* fp16 in                       */
+    uintptr_t dst;  /* fp16 out (may alias src)      */
+    uint32_t len;   /* element count, multiple of 8   */
     uint16_t scale; /* fp16 bit pattern              */
     uint16_t bias;  /* fp16 bit pattern              */
 } nn_spatz_act_params_t;
@@ -229,7 +229,7 @@ typedef struct {
     uintptr_t dst; /* int16 [rows x cols] out, Q0.15    */
     uintptr_t res; /* nn_pulp_core_res_t[PULP_CORE_COUNT] */
     uint32_t rows;
-    uint32_t cols;           /* multiple of 2: SIMD works on int16 pairs */
+    uint32_t cols; /* multiple of 2: SIMD works on int16 pairs */
     uint32_t rows_per_core;
 } nn_pulp_params_t;
 
@@ -238,6 +238,6 @@ typedef struct {
     int32_t maxval;     /* that maximum, Q8.8                             */
     uint32_t sumsq;     /* sum of squared Q0.15 probabilities, >> 15      */
     uint32_t rows_done; /* progress marker, == rows_per_core on success    */
-} nn_pulp_core_res_t; /* 16 B */
+} nn_pulp_core_res_t;   /* 16 B */
 
 #endif /* NN_IS_PARAMS_H_ */
