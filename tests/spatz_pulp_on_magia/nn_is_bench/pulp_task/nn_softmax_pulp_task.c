@@ -153,16 +153,15 @@ void nn_softmax_pulp_task(uint32_t data_ptr)
 {
     volatile nn_pulp_params_t *params = (volatile nn_pulp_params_t *)data_ptr;
 
-    const uint16_t *src   = (const uint16_t *)params->src;
-    int16_t *dst          = (int16_t *)params->dst;
-    uint32_t cols         = params->cols;
-    uint32_t rows_per     = params->rows_per_core;
-    uint32_t core         = GET_PULP_LOCAL_ID(get_hartid());
-    uint32_t row_first    = core * rows_per;
-    uint32_t pairs        = cols >> 1;
+    const uint16_t *src = (const uint16_t *)params->src;
+    int16_t *dst        = (int16_t *)params->dst;
+    uint32_t cols       = params->cols;
+    uint32_t rows_per   = params->rows_per_core;
+    uint32_t core       = GET_PULP_LOCAL_ID(get_hartid());
+    uint32_t row_first  = core * rows_per;
+    uint32_t pairs      = cols >> 1;
 
-    volatile nn_pulp_core_res_t *res =
-        (volatile nn_pulp_core_res_t *)params->res + core;
+    volatile nn_pulp_core_res_t *res = (volatile nn_pulp_core_res_t *)params->res + core;
 
     int32_t best_val   = -32768;
     uint32_t best_idx  = 0;

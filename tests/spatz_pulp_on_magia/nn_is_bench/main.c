@@ -104,18 +104,18 @@
 #include "nn_spatz_task_bin.h"
 #include "nn_pulp_task_bin.h"
 
-#define WAIT_MODE WFE
+#define WAIT_MODE      WFE
 
 /* fp16 bit patterns of the block's hyper-parameters. */
-#define F16_SCALE (0x3000u) /* 0.125   -- tames the GEMM output range   */
-#define F16_BIAS  (0x3400u) /* 0.25                                     */
-#define F16_GAMMA (0x3C00u) /* 1.0                                      */
-#define F16_BETA  (0x0000u) /* 0.0                                      */
-#define F16_EPS   (0x1400u) /* 2^-10                                    */
+#define F16_SCALE      (0x3000u) /* 0.125   -- tames the GEMM output range   */
+#define F16_BIAS       (0x3400u) /* 0.25                                     */
+#define F16_GAMMA      (0x3C00u) /* 1.0                                      */
+#define F16_BETA       (0x0000u) /* 0.0                                      */
+#define F16_EPS        (0x1400u) /* 2^-10                                    */
 
 #define PULP_CORE_MASK ((1u << PULP_CORE_COUNT) - 1u)
 
-#define NN_MESH_TILES (MESH_X_TILES * MESH_Y_TILES)
+#define NN_MESH_TILES  (MESH_X_TILES * MESH_Y_TILES)
 
 /* Which tiles run with the hardware cycle counters enabled.
  *
@@ -471,8 +471,7 @@ static void gemm_round(gemm_ctx_t *g, uint32_t r, post_ctx_t *pc)
             t0 = perf_get_cycles();
             idma_memcpy_2d(g->idma,
                            0,
-                           get_l1_base(g->hartid - 1) +
-                               ((i & 1) ? NN_L1_OFF_Z1 : NN_L1_OFF_Z0),
+                           get_l1_base(g->hartid - 1) + ((i & 1) ? NN_L1_OFF_Z1 : NN_L1_OFF_Z0),
                            a_z_cur,
                            NN_TS * 2,
                            NN_TS * 2,
@@ -484,13 +483,7 @@ static void gemm_round(gemm_ctx_t *g, uint32_t r, post_ctx_t *pc)
         /* Z += X * W. The longest single wait in the timeslot, and therefore the
          * main window in which the post track gets to advance. */
         t0 = perf_get_cycles();
-        redmule_gemm(g->rm,
-                     a_x,
-                     a_w,
-                     a_z_cur,
-                     (uint16_t)NN_TH,
-                     (uint16_t)NN_TW,
-                     (uint16_t)NN_TS);
+        redmule_gemm(g->rm, a_x, a_w, a_z_cur, (uint16_t)NN_TH, (uint16_t)NN_TW, (uint16_t)NN_TS);
         wait_evt(EU_REDMULE_DONE_MASK, pc);
         g->cyc_gemm += perf_get_cycles() - t0;
 
@@ -656,12 +649,8 @@ static uint32_t verify_gathered(gemm_ctx_t *g,
     }
 
     t0     = perf_get_cycles();
-    errors = verify_chunk(g->l1 + NN_L1_OFF_P,
-                          chunk_row0(g, x_id),
-                          b * NN_PB,
-                          hartid,
-                          checked,
-                          worst_dev);
+    errors = verify_chunk(
+        g->l1 + NN_L1_OFF_P, chunk_row0(g, x_id), b * NN_PB, hartid, checked, worst_dev);
     *cyc_verify += perf_get_cycles() - t0;
 
     return errors;
@@ -760,9 +749,9 @@ int main(void)
         pc.cyc_spatz = 0;
         pc.cyc_pulp  = 0;
         pc.errors    = 0;
-        pc.act_p  = (volatile nn_spatz_act_params_t *)(l1 + NN_L1_OFF_CTL + NN_CTL_OFF_ACT);
-        pc.ln_p   = (volatile nn_spatz_ln_params_t *)(l1 + NN_L1_OFF_CTL + NN_CTL_OFF_LN);
-        pc.pulp_p = (volatile nn_pulp_params_t *)(l1 + NN_L1_OFF_CTL + NN_CTL_OFF_PULP);
+        pc.act_p     = (volatile nn_spatz_act_params_t *)(l1 + NN_L1_OFF_CTL + NN_CTL_OFF_ACT);
+        pc.ln_p      = (volatile nn_spatz_ln_params_t *)(l1 + NN_L1_OFF_CTL + NN_CTL_OFF_LN);
+        pc.pulp_p    = (volatile nn_pulp_params_t *)(l1 + NN_L1_OFF_CTL + NN_CTL_OFF_PULP);
 
         pc.act_p->src   = l1 + NN_L1_OFF_P;
         pc.act_p->dst   = l1 + NN_L1_OFF_P;
@@ -853,8 +842,8 @@ int main(void)
                 }
 
                 chunk_gather(&g, x_id, b);
-                errors += verify_gathered(&g, x_id, b, hartid, flags, &checked, &worst_dev,
-                                          &cyc_verify);
+                errors +=
+                    verify_gathered(&g, x_id, b, hartid, flags, &checked, &worst_dev, &cyc_verify);
                 post_launch(&pc);
                 inflight = (int32_t)b;
             }
@@ -879,8 +868,8 @@ int main(void)
          * post_exposed -- half the post-processing on a 4-wide mesh. */
         for (r = NN_ROUNDS - NN_PIPE_LAG; r < NN_ROUNDS; r++) {
             chunk_gather(&g, x_id, r);
-            errors += verify_gathered(&g, x_id, r, hartid, flags, &checked, &worst_dev,
-                                      &cyc_verify);
+            errors +=
+                verify_gathered(&g, x_id, r, hartid, flags, &checked, &worst_dev, &cyc_verify);
             post_launch(&pc);
 
             t0 = perf_get_cycles();

@@ -24,27 +24,26 @@
 #ifndef _TILE_ADDR_MAP_INCLUDE_GUARD_
 #define _TILE_ADDR_MAP_INCLUDE_GUARD_
 
-#define NUM_L1_BANKS          (32)
-#define WORDS_BANK            (8192)
-#define BITS_WORD             (32)
-#define BITS_BYTE             (8)
+#define NUM_L1_BANKS                (32)
+#define WORDS_BANK                  (8192)
+#define BITS_WORD                   (32)
+#define BITS_BYTE                   (8)
 
-#define IDMA_BASE_AXI2OBI (IDMA_BASE)         // direction=0, L2 to L1
-#define IDMA_BASE_OBI2AXI (IDMA_BASE + 0x200) // direction=1, L1 to L2
+#define IDMA_BASE_AXI2OBI           (IDMA_BASE)         // direction=0, L2 to L1
+#define IDMA_BASE_OBI2AXI           (IDMA_BASE + 0x200) // direction=1, L1 to L2
 
-
-#define REDMULE_BASE          (0x00000100)
-#define REDMULE_END           (0x000001FF)
-#define IDMA_BASE             (0x00000200)
-#define IDMA_END              (0x000005FF)
-#define FSYNC_BASE            (0x00000600)
-#define FSYNC_END             (0x000006FF)
-#define EU_BASE               (0x00000700)
-#define EU_END                (0x000016FF)
-#define SPATZ_CTRL_BASE       (0x00001700)
-#define SPATZ_CTRL_END        (0x0000173F)
-#define PULP_CTRL_BASE        (0x00001740)
-#define PULP_CTRL_END         (0x000017FF)
+#define REDMULE_BASE                (0x00000100)
+#define REDMULE_END                 (0x000001FF)
+#define IDMA_BASE                   (0x00000200)
+#define IDMA_END                    (0x000005FF)
+#define FSYNC_BASE                  (0x00000600)
+#define FSYNC_END                   (0x000006FF)
+#define EU_BASE                     (0x00000700)
+#define EU_END                      (0x000016FF)
+#define SPATZ_CTRL_BASE             (0x00001700)
+#define SPATZ_CTRL_END              (0x0000173F)
+#define PULP_CTRL_BASE              (0x00001740)
+#define PULP_CTRL_END               (0x000017FF)
 
 // PULP hart ID helpers
 #define GET_PULP_GLOBAL_ID(mhartid) ((mhartid) - PULP_HARTID_BASE)
@@ -68,9 +67,9 @@
 #define PULP_STACK_MAX_CORES  (16)
 
 // PULP hart ID mapping (CV32 tiles occupy [0, NUM_HARTS), PULP starts after)
-#define NUM_PULP_CORES              (PULP_CORE_COUNT)
-#define PULP_HARTID_BASE            (2 * NUM_HARTS)
-#define TOTAL_PULP_HARTS            (NUM_HARTS * NUM_PULP_CORES)
+#define NUM_PULP_CORES        (PULP_CORE_COUNT)
+#define PULP_HARTID_BASE      (2 * NUM_HARTS)
+#define TOTAL_PULP_HARTS      (NUM_HARTS * NUM_PULP_CORES)
 
 #if ((PULP_CORE_COUNT < 1) || (PULP_CORE_COUNT > PULP_STACK_MAX_CORES))
 #if PULP_CLUSTER

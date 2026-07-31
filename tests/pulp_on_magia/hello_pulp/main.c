@@ -28,7 +28,7 @@ int main(void)
 
     printf("[CV32] Dispatching HELLO_TASK to PULP cluster (mask=0x%02x)\n", pulp_core_mask);
     pulp_run_task(HELLO_PULP_TASK, pulp_core_mask);
-    //pulp_run_task_with_params(HELLO_PULP_TASK, NULL, pulp_core_mask);
+    // pulp_run_task_with_params(HELLO_PULP_TASK, NULL, pulp_core_mask);
 
     eu_pulp_wait(&eu_ctrl, WFE);
 

@@ -25,8 +25,8 @@ static inline _Float16 f16_from_bits(uint16_t bits)
     return c.f;
 }
 
-static void act_hardswish(const _Float16 *src, _Float16 *dst, size_t len, _Float16 scale,
-                          _Float16 bias)
+static void
+act_hardswish(const _Float16 *src, _Float16 *dst, size_t len, _Float16 scale, _Float16 bias)
 {
     register _Float16 ALPHA asm("fs0") = (_Float16)(1.0f / 6.0f);
     register _Float16 BETA asm("fs1")  = (_Float16)0.5f;
