@@ -18,10 +18,24 @@
 SEARCH_DIR(.)
 __DYNAMIC  =  0;
 
+/* L2 spans 0xc0000000 .. 0xccfeffff (see gvsoc magia_v3 arch.py L2_ADDR_START/L2_SIZE).
+ * The program image sits at the top of it: dataram ends just below TEST_END_ADDR
+ * (0xccff0000) and so cannot grow. l2_bulk is the 192 MB of L2 *below* the image,
+ * mapped both from the tile's OBI xbar and from the NoC (so the iDMA reaches it), for
+ * payloads too large to live in dataram - e.g. a whole network's weights. Tests that
+ * place nothing there emit no such section and are unaffected. */
 MEMORY
 {
-    instrram    : ORIGIN = 0xcc000000, LENGTH = 0x8000
-    dataram     : ORIGIN = 0xcc010000, LENGTH = 0xF00000
+    l2_bulk     : ORIGIN = 0xc0000000, LENGTH = 0x0C000000
+    /* instrram holds .text plus the embedded Spatz and PULP binaries. It used to stop at
+     * 0x8000, leaving the 32 KB up to dataram unused; a test that links several kernels
+     * into one Spatz binary does not fit in that. onnx_resnet18 (seven kernels) needed
+     * 0x10000, which onnx_mobilevit_v2 (eleven kernels, twelve Spatz tasks) then filled
+     * to 96%, so it is 0x20000 now. Growing it moves dataram up rather than eating into
+     * it: dataram uses well under 1% of its 15.7 MB in every test here, and its end stays
+     * below TEST_END_ADDR (0xccff0000) with 832 KB to spare. */
+    instrram    : ORIGIN = 0xcc000000, LENGTH = 0x20000
+    dataram     : ORIGIN = 0xcc020000, LENGTH = 0xF00000
     stack       : ORIGIN = 0x00010000, LENGTH = 0xC000 /* 16K for control core CV32 */
 }
 
@@ -35,12 +49,33 @@ _stack_start   = ORIGIN(stack) + LENGTH(stack);
 
 PHDRS
 {
+    bulk PT_LOAD;
     text PT_LOAD;
     data PT_LOAD;
 }
 
 SECTIONS
 {
+    /* Read-only bulk payload, loaded from the ELF. */
+    .l2_bulk : {
+        . = ALIGN(4);
+        _l2_bulk_start = .;
+        KEEP(*(.l2_bulk))
+        KEEP(*(.l2_bulk.*))
+        _l2_bulk_end = .;
+    } > l2_bulk :bulk
+
+    /* Scratch payload, NOLOAD so it never enters the ELF. Nothing zeroes it - unlike
+     * .bss, which crt0 clears from hart 0 only - so anything placed here must be
+     * written before it is read. */
+    .l2_arena (NOLOAD) : {
+        . = ALIGN(4);
+        _l2_arena_start = .;
+        *(.l2_arena)
+        *(.l2_arena.*)
+        _l2_arena_end = .;
+    } > l2_bulk
+
     .vectors :
     {
         . = ALIGN(4);

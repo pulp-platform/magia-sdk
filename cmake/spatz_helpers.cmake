@@ -192,6 +192,11 @@ function(add_cv32_executable_with_spatz)
         ${SPATZ_HEADER_DIR}
     )
 
+    # The sources include the generated <name>_task_bin.h, so the task has to be
+    # built first. Without this, building a single test (`make build test=<name>`)
+    # never triggers the header generation.
+    add_dependencies(${ARG_TARGET_NAME} ${${ARG_TARGET_NAME}_SPATZ_TARGET})
+
     target_compile_options(${ARG_TARGET_NAME} PRIVATE ${CV32_COMPILE_FLAGS})
     target_link_options(${ARG_TARGET_NAME} PRIVATE ${CV32_LINK_FLAGS})
     target_link_libraries(${ARG_TARGET_NAME} PUBLIC runtime hal)

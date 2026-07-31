@@ -72,6 +72,39 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl,
                           uint32_t reps);
 
 /**
+ * Start 2-dimensional memory copy with independent strides on both sides.
+ *
+ * Same as idma_memcpy_2d except that the contiguous side is not forced to advance by
+ * `len`: both the AXI (L2) and the OBI (L1) address advance by their own stride after
+ * each row. That is what lets a caller drop a narrow rectangle into the middle of a
+ * wider L1 buffer - idma_memcpy_2d is the special case obi_std == len.
+ *
+ * NB: the hardware has a third dimension (IDMA_*_STRIDE_3 / IDMA_REPS_3) but the GVSoC
+ * magia_v3 model only ever issues one dmrep/dmstr pair, so those registers are inert
+ * there and a 3D descriptor would silently be executed as 2D. Hence no 3D entry point:
+ * decompose into several 2D transfers instead.
+ *
+ * @param ctrl     IDMA controller handle.
+ * @param dir      Copy direction. 0 = AXI to OBI (L2 to L1), !0 = OBI to AXI (L1 to L2).
+ * @param axi_addr AXI (L2) address of the first element.
+ * @param obi_addr OBI (L1) address of the first element.
+ * @param len      Byte length of each row.
+ * @param axi_std  Byte stride between row starts on the AXI (L2) side.
+ * @param obi_std  Byte stride between row starts on the OBI (L1) side.
+ * @param reps     Number of rows.
+ *
+ * @return 0 on successful dispatch.
+ */
+extern int idma_memcpy_2d_ex(idma_controller_t *ctrl,
+                             uint8_t dir,
+                             uint32_t axi_addr,
+                             uint32_t obi_addr,
+                             uint32_t len,
+                             uint32_t axi_std,
+                             uint32_t obi_std,
+                             uint32_t reps);
+
+/**
  * WIP
  * IDMA API
  */
@@ -91,6 +124,15 @@ struct idma_controller_api {
                      uint32_t len,
                      uint32_t std,
                      uint32_t reps);
+
+    int (*memcpy_2d_ex)(idma_controller_t *ctrl,
+                        uint8_t dir,
+                        uint32_t axi_addr,
+                        uint32_t obi_addr,
+                        uint32_t len,
+                        uint32_t axi_std,
+                        uint32_t obi_std,
+                        uint32_t reps);
 };
 
 /*

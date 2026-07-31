@@ -38,6 +38,10 @@ set(MAGIA_TARGET_INCLUDE_DIRS
 set(MAGIA_CV32_EXTRA_INCLUDE_DIRS
     "${CMAKE_SOURCE_DIR}/hal/include"
     "${CMAKE_SOURCE_DIR}/drivers/eventunit32/include"
+    # Shared CV32-side kernel infrastructure (kernels_dma_utils.h and friends), used by
+    # every kernels/spatz_fp16 driver, so it is on the path rather than repeated in each
+    # test's INCLUDE_DIRS.
+    "${CMAKE_SOURCE_DIR}/kernels/common"
 )
 
 # ISA setup [MAGIA/Makefile]

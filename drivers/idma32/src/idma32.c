@@ -123,6 +123,59 @@ int idma32_memcpy_2d(idma_controller_t *ctrl,
     return 0;
 }
 
+/**
+ * Start 2-dimensional memory copy with an independent stride on each side.
+ *
+ * idma32_memcpy_2d hardwires the contiguous side's stride to `len`, which cannot express
+ * a narrow rectangle landing inside a wider buffer. The underlying descriptor keeps the
+ * two strides separate (dmstr carries src and dst), so this just exposes them.
+ *
+ * @param dir Copy Direction. 0 = AXI to OBI (L2 to L1), !0 = OBI to AXI (L1 to L2).
+ * @param axi_addr AXI/L2 memory address of first element.
+ * @param obi_addr OBI/L1 memory address of first element.
+ * @param len Byte length of each row.
+ * @param axi_std Byte stride between row starts on the AXI/L2 side.
+ * @param obi_std Byte stride between row starts on the OBI/L1 side.
+ * @param reps Number of rows.
+ */
+int idma32_memcpy_2d_ex(idma_controller_t *ctrl,
+                        uint8_t dir,
+                        uint32_t axi_addr,
+                        uint32_t obi_addr,
+                        uint32_t len,
+                        uint32_t axi_std,
+                        uint32_t obi_std,
+                        uint32_t reps)
+{
+#if IDMA_MM == 0
+    if (dir) { // OBI to AXI (L1 to L2): dst = AXI, src = OBI
+        idma_conf_out();
+        idma_set_addr_len_out(axi_addr, obi_addr, len);
+        idma_set_std2_rep2_out(axi_std, obi_std, reps);
+        idma_set_std3_rep3_out(0, 0, 1);
+        idma_start_out();
+    } else { // AXI to OBI (L2 to L1): dst = OBI, src = AXI
+        idma_conf_in();
+        idma_set_addr_len_in(obi_addr, axi_addr, len);
+        idma_set_std2_rep2_in(obi_std, axi_std, reps);
+        idma_set_std3_rep3_in(0, 0, 1);
+        idma_start_in();
+    }
+#else
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
+    if (dir) {
+        idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
+        idma_mm_set_std2_rep2(dir, axi_std, obi_std, reps);
+    } else {
+        idma_mm_set_addr_len(dir, obi_addr, axi_addr, len);
+        idma_mm_set_std2_rep2(dir, obi_std, axi_std, reps);
+    }
+    idma_mm_set_std3_rep3(dir, 0, 0, 1);
+    idma_mm_start(dir);
+#endif
+    return 0;
+}
+
 extern int idma_init(idma_controller_t *ctrl)
     __attribute__((alias("idma32_init"), used, visibility("default")));
 extern int idma_memcpy_1d(
@@ -136,11 +189,21 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl,
                           uint32_t std,
                           uint32_t reps)
     __attribute__((alias("idma32_memcpy_2d"), used, visibility("default")));
+extern int idma_memcpy_2d_ex(idma_controller_t *ctrl,
+                             uint8_t dir,
+                             uint32_t axi_addr,
+                             uint32_t obi_addr,
+                             uint32_t len,
+                             uint32_t axi_std,
+                             uint32_t obi_std,
+                             uint32_t reps)
+    __attribute__((alias("idma32_memcpy_2d_ex"), used, visibility("default")));
 
 /* Export the IDMA-specific controller API */
 idma_controller_api_t idma_api = {
     .init = idma32_init,
     /*     .wait = idma32_wait, */
-    .memcpy_1d = idma32_memcpy_1d,
-    .memcpy_2d = idma32_memcpy_2d,
+    .memcpy_1d    = idma32_memcpy_1d,
+    .memcpy_2d    = idma32_memcpy_2d,
+    .memcpy_2d_ex = idma32_memcpy_2d_ex,
 };
