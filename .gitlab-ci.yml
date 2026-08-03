@@ -16,7 +16,7 @@ workflow:
 variables:
   MAGIA: './MAGIA'
   RISCV_GCC_BINROOT: /usr/pack/pulpsdk-1.0-kgf/artifactory/pulp-sdk-release/pkg/pulp_riscv_gcc/1.0.16/bin
-  OPENHW_GCC_BINROOT: /usr/scratch2/lagrev5/anadalini/cv32e40p-gcc-toolchain
+  OPENHW_GCC_BINROOT: /usr/scratch2/lagrev5/anadalini/cv32e40p-gcc-toolchain/bin
   PYENV_BINROOT: /home/adequi/.pyenv/bin
   LLVM_DIR: /usr/pack/riscv-1.0-kgf/spatz-llvm-2023.08.10/
   GIT_CLONE_PATH: "$CI_BUILDS_DIR/$CI_CONCURRENT_ID/$CI_PIPELINE_ID/$CI_JOB_ID"
@@ -91,7 +91,7 @@ clone_gvsoc:
 .gvsoc:
   extends: [.base]
   script:
-    - source gvsoc_venv/bin/activate && gcc-11.2.0 make gvsoc tiles=${tiles}
+    - source gvsoc_venv/bin/activate && export CC=/usr/sepp/bin/gcc-11.2.0 && export CXX=/usr/sepp/bin/g++-11.2.0 && make gvsoc tiles=${tiles}
   artifacts:
     paths: [ "gvsoc/install" , "gvsoc/pulp/pulp/chips/magia_v2/arch.py"]
 
