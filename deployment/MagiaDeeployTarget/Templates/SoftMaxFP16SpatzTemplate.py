@@ -7,7 +7,14 @@ class _MagiaSoftmaxFP16Spatz(NodeTemplate):
         data_in = ctxt.lookup(operatorRepresentation['data_in'])
         ctxt.lookup(operatorRepresentation['data_out'])
 
-        operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, data_in.shape)) + "}"
+        shape = list(data_in.shape)
+        row_len = shape[-1]
+        outer = 1
+        for dim in shape[:-1]:
+            outer *= dim
+        shape4 = [1, 1, outer, row_len]
+
+        operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, shape4)) + "}"
         operatorRepresentation['offset'] = 0
 
         return ctxt, operatorRepresentation, []
