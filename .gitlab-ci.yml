@@ -91,7 +91,7 @@ clone_gvsoc:
 .gvsoc:
   extends: [.base]
   script:
-    - source gvsoc_venv/bin/activate && make gvsoc tiles=${tiles}
+    - source gvsoc_venv/bin/activate && gcc-11.2.0 make gvsoc tiles=${tiles}
   artifacts:
     paths: [ "gvsoc/install" , "gvsoc/pulp/pulp/chips/magia_v2/arch.py"]
 
