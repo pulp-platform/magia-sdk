@@ -127,7 +127,7 @@ Once the [Prerequisites](#prerequisites) are in place:
 
     `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode>`
 
-    and/or the GVSoC module:
+    and/or the GVSoC module **NOTE: GCC AND G++ 11.2.0 AND ABOVE IS MANDATORY**:
 
     `make gvsoc <tiles>`
 
