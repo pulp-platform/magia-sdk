@@ -58,3 +58,6 @@ states/
 
 # Deeploy generated code
 tests/spatz_on_magia/deeploy_*
+
+# Test generators' downloaded/intermediate model files
+deployment/tests/*/*/*/download/
