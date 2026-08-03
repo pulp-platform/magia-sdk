@@ -118,7 +118,8 @@ exit:
  add     a1, a1, a0
  add     a1, a1, a0
  sh      s0, 0(a1)
- wfi
+ li      a1, 0x00010000
+ cv.elw	 zero, 0(a1)
 
 .section .vectors, "ax"
 .option norvc;
