@@ -16,6 +16,7 @@ workflow:
 variables:
   MAGIA: './MAGIA'
   RISCV_GCC_BINROOT: /usr/pack/pulpsdk-1.0-kgf/artifactory/pulp-sdk-release/pkg/pulp_riscv_gcc/1.0.16/bin
+  OPENHW_GCC_BINROOT: /usr/scratch2/lagrev5/anadalini/cv32e40p-gcc-toolchain
   PYENV_BINROOT: /home/adequi/.pyenv/bin
   LLVM_DIR: /usr/pack/riscv-1.0-kgf/spatz-llvm-2023.08.10/
   GIT_CLONE_PATH: "$CI_BUILDS_DIR/$CI_CONCURRENT_ID/$CI_PIPELINE_ID/$CI_JOB_ID"
@@ -24,7 +25,7 @@ variables:
 
 .export_path:
   before_script:
-    - export PATH=$RISCV_GCC_BINROOT:$PATH
+    - export PATH=$OPENHW_GCC_BINROOT:$PATH
     - export PATH=$PYENV_BINROOT:$PATH
     - export LLVM_INSTALL_DIR=$LLVM_DIR
 
@@ -32,9 +33,19 @@ stages:
   - clone
   - python_setup
   - build_tiles_4
-  - test_tiles_4
+  - build_test_tiles_4_spatz
+  - test_tiles_4_spatz
+  - build_test_tiles_4_cluster
+  - test_tiles_4_cluster
+  - build_test_tiles_4_spatz+cluster
+  - test_tiles_4_spatz+cluster
   - build_tiles_1
-  - test_tiles_1
+  - build_test_tiles_1_spatz
+  - test_tiles_1_spatz
+  - build_test_tiles_1_cluster
+  - test_tiles_1_cluster
+  - build_test_tiles_1_spatz+cluster
+  - test_tiles_1_spatz+cluster
   - postscript
 
 python_gvsoc:
@@ -115,21 +126,21 @@ gvsoc_tiles_1:
   artifacts:
     paths: [ "$MAGIA/work", "$MAGIA/sim/work", "$MAGIA/sim/modelsim.ini", "$MAGIA/scripts/sim_ret_errors.sh", "$MAGIA/scripts/compile.tcl", "$MAGIA/Makefile", "$MAGIA/hw/mesh/magia_pkg.sv", "$MAGIA/hw/tile/magia_tile_pkg.sv" ]
 
-magia_v2_tiles_4:
+magia_v3_tiles_4:
   extends: .MAGIA
   stage: build_tiles_4
   variables:
     tiles: 4
-    target_platform: magia_v2
+    target_platform: magia_v3
   dependencies:
     - clone_magia
 
-magia_v2_tiles_1:
+magia_v3_tiles_1:
   extends: .MAGIA
   stage: build_tiles_1
   variables:
     tiles: 1
-    target_platform: magia_v2
+    target_platform: magia_v3
   dependencies:
     - clone_magia
 
@@ -140,26 +151,81 @@ magia_v2_tiles_1:
   artifacts:
     paths: [ "build", "targets/${target_platform}/include/addr_map/tile_addr_map.h" ]
 
-build_test_magia_v2_tiles_4:
+build_test_magia_v3_tiles_4_spatz:
   extends: .build
-  stage: build_tiles_4
+  stage: build_test_tiles_4_spatz
   variables:
     tiles: 4
-    target_platform: magia_v2
-    compiler: GCC_PULP
+    target_platform: magia_v3
+    compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
+    spatz: 1
+    pulp_cores: 0
   dependencies:
     - python_gvsoc
 
-
-build_test_magia_v2_tiles_1:
+build_test_magia_v3_tiles_1_spatz:
   extends: .build
-  stage: build_tiles_1
+  stage: build_test_tiles_1_spatz
   variables:
     tiles: 1
-    target_platform: magia_v2
-    compiler: GCC_PULP
+    target_platform: magia_v3
+    compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
+    spatz: 1
+    pulp_cores: 0
+  dependencies:
+    - python_gvsoc
+
+build_test_magia_v3_tiles_4_cluster:
+  extends: .build
+  stage: build_test_tiles_4_cluster
+  variables:
+    tiles: 4
+    target_platform: magia_v3
+    compiler: GCC_MULTILIB
+    CMAKE: cmake-3.28.3
+    spatz: 0
+    pulp_cores: 8
+  dependencies:
+    - python_gvsoc
+
+build_test_magia_v3_tiles_1_cluster:
+  extends: .build
+  stage: build_test_tiles_1_cluster
+  variables:
+    tiles: 1
+    target_platform: magia_v3
+    compiler: GCC_MULTILIB
+    CMAKE: cmake-3.28.3
+    spatz: 0
+    pulp_cores: 8
+  dependencies:
+    - python_gvsoc
+
+build_test_magia_v3_tiles_4_spatz+cluster:
+  extends: .build
+  stage: build_test_tiles_4_spatz+cluster
+  variables:
+    tiles: 4
+    target_platform: magia_v3
+    compiler: GCC_MULTILIB
+    CMAKE: cmake-3.28.3
+    spatz: 1
+    pulp_cores: 8
+  dependencies:
+    - python_gvsoc
+
+build_test_magia_v3_tiles_1_spatz+cluster:
+  extends: .build
+  stage: build_test_tiles_1_spatz+cluster
+  variables:
+    tiles: 1
+    target_platform: magia_v3
+    compiler: GCC_MULTILIB
+    CMAKE: cmake-3.28.3
+    spatz: 1
+    pulp_cores: 8
   dependencies:
     - python_gvsoc
 
@@ -183,9 +249,9 @@ build_test_magia_v2_tiles_1:
     paths: [ "*.log" ]
     expire_in: 2 weeks
 
-magia_v2_tiles_4_rtl_sim:
+magia_v3_tiles_4_rtl_sim_spatz:
   extends: [.sim]
-  stage: test_tiles_4
+  stage: test_tiles_4_spatz
   variables:
     platform: rtl
     tiles: 4
@@ -194,13 +260,13 @@ magia_v2_tiles_4_rtl_sim:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv, test_alloc, onnx_add, onnx_ceil, onnx_clip, onnx_div, onnx_floor, onnx_relu, onnx_sub]
   dependencies:
     - clone_magia
-    - magia_v2_tiles_4
-    - build_test_magia_v2_tiles_4
+    - magia_v3_tiles_4
+    - build_test_magia_v3_tiles_4_spatz
 
 
-magia_v2_tiles_4_gvsoc_sim:
+magia_v3_tiles_4_gvsoc_sim_spatz:
   extends: [.sim_gvsoc]
-  stage: test_tiles_4
+  stage: test_tiles_4_spatz
   variables:
     platform: gvsoc
     tiles: 4
@@ -209,16 +275,16 @@ magia_v2_tiles_4_gvsoc_sim:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv, test_alloc, onnx_add, onnx_ceil, onnx_clip, onnx_div, onnx_floor, onnx_relu, onnx_sub]
   dependencies:
     - clone_magia
-    - magia_v2_tiles_4
+    - magia_v3_tiles_4
     - clone_gvsoc
     - gvsoc_tiles_4
-    - build_test_magia_v2_tiles_4
+    - build_test_magia_v3_tiles_4_spatz
     - python_gvsoc
 
 
-magia_v2_tiles_1_rtl_sim:
+magia_v3_tiles_1_rtl_sim_spatz:
   extends: [.sim]
-  stage: test_tiles_1
+  stage: test_tiles_1_spatz
   variables:
     platform: rtl
     tiles: 1
@@ -227,13 +293,13 @@ magia_v2_tiles_1_rtl_sim:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv, test_alloc,  onnx_add, onnx_ceil, onnx_clip, onnx_div, onnx_floor, onnx_relu, onnx_sub]
   dependencies:
     - clone_magia
-    - magia_v2_tiles_1
-    - build_test_magia_v2_tiles_1
+    - magia_v3_tiles_1
+    - build_test_magia_v3_tiles_1_spatz
 
 
-magia_v2_tiles_1_gvsoc_sim:
+magia_v2_tiles_1_gvsoc_sim_spatz:
   extends: [.sim_gvsoc]
-  stage: test_tiles_1
+  stage: test_tiles_1_spatz
   variables:
     platform: gvsoc
     tiles: 1
@@ -242,10 +308,140 @@ magia_v2_tiles_1_gvsoc_sim:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv, test_alloc, onnx_add, onnx_ceil, onnx_clip, onnx_div, onnx_floor, onnx_relu, onnx_sub]
   dependencies:
     - clone_magia
-    - magia_v2_tiles_1
+    - magia_v3_tiles_1
     - clone_gvsoc
     - gvsoc_tiles_1
-    - build_test_magia_v2_tiles_1
+    - build_test_magia_v3_tiles_1_spatz
+    - python_gvsoc
+
+magia_v3_tiles_4_rtl_sim_cluster:
+  extends: [.sim]
+  stage: test_tiles_4_cluster
+  variables:
+    platform: rtl
+    tiles: 4
+  parallel:
+    matrix:
+      - TESTNAME: [hello_pulp_2, multi_task]
+  dependencies:
+    - clone_magia
+    - magia_v3_tiles_4
+    - build_test_magia_v3_tiles_4_cluster
+
+
+magia_v3_tiles_4_gvsoc_sim_cluster:
+  extends: [.sim_gvsoc]
+  stage: test_tiles_4_cluster
+  variables:
+    platform: gvsoc
+    tiles: 4
+  parallel:
+    matrix:
+      - TESTNAME: [hello_pulp_2, multi_task]
+  dependencies:
+    - clone_magia
+    - magia_v3_tiles_4
+    - clone_gvsoc
+    - gvsoc_tiles_4
+    - build_test_magia_v3_tiles_4_cluster
+    - python_gvsoc
+
+
+magia_v3_tiles_1_rtl_sim_cluster:
+  extends: [.sim]
+  stage: test_tiles_1_cluster
+  variables:
+    platform: rtl
+    tiles: 1
+  parallel:
+    matrix:
+      - TESTNAME: [hello_pulp_2, multi_task]
+  dependencies:
+    - clone_magia
+    - magia_v3_tiles_1
+    - build_test_magia_v3_tiles_1_cluster
+
+
+magia_v2_tiles_1_gvsoc_sim_cluster:
+  extends: [.sim_gvsoc]
+  stage: test_tiles_1_cluster
+  variables:
+    platform: gvsoc
+    tiles: 1
+  parallel:
+    matrix:
+      - TESTNAME: [hello_pulp_2, multi_task]
+  dependencies:
+    - clone_magia
+    - magia_v3_tiles_1
+    - clone_gvsoc
+    - gvsoc_tiles_1
+    - build_test_magia_v3_tiles_1_cluster
+    - python_gvsoc
+
+magia_v3_tiles_4_rtl_sim_spatz+cluster:
+  extends: [.sim]
+  stage: test_tiles_4_spatz+cluster
+  variables:
+    platform: rtl
+    tiles: 4
+  parallel:
+    matrix:
+      - TESTNAME: [hello_spatz_pulp_2, multi_task]
+  dependencies:
+    - clone_magia
+    - magia_v3_tiles_4
+    - build_test_magia_v3_tiles_4_spatz+cluster
+
+
+magia_v3_tiles_4_gvsoc_sim_spatz+cluster:
+  extends: [.sim_gvsoc]
+  stage: test_tiles_4_spatz+cluster
+  variables:
+    platform: gvsoc
+    tiles: 4
+  parallel:
+    matrix:
+      - TESTNAME: [hello_spatz_pulp_2, multi_task]
+  dependencies:
+    - clone_magia
+    - magia_v3_tiles_4
+    - clone_gvsoc
+    - gvsoc_tiles_4
+    - build_test_magia_v3_tiles_4_spatz+cluster
+    - python_gvsoc
+
+
+magia_v3_tiles_1_rtl_sim_spatz+cluster:
+  extends: [.sim]
+  stage: test_tiles_1_spatz+cluster
+  variables:
+    platform: rtl
+    tiles: 1
+  parallel:
+    matrix:
+      - TESTNAME: [hello_spatz_pulp_2, multi_task]
+  dependencies:
+    - clone_magia
+    - magia_v3_tiles_1
+    - build_test_magia_v3_tiles_1_spatz+cluster
+
+
+magia_v2_tiles_1_gvsoc_sim_spatz+cluster:
+  extends: [.sim_gvsoc]
+  stage: test_tiles_1_spatz+cluster
+  variables:
+    platform: gvsoc
+    tiles: 1
+  parallel:
+    matrix:
+      - TESTNAME: [hello_spatz_pulp_2, multi_task]
+  dependencies:
+    - clone_magia
+    - magia_v3_tiles_1
+    - clone_gvsoc
+    - gvsoc_tiles_1
+    - build_test_magia_v3_tiles_1_spatz+cluster
     - python_gvsoc
 
 cleanup:

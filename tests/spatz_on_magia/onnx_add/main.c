@@ -49,24 +49,11 @@ static int init_data(void *params)
     end   = start + chunk + (HID < left ? 1 : 0);
     len   = end - start;
 
-    // for (unsigned int i = 0; i < len; i++) {
-    //     int global_idx;
-    //     uint32_t offset;
-
-    //     global_idx = start + i;
-    //     offset     = i * sizeof(float16);
-
-    //     mmio_fp16(CHUNK_A_BASE + offset) = A[global_idx];
-    //     mmio_fp16(CHUNK_B_BASE + offset) = B[global_idx];
-    //     mmio_fp16(CHUNK_G_BASE + offset) = G[global_idx];
-    //     mmio_fp16(CHUNK_C_BASE + offset) = 0;
-    // }
-
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)A, CHUNK_A_BASE, (len * 2));
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)(A + start), CHUNK_A_BASE, (len * 2));
     eu_idma_wait_a2o(&eu_ctrl, WFE);
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)B, CHUNK_B_BASE, (len * 2));
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)(B + start), CHUNK_B_BASE, (len * 2));
     eu_idma_wait_a2o(&eu_ctrl, WFE);
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)G, CHUNK_G_BASE, (len * 2));
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)(G + start), CHUNK_G_BASE, (len * 2));
     eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     add_params->chunk_A = CHUNK_A_BASE;
@@ -121,6 +108,7 @@ static bool run_test()
     int ret;
     bool check;
     volatile onnx_add_params_t *params;
+    int id = get_hartid();
 
     params = (volatile onnx_add_params_t *)ONNX_ADD_PARAMS_BASE;
 
@@ -141,7 +129,7 @@ static bool run_test()
     printf("[CV32] Checking results...\n");
     check = check_result((void *)params);
     if (check) {
-        printf("[CV32 (%d)] Test SUCCESS\n", HID);
+        printf("[CV32 (%d)] Test SUCCESS\n", id);
     } else {
         printf("[CV32 (%d)] Test FAILED\n", HID);
         ret = -1;
@@ -155,15 +143,15 @@ int main(void)
     int ret;
     int hartid = HID;
 
-    if (HID == 0)
+    if (hartid == 0)
         printf("############################### ONNX_ADD TEST on Tiles "
                "################################\n");
 
     ret = run_test();
 
-    if (HID == 0)
-        printf("\n#################################################################################"
-               "#########\n\n");
+    if (hartid == 0)
+        printf("###################################################################################"
+               "#######\n\n");
 
     return ret;
 }
