@@ -48,6 +48,7 @@ from MagiaDeeployTarget.Templates import SliceFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SoftMaxFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SubFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SwishFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import TanhFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import TransposeFP16SpatzTemplate
 
 BasicTransformer = CodeTransformation([MagiaSynchTilesPass()])
@@ -485,6 +486,17 @@ MagiaSwishFp16Bindings = [
             [PointerClass(float16_t)],
         ),
         SwishFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    ),
+]
+
+MagiaTanhFp16Bindings = [
+    NodeBinding(
+        DummyChecker(
+            [PointerClass(float16_t)],
+            [PointerClass(float16_t)]
+        ),
+        TanhFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     ),
 ]
