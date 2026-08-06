@@ -498,11 +498,18 @@ int gemm_fp16_spatz_task(void)
     Y = (_Float16 *) params->shard_Y;
     transA = params->transA;
     transB = params->transB;
-    M = params->m_len;
-    N = params->N;
-    K = params->K;
 
-    if (M == 0)
+    /* The tile owns a slice of the sharded output dimension; the other dimension is whole. */
+    K = params->K;
+    if (params->shard_dim == 0) {
+        M = params->m_len;
+        N = params->N;
+    } else {
+        M = params->M;
+        N = params->m_len;
+    }
+
+    if (M == 0 || N == 0)
         return 0;
 
     if (transA && transB)
