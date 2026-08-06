@@ -28,19 +28,21 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shap
     size_t c_in;
     size_t c_out;
     size_t K;
+    size_t K_g;
     size_t hw_out;
     size_t shard;
     size_t left;
     size_t oc_start;
     size_t oc_len;
 
-    /* Full im2col over all input channels (K = C_in * K_h * K_w). Grouped convs keep
-       this width and place each output channel's compact weights in its group block,
-       so the GEMM stays a plain dense product (see init_input_params). */
+    /* im2col over all input channels gives B = [K = C_in * K_h * K_w, HW_out]. Each output
+       channel's weights are compact (K_g = K / group values); the grouped GEMM multiplies them
+       by only that channel's group block of B (see the Spatz task). group == 1 -> K_g == K. */
     n_batches = input_shape[0];
     c_in = input_shape[1];
     c_out = output_shape[1];
     K = c_in * kernel_h * kernel_w;
+    K_g = K / group;
     hw_out = output_shape[2] * output_shape[3];
 
     /* Shard the output channels across the tiles (GEMM M dimension). */
@@ -57,7 +59,7 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shap
 
     /* Weights (A) and bias (C) are shared across batches; the im2col matrix (B) and
        the output (Y) are batched so the Spatz task can sweep all batches in one offload. */
-    shard_A = l1_alloc(oc_len * K * sizeof(float16));
+    shard_A = l1_alloc(oc_len * K_g * sizeof(float16));
     if (!shard_A)
         return ENOMEM;
 
@@ -117,22 +119,16 @@ static int init_input_params(void *params, const float16 *W, const float16 *B)
     volatile conv2dgemm_fp16_spatz_params_t *conv_params;
     idma_controller_t idma_ctrl;
     eu_controller_t eu_ctrl;
+    uint32_t oc_start;
+    uint32_t K_g;
     uint32_t M;
     uint32_t N;
-    uint32_t K;
-    uint32_t oc_start;
-    uint32_t group;
-    uint32_t cout_g;
-    uint32_t K_g;
 
     conv_params = (volatile conv2dgemm_fp16_spatz_params_t *) params;
+    K_g = conv_params->K / conv_params->group;   /* compact weights per output channel */
+    oc_start = conv_params->oc_start;
     M = conv_params->M;
     N = conv_params->N;
-    K = conv_params->K;
-    oc_start = conv_params->oc_start;
-    group = conv_params->group;
-    cout_g = conv_params->c_out / group;   /* output channels per group */
-    K_g = K / group;                       /* (C_in / group) * K_h * K_w */
 
     idma_ctrl_init(&idma_ctrl);
     eu_ctrl_init(&eu_ctrl);
@@ -142,24 +138,11 @@ static int init_input_params(void *params, const float16 *W, const float16 *B)
     mmio_fp16(conv_params->beta)  = conv_params->has_bias ? (float16) 1.0f : (float16) 0.0f;
 
     if (M > 0) {
-        /* Weights A = [M, K]. group == 1 (K_g == K) -> A is exactly the contiguous rows
-           W[oc_start : oc_start+M], a plain 1D DMA. For grouped convs A is block-diagonal
-           (each row's K_g compact weights in its group block, the rest zero) -> a scatter,
-           not a copy, so it is built scalar. */
-        if (group == 1) {
-            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (W + oc_start * K), (uint32_t) conv_params->shard_A, M * K * sizeof(float16));
-            eu_idma_wait_a2o(&eu_ctrl, WFE);
-        } else {
-            for (uint32_t m = 0; m < M; m++) {
-                uint32_t oc = oc_start + m;
-                uint32_t g = oc / cout_g;
-                const float16 *w_row = W + (uintptr_t) oc * K_g;
-                for (uint32_t k = 0; k < K; k++)
-                    mmio_fp16(conv_params->shard_A + (m * K + k) * sizeof(float16)) = (float16) 0.0f;
-                for (uint32_t kk = 0; kk < K_g; kk++)
-                    mmio_fp16(conv_params->shard_A + (m * K + g * K_g + kk) * sizeof(float16)) = w_row[kk];
-            }
-        }
+        /* Weights A = [M, K_g] are each output channel's compact weights, contiguous in W
+           (which is [C_out, K_g]); this tile's rows W[oc_start : oc_start+M] are a plain 1D DMA.
+           The grouped GEMM applies each row to its own group block of B (see the Spatz task). */
+        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (W + oc_start * K_g), (uint32_t) conv_params->shard_A, M * K_g * sizeof(float16));
+        eu_idma_wait_a2o(&eu_ctrl, WFE);
 
         /* Bias: broadcast the per-output-channel value over the N columns of C (a
            broadcast, not a plain copy -> scalar). */

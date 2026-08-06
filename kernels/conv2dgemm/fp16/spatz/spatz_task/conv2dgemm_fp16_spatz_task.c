@@ -124,6 +124,53 @@ static void gemm(const _Float16 *A, const _Float16 *B, const _Float16 *C, _Float
     }
 }
 
+static void gemm_grouped(const _Float16 *A, const _Float16 *B, const _Float16 *C, _Float16 *Y, _Float16 alpha, _Float16 beta, const size_t dim_M, const size_t dim_N, const size_t dim_Kg, const size_t cout_g, const size_t oc_start)
+{
+    register _Float16 ZERO asm ("fs0") = 0.0f;
+    const _Float16 *A_row;
+    const _Float16 *B_grp;
+    const _Float16 *B_row;
+    const _Float16 *C_row;
+    _Float16 *Y_row;
+    size_t avl;
+    size_t vl;
+
+    /* Grouped/depthwise: each output channel's compact weights (dim_Kg) multiply only its own
+       group's im2col block (rows [g * dim_Kg, (g + 1) * dim_Kg) of B), avoiding the full-K dense
+       product with a block-diagonal weight matrix. One dense GEMV per output row. */
+    for (int n = 0; n < dim_N; n += vl) {
+        avl = dim_N - n;
+        asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+
+        for (int m = 0; m < dim_M; m++) {
+            int g = (oc_start + m) / cout_g;
+            A_row = A + m * dim_Kg;
+            B_grp = B + g * dim_Kg * dim_N;
+            C_row = C + (m * dim_N + n);
+            Y_row = Y + (m * dim_N + n);
+
+            asm volatile ("vfmv.v.f v0, %0" :: "f"(ZERO));
+
+            if (alpha != 0.0f) {
+                for (int k = 0; k < (int) dim_Kg; k++) {
+                    B_row = B_grp + (k * dim_N + n);
+                    asm volatile ("vle16.v v16, (%0)" :: "r"(B_row));
+                    asm volatile ("vfmacc.vf v0, %0, v16" :: "f"(A_row[k]));
+                }
+
+                asm volatile ("vfmul.vf v0, v0, %0" :: "f"(alpha));
+            }
+
+            if (beta != 0.0f) {
+                asm volatile ("vle16.v v16, (%0)" :: "r"(C_row));
+                asm volatile ("vfmacc.vf v0, %0, v16" :: "f"(beta));
+            }
+
+            asm volatile ("vse16.v v0, (%0)" :: "r"(Y_row));
+        }
+    }
+}
+
 int conv2dgemm_fp16_spatz_task(void)
 {
     volatile conv2dgemm_fp16_spatz_params_t *params;
@@ -137,6 +184,11 @@ int conv2dgemm_fp16_spatz_task(void)
     size_t M;
     size_t N;
     size_t K;
+    size_t K_g;
+    size_t cout_g;
+    size_t oc_start;
+    size_t group;
+    size_t c_out;
     size_t n_batches;
 
     params_addr = mmio32(SPATZ_DATA);
@@ -149,6 +201,9 @@ int conv2dgemm_fp16_spatz_task(void)
     C = (_Float16 *) params->shard_C;
     Y = (_Float16 *) params->shard_Y;
     n_batches = params->n_batches;
+    oc_start = params->oc_start;
+    group = params->group;
+    c_out = params->c_out;
     M = params->M;
     N = params->N;
     K = params->K;
@@ -156,10 +211,19 @@ int conv2dgemm_fp16_spatz_task(void)
     if (M == 0)
         return 0;
 
-    /* Weights (A) and bias (C) are shared across batches; the im2col matrix (B) and
-       the output (Y) are batched, so advance them by one 2D slice per batch. */
-    for (size_t b = 0; b < n_batches; b++)
-        gemm(A, B + b * (K * N), C, Y + b * (M * N), alpha, beta, M, N, K);
+    K_g = K / group;
+    cout_g = c_out / group;
+
+    /* Weights (A) and bias (C) are shared across batches; the im2col matrix (B) and the output
+       (Y) are batched, so advance them by one 2D slice per batch. group == 1 is a plain dense
+       GEMM; grouped/depthwise convs apply each output channel's compact weights to only its
+       group's block of B. */
+    for (size_t b = 0; b < n_batches; b++) {
+        if (group == 1)
+            gemm(A, B + b * (K * N), C, Y + b * (M * N), alpha, beta, M, N, K_g);
+        else
+            gemm_grouped(A, B + b * (K * N), C, Y + b * (M * N), alpha, beta, M, N, K_g, cout_g, oc_start);
+    }
 
     return 0;
 }
