@@ -24,4 +24,4 @@ MAKE="${MAKE:-make}"
 SPATZ="0"
 
 "$MAKE" clean
-"$MAKE" build target_platform=magia_v2 tiles="$TILES" compiler="$COMPILER" eval="$EVAL" spatz="$SPATZ"
+"$MAKE" build target_platform=magia_v3 tiles="$TILES" compiler="$COMPILER" eval="$EVAL" spatz="$SPATZ"

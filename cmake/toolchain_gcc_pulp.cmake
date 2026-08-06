@@ -10,6 +10,7 @@ set(CMAKE_EXECUTABLE_SUFFIX ".elf")
 set(CMAKE_SYSTEM_NAME Generic)
 
 set(CMAKE_C_COMPILER riscv32-unknown-elf-gcc)
+set(COMPILER_NAME riscv32-unknown-elf-gcc)
 set(CMAKE_CXX_COMPILER riscv32-unknown-elf-g++)
 set(CMAKE_ASM_COMPILER ${CMAKE_C_COMPILER})
 set(CMAKE_OBJCOPY riscv32-unknown-elf-objcopy)

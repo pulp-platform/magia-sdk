@@ -33,4 +33,12 @@ target_link_libraries(hal
     "fsync_lib"
     "eu_lib"
 )
+elseif(${TARGET_PLATFORM} STREQUAL "magia_v3")
+target_link_libraries(hal
+  PUBLIC
+    "idma_lib"
+    "redmule_lib"
+    "fsync_lib"
+    "eu_lib"
+)
 endif()

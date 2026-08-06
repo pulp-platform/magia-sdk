@@ -4,6 +4,7 @@
 
 #include "tile.h"
 #include "eventunit.h"
+#include "idma.h"
 
 #include "compare_utils.h"
 #include "data.h"
@@ -22,6 +23,24 @@ static int init_data(void *params)
     uint32_t len;
     uint32_t end;
 
+    idma_config_t idma_cfg      = {.hartid = get_hartid()};
+    idma_controller_t idma_ctrl = {
+        .base = NULL,
+        .cfg  = &idma_cfg,
+        .api  = &idma_api,
+    };
+    idma_init(&idma_ctrl);
+
+    eu_config_t eu_cfg      = {.hartid = get_hartid()};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg  = &eu_cfg,
+        .api  = &eu_api,
+    };
+
+    eu_init(&eu_ctrl);
+    eu_idma_init(&eu_ctrl, 0);
+
     clip_params = (volatile onnx_clip_params_t *)params;
 
     chunk = TENSOR_LEN / NUM_HARTS;
@@ -30,15 +49,10 @@ static int init_data(void *params)
     end   = start + chunk + (HID < left ? 1 : 0);
     len   = end - start;
 
-    for (unsigned int i = 0; i < len; i++) {
-        uint32_t offset;
-
-        offset = i * sizeof(float16);
-
-        mmio_fp16(INPUT_BASE + offset) = input[i];
-        mmio_fp16(EXP_BASE + offset)   = golden[i];
-        mmio_fp16(RES_BASE + offset)   = 0;
-    }
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)(input + start), INPUT_BASE, (len * 2));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)(golden + start), EXP_BASE, (len * 2));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     mmio_fp16(MIN_BASE) = min;
     mmio_fp16(MAX_BASE) = max;
