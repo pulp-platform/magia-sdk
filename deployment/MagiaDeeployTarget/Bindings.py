@@ -6,7 +6,7 @@
 from Deeploy.AbstractDataTypes import PointerClass
 from Deeploy.CommonExtensions.DataTypes import float16_t, int8_t, int32_t, int64_t
 from Deeploy.DeeployTypes import CodeTransformation, NodeBinding
-from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, ConcatChecker, ConvChecker, DivChecker, DummyChecker, GatherChecker, GELUChecker, GEMMChecker, LayerNormChecker, MatMulChecker, MaxPoolChecker, MulChecker, PassThroughTypeChecker, ReduceMeanChecker, ReluChecker, ReshapeChecker, SliceChecker, TransposeChecker
+from Deeploy.Targets.Generic.TypeCheckers import AddChecker, BatchNormChecker, ConcatChecker, ConvChecker, DivChecker, DummyChecker, GatherChecker, GELUChecker, GEMMChecker, LayerNormChecker, MatMulChecker, MaxPoolChecker, MulChecker, PassThroughTypeChecker, ReduceMeanChecker, ReluChecker, ReshapeChecker, SigmoidChecker, SliceChecker, SplitChecker, TransposeChecker
 from MagiaDeeployTarget.CodeTransformationPasses.MagiaTileSync import MagiaSynchTilesPass
 from MagiaDeeployTarget.Templates import AddFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import AddTemplate
@@ -47,6 +47,7 @@ from MagiaDeeployTarget.Templates import SeluFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SigmoidFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SliceFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SoftMaxFP16SpatzTemplate
+from MagiaDeeployTarget.Templates import SplitFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SubFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import SwishFP16SpatzTemplate
 from MagiaDeeployTarget.Templates import TanhFP16SpatzTemplate
@@ -449,7 +450,7 @@ MagiaSeluFp16Bindings = [
 
 MagiaSigmoidFp16Bindings = [
     NodeBinding(
-        DummyChecker(
+        SigmoidChecker(
             [PointerClass(float16_t)],
             [PointerClass(float16_t)]
         ),
@@ -476,6 +477,17 @@ MagiaSoftmaxFp16Bindings = [
             [PointerClass(float16_t)]
         ),
         SoftMaxFP16SpatzTemplate.referenceTemplate,
+        BasicTransformer,
+    ),
+]
+
+MagiaSplitFp16Bindings = [
+    NodeBinding(
+        SplitChecker(
+            [PointerClass(float16_t), PointerClass(int64_t)],
+            [PointerClass(float16_t), PointerClass(float16_t)]
+        ),
+        SplitFP16SpatzTemplate.referenceTemplate,
         BasicTransformer,
     ),
 ]
