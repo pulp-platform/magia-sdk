@@ -9,29 +9,29 @@ from Deeploy.DeeployTypes import NetworkContext, NodeTemplate, OperatorRepresent
 class _MagiaConcatFP16Spatz(NodeTemplate):
     def alignToContext(self, ctxt: NetworkContext,
                        operatorRepresentation: OperatorRepresentation) -> Tuple[NetworkContext, Dict, List[str]]:
-        dataIn1 = ctxt.lookup(operatorRepresentation['data_in_1'])
-        dataIn2 = ctxt.lookup(operatorRepresentation['data_in_2'])
-
-        assert "data_in_3" not in operatorRepresentation.keys(), "Concat with more than two inputs not implemented!"
-
-        dataIn1Shape = dataIn1.shape
-        dataIn2Shape = dataIn2.shape
-
         axis = operatorRepresentation['axis']
 
         assert axis != 0, f"axis == 0 not yet supported"
 
-        in0_transfer_len = np.prod(dataIn1Shape[axis:])
-        in1_transfer_len = np.prod(dataIn2Shape[axis:])
+        inputs = []
+        idx = 1
+        while f'data_in_{idx}' in operatorRepresentation:
+            inputs.append(operatorRepresentation[f'data_in_{idx}'])
+            idx += 1
 
-        iterations1 = np.prod(dataIn1Shape[:axis])
-        iterations2 = np.prod(dataIn2Shape[:axis])
+        transfer_lens = []
+        iterations = None
+        for name in inputs:
+            shape = ctxt.lookup(name).shape
+            transfer_lens.append(int(np.prod(shape[axis:])))
+            it = int(np.prod(shape[:axis]))
+            assert iterations is None or it == iterations, f"iterations {it} is not {iterations}; concat can't be applied!"
+            iterations = it
 
-        assert iterations1 == iterations2, f"iterations1 {iterations1} is not iterations2 {iterations2}; concat can't be applied!"
-
-        operatorRepresentation['iterations'] = iterations1
-        operatorRepresentation['in0_transfer_len'] = in0_transfer_len
-        operatorRepresentation['in1_transfer_len'] = in1_transfer_len
+        operatorRepresentation['num_inputs'] = len(inputs)
+        operatorRepresentation['iterations'] = iterations
+        operatorRepresentation['inputs'] = "{" + ", ".join(ctxt._mangle(name) for name in inputs) + "}"
+        operatorRepresentation['lens'] = "{" + ", ".join(map(str, transfer_lens)) + "}"
 
         return ctxt, operatorRepresentation, []
 
@@ -40,5 +40,5 @@ referenceTemplate = _MagiaConcatFP16Spatz("""
 #ifdef ENABLE_NODE_LOGS
 printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
 #endif
-MAGIA_concat_fp16_spatz(${data_in_1}, ${data_in_2}, ${data_out}, ${in0_transfer_len}, ${in1_transfer_len}, ${axis}, ${iterations});
+MAGIA_concat_fp16_spatz((const float16 *[])${inputs}, (uint32_t[])${lens}, ${num_inputs}, ${data_out}, ${iterations});
 """)
