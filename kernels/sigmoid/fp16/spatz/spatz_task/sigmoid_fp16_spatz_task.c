@@ -7,7 +7,8 @@ static inline void sigmoid(const _Float16 *src, _Float16 *dst, const size_t len)
     register _Float16 COEF asm ("fs1") = 1477.0f;
     register _Float16 ZERO asm ("fs2") = 0.0f;
     register _Float16 ONE  asm ("fs3") = 1.0f;
-    register _Float16 MIN  asm ("fs4") = -5.0f;
+    register _Float16 MIN  asm ("fs4") = -10.0f;
+
     const _Float16 *p_src;
     _Float16 *p_dst;
     size_t avl;
@@ -24,6 +25,9 @@ static inline void sigmoid(const _Float16 *src, _Float16 *dst, const size_t len)
         asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
 
         asm volatile ("vle16.v v0,( %0)" :: "r"(p_src));
+
+        /* clamp for stability */
+        asm volatile ("vfmax.vf v0, v0, %0" :: "f"(MIN));
 
         asm volatile ("vfsgnjn.vv v0, v0, v0");
 
