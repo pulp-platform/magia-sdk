@@ -1,6 +1,10 @@
 #include "tile.h"
 #include "sigmoid_fp16_spatz_params.h"
 
+/* Uncomment for a scalar, accurate sigmoid (range-reduced fp32 exp) instead of the vectorized
+   Schraudolph fast exp. For debugging/verification only: correct but slow. */
+// #define ACCURATE_SIGMOID
+
 static inline void sigmoid(const _Float16 *src, _Float16 *dst, const size_t len)
 {
     register _Float16 BIAS asm ("fs0") = 15360.0f;
@@ -47,6 +51,46 @@ static inline void sigmoid(const _Float16 *src, _Float16 *dst, const size_t len)
     }
 }
 
+#ifdef ACCURATE_SIGMOID
+
+static float exp_scalar(float x)
+{
+    /* exp(x) = 2^n * exp(r), with n = round(x / ln2) and r = x - n*ln2 in [-ln2/2, ln2/2]. */
+    const float LOG2E = 1.4426950408889634f;
+    const float LN2   = 0.6931471805599453f;
+
+    float y = x * LOG2E;
+    int n = (int) (y + (y >= 0.0f ? 0.5f : -0.5f));
+
+    if (n <= -127)
+        return 0.0f;   /* underflow: 2^n rounds to zero */
+
+    float r = x - (float) n * LN2;
+
+    /* exp(r) on the reduced range (6-term Taylor). */
+    float p = 1.0f + r * (1.0f + r * (0.5f + r * (0.16666667f + r * (0.041666668f + r * 0.008333334f))));
+
+    /* 2^n by building the IEEE-754 single-precision exponent field. */
+    union { float f; int i; } pow2 = { .i = (n + 127) << 23 };
+
+    return p * pow2.f;
+}
+
+static void sigmoid_accurate(const _Float16 *src, _Float16 *dst, const size_t len)
+{
+    /* Scalar reference: numerically stable sigmoid e^min(x,0) / (1 + e^-|x|) with an accurate
+       fp32 exp. Same math as the vectorized kernel, but exact enough to isolate the fast-exp error. */
+    for (size_t i = 0; i < len; i++) {
+        float x = (float) src[i];
+        float a = x < 0.0f ? x : 0.0f;
+        float b = x < 0.0f ? x : -x;
+
+        dst[i] = (_Float16) (exp_scalar(a) / (1.0f + exp_scalar(b)));
+    }
+}
+
+#endif
+
 int sigmoid_fp16_spatz_task(void)
 {
     volatile sigmoid_fp16_spatz_params_t *params;
@@ -62,5 +106,9 @@ int sigmoid_fp16_spatz_task(void)
     Y = (_Float16 *) params->shard_Y;
     len = params->len;
 
+#ifdef ACCURATE_SIGMOID
+    sigmoid_accurate(X, Y, len);
+#else
     sigmoid(X, Y, len);
+#endif
 }
