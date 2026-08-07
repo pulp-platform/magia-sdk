@@ -27,6 +27,8 @@ def parse_args():
     parser.add_argument("H", type=positive_int, help="Spatial height dimension")
     parser.add_argument("W", type=positive_int, help="Spatial width dimension")
 
+    parser.add_argument("--axis", type=int, default=-1, help="Axis along which to apply softmax (default: -1)")
+
     args = parser.parse_args()
     return args
 
@@ -37,12 +39,12 @@ def generate_input_data(args):
     return input
 
 
-def run_onnx_softmax(input):
+def run_onnx_softmax(input, axis):
     input_info = onnx.helper.make_tensor_value_info('input', onnx.TensorProto.FLOAT16, input.shape)
     output_info = onnx.helper.make_tensor_value_info('output', onnx.TensorProto.FLOAT16, input.shape)
 
     opset = onnx.helper.make_operatorsetid("", 13)
-    node_def = onnx.helper.make_node('Softmax', ['input'], ['output'], axis=-1)
+    node_def = onnx.helper.make_node('Softmax', ['input'], ['output'], axis=axis)
     graph_def = onnx.helper.make_graph([node_def], 'onnx-softmax-test', [input_info], [output_info])
     model_def = onnx.helper.make_model(graph_def, producer_name='onnx-generator', opset_imports=[opset])
 
@@ -65,11 +67,11 @@ def main():
     args = parse_args()
 
     input = generate_input_data(args)
-    output, model_def = run_onnx_softmax(input)
+    output, model_def = run_onnx_softmax(input, args.axis)
 
     save_deployment_files(input, output, model_def)
 
-    print(f"Deployment files generated with [N:{args.N}, C:{args.C}, H:{args.H}, W:{args.W}]")
+    print(f"Deployment files generated with [N:{args.N}, C:{args.C}, H:{args.H}, W:{args.W}, axis:{args.axis}]")
 
 
 if __name__ == "__main__":

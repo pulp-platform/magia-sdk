@@ -115,37 +115,94 @@ static inline void normalize(_Float16 *dst, size_t len, _Float16 sum)
     }
 }
 
+/**
+ * Softmax over an inner (non-last) axis: the reduce axis has stride inner_dim, so the max, the
+ * exponential sum and the division are all per-column vectors over inner_dim (vectorized over
+ * inner_dim, looping over the reduce axis). exp(x - max) uses the Schraudolph fast-exp. Unlike the
+ * inner_dim == 1 case, the three phases live in a single function: here max, sum and normalize
+ * would each have to return a per-column vector, so fusing them keeps those vectors in registers
+ * and avoids allocating extra buffers.
+ */
+static inline void softmax_strided(const _Float16 *src, _Float16 *dst, const size_t reduce_dim, const size_t inner_dim)
+{
+    register _Float16 COEF asm("f10") = 1486.0f;
+    register _Float16 BIAS asm("f11") = 15360.0f;
+
+    size_t avl = inner_dim;
+    size_t vl;
+
+    for (; avl > 0; avl -= vl) {
+        size_t off = inner_dim - avl;
+        asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+
+        /* Column-wise max over the reduce axis (v0 holds the per-column max) */
+        asm volatile ("vle16.v v0, (%0)" :: "r"(src + off));
+        for (size_t r = 1; r < reduce_dim; r++) {
+            asm volatile ("vle16.v v8, (%0)" :: "r"(src + (r * inner_dim) + off));
+            asm volatile ("vfmax.vv v0, v0, v8");
+        }
+
+        /* dst = fastexp(src - max); v16 accumulates the per-column sum */
+        asm volatile ("vmv.v.i v16, 0");
+        for (size_t r = 0; r < reduce_dim; r++) {
+            const _Float16 *p_src = src + (r * inner_dim) + off;
+            _Float16 *p_dst = dst + (r * inner_dim) + off;
+
+            asm volatile ("vle16.v v8, (%0)" :: "r"(p_src));
+            asm volatile ("vfsub.vv v8, v8, v0");
+            asm volatile ("vfmul.vf v8, v8, %0" :: "f"(COEF));
+            asm volatile ("vfadd.vf v8, v8, %0" :: "f"(BIAS));
+            asm volatile ("vfcvt.rtz.xu.f.v v8, v8");
+            asm volatile ("vse16.v v8, (%0)" :: "r"(p_dst) : "memory");
+            asm volatile ("vfadd.vv v16, v16, v8");
+        }
+
+        /* Normalize each row by the per-column sum */
+        for (size_t r = 0; r < reduce_dim; r++) {
+            _Float16 *p_dst = dst + (r * inner_dim) + off;
+
+            asm volatile ("vle16.v v8, (%0)" :: "r"(p_dst));
+            asm volatile ("vfdiv.vv v8, v8, v16");
+            asm volatile ("vse16.v v8, (%0)" :: "r"(p_dst) : "memory");
+        }
+    }
+}
+
 int softmax_fp16_spatz_task(void)
 {
     volatile softmax_fp16_spatz_params_t *params;
     uintptr_t params_addr;
     _Float16 *shard_input;
     _Float16 *shard_output;
-    _Float16 max;
-    _Float16 sum;
-    size_t r_len;
-    size_t w_len;
+    size_t reduce_dim;
+    size_t inner_dim;
+    size_t outer_len;
+    size_t block;
 
     params_addr = mmio32(SPATZ_DATA);
     params = (volatile softmax_fp16_spatz_params_t *) params_addr;
 
     shard_input = (_Float16 *)params->shard_input;
     shard_output = (_Float16 *)params->shard_output;
-    r_len = params->r_len;
-    w_len = params->w_len;
+    reduce_dim = params->reduce_dim;
+    inner_dim = params->inner_dim;
+    outer_len = params->outer_len;
+    block = reduce_dim * inner_dim;
 
-    for (size_t r = 0; r < r_len; r++) {
+    for (size_t o = 0; o < outer_len; o++) {
         _Float16 *current_shard_input;
         _Float16 *current_shard_output;
-        _Float16 max;
-        _Float16 sum;
 
-        current_shard_input = shard_input + (r * w_len);
-        current_shard_output = shard_output + (r * w_len);
+        current_shard_input = shard_input + (o * block);
+        current_shard_output = shard_output + (o * block);
 
-        max = find_max(current_shard_input, w_len);
-        sum = compute_exponential_sum_fastexp(current_shard_input, current_shard_output, w_len, max);
-        normalize(current_shard_output, w_len, sum);
+        if (inner_dim == 1) {
+            _Float16 max = find_max(current_shard_input, reduce_dim);
+            _Float16 sum = compute_exponential_sum_fastexp(current_shard_input, current_shard_output, reduce_dim, max);
+            normalize(current_shard_output, reduce_dim, sum);
+        } else {
+            softmax_strided(current_shard_input, current_shard_output, reduce_dim, inner_dim);
+        }
     }
 
     return 0;

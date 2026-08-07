@@ -1,5 +1,6 @@
 from typing import Dict, List, Tuple
 from Deeploy.DeeployTypes import NetworkContext, NodeTemplate, OperatorRepresentation
+import numpy as np
 
 class _MagiaSoftmaxFP16Spatz(NodeTemplate):
     def alignToContext(self, ctxt: NetworkContext,
@@ -7,15 +8,19 @@ class _MagiaSoftmaxFP16Spatz(NodeTemplate):
         data_in = ctxt.lookup(operatorRepresentation['data_in'])
         ctxt.lookup(operatorRepresentation['data_out'])
 
-        shape = list(data_in.shape)
-        row_len = shape[-1]
-        outer = 1
-        for dim in shape[:-1]:
-            outer *= dim
-        shape4 = [1, 1, outer, row_len]
+        axis = operatorRepresentation.get('axis', -1)
+        if axis < 0:
+            axis += len(data_in.shape)
 
-        operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, shape4)) + "}"
-        operatorRepresentation['offset'] = 0
+        input_shape = data_in.shape
+
+        outer_dim = int(np.prod(input_shape[:axis])) if axis > 0 else 1
+        reduce_dim = int(input_shape[axis])
+        inner_dim = int(np.prod(input_shape[axis + 1:])) if axis < len(input_shape) - 1 else 1
+
+        operatorRepresentation['outer_dim'] = outer_dim
+        operatorRepresentation['reduce_dim'] = reduce_dim
+        operatorRepresentation['inner_dim'] = inner_dim
 
         return ctxt, operatorRepresentation, []
 
@@ -24,5 +29,5 @@ referenceTemplate = _MagiaSoftmaxFP16Spatz("""
 #ifdef ENABLE_NODE_LOGS
 printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
 #endif
-MAGIA_softmax_fp16_spatz(${data_in}, ${data_out}, (uint32_t[])${input_shape});
+MAGIA_softmax_fp16_spatz(${data_in}, ${data_out}, ${outer_dim}, ${reduce_dim}, ${inner_dim});
 """)
