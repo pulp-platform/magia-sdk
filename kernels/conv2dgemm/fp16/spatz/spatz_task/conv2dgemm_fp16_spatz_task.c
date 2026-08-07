@@ -1,6 +1,9 @@
 #include "tile.h"
 #include "conv2dgemm_fp16_spatz_params.h"
 
+/* Uncomment to accumulate the GEMM in fp32 (widening MAC + narrow to fp16) instead of fp16. */
+// #define FP32_ACCUM
+
 static void gemm(const _Float16 *A, const _Float16 *B, const _Float16 *C, _Float16 *Y, _Float16 alpha, _Float16 beta, const size_t dim_M, const size_t dim_N, const size_t dim_K)
 {
     register _Float16 ZERO asm ("fs0") = 0.0f;
@@ -171,6 +174,105 @@ static void gemm_grouped(const _Float16 *A, const _Float16 *B, const _Float16 *C
     }
 }
 
+#ifdef FP32_ACCUM
+
+static void gemm_accfp32(const _Float16 *A, const _Float16 *B, const _Float16 *C, _Float16 *Y, _Float16 alpha, _Float16 beta, const size_t dim_M, const size_t dim_N, const size_t dim_K)
+{
+    register _Float16 ZERO asm ("fs0") = 0.0f;
+    const _Float16 *B_row;
+    const _Float16 *C_row;
+    _Float16 *Y_row;
+    size_t avl;
+    size_t vl;
+
+    /* Each output row is a dot product over dim_K accumulated in fp32: v8 (e32) is built with a
+       widening multiply on the first term and widening MACs on the rest, then narrowed to fp16. */
+    for (int n = 0; n < dim_N; n += vl) {
+        avl = dim_N - n;
+        asm volatile ("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl));
+
+        for (int m = 0; m < dim_M; m++) {
+            C_row = C + (m * dim_N + n);
+            Y_row = Y + (m * dim_N + n);
+
+            if (alpha != 0.0f) {
+                B_row = B + n;
+                asm volatile ("vle16.v v0, (%0)" :: "r"(B_row));
+                asm volatile ("vfwmul.vf v8, v0, %0" :: "f"(*(A + m * dim_K)));
+
+                for (int k = 1; k < (int) dim_K; k++) {
+                    B_row = B + (k * dim_N + n);
+                    asm volatile ("vle16.v v0, (%0)" :: "r"(B_row));
+                    asm volatile ("vfwmacc.vf v8, %0, v0" :: "f"(*(A + m * dim_K + k)));
+                }
+
+                asm volatile ("vfncvt.f.f.w v16, v8");
+                asm volatile ("vfmul.vf v16, v16, %0" :: "f"(alpha));
+            } else {
+                asm volatile ("vfmv.v.f v16, %0" :: "f"(ZERO));
+            }
+
+            if (beta != 0.0f) {
+                asm volatile ("vle16.v v0, (%0)" :: "r"(C_row));
+                asm volatile ("vfmacc.vf v16, %0, v0" :: "f"(beta));
+            }
+
+            asm volatile ("vse16.v v16, (%0)" :: "r"(Y_row));
+        }
+    }
+}
+
+static void gemm_grouped_accfp32(const _Float16 *A, const _Float16 *B, const _Float16 *C, _Float16 *Y, _Float16 alpha, _Float16 beta, const size_t dim_M, const size_t dim_N, const size_t dim_Kg, const size_t cout_g, const size_t oc_start)
+{
+    register _Float16 ZERO asm ("fs0") = 0.0f;
+    const _Float16 *A_row;
+    const _Float16 *B_grp;
+    const _Float16 *B_row;
+    const _Float16 *C_row;
+    _Float16 *Y_row;
+    size_t avl;
+    size_t vl;
+
+    for (int n = 0; n < dim_N; n += vl) {
+        avl = dim_N - n;
+        asm volatile ("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl));
+
+        for (int m = 0; m < dim_M; m++) {
+            int g = (oc_start + m) / cout_g;
+            A_row = A + m * dim_Kg;
+            B_grp = B + g * dim_Kg * dim_N;
+            C_row = C + (m * dim_N + n);
+            Y_row = Y + (m * dim_N + n);
+
+            if (alpha != 0.0f) {
+                B_row = B_grp + n;
+                asm volatile ("vle16.v v0, (%0)" :: "r"(B_row));
+                asm volatile ("vfwmul.vf v8, v0, %0" :: "f"(A_row[0]));
+
+                for (int k = 1; k < (int) dim_Kg; k++) {
+                    B_row = B_grp + (k * dim_N + n);
+                    asm volatile ("vle16.v v0, (%0)" :: "r"(B_row));
+                    asm volatile ("vfwmacc.vf v8, %0, v0" :: "f"(A_row[k]));
+                }
+
+                asm volatile ("vfncvt.f.f.w v16, v8");
+                asm volatile ("vfmul.vf v16, v16, %0" :: "f"(alpha));
+            } else {
+                asm volatile ("vfmv.v.f v16, %0" :: "f"(ZERO));
+            }
+
+            if (beta != 0.0f) {
+                asm volatile ("vle16.v v0, (%0)" :: "r"(C_row));
+                asm volatile ("vfmacc.vf v16, %0, v0" :: "f"(beta));
+            }
+
+            asm volatile ("vse16.v v16, (%0)" :: "r"(Y_row));
+        }
+    }
+}
+
+#endif
+
 int conv2dgemm_fp16_spatz_task(void)
 {
     volatile conv2dgemm_fp16_spatz_params_t *params;
@@ -219,10 +321,17 @@ int conv2dgemm_fp16_spatz_task(void)
        GEMM; grouped/depthwise convs apply each output channel's compact weights to only its
        group's block of B. */
     for (size_t b = 0; b < n_batches; b++) {
+#ifdef FP32_ACCUM
+        if (group == 1)
+            gemm_accfp32(A, B + b * (K * N), C, Y + b * (M * N), alpha, beta, M, N, K_g);
+        else
+            gemm_grouped_accfp32(A, B + b * (K * N), C, Y + b * (M * N), alpha, beta, M, N, K_g, cout_g, oc_start);
+#else
         if (group == 1)
             gemm(A, B + b * (K * N), C, Y + b * (M * N), alpha, beta, M, N, K_g);
         else
             gemm_grouped(A, B + b * (K * N), C, Y + b * (M * N), alpha, beta, M, N, K_g, cout_g, oc_start);
+#endif
     }
 
     return 0;
