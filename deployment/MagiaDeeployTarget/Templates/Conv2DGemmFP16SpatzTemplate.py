@@ -14,6 +14,8 @@ class _MagiaConv2DGemmFP16Spatz(NodeTemplate):
         operatorRepresentation['input_shape'] = "{" + ", ".join(map(str, data_in.shape)) + "}"
         operatorRepresentation['output_shape'] = "{" + ", ".join(map(str, data_out.shape)) + "}"
         operatorRepresentation['has_bias_c'] = int('bias' in operatorRepresentation)
+        if 'bias' not in operatorRepresentation:
+            operatorRepresentation['bias'] = 'NULL'
         operatorRepresentation['offset'] = 0
 
         return ctxt, operatorRepresentation, []
