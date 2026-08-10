@@ -210,16 +210,16 @@ Options:
 
 `MAGIA_VERILATOR_BIN`: Path to the model. **Default**: `$(MAGIA_RTL_DIR)/verilator/build/obj_dir/Vmagia_tb`. Override to run a model kept outside the MAGIA checkout.
 
-`verilator_fst`: **&lt;file&gt;** (**Default**: empty). Dump an FST waveform. A relative path lands in the test directory. Dumping is off until you ask for it and costs nothing when unused.
+`gui`: **0**|**1** (**Default**: 0). Dumps an FST waveform of the run to `<test_name>.fst` in the test directory, and prints ready-to-paste `gtkwave` and `surfer` commands when the simulation ends. This is what `gui` means for Verilator — there is no interactive simulator window as with QuestaSim. Dumping is off otherwise and costs nothing. Override the filename with `VERILATOR_FST`.
 
-`gui` and `fast_sim` are QuestaSim-only and are ignored.
+`fast_sim` is QuestaSim-only and is ignored.
 
 Outputs, all in `$(MAGIA_RTL_DIR)/sw/tests/<test_name>/`:
 
 - **stdout**, also teed to `transcript_verilator`. Printing from the tiles appears as
   `[mhartid N] ...`.
 - `trace_core_<hartid>.log`, one per core.
-- The FST waveform, if `verilator_fst` was given.
+- `<test_name>.fst`, the waveform, if `gui=1` was given.
 - `build/` with the ELF and the stimuli, exactly as in the `rtl` flow. No `modelsim.ini`/`work`
   symlinks are created — the verilated model is self-contained.
 

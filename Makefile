@@ -35,9 +35,9 @@ BIN 			?= $(BUILD_DIR)/build/verif
 # Prebuilt Verilator model. Built in the MAGIA repo with `make verilate mesh_dv=1`;
 # the SDK never builds it. Override to use a model outside $(MAGIA_RTL_DIR).
 MAGIA_VERILATOR_BIN	?= $(MAGIA_DIR_ABS)/verilator/build/obj_dir/Vmagia_tb
-# Waveform for a verilator run. Empty means no dump and no cost. A relative path
-# lands in the test build dir, which is where the model is run from.
-verilator_fst	?=
+# Waveform a verilator run dumps under gui=1, relative to the test build dir the
+# model runs in. Dumping is off otherwise and costs nothing.
+VERILATOR_FST	?= $(test).fst
 # Build parallelism, and threads compiled into the model. Passed to the MAGIA
 # repo's verilator flow by `make MAGIA platform=verilator`.
 verilator_jobs		?= 16
@@ -253,8 +253,14 @@ else ifeq ($(platform), verilator)
 	  +DATA_ENTRY=$(data_entry)											\
 	  +BOOT_ADDR=$(boot_addr)											\
 	  +itb_file=$(itb_file)												\
-	  $(if $(verilator_fst),+FST=$(verilator_fst),)						\
+	  $(if $(filter 1,$(gui)),+FST=$(VERILATOR_FST),)					\
 	  2>&1 | tee transcript_verilator
+ifeq ($(gui), 1)
+	@echo ''
+	@echo 'Waveform: $(BUILD_DIR_ABS)/$(VERILATOR_FST)'
+	@echo '  gtkwave $(BUILD_DIR_ABS)/$(VERILATOR_FST)'
+	@echo '  surfer  $(BUILD_DIR_ABS)/$(VERILATOR_FST)'
+endif
 else
 	$(error Only rtl, verilator and gvsoc are supported as platforms.)
 endif
