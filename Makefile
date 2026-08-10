@@ -38,6 +38,14 @@ MAGIA_VERILATOR_BIN	?= $(MAGIA_DIR_ABS)/verilator/build/obj_dir/Vmagia_tb
 # Waveform for a verilator run. Empty means no dump and no cost. A relative path
 # lands in the test build dir, which is where the model is run from.
 verilator_fst	?=
+# Build parallelism, and threads compiled into the model. Passed to the MAGIA
+# repo's verilator flow by `make MAGIA platform=verilator`.
+verilator_jobs		?= 16
+verilator_threads	?= 4
+# Which simulator `MAGIA` and `rtl-clean` act on. `run` reads `platform` directly
+# and still demands it explicitly; these two default to rtl so that invocations
+# predating platform= keep working unchanged.
+hw_platform	:= $(if $(platform),$(platform),rtl)
 # Simulator inputs, relative to the test build dir. Same contract for questasim
 # and verilator: both drive the magia_tb testbench in the MAGIA repo, so these
 # mirror its own defaults.
@@ -136,9 +144,16 @@ format:
 clean:
 	rm -rf build/
 
+# Note: hw-clean-all also removes .bender, which invalidates any verilator model
+# built from the same checkout.
 rtl-clean:
+ifeq ($(hw_platform), verilator)
+	cd $(MAGIA_RTL_DIR) 		&& \
+	make clean-verilate
+else
 	cd $(MAGIA_RTL_DIR) 		&& \
 	make hw-clean-all
+endif
 	rm -rf $(MAGIA_RTL_DIR)/sw/tests/test_*
 
 build:
@@ -276,7 +291,32 @@ endif
 		--include '$(GVSOC2PERFETTO_INCLUDE)'
 	rm -f -- $(GVSOC2PERFETTO_VCD)
 
+# Hardware build command, the only part of `make MAGIA` that differs per simulator.
+# Recursively expanded on purpose: set_mesh rewrites mesh_dv while the target runs.
+ifeq ($(hw_platform), verilator)
+HW_BUILD_CMD = make verilate > verilate.log mesh_dv=$(mesh_dv) VERILATOR_JOBS=$(verilator_jobs) VERILATOR_THREADS=$(verilator_threads)
+else
+HW_BUILD_CMD = make build-hw > build-hw.log mesh_dv=$(mesh_dv) fast_sim=$(fast_sim)
+endif
+
 MAGIA: set_mesh
+ifeq (,$(filter $(hw_platform), rtl verilator))
+	$(error Only rtl and verilator can be built with `make MAGIA` (got platform=$(hw_platform)).)
+endif
+# The MAGIA verilator flow is mesh-only and CV32E40P-only (verilator/verilator.mk).
+# tiles=1 is rejected because set_mesh turns it into mesh_dv=0, and magia_v1
+# because it seds the core to CV32E40X further down.
+ifeq ($(hw_platform), verilator)
+ifeq ($(tiles), 1)
+	$(error platform=verilator requires mesh_dv=1, but tiles=1 forces mesh_dv=0: there is no single-tile verilator target.)
+endif
+ifneq ($(mesh_dv), 1)
+	$(error platform=verilator requires mesh_dv=1: there is no single-tile verilator target.)
+endif
+ifeq ($(target_platform), magia_v1)
+	$(error platform=verilator does not support magia_v1: it selects CV32E40X, whose hierarchical core traces need per-tile filenames resolved at run time.)
+endif
+endif
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
 	$(eval tiles_2=256)
 endif
@@ -312,7 +352,7 @@ ifneq (,$(filter $(build_mode), update synth profile))
 	python -m pip install --upgrade "setuptools<81"						&& \
 	make vsim-scripts > vsim-scripts.log mesh_dv=$(mesh_dv)	&& \
 	make floonoc-patch || true											&& \
-	make build-hw > build-hw.log mesh_dv=$(mesh_dv) fast_sim=$(fast_sim)
+	$(HW_BUILD_CMD)
 else
 	$(error unrecognized mode (acceptable build modes: update|profile|synth).)
 endif

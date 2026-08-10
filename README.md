@@ -91,7 +91,7 @@ The following *optional* parameters can be specified when running the make comma
 
 `ISA`: **rv32imcxgap9**|**rv32imafc** (**Default**: rv32imcxgap9) ISA target for the GCC toolcahin.
 
-`platform`: **rtl**|**verilator**|**gvsoc**. Selects the simulation platform. `rtl` simulates the RTL with QuestaSim, `verilator` simulates the same RTL with a prebuilt Verilator model (see [Simulating with Verilator](#simulating-with-verilator)). GVSoC is currently WIP, some tests may fail.
+`platform`: **rtl**|**verilator**|**gvsoc**. Selects the simulation platform. `rtl` simulates the RTL with QuestaSim, `verilator` simulates the same RTL with Verilator (see [Simulating with Verilator](#simulating-with-verilator)). GVSoC is currently WIP, some tests may fail. `make MAGIA` and `make rtl-clean` accept `rtl` and `verilator` and default to `rtl`; `make run` requires the flag explicitly.
 
 `tiles`: **2**|**4**|**8**|**16** (**Default**: 2). Selects number of rows and columns for the mesh architecture.
 
@@ -126,6 +126,11 @@ Once the [Prerequisites](#prerequisites) are in place:
 2. Build the Magia RTL architecture (*this command may take time and return an error, please be patient.*):
 
     `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode>`
+
+    This builds the QuestaSim libraries. To build a Verilator model of the same RTL instead, add
+    `platform=verilator` (see [Simulating with Verilator](#simulating-with-verilator)):
+
+    `make MAGIA platform=verilator <target_platform> <tiles> <fsync_mode>`
 
     and/or the GVSoC module **NOTE: GCC AND G++ 11.2.0 AND ABOVE IS MANDATORY**:
 
@@ -166,32 +171,42 @@ before building the RTL back using the `make MAGIA` command.
 two flows share the entire software side: the SDK produces exactly the same `verif` ELF, `$readmemh`
 stimuli and disassembly, and both drive the same `magia_tb` testbench with the same plusargs.
 
-**The SDK does not build the Verilator model.** It runs a model you have already built in the MAGIA
-repository, and stops with an error if there is none:
+The flow has the same build-then-run shape as `platform=rtl`, and takes the same `tiles`,
+`target_platform` and `fsync_mode`:
 
 ```sh
-# in the MAGIA repository
-make verilate core=CV32E40P mesh_dv=1 VERILATOR_JOBS=16
-```
-
-```sh
-# in magia-sdk
-make build test=test_helloworld tiles=4
+make MAGIA platform=verilator tiles=4        # build the model  (minutes)
+make build test=test_helloworld tiles=4      # build the test
 make run test=test_helloworld platform=verilator tiles=4
 ```
+
+`make MAGIA platform=verilator` applies exactly the same parameter edits to the RTL as the QuestaSim
+build does, then Verilates instead of running `build-hw`. The mesh geometry is compiled into the
+model, so **`tiles` must be the same for `MAGIA`, `build` and `run`**, and the model has to be
+rebuilt whenever `tiles`, `target_platform`, `fsync_mode` or the RTL itself changes — `make run`
+never rebuilds it, and errors out if there is no model at all.
+
+To remove a Verilator build: `make rtl-clean platform=verilator` (without `platform=verilator` this
+still does the QuestaSim `hw-clean-all`, which deletes `.bender` and thereby invalidates any
+Verilator model built from the same checkout).
 
 Requirements:
 
 - A MAGIA checkout containing the Verilator flow (`verilator/verilator.mk`). This is **not** in the
   commit pinned by `scripts/deps.env` yet, so point `MAGIA_RTL_DIR` at a checkout that has it.
 - Verilator >= 5.046 — earlier versions miss the hierarchical-block fixes the flow depends on.
-- `mesh_dv=1` and `core=CV32E40P` on the MAGIA side; there is no single-tile or CV32E40X Verilator
-  target.
-- **The mesh size is compiled into the model** (`N_TILES_X`/`N_TILES_Y` in `hw/mesh/magia_pkg.sv`,
-  which have no Make override), so build the test with the matching `tiles=` — `tiles=4` for a 4x4
-  model. The SDK does not check this; a mismatch shows up as a failing simulation, not as an error.
+- `mesh_dv=1`: the flow is mesh-only, so `tiles=1` is rejected (it forces `mesh_dv=0`).
+- Not `target_platform=magia_v1`: it selects CV32E40X, whose hierarchical core traces would need
+  per-tile filenames resolved at run time. Also rejected.
+
+Both constraints are checked by `make MAGIA`, which stops with an explanatory error rather than
+letting the build fail later.
 
 Options:
+
+`verilator_jobs`: **N** (**Default**: 16). Parallelism used to *build* the model. Unrelated to simulation speed.
+
+`verilator_threads`: **N** (**Default**: 4). Threads the *simulation* runs on. Compiled into the model, so it only has an effect on `make MAGIA platform=verilator`.
 
 `MAGIA_VERILATOR_BIN`: Path to the model. **Default**: `$(MAGIA_RTL_DIR)/verilator/build/obj_dir/Vmagia_tb`. Override to run a model kept outside the MAGIA checkout.
 
