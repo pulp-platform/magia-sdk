@@ -91,7 +91,7 @@ The following *optional* parameters can be specified when running the make comma
 
 `ISA`: **rv32imcxgap9**|**rv32imafc** (**Default**: rv32imcxgap9) ISA target for the GCC toolcahin.
 
-`platform`: **rtl**|**gvsoc**. Selects the simulation platform. GVSoC is currently WIP, some tests may fail.
+`platform`: **rtl**|**verilator**|**gvsoc**. Selects the simulation platform. `rtl` simulates the RTL with QuestaSim, `verilator` simulates the same RTL with a prebuilt Verilator model (see [Simulating with Verilator](#simulating-with-verilator)). GVSoC is currently WIP, some tests may fail.
 
 `tiles`: **2**|**4**|**8**|**16** (**Default**: 2). Selects number of rows and columns for the mesh architecture.
 
@@ -158,6 +158,73 @@ To ensure a clean re-build of the RTL, you can run:
 `make rtl-clean`
 
 before building the RTL back using the `make MAGIA` command.
+
+## Simulating with Verilator
+
+`platform=verilator` runs the same RTL as `platform=rtl`, but on a
+[Verilator](https://verilator.org) model instead of QuestaSim — no simulator license needed. The
+two flows share the entire software side: the SDK produces exactly the same `verif` ELF, `$readmemh`
+stimuli and disassembly, and both drive the same `magia_tb` testbench with the same plusargs.
+
+**The SDK does not build the Verilator model.** It runs a model you have already built in the MAGIA
+repository, and stops with an error if there is none:
+
+```sh
+# in the MAGIA repository
+make verilate core=CV32E40P mesh_dv=1 VERILATOR_JOBS=16
+```
+
+```sh
+# in magia-sdk
+make build test=test_helloworld tiles=4
+make run test=test_helloworld platform=verilator tiles=4
+```
+
+Requirements:
+
+- A MAGIA checkout containing the Verilator flow (`verilator/verilator.mk`). This is **not** in the
+  commit pinned by `scripts/deps.env` yet, so point `MAGIA_RTL_DIR` at a checkout that has it.
+- Verilator >= 5.046 — earlier versions miss the hierarchical-block fixes the flow depends on.
+- `mesh_dv=1` and `core=CV32E40P` on the MAGIA side; there is no single-tile or CV32E40X Verilator
+  target.
+- **The mesh size is compiled into the model** (`N_TILES_X`/`N_TILES_Y` in `hw/mesh/magia_pkg.sv`,
+  which have no Make override), so build the test with the matching `tiles=` — `tiles=4` for a 4x4
+  model. The SDK does not check this; a mismatch shows up as a failing simulation, not as an error.
+
+Options:
+
+`MAGIA_VERILATOR_BIN`: Path to the model. **Default**: `$(MAGIA_RTL_DIR)/verilator/build/obj_dir/Vmagia_tb`. Override to run a model kept outside the MAGIA checkout.
+
+`verilator_fst`: **&lt;file&gt;** (**Default**: empty). Dump an FST waveform. A relative path lands in the test directory. Dumping is off until you ask for it and costs nothing when unused.
+
+`gui` and `fast_sim` are QuestaSim-only and are ignored.
+
+Outputs, all in `$(MAGIA_RTL_DIR)/sw/tests/<test_name>/`:
+
+- **stdout**, also teed to `transcript_verilator`. Printing from the tiles appears as
+  `[mhartid N] ...`.
+- `trace_core_<hartid>.log`, one per core.
+- The FST waveform, if `verilator_fst` was given.
+- `build/` with the ELF and the stimuli, exactly as in the `rtl` flow. No `modelsim.ini`/`work`
+  symlinks are created — the verilated model is self-contained.
+
+Pass/fail is decided by the testbench's end-of-simulation line rather than by the exit code alone,
+because the model also exits 0 when it runs out of events without reaching `$finish`:
+
+```sh
+./scripts/sim_ret_errors_verilator.sh $MAGIA_RTL_DIR/sw/tests/test_helloworld/transcript_verilator
+```
+
+It exits 0 on success, 1 on a failing simulation, 2 if the log is missing, and 3 if the simulation
+never reported an end-of-simulation line (hung or killed).
+
+Two things to keep in mind:
+
+- **Nothing bounds a hung run.** If a tile never signals end-of-computation the simulation waits
+  forever; interrupt it with Ctrl-C.
+- **Let a waveform run reach `$finish`.** A run killed earlier leaves the FST unclosed, and its
+  signal hierarchy is still sitting in the `<dump>.fst.hier` companion file — such a dump only reads
+  in place and loses every signal name the moment it is moved.
 
 ## Adding your own test
 
@@ -415,4 +482,4 @@ add_cv32_executable_with_spatz(
 ```
 
 ### Run Tests
-To run test a special Makefile rule can be used: `make run test=<test_name> platform=<rtl|gvsoc>`.
+To run test a special Makefile rule can be used: `make run test=<test_name> platform=<rtl|verilator|gvsoc>`.
