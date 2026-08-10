@@ -178,6 +178,16 @@ endif
 $(GVSOC_WORK_DIR):
 	mkdir -p $(GVSOC_WORK_DIR)
 
+# SREC -> $readmemh stimuli, replacing the parse_s19.pl | s19tomem.py pipeline.
+# Single file, so rustc directly rather than a cargo project.
+RUSTC			?= rustc
+S19TOMEM_SRC	?= scripts/s19tomem.rs
+S19TOMEM_BIN	?= $(CMAKE_BUILDDIR)/tools/s19tomem
+
+$(S19TOMEM_BIN): $(S19TOMEM_SRC)
+	mkdir -p $(dir $@)
+	$(RUSTC) -O -o $@ $<
+
 # Turn the CMake-built ELF into everything an RTL simulator needs, under
 # $(MAGIA_RTL_DIR)/sw/tests/$(test)/build/: the ELF itself as `verif`, the
 # $readmemh instruction/data images, and the disassembly the core tracer reads.
@@ -189,15 +199,14 @@ OBJDUMP ?= riscv32-unknown-elf-objdump
 endif
 
 .PHONY: rtl_stimuli
-rtl_stimuli:
+rtl_stimuli: $(S19TOMEM_BIN)
 ifndef test
 	$(error Proper formatting is: make rtl_stimuli test=<test_name>)
 endif
 	mkdir -p $(BUILD_DIR_ABS)/build
 	cp $(BIN_ABS_PATH)/$(test) $(BUILD_DIR_ABS)/build/verif
 	objcopy --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
-	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
-	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
+	$(S19TOMEM_BIN) $(BIN).s19 $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
 	$(OBJDUMP) -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	$(OBJDUMP) -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
