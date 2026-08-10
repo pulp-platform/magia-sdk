@@ -32,6 +32,21 @@ GVSOC_DIR 		?= ./gvsoc
 GVSOC_ABS_PATH	?= $(CURR_DIR)/gvsoc
 BIN_ABS_PATH	?= $(CMAKE_BUILDDIR)/bin
 BIN 			?= $(BUILD_DIR)/build/verif
+# Prebuilt Verilator model. Built in the MAGIA repo with `make verilate mesh_dv=1`;
+# the SDK never builds it. Override to use a model outside $(MAGIA_RTL_DIR).
+MAGIA_VERILATOR_BIN	?= $(MAGIA_DIR_ABS)/verilator/build/obj_dir/Vmagia_tb
+# Waveform for a verilator run. Empty means no dump and no cost. A relative path
+# lands in the test build dir, which is where the model is run from.
+verilator_fst	?=
+# Simulator inputs, relative to the test build dir. Same contract for questasim
+# and verilator: both drive the magia_tb testbench in the MAGIA repo, so these
+# mirror its own defaults.
+inst_hex_name	?= build/stim_instr.txt
+data_hex_name	?= build/stim_data.txt
+itb_file		?= build/verif.itb
+inst_entry		?= 0xCC000000
+data_entry		?= 0xCC010000
+boot_addr		?= 0xCC000080
 build_mode		?= update
 fsync_mode		?= stall
 mesh_dv			?= 1
@@ -148,42 +163,76 @@ endif
 $(GVSOC_WORK_DIR):
 	mkdir -p $(GVSOC_WORK_DIR)
 
+# Turn the CMake-built ELF into everything an RTL simulator needs, under
+# $(MAGIA_RTL_DIR)/sw/tests/$(test)/build/: the ELF itself as `verif`, the
+# $readmemh instruction/data images, and the disassembly the core tracer reads.
+# Shared by platform=rtl and platform=verilator -- both drive the same magia_tb.
+ifeq ($(compiler), GCC_MULTILIB)
+OBJDUMP ?= riscv64-unknown-elf-objdump
+else
+OBJDUMP ?= riscv32-unknown-elf-objdump
+endif
+
+.PHONY: rtl_stimuli
+rtl_stimuli:
+ifndef test
+	$(error Proper formatting is: make rtl_stimuli test=<test_name>)
+endif
+	mkdir -p $(BUILD_DIR_ABS)/build
+	cp $(BIN_ABS_PATH)/$(test) $(BUILD_DIR_ABS)/build/verif
+	objcopy --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
+	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
+	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
+	$(OBJDUMP) -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
+	$(OBJDUMP) -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
+	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
+
 run: set_mesh $(GVSOC_WORK_DIR)
 	@echo 'Magia is available at https://github.com/pulp-platform/MAGIA.git'
 	@echo 'please run "source setup_env.sh" in the magia folder before running this script'
 	@echo 'and make sure the risc-v objdump binary is visible on path using "which riscv32-unknown-elf-objdump".'
 ifndef test
-	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
+	$(error Proper formatting is: make run test=<test_name> platform=rtl|verilator|gvsoc)
 endif
 ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
 	$(error No test found with name: $(test))
 endif
 ifndef platform
-	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
+	$(error Proper formatting is: make run test=<test_name> platform=rtl|verilator|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
 	$(GVRUN) --target $(target_platform) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
 else ifeq ($(platform), rtl)
-	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
-	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
-	objcopy --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
-	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
-	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
+	$(MAKE) rtl_stimuli test=$(test)
 	cd $(BUILD_DIR_ABS)													&& \
 	cp -sf "$(MAGIA_DIR_ABS)/sim/modelsim.ini" modelsim.ini    			&& \
 	ln -sfn "$(MAGIA_DIR_ABS)/sim/work" work
-ifeq ($(compiler), GCC_MULTILIB)
-	riscv64-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
-	riscv64-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
-else
-	riscv32-unknown-elf-objdump -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
-	riscv32-unknown-elf-objdump -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
-endif
-	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
 	cd $(MAGIA_RTL_DIR) 												&& \
 	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv) fast_sim=$(fast_sim)
+else ifeq ($(platform), verilator)
+	@test -x "$(MAGIA_VERILATOR_BIN)" || {								\
+	  echo "error: no Verilator model at $(MAGIA_VERILATOR_BIN)" >&2;	\
+	  echo "       build it in the MAGIA repo first:" >&2;				\
+	  echo "         make verilate core=CV32E40P mesh_dv=1" >&2;		\
+	  exit 1; }
+	$(MAKE) rtl_stimuli test=$(test)
+# No modelsim.ini/work symlinks: the verilated model is self-contained. Run it
+# straight rather than via the MAGIA repo's `make verilate-run`, whose `all`
+# prerequisite would try to recompile the test from sources that only exist for
+# tests living in that repo.
+	set -o pipefail												 	 && \
+	cd $(BUILD_DIR_ABS)												 	 && \
+	"$(MAGIA_VERILATOR_BIN)"											\
+	  +INST_HEX=$(inst_hex_name)										\
+	  +DATA_HEX=$(data_hex_name)										\
+	  +INST_ENTRY=$(inst_entry)											\
+	  +DATA_ENTRY=$(data_entry)											\
+	  +BOOT_ADDR=$(boot_addr)											\
+	  +itb_file=$(itb_file)												\
+	  $(if $(verilator_fst),+FST=$(verilator_fst),)						\
+	  2>&1 | tee transcript_verilator
 else
-	$(error Only rtl and gvsoc are supported as platforms.)
+	$(error Only rtl, verilator and gvsoc are supported as platforms.)
 endif
 
 run_profiling: set_mesh $(GVSOC_WORK_DIR) $(GVSOC2PERFETTO_BIN)
