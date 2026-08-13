@@ -43,6 +43,8 @@ target_compile_options(runtime
   -DPROFILE_CMI=${PROFILE_CMI}
   -DPROFILE_CMO=${PROFILE_CMO}
   -DPROFILE_SNC=${PROFILE_SNC}
+  -ffreestanding
+  -fno-builtin
 )
 
 target_compile_options(runtime
@@ -70,6 +72,7 @@ target_link_options(runtime
 )
 
 # Build bootrom only when Spatz tests are enabled.
+# MAPS runtime support is header-only and exported through this Target.
 if(SPATZ_TESTS)
     add_spatz_bootrom()
 endif()

@@ -189,10 +189,11 @@ SECTIONS
         _bss_end = .;
     } > dataram :data
 
-    /* ensure there is enough room for stack */
+    /* Reserve the complete control-core stack window.  crt0 initializes sp from
+     * `stack`, so this symbol must denote the top of the downward-growing stack. */
     .stack (NOLOAD): {
         . = ALIGN(4);
-        . = . + _min_stack ;
+        . = . + _stack_len;
         . = ALIGN(4);
         stack = . ;
         _stack = . ;

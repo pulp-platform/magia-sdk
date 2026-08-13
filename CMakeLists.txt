@@ -39,6 +39,15 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 project(magia-sdk LANGUAGES C ASM)
 
+set(EVAL 0 CACHE STRING "Enable evaluation instrumentation")
+set(STALLING 0 CACHE STRING "Enable accelerator stalling")
+set(FSYNC_MM 1 CACHE STRING "Use the memory-mapped fractal-sync interface")
+set(IDMA_MM 1 CACHE STRING "Use the memory-mapped iDMA interface")
+set(REDMULE_MM 1 CACHE STRING "Use the memory-mapped RedMulE interface")
+foreach(PROFILE_OPTION PROFILE_CMP PROFILE_CMI PROFILE_CMO PROFILE_SNC)
+    set(${PROFILE_OPTION} 0 CACHE STRING "Enable ${PROFILE_OPTION} profiling")
+endforeach()
+
 # Speed up rebuilds with ccache when available (opt-out via -DUSE_CCACHE=OFF).
 option(USE_CCACHE "Use ccache to speed up (re)compilation if available" ON)
 if (USE_CCACHE)
@@ -105,3 +114,7 @@ add_subdirectory(drivers)
 ################################################################################
 
 add_subdirectory(tests)
+
+if(DEFINED MAPS_APPLICATION_DIR)
+    add_subdirectory("${MAPS_APPLICATION_DIR}" maps_application)
+endif()

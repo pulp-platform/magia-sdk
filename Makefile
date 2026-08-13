@@ -77,7 +77,12 @@ GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
 CMAKE ?= cmake
 
 GVSOC_WORK_DIR ?= ./gvsoc_work
-GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_WORK_DIR) --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --attr magia_v3/nb_pulp_cores=$(pulp_cores) --trace-level=trace --trace=kill-module
+ifeq ($(target_platform), magia_v3)
+GVRUN_TARGET_ARGS ?= --attr magia_v3/n_tiles_x=$(tiles) --attr magia_v3/n_tiles_y=$(tiles) --attr magia_v3/nb_pulp_cores=$(pulp_cores) --attr magia_v3/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin
+else
+GVRUN_TARGET_ARGS ?= --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin
+endif
+GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_WORK_DIR) $(GVRUN_TARGET_ARGS) --trace-level=trace --trace=kill-module
 GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
 GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 profile_tile		?=
@@ -162,7 +167,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
+	$(GVRUN) --target $(target_platform) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
 	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
@@ -193,7 +198,7 @@ endif
 ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
 	$(error No test found with name: $(test))
 endif
-	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG) $(GVSOC_TRACE_ARG)
+	$(GVRUN) --target $(target_platform) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG) $(GVSOC_TRACE_ARG)
 	$(GVSOC2PERFETTO_BIN) $(GVSOC2PERFETTO_VCD) \
 		-o $(GVSOC2PERFETTO_OUT) \
 		--state-map 'fsm_state=0:idle,1:preload,2:routine,3:storing,4:finished,5:acknowledge' \
