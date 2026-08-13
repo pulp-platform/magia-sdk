@@ -74,7 +74,7 @@ SECTIONS
         *(.l2_arena)
         *(.l2_arena.*)
         _l2_arena_end = .;
-    } > l2_bulk
+    } > dataram :data
 
     .vectors :
     {
