@@ -5,11 +5,56 @@
 
 #include "eventunit.h"
 #include "redmule.h"
+#include "utils/magia_spatz_utils.h"
+
+#ifndef MAPS_HAS_ADD_SPATZ_TASK
+#define MAPS_HAS_ADD_SPATZ_TASK 0u
+#endif
+#ifndef MAPS_HAS_RELU_SPATZ_TASK
+#define MAPS_HAS_RELU_SPATZ_TASK 0u
+#endif
+
+#ifndef MAPS_KERNEL_ABI_VERSION
+#define MAPS_KERNEL_ABI_VERSION 1u
+#endif
+#ifndef MAPS_TASK_BUNDLE_ABI_VERSION
+#define MAPS_TASK_BUNDLE_ABI_VERSION 1u
+#endif
+#define MAPS_OPERATION_TASK_SCRATCH_OFFSET 0xC0000u
+#define MAPS_OPERATION_TASK_SCRATCH_BYTES 0x10000u
 
 typedef struct {
     redmule_controller_t *redmule_ctrl;
     eu_controller_t *eu_ctrl;
+    uint32_t kernel_abi_version;
+    uint32_t task_bundle_abi_version;
+    uint32_t spatz_binary_start;
+    uint32_t add_fp16_task;
+    uint32_t relu_fp16_task;
+    void *spatz_params;
+    uint32_t spatz_params_bytes;
+    uint32_t spatz_initialized;
 } maps_operation_runtime_t;
+
+static inline int maps_operation_runtime_init(maps_operation_runtime_t *runtime)
+{
+    if (!runtime)
+        return -1;
+    if (runtime->spatz_binary_start == 0u)
+        return 0;
+    if (runtime->kernel_abi_version != MAPS_KERNEL_ABI_VERSION ||
+        runtime->task_bundle_abi_version != MAPS_TASK_BUNDLE_ABI_VERSION)
+        return -2;
+    if (!runtime->eu_ctrl || !runtime->spatz_params ||
+        runtime->spatz_params_bytes == 0u)
+        return -3;
+    if (!runtime->spatz_initialized) {
+        eu_spatz_init(runtime->eu_ctrl, 0u);
+        spatz_init(runtime->spatz_binary_start);
+        runtime->spatz_initialized = 1u;
+    }
+    return 0;
+}
 
 typedef enum {
     MAPS_COLLECTIVE_ARRIVAL = 0u,
@@ -309,6 +354,8 @@ static inline void maps_operation_zero(uint32_t address, uint32_t bytes)
         output[index] = 0u;
 }
 
+#include "utils/maps_spatz_tasks.h"
+
 static inline int maps_execute_operation(const tile_plan_t *plan,
                                          const op_desc_t *op,
                                          uint32_t slot,
@@ -336,7 +383,14 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
     case OP_COPY:
     case OP_RESHAPE:
         return maps_execute_copy_op(plan, op, slot);
+#if MAPS_HAS_ADD_SPATZ_TASK
+    case OP_ADD:
+        return maps_execute_add_spatz(plan, op, slot, runtime);
+#endif
+#if MAPS_HAS_RELU_SPATZ_TASK
     case OP_RELU:
+        return maps_execute_relu_spatz(plan, op, slot, runtime);
+#endif
     case OP_NEG:
     case OP_EXP:
     case OP_SUB:

@@ -147,6 +147,33 @@ function(add_spatz_task)
     set(${ARG_TEST_NAME}_TASK_BIN            ${TASK_BIN}             PARENT_SCOPE)
     set(${ARG_TEST_NAME}_TASK_HEADER         ${TASK_HEADER}          PARENT_SCOPE)
     set(${ARG_TEST_NAME}_SPATZ_OUTPUT_DIR    ${SPATZ_OUTPUT_DIR}     PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_SPATZ_INCLUDE_DIRS  ${ARG_INCLUDE_DIRS}     PARENT_SCOPE)
+endfunction()
+
+# target_embed_spatz_task(
+#   TARGET <existing-target>
+#   TASK_NAME <name-passed-to-add_spatz_task>
+# )
+# Attaches a generated Spatz image to an existing CV32 executable.
+function(target_embed_spatz_task)
+    set(options)
+    set(oneValueArgs TARGET TASK_NAME)
+    set(multiValueArgs)
+    cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if(NOT ARG_TARGET OR NOT TARGET ${ARG_TARGET})
+        message(FATAL_ERROR "target_embed_spatz_task requires an existing TARGET")
+    endif()
+    if(NOT ARG_TASK_NAME OR NOT DEFINED ${ARG_TASK_NAME}_SPATZ_HEADER)
+        message(FATAL_ERROR "target_embed_spatz_task requires a TASK_NAME built by add_spatz_task")
+    endif()
+
+    get_filename_component(_spatz_header_dir "${${ARG_TASK_NAME}_SPATZ_HEADER}" DIRECTORY)
+    target_include_directories(${ARG_TARGET} PRIVATE
+        ${_spatz_header_dir}
+        ${${ARG_TASK_NAME}_SPATZ_INCLUDE_DIRS}
+    )
+    add_dependencies(${ARG_TARGET} ${${ARG_TASK_NAME}_SPATZ_TARGET})
 endfunction()
 
 # add_cv32_executable_with_spatz(
@@ -182,21 +209,21 @@ function(add_cv32_executable_with_spatz)
         ${MAGIA_IO_SRC}
     )
 
-    get_filename_component(SPATZ_HEADER_DIR "${${ARG_TARGET_NAME}_SPATZ_HEADER}" DIRECTORY)
     target_include_directories(${ARG_TARGET_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/inc
         ${MAGIA_TARGET_INCLUDE_DIRS}
         ${MAGIA_CV32_EXTRA_INCLUDE_DIRS}
         ${ARG_INCLUDE_DIRS}
-        ${SPATZ_HEADER_DIR}
     )
 
     # The sources include the generated <name>_task_bin.h, so the task has to be
     # built first. Without this, building a single test (`make build test=<name>`)
     # never triggers the header generation.
-    add_dependencies(${ARG_TARGET_NAME} ${${ARG_TARGET_NAME}_SPATZ_TARGET})
-
+    target_embed_spatz_task(
+        TARGET ${ARG_TARGET_NAME}
+        TASK_NAME ${ARG_TARGET_NAME}
+    )
     target_compile_options(${ARG_TARGET_NAME} PRIVATE ${CV32_COMPILE_FLAGS})
     target_link_options(${ARG_TARGET_NAME} PRIVATE ${CV32_LINK_FLAGS})
     target_link_libraries(${ARG_TARGET_NAME} PUBLIC runtime hal)
