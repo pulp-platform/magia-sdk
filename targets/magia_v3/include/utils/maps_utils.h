@@ -501,7 +501,10 @@ is_ready(const tile_plan_t *plan, uint32_t transition_id, uint32_t ready_flag_id
 }
 
 
-static inline void clear_ready(const tile_plan_t *plan, uint32_t transition_id, uint32_t ready_flag_id, uint32_t slot)
+static inline void clear_ready(const tile_plan_t *plan,
+                               uint32_t transition_id,
+                               uint32_t ready_flag_id,
+                               uint32_t slot)
 {
     volatile uint32_t *flag = maps_ready_flag_addr(
         plan->hartid, plan->ready_flags_base, transition_id, ready_flag_id, slot);
@@ -509,7 +512,6 @@ static inline void clear_ready(const tile_plan_t *plan, uint32_t transition_id, 
     *flag = 0u;
     __asm__ volatile("fence rw, rw" ::: "memory");
 }
-
 __attribute__((noinline))
 static void publish_ready(const tile_plan_t *plan,
                                  uint32_t dst_hartid,
