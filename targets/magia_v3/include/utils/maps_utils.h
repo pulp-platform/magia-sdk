@@ -36,12 +36,12 @@
 #endif
 
 #define MAPS_MAX_RANK       6u
-#define MAPS_MAX_OP_INPUTS  4u
-#define MAPS_MAX_OP_OUTPUTS 2u
+#define MAPS_MAX_OP_INPUTS  5u
+#define MAPS_MAX_OP_OUTPUTS 3u
 #define MAPS_MAX_COLLECTIVE_PARTICIPANTS 64u
-#define MAPS_OP_ABI_VERSION 1u
+#define MAPS_OP_ABI_VERSION 2u
 
-/* Stable op_desc_t.params indices for ABI version 1. */
+/* Stable op_desc_t.params indices for ABI version 2. */
 #define MAPS_PARAM_ROWS       0u
 #define MAPS_PARAM_COLS       1u
 #define MAPS_PARAM_INNER      2u
@@ -74,6 +74,7 @@ typedef enum {
     OP_ADD,
     OP_LOG,
     OP_EXP,
+    OP_SOFTMAX_EXP,
     OP_REDUCE_SUM,
     OP_REDUCE_MAX,
     OP_COPY,
@@ -89,6 +90,10 @@ typedef enum {
     OP_DIV,
     OP_GROUP_NORMALIZE,
     OP_GROUP_REDUCE,
+    OP_GROUP_CENTERED_REDUCE,
+    OP_IM2COL,
+    OP_OUTPUT_REFORMAT,
+    OP_SPLIT,
     OP_MUL,
     OP_NEG,
     OP_POW,

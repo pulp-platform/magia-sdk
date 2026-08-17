@@ -13,12 +13,24 @@
 #ifndef MAPS_HAS_RELU_SPATZ_TASK
 #define MAPS_HAS_RELU_SPATZ_TASK 0u
 #endif
+#ifndef MAPS_HAS_SOFTMAX_EXP_SPATZ_TASK
+#define MAPS_HAS_SOFTMAX_EXP_SPATZ_TASK 0u
+#endif
+#ifndef MAPS_HAS_GROUP_REDUCE_SPATZ_TASK
+#define MAPS_HAS_GROUP_REDUCE_SPATZ_TASK 0u
+#endif
+#ifndef MAPS_HAS_GROUP_CENTERED_REDUCE_SPATZ_TASK
+#define MAPS_HAS_GROUP_CENTERED_REDUCE_SPATZ_TASK 0u
+#endif
+#ifndef MAPS_HAS_GROUP_NORMALIZE_SPATZ_TASK
+#define MAPS_HAS_GROUP_NORMALIZE_SPATZ_TASK 0u
+#endif
 
 #ifndef MAPS_KERNEL_ABI_VERSION
-#define MAPS_KERNEL_ABI_VERSION 1u
+#define MAPS_KERNEL_ABI_VERSION 2u
 #endif
 #ifndef MAPS_TASK_BUNDLE_ABI_VERSION
-#define MAPS_TASK_BUNDLE_ABI_VERSION 1u
+#define MAPS_TASK_BUNDLE_ABI_VERSION 2u
 #endif
 #define MAPS_OPERATION_TASK_SCRATCH_OFFSET 0xC0000u
 #define MAPS_OPERATION_TASK_SCRATCH_BYTES 0x10000u
@@ -31,6 +43,10 @@ typedef struct {
     uint32_t spatz_binary_start;
     uint32_t add_fp16_task;
     uint32_t relu_fp16_task;
+    uint32_t softmax_exp_fp16_task;
+    uint32_t group_reduce_fp16_task;
+    uint32_t group_centered_reduce_fp16_task;
+    uint32_t group_normalize_fp16_task;
     void *spatz_params;
     uint32_t spatz_params_bytes;
     uint32_t spatz_initialized;
@@ -148,6 +164,30 @@ static inline uint32_t maps_operation_elems(const subslice_desc_t *value)
     return maps_shape_elems(value->rank, value->shape);
 }
 
+static inline uint32_t maps_operation_broadcast_index(
+    const subslice_desc_t *output, const subslice_desc_t *input,
+    uint32_t output_index)
+{
+    uint32_t input_index = 0u;
+    uint32_t input_stride = 1u;
+    uint32_t remaining = output_index;
+    uint32_t output_axis = output->rank;
+    uint32_t input_axis = input->rank;
+
+    while (output_axis > 0u) {
+        --output_axis;
+        const uint32_t coordinate = remaining % output->shape[output_axis];
+        remaining /= output->shape[output_axis];
+        if (input_axis > 0u) {
+            --input_axis;
+            if (input->shape[input_axis] != 1u)
+                input_index += coordinate * input_stride;
+            input_stride *= input->shape[input_axis];
+        }
+    }
+    return input_index;
+}
+
 static inline int maps_execute_elementwise_f16(const tile_plan_t *plan,
                                                 const op_desc_t *op,
                                                 uint32_t slot)
@@ -165,13 +205,14 @@ static inline int maps_execute_elementwise_f16(const tile_plan_t *plan,
         plan, &op->outputs[0], slot);
     const uint32_t output_elems = maps_operation_elems(&op->outputs[0]);
     const uint32_t rhs_elems = rhs ? maps_operation_elems(&op->inputs[1]) : 0u;
-    const uint32_t row_width = op->outputs[0].rank > 1u
-        ? op->outputs[0].shape[op->outputs[0].rank - 1u] : output_elems;
 
     for (uint32_t index = 0u; index < output_elems; ++index) {
-        const float left = maps_operation_f16_to_f32(lhs[index]);
-        const uint32_t rhs_index = rhs_elems == output_elems
-            ? index : (rhs_elems == 1u ? 0u : index / row_width);
+        const uint32_t lhs_index = maps_operation_broadcast_index(
+            &op->outputs[0], &op->inputs[0], index);
+        const float left = maps_operation_f16_to_f32(lhs[lhs_index]);
+        const uint32_t rhs_index = rhs_elems == output_elems ? index :
+            maps_operation_broadcast_index(
+                &op->outputs[0], &op->inputs[1], index);
         const float right = rhs
             ? maps_operation_f16_to_f32(rhs[rhs_index]) : 0.0f;
         float result;
@@ -192,6 +233,9 @@ static inline int maps_execute_elementwise_f16(const tile_plan_t *plan,
         case OP_DIV:
             result = left / right;
             break;
+        case OP_MUL:
+            result = left * right;
+            break;
         default:
             return -1;
         }
@@ -206,15 +250,17 @@ static inline int maps_execute_reduce_f16(const tile_plan_t *plan,
 {
     if (op->num_inputs == 0u || op->num_outputs == 0u ||
         op->inputs[0].elem_type != ELEM_F16 ||
-        op->outputs[0].elem_type != ELEM_F16 || op->params[0] != 1u)
+        op->outputs[0].elem_type != ELEM_F16 ||
+        op->params[0] != op->inputs[0].rank - 1u)
         return -1;
 
     const uint16_t *input = (const uint16_t *)local_subslice_addr(
         plan, &op->inputs[0], slot);
     uint16_t *output = (uint16_t *)local_subslice_addr(
         plan, &op->outputs[0], slot);
-    const uint32_t rows = op->inputs[0].shape[0];
-    const uint32_t columns = op->inputs[0].shape[1];
+    const uint32_t columns =
+        op->inputs[0].shape[op->inputs[0].rank - 1u];
+    const uint32_t rows = maps_operation_elems(&op->inputs[0]) / columns;
 
     for (uint32_t row = 0u; row < rows; ++row) {
         float result = maps_operation_f16_to_f32(input[row * columns]);
@@ -354,6 +400,75 @@ static inline void maps_operation_zero(uint32_t address, uint32_t bytes)
         output[index] = 0u;
 }
 
+static inline int maps_execute_split_f16(const tile_plan_t *plan,
+                                         const op_desc_t *op,
+                                         uint32_t slot)
+{
+    if (op->num_inputs != 1u || op->num_outputs == 0u ||
+        op->num_outputs > MAPS_MAX_OP_OUTPUTS || op->params[0] != 1u)
+        return -1;
+    const uint16_t *input = (const uint16_t *)local_subslice_addr(
+        plan, &op->inputs[0], slot);
+    uint32_t offset = 0u;
+    for (uint32_t output_index = 0u; output_index < op->num_outputs;
+         ++output_index) {
+        const uint32_t elements = maps_operation_elems(&op->outputs[output_index]);
+        uint16_t *output = (uint16_t *)local_subslice_addr(
+            plan, &op->outputs[output_index], slot);
+        for (uint32_t index = 0u; index < elements; ++index)
+            output[index] = input[offset + index];
+        offset += elements;
+    }
+    return offset == maps_operation_elems(&op->inputs[0]) ? 0 : -2;
+}
+
+static inline int maps_execute_im2col_1x1_f16(const tile_plan_t *plan,
+                                              const op_desc_t *op,
+                                              uint32_t slot)
+{
+    if (op->num_inputs != 1u || op->num_outputs != 1u ||
+        op->inputs[0].rank != 4u || op->outputs[0].rank != 2u ||
+        op->inputs[0].shape[0] != 1u)
+        return -1;
+    const uint16_t *input = (const uint16_t *)local_subslice_addr(
+        plan, &op->inputs[0], slot);
+    uint16_t *output = (uint16_t *)local_subslice_addr(
+        plan, &op->outputs[0], slot);
+    const uint32_t channels = op->inputs[0].shape[1];
+    const uint32_t spatial =
+        op->inputs[0].shape[2] * op->inputs[0].shape[3];
+    if (op->outputs[0].shape[0] != spatial ||
+        op->outputs[0].shape[1] != channels)
+        return -2;
+    for (uint32_t row = 0u; row < spatial; ++row)
+        for (uint32_t channel = 0u; channel < channels; ++channel)
+            output[row * channels + channel] = input[channel * spatial + row];
+    return 0;
+}
+
+static inline int maps_execute_output_reformat_1x1_f16(
+    const tile_plan_t *plan, const op_desc_t *op, uint32_t slot)
+{
+    if (op->num_inputs != 1u || op->num_outputs != 1u ||
+        op->inputs[0].rank != 2u || op->outputs[0].rank != 4u ||
+        op->outputs[0].shape[0] != 1u)
+        return -1;
+    const uint16_t *input = (const uint16_t *)local_subslice_addr(
+        plan, &op->inputs[0], slot);
+    uint16_t *output = (uint16_t *)local_subslice_addr(
+        plan, &op->outputs[0], slot);
+    const uint32_t channels = op->outputs[0].shape[1];
+    const uint32_t spatial =
+        op->outputs[0].shape[2] * op->outputs[0].shape[3];
+    if (op->inputs[0].shape[0] != spatial ||
+        op->inputs[0].shape[1] != channels)
+        return -2;
+    for (uint32_t channel = 0u; channel < channels; ++channel)
+        for (uint32_t row = 0u; row < spatial; ++row)
+            output[channel * spatial + row] = input[row * channels + channel];
+    return 0;
+}
+
 #include "utils/maps_spatz_tasks.h"
 
 static inline int maps_execute_operation(const tile_plan_t *plan,
@@ -378,6 +493,18 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
                 (uint16_t)op->params[2]) != 0)
             return -1;
         eu_redmule_wait(runtime->eu_ctrl, MAPS_WAIT_MODE);
+        if (op->num_inputs == 3u) {
+            uint16_t *values = (uint16_t *)output;
+            const uint16_t *bias = (const uint16_t *)local_subslice_addr(
+                plan, &op->inputs[2], slot);
+            for (uint32_t row = 0u; row < op->params[0]; ++row)
+                for (uint32_t column = 0u; column < op->params[2]; ++column) {
+                    const uint32_t index = row * op->params[2] + column;
+                    values[index] = maps_operation_f32_to_f16(
+                        maps_operation_f16_to_f32(values[index]) +
+                        maps_operation_f16_to_f32(bias[column]));
+                }
+        }
         return 0;
     }
     case OP_COPY:
@@ -391,10 +518,28 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
     case OP_RELU:
         return maps_execute_relu_spatz(plan, op, slot, runtime);
 #endif
+#if MAPS_HAS_SOFTMAX_EXP_SPATZ_TASK
+    case OP_SOFTMAX_EXP:
+        return maps_execute_softmax_exp_spatz(plan, op, slot, runtime);
+#endif
+#if MAPS_HAS_GROUP_REDUCE_SPATZ_TASK
+    case OP_GROUP_REDUCE:
+        return maps_execute_group_reduce_spatz(plan, op, slot, runtime);
+#endif
+#if MAPS_HAS_GROUP_CENTERED_REDUCE_SPATZ_TASK
+    case OP_GROUP_CENTERED_REDUCE:
+        return maps_execute_group_centered_reduce_spatz(
+            plan, op, slot, runtime);
+#endif
+#if MAPS_HAS_GROUP_NORMALIZE_SPATZ_TASK
+    case OP_GROUP_NORMALIZE:
+        return maps_execute_group_normalize_spatz(plan, op, slot, runtime);
+#endif
     case OP_NEG:
     case OP_EXP:
     case OP_SUB:
     case OP_DIV:
+    case OP_MUL:
         return maps_execute_elementwise_f16(plan, op, slot);
     case OP_REDUCE_MAX:
     case OP_REDUCE_SUM:
@@ -402,6 +547,12 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
     case OP_ALL_REDUCE_MAX:
     case OP_ALL_REDUCE_SUM:
         return maps_execute_all_reduce(plan, op, slot);
+    case OP_SPLIT:
+        return maps_execute_split_f16(plan, op, slot);
+    case OP_IM2COL:
+        return maps_execute_im2col_1x1_f16(plan, op, slot);
+    case OP_OUTPUT_REFORMAT:
+        return maps_execute_output_reformat_1x1_f16(plan, op, slot);
     default:
         return maps_execute_builtin_op(plan, op, slot);
     }
