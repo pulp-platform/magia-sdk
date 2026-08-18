@@ -3,7 +3,12 @@
 
 /* Uncomment for a scalar, accurate sigmoid (range-reduced fp32 exp) instead of the vectorized
    Schraudolph fast exp. For debugging/verification only: correct but slow. */
-// #define ACCURATE_SIGMOID
+// #define SCALAR_SIGMOID
+
+/* Uncomment for the original Schraudolph fast exp but evaluated in fp32 (widen fp16->fp32,
+   reinterpret(int(COEF*z + BIAS)) with the single-precision constants, narrow back). Keeps the
+   ~3% fast-exp error but removes the fp16 cancellation, at the cost of e32 intermediates (m2). */
+#define WIDE_FAST_SIGMOID
 
 static inline void sigmoid(const _Float16 *src, _Float16 *dst, const size_t len)
 {
@@ -51,7 +56,68 @@ static inline void sigmoid(const _Float16 *src, _Float16 *dst, const size_t len)
     }
 }
 
-#ifdef ACCURATE_SIGMOID
+#ifdef WIDE_FAST_SIGMOID
+
+static inline void sigmoid_widefast(const _Float16 *src, _Float16 *dst, const size_t len)
+{
+    register float COEF  asm ("fs0") = 12102203.0f;      /* 2^23 / ln2      */
+    register float BIAS  asm ("fs1") = 1065353216.0f;    /* 127 * 2^23      */
+    register float ONE   asm ("fs2") = 1.0f;
+    register float ZERO  asm ("fs3") = 0.0f;
+    register _Float16 ONE16 asm ("fs4") = 1.0f;
+    register float NCLAMP asm ("fs5") = -87.0f;
+
+    const _Float16 *p_src;
+    _Float16 *p_dst;
+    size_t avl;
+    size_t vl;
+
+    p_src = src;
+    p_dst = dst;
+    avl = len;
+
+    /* Stable sigmoid e^min(x,0) / (1 + e^-|x|) with the Schraudolph fast exp done in fp32: widen
+       the fp16 input, approximate each exp as reinterpret(int(COEF*z + BIAS)) using the fp32
+       constants, then narrow back. Both exp arguments are non-positive; clamping them to -87 keeps
+       int(COEF*z + BIAS) non-negative (no wrap), and exp(-87) narrows to fp16 0. */
+    for (; avl > 0; avl -= vl) {
+        asm volatile ("vsetvli %0, %1, e16, m1, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile ("vle16.v v20, (%0)" :: "r"(p_src));
+        asm volatile ("vfwmul.vf v28, v20, %0" :: "f"(ONE16));  /* x32 = widen(x)  */
+
+        asm volatile ("vsetvli %0, %1, e32, m2, ta, ma" : "=r"(vl) : "r"(avl));
+
+        asm volatile ("vfmin.vf v4, v28, %0" :: "f"(ZERO));     /* a = min(x, 0)   */
+        asm volatile ("vfmax.vf v4, v4, %0" :: "f"(NCLAMP));    /* a = max(a, -87) */
+        asm volatile ("vfsgnjx.vv v6, v28, v28");               /* |x|             */
+        asm volatile ("vfsgnjn.vv v6, v6, v6");                 /* -|x|            */
+        asm volatile ("vfmax.vf v6, v6, %0" :: "f"(NCLAMP));    /* b = max(-|x|,-87) */
+
+        /* numerator = fast_exp(a) */
+        asm volatile ("vfmul.vf v8, v4, %0" :: "f"(COEF));
+        asm volatile ("vfadd.vf v8, v8, %0" :: "f"(BIAS));
+        asm volatile ("vfcvt.rtz.x.f.v v8, v8");                /* reinterpret as fp32 */
+
+        /* denominator = 1 + fast_exp(b) */
+        asm volatile ("vfmul.vf v10, v6, %0" :: "f"(COEF));
+        asm volatile ("vfadd.vf v10, v10, %0" :: "f"(BIAS));
+        asm volatile ("vfcvt.rtz.x.f.v v10, v10");
+        asm volatile ("vfadd.vf v10, v10, %0" :: "f"(ONE));     /* den = 1 + e^b   */
+
+        asm volatile ("vfdiv.vv v8, v8, v10");                  /* sigmoid = num/den */
+
+        asm volatile ("vsetvli %0, %1, e16, m1, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile ("vfncvt.f.f.w v20, v8");                  /* narrow to fp16  */
+        asm volatile ("vse16.v v20, (%0)" :: "r"(p_dst));
+
+        p_src += vl;
+        p_dst += vl;
+    }
+}
+
+#endif
+
+#ifdef SCALAR_SIGMOID
 
 static float exp_scalar(float x)
 {
@@ -76,7 +142,7 @@ static float exp_scalar(float x)
     return p * pow2.f;
 }
 
-static void sigmoid_accurate(const _Float16 *src, _Float16 *dst, const size_t len)
+static void sigmoid_scalar(const _Float16 *src, _Float16 *dst, const size_t len)
 {
     /* Scalar reference: numerically stable sigmoid e^min(x,0) / (1 + e^-|x|) with an accurate
        fp32 exp. Same math as the vectorized kernel, but exact enough to isolate the fast-exp error. */
@@ -106,9 +172,12 @@ int sigmoid_fp16_spatz_task(void)
     Y = (_Float16 *) params->shard_Y;
     len = params->len;
 
-#ifdef ACCURATE_SIGMOID
-    sigmoid_accurate(X, Y, len);
+#if defined(WIDE_FAST_SIGMOID)
+    sigmoid_widefast(X, Y, len);
+#elif defined(SCALAR_SIGMOID)
+    sigmoid_scalar(X, Y, len);
 #else
     sigmoid(X, Y, len);
 #endif
+
 }
