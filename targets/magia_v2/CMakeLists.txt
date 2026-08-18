@@ -9,8 +9,6 @@
 
 add_library(runtime STATIC)
 
-#add_dependencies(runtime picolibc)
-
 file(GLOB_RECURSE ASM_SOURCES
   "src/crt0.S"
 )

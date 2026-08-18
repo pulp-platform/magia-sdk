@@ -8,7 +8,7 @@
 /* Uncomment for the original Schraudolph fast exp but evaluated in fp32 (widen fp16->fp32,
    reinterpret(int(COEF*z + BIAS)) with the single-precision constants, narrow back). Keeps the
    ~3% fast-exp error but removes the fp16 cancellation, at the cost of e32 intermediates (m2). */
-#define WIDE_FAST_SIGMOID
+// #define WIDE_FAST_SIGMOID
 
 static inline void sigmoid(const _Float16 *src, _Float16 *dst, const size_t len)
 {

@@ -1,0 +1,195 @@
+/*
+ * Copyright (C) 2023-2025 ETH Zurich and University of Bologna
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Authors: Victor Isachi <victor.isachi@unibo.it>
+ * Alberto Dequino <alberto.dequino@unibo.it>
+ *
+ * MAGIA Utils
+ */
+
+#ifndef PERFORMANCE_UTILS_H
+#define PERFORMANCE_UTILS_H
+
+/**
+ * @brief Returns the cycles of the performance counter
+ * !! WARNING !! AT THE MOMENT OF WRITING (06/05/2026) THIS PROFILING UTILITY ONLY WORKS ON GVSOC.
+ * PLEASE USE THE TESTBENCH UTILITIES WHEN PROFILING ON RTL.
+ */
+static inline unsigned int perf_get_cycles()
+{
+    unsigned int value = 0;
+    asm volatile("csrr %0, 0xB00" : "=r"(value));
+    return value;
+}
+
+///////////// TESTBENCH PROFILING UTILITIES //////////////
+/*
+ * This utilities ONLY work on RTL emulation, since they trigger specific behaviour of the
+ * TestBench. Using these utilities on GVSOC will do nothing.
+ */
+
+/**
+ * @brief Triggers the testbench on saving the current cycle count in a FILO buffer.
+ */
+static inline void sentinel_start()
+{
+    asm volatile("addi x0, x0, 0x5AA" ::);
+}
+
+/**
+ * @brief Triggers the testbench on subtracting the current cycle count with the last saved value in
+ * the FILO buffer, popping it from the buffer. If no value is stored (I.E. sentinel_end is called
+ * without calling sentinel_start before), an error message is printed instead.
+ */
+static inline void sentinel_end()
+{
+    asm volatile("addi x0, x0, 0x5FF" ::);
+}
+
+/**
+ * @brief There are specific FILO buffers that can be used to more easily distinguish the profiled
+ * code. Their behaviour is the exact same as the normal sentinels, the only difference is the
+ * message printed.
+ */
+// Start input communication sentinel accumulator
+static inline void stnl_cmi_s()
+{
+    asm volatile("addi x0, x0, 0x50B" ::);
+}
+
+// Start output communication sentinel accumulator
+static inline void stnl_cmo_s()
+{
+    asm volatile("addi x0, x0, 0x51B" ::);
+}
+
+// Start computation sentinel accumulator
+static inline void stnl_cmp_s()
+{
+    asm volatile("addi x0, x0, 0x52B" ::);
+}
+
+// Start synchronization sentinel accumulator
+static inline void stnl_snc_s()
+{
+    asm volatile("addi x0, x0, 0x53B" ::);
+}
+
+// Start timeslot sentinel accumulator
+static inline void stnl_ts_s()
+{
+    asm volatile("addi x0, x0, 0x5FB" ::);
+}
+
+// Finish (record) input communication sentinel accumulator
+static inline void stnl_cmi_f()
+{
+    asm volatile("addi x0, x0, 0x50C" ::);
+}
+
+// Finish (record) output communication sentinel accumulator
+static inline void stnl_cmo_f()
+{
+    asm volatile("addi x0, x0, 0x51C" ::);
+}
+
+// Finish (record) computation sentinel accumulator
+static inline void stnl_cmp_f()
+{
+    asm volatile("addi x0, x0, 0x52C" ::);
+}
+
+// Finish (record) synchronization sentinel accumulator
+static inline void stnl_snc_f()
+{
+    asm volatile("addi x0, x0, 0x53C" ::);
+}
+
+// Finish (record) timeslot sentinel accumulator
+static inline void stnl_ts_f()
+{
+    asm volatile("addi x0, x0, 0x5FC" ::);
+}
+
+// Report input communication sentinel accumulator
+static inline void stnl_cmi_r()
+{
+    asm volatile("addi x0, x0, 0x50D" ::);
+}
+
+// Report output communication sentinel accumulator
+static inline void stnl_cmo_r()
+{
+    asm volatile("addi x0, x0, 0x51D" ::);
+}
+
+// Report computation sentinel accumulator
+static inline void stnl_cmp_r()
+{
+    asm volatile("addi x0, x0, 0x52D" ::);
+}
+
+// Report synchronization sentinel accumulator
+static inline void stnl_snc_r()
+{
+    asm volatile("addi x0, x0, 0x53D" ::);
+}
+
+// Report timeslot sentinel accumulator
+static inline void stnl_ts_r()
+{
+    asm volatile("addi x0, x0, 0x5FD" ::);
+}
+
+// Report global input communication, output communication and computation overheads
+static inline void stnl_r()
+{
+    asm volatile("addi x0, x0, 0x5EE" ::);
+}
+
+// LEGACY PROFILING UTILITIES //
+// /**
+//  * @brief Starts all performance counters
+//  */
+// static inline void perf_start(void) {
+//     // enable all counters
+//     asm volatile("csrw 0x7E0, %0" :: "r"(0x1));  // Enable PCCR[0]
+//     asm volatile("csrw 0x7E1, %0" :: "r"(0x1));  // Enable counting, , no saturation
+// }
+
+// /**
+//  * @brief Stops all performance counters
+//  */
+// static inline void perf_stop(void) {
+//     asm volatile("csrw 0x320, %0" : : "r"(0xffffffff));
+// }
+
+// /**
+//  * @brief Resets all performance counters to 0 without stopping them
+//  */
+// static inline void perf_reset(void) {
+//     asm volatile("csrw 0xB00, %0" : : "r"(0));
+// }
+// /**
+//  * @brief Returns the n. instructions of the performance counter
+//  */
+// static inline unsigned int perf_get_instr(){
+//     unsigned int value = 0;
+//     asm volatile ("csrr %0, 0xB02" : "=r" (value));
+//     return value;
+// }
+
+#endif

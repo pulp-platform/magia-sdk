@@ -1,3 +1,7 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
 import argparse
 import onnx
 import os
@@ -85,6 +89,10 @@ def generate_header_file(args, input, expected, filename="data.h"):
     len_output = len(expected)
 
     with open(filepath, "w") as f:
+        f.write("// Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.\n")
+        f.write("// Licensed under the Apache License, Version 2.0, see LICENSE for details.\n")
+        f.write("// SPDX-License-Identifier: Apache-2.0\n")
+        f.write("\n")
         f.write(f"/* Automatically generated header file for Spatz ONNX testing */\n")
         f.write(f"#ifndef DATA_H_\n")
         f.write(f"#define DATA_H_\n\n")

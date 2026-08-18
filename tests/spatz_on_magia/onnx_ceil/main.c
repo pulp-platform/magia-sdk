@@ -1,5 +1,10 @@
+// Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+
 #include "tile.h"
 #include "eventunit.h"
+#include "idma.h"
 
 #include "compare_utils.h"
 #include "data.h"
@@ -18,32 +23,43 @@ static int init_data(void *params)
     uint32_t len;
     uint32_t end;
 
-    ceil_params = (volatile onnx_ceil_params_t *) params;
+    idma_config_t idma_cfg      = {.hartid = get_hartid()};
+    idma_controller_t idma_ctrl = {
+        .base = NULL,
+        .cfg  = &idma_cfg,
+        .api  = &idma_api,
+    };
+    idma_init(&idma_ctrl);
+
+    eu_config_t eu_cfg      = {.hartid = get_hartid()};
+    eu_controller_t eu_ctrl = {
+        .base = NULL,
+        .cfg  = &eu_cfg,
+        .api  = &eu_api,
+    };
+
+    eu_init(&eu_ctrl);
+    eu_idma_init(&eu_ctrl, 0);
+
+    ceil_params = (volatile onnx_ceil_params_t *)params;
 
     chunk = TENSOR_LEN / NUM_HARTS;
-    left = TENSOR_LEN % NUM_HARTS;
+    left  = TENSOR_LEN % NUM_HARTS;
     start = HID * chunk + (HID < left ? HID : left);
-    end = start + chunk + (HID < left ? 1 : 0);
-    len = end - start;
+    end   = start + chunk + (HID < left ? 1 : 0);
+    len   = end - start;
 
-    for (int i = 0; i < len; i++) {
-        int global_idx;
-        uint32_t offset;
-
-        global_idx = start + i;
-        offset =  i * sizeof(float16);
-
-        mmio_fp16(CHUNK_X_BASE + offset) = X[global_idx];
-        mmio_fp16(CHUNK_G_BASE + offset) = G[global_idx];
-        mmio_fp16(CHUNK_Y_BASE + offset) = 0;
-    }
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)(X + start), CHUNK_X_BASE, (len * 2));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)(G + start), CHUNK_G_BASE, (len * 2));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     ceil_params->chunk_X = CHUNK_X_BASE;
     ceil_params->chunk_Y = CHUNK_Y_BASE;
     ceil_params->chunk_G = CHUNK_G_BASE;
-    ceil_params->start = start;
-    ceil_params->len = len;
-    ceil_params->end = end;
+    ceil_params->start   = start;
+    ceil_params->len     = len;
+    ceil_params->end     = end;
 
     return 0;
 }
@@ -55,9 +71,7 @@ static int run_spatz_task()
     eu_controller_t eu_ctrl;
 
     eu_cfg.hartid = get_hartid();
-    eu_ctrl.base = NULL,
-    eu_ctrl.cfg = &eu_cfg,
-    eu_ctrl.api = &eu_api,
+    eu_ctrl.base = NULL, eu_ctrl.cfg = &eu_cfg, eu_ctrl.api = &eu_api,
 
     eu_init(&eu_ctrl);
     eu_spatz_init(&eu_ctrl, 0);
@@ -77,8 +91,9 @@ static int run_spatz_task()
 static bool check_result(void *params)
 {
     volatile onnx_ceil_params_t *ceil_params;
-    ceil_params = (volatile onnx_ceil_params_t *) params;
-    return chunk_compare_fp16_bitwise(ceil_params->chunk_Y, ceil_params->chunk_G, ceil_params->start, ceil_params->len);
+    ceil_params = (volatile onnx_ceil_params_t *)params;
+    return chunk_compare_fp16_bitwise(
+        ceil_params->chunk_Y, ceil_params->chunk_G, ceil_params->start, ceil_params->len);
 }
 
 static bool run_test()
@@ -87,9 +102,9 @@ static bool run_test()
     bool check;
     volatile onnx_ceil_params_t *params;
 
-    params = (volatile onnx_ceil_params_t *) ONNX_CEIL_PARAMS_BASE;
+    params = (volatile onnx_ceil_params_t *)ONNX_CEIL_PARAMS_BASE;
 
-    ret = init_data(params);
+    ret = init_data((void *)params);
     if (ret != 0) {
         printf("[CV32 (%d)] Params initialization failed with error: %d\n", HID, ret);
         return ret;
@@ -101,7 +116,7 @@ static bool run_test()
         return ret;
     }
 
-    check = check_result(params);
+    check = check_result((void *)params);
     if (check) {
         printf("[CV32 (%d)] Test SUCCESS\n", HID);
     } else {
@@ -116,11 +131,16 @@ int main(void)
 {
     int ret;
 
-    if (HID == 0) printf("\n############################### ONNX_CEIL TEST on %d Tiles ################################\n\n", NUM_HARTS);
+    if (HID == 0)
+        printf("\n############################### ONNX_CEIL TEST on %d Tiles "
+               "################################\n\n",
+               NUM_HARTS);
 
     ret = run_test();
 
-    if (HID == 0) printf("\n##########################################################################################\n\n");
+    if (HID == 0)
+        printf("\n#################################################################################"
+               "#########\n\n");
 
     return ret;
 }

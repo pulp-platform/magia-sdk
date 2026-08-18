@@ -1,4 +1,4 @@
-// Copyright 2025 University of Bologna.
+// Copyright 2025-2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -9,7 +9,7 @@
 
 #include "utils/amo_utils.h"
 
-extern uint32_t lock = 0x12345678;
-extern uint32_t value = NUM_HARTS;
+uint32_t lock  = 0x12345678;
+uint32_t value = NUM_HARTS;
 
 #endif //_TEST_AMO_LOCK_GLOBAL_INCLUDE_GUARD_

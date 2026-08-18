@@ -1,4 +1,4 @@
-// Copyright 2025 University of Bologna.
+// Copyright 2025-2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,124 +14,137 @@
 #define WAIT_MODE WFE
 
 /**
- * Writes the group ID increased by an offset to the L1 memory address to be used to verify correct horizzontal synchronization.
- * Delays the write by an increasing number of nops depending on the core id.
+ * Writes the group ID increased by an offset to the L1 memory address to be used to verify correct
+ * horizzontal synchronization. Delays the write by an increasing number of nops depending on the
+ * core id.
  */
-int write_delayed(uint8_t lvl, uint32_t id, uint8_t groupid, uint32_t addr){
-    if(lvl){
-        for(uint8_t i = lvl; i > 0; i--){
+int write_delayed(uint8_t lvl, uint32_t id, uint8_t groupid, uint32_t addr)
+{
+    if (lvl) {
+        for (uint8_t i = lvl; i > 0; i--) {
             groupid += (NUM_HARTS >> i);
         }
     }
-    //wait_nop(100 * id);
+    // wait_nop(100 * id);
     mmio8(addr) = groupid;
     return 0;
 }
 
 /**
- * Compares the value written in L1 memory with the value written in L1 memory of the tile_0 of the same synched mesh area.
- * To locate which tile is the tile_0, the value stored in L1 (the "group-id") is used to calculate the X and Y of tile_0 (and its ID).
+ * Compares the value written in L1 memory with the value written in L1 memory of the tile_0 of the
+ * same synched mesh area. To locate which tile is the tile_0, the value stored in L1 (the
+ * "group-id") is used to calculate the X and Y of tile_0 (and its ID).
  */
-int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr, uint8_t dir){
-    uint8_t val = *(volatile uint8_t*)(addr);
+int check_values(uint8_t lvl, uint8_t groupid, uint32_t addr, uint8_t dir)
+{
+    uint8_t val = *(volatile uint8_t *)(addr);
     uint8_t id_0;
-    if(!dir)
-        id_0 = (((groupid % (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 2) / 2)) + (((groupid / (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 1) / 2)) * MESH_X_TILES));
+    if (!dir)
+        id_0 =
+            (((groupid % (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 2) / 2)) +
+             (((groupid / (MESH_X_TILES >> ((lvl + 2) / 2))) << ((lvl + 1) / 2)) * MESH_X_TILES));
     else
-        id_0 = (((groupid % (MESH_X_TILES >> ((lvl + 1) / 2))) << ((lvl + 1) / 2)) + (((groupid / (MESH_X_TILES >> ((lvl + 1) / 2))) << ((lvl + 2) / 2)) * MESH_X_TILES));
-    uint8_t val_0 = *(volatile uint8_t*)(get_l1_base(id_0));
-    uint8_t flag = 0;
-    if(val_0 != val){
-        printf("Error detected at sync level %d - val is: %d but val_0 (id_0:%d) is %d\n", lvl, val, id_0, val_0);
+        id_0 =
+            (((groupid % (MESH_X_TILES >> ((lvl + 1) / 2))) << ((lvl + 1) / 2)) +
+             (((groupid / (MESH_X_TILES >> ((lvl + 1) / 2))) << ((lvl + 2) / 2)) * MESH_X_TILES));
+    uint8_t val_0 = *(volatile uint8_t *)(get_l1_base(id_0));
+    uint8_t flag  = 0;
+    if (val_0 != val) {
+        printf("Error detected at sync level %d - val is: %d but val_0 (id_0:%d) is %d\n",
+               lvl,
+               val,
+               id_0,
+               val_0);
         flag = 1;
     }
-    //else
-        //printf("DEBUG lvl %d - val_0:%d val:%d", lvl, val_0, val);
+    // else
+    // printf("DEBUG lvl %d - val_0:%d val:%d", lvl, val_0, val);
     return flag;
 }
 
 /**
- * This test checks the correctness of the Fractal Sync mechanism for synchronizing mesh tiles at different horizzontal tree levels.
- * Each tiles of the same synchronization level writes an identical value in its L1 memory.
- * After the write, each tile reads the value written by the others in the same synchronization level to check their correctness.
- * Each tile has a delay on the write proportional to its ID, making the synchronization mechanism mandatory. 
+ * This test checks the correctness of the Fractal Sync mechanism for synchronizing mesh tiles at
+ * different horizzontal tree levels. Each tiles of the same synchronization level writes an
+ * identical value in its L1 memory. After the write, each tile reads the value written by the
+ * others in the same synchronization level to check their correctness. Each tile has a delay on the
+ * write proportional to its ID, making the synchronization mechanism mandatory.
  */
-int main(void){
-    /** 
+int main(void)
+{
+    /**
      * 0. Get the tile's hartid and define its L1 base, also initialize the controllers for fsync.
      */
     uint32_t hartid = get_hartid();
 
-    fsync_config_t fsync_cfg = {.hartid = hartid};
+    fsync_config_t fsync_cfg      = {.hartid = hartid};
     fsync_controller_t fsync_ctrl = {
         .base = NULL,
-        .cfg = &fsync_cfg,
-        .api = &fsync_api,
+        .cfg  = &fsync_cfg,
+        .api  = &fsync_api,
     };
 
     fsync_init(&fsync_ctrl);
 
-    #if STALLING == 0
-    eu_config_t eu_cfg = {.hartid = hartid};
+#if STALLING == 0
+    eu_config_t eu_cfg      = {.hartid = hartid};
     eu_controller_t eu_ctrl = {
         .base = NULL,
-        .cfg = &eu_cfg,
-        .api = &eu_api,
+        .cfg  = &eu_cfg,
+        .api  = &eu_api,
     };
     eu_init(&eu_ctrl);
     eu_fsync_init(&eu_ctrl, 0);
-    #endif
+#endif
 
     uint32_t l1_tile_base = get_l1_base(hartid);
     uint8_t groupid;
     uint8_t flag = 0;
-    uint8_t dir = 1;
+    uint8_t dir  = 1;
 
     /**
      * 1. Cycle over the synchronization levels.
      * Increasing the synchronization level increases the mesh area that has to be synchronized.
      */
-    for(uint8_t i = 0; i < MAX_SYNC_LVL; i++){
-        //printf("Entering synchronization level %d", i);
+    for (uint8_t i = 0; i < MAX_SYNC_LVL; i++) {
+        // printf("Entering synchronization level %d", i);
         /**
-        * 1_a. Get the group ID for the current synch level.
-        */
-        groupid = (uint8_t)fsync_getgroup_level(&fsync_ctrl, (uint32_t) i, hartid, dir);
+         * 1_a. Get the group ID for the current synch level.
+         */
+        groupid = (uint8_t)fsync_getgroup_level(&fsync_ctrl, (uint32_t)i, hartid, dir);
 
         /**
-        * 1_b. Write value.
-        */
+         * 1_b. Write value.
+         */
         write_delayed(i, hartid, groupid, l1_tile_base);
 
         /**
-        * 1_c. Synchronize on the current horizzontal level.
-        */
-        fsync_sync_level(&fsync_ctrl, (uint32_t) i, dir);
-        #if STALLING == 0
+         * 1_c. Synchronize on the current horizzontal level.
+         */
+        fsync_sync_level(&fsync_ctrl, (uint32_t)i, dir);
+#if STALLING == 0
         eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-        #endif
-
+#endif
 
         /**
-        * 1_d. Check if the other tiles have written the correct value.
-        */
-        if(check_values(i, groupid, l1_tile_base, dir))
-            flag=1;
-            
+         * 1_d. Check if the other tiles have written the correct value.
+         */
+        if (check_values(i, groupid, l1_tile_base, dir))
+            flag = 1;
+
         /**
-        * 1_e. Synchronize again before next cycle write.
-        */
-        fsync_sync_level(&fsync_ctrl, (uint32_t) i, dir);
-        #if STALLING == 0
+         * 1_e. Synchronize again before next cycle write.
+         */
+        fsync_sync_level(&fsync_ctrl, (uint32_t)i, dir);
+#if STALLING == 0
         eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-        #endif
+#endif
     }
 
-    if(!flag){
-        printf("No errors detected for all synchronization levels! (MAX LEVEL: %d)\n", (MAX_SYNC_LVL-1));
+    if (!flag) {
+        printf("No errors detected for all synchronization levels! (MAX LEVEL: %d)\n",
+               (MAX_SYNC_LVL - 1));
         return 0;
-    }
-    else{
+    } else {
         printf("Errors detected when synchronizing some of the levels!\n");
         return 1;
     }

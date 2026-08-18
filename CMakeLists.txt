@@ -14,7 +14,6 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_COMPILER_WORKS 1)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
-set(CMAKE_VERBOSE_MAKEFILE TRUE)
 
 set(CMAKE_EXE_LINKER_FLAGS_INIT "--specs=nosys.specs")
 set(CMAKE_LINK_LIBRARY_USING_WHOLE_ARCHIVE
@@ -38,15 +37,35 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-#include("targets/${TARGET_PLATFORM}/config.cmake")
-
 project(magia-sdk LANGUAGES C ASM)
+
+# Speed up rebuilds with ccache when available (opt-out via -DUSE_CCACHE=OFF).
+option(USE_CCACHE "Use ccache to speed up (re)compilation if available" ON)
+if (USE_CCACHE)
+    find_program(CCACHE_PROGRAM ccache)
+    if (CCACHE_PROGRAM)
+        message(STATUS "[MAGIA-SDK] ccache                  : ${CCACHE_PROGRAM}")
+        set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+        set(CMAKE_ASM_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    else()
+        message(STATUS "[MAGIA-SDK] ccache                  : not found (disabled)")
+    endif()
+endif()
 
 set(ABI ilp32)
 if (TARGET_PLATFORM STREQUAL "magia_v1")
-    set(ISA rv32imafc)
+    set(ISA rv32imac)
 elseif (TARGET_PLATFORM STREQUAL "magia_v2")
     set(ISA rv32imcxgap9)
+elseif (TARGET_PLATFORM STREQUAL "magia_v3")
+    set(ISA rv32imcxgap9)
+endif ()
+
+if (COMPILER STREQUAL "GCC_MULTILIB")
+    set(ISA rv32imc_xcvalu_xcvbi_xcvbitmanip_xcvhwlp_xcvmac_xcvmem_xcvsimd_xcvelw_zfinx_zhinxmin)
+    set(CV32E40P 1)
+else ()
+    set(CV32E40P 0)
 endif ()
 
 message(STATUS "[MAGIA-SDK] ABI                     : ${ABI}")
@@ -70,6 +89,10 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/spatz_config.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/spatz_helpers.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/bootrom_helpers.cmake)
 
+# PULP cluster support
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/pulp_config.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/pulp_helpers.cmake)
+
 ################################################################################
 # Add subdirectories                                                           #
 ################################################################################
@@ -77,9 +100,6 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/bootrom_helpers.cmake)
 # Targets have to be included before the other folders to make them available
 # Depending on the target, following static libraries have to added by the targets
 add_subdirectory(targets)
-
-# VIVIANEP: Include the picolibc library
-#include(${CMAKE_CURRENT_LIST_DIR}/cmake/picolibc.cmake)
 
 # Include other subdirectories
 add_subdirectory(hal)

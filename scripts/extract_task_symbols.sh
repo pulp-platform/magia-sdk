@@ -1,4 +1,8 @@
 #!/bin/bash
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
 # Extract task symbols from ELF and append to task header
 # Usage: extract_task_symbols.sh <TEST_NAME> <TASK_ELF> <TASK_HEADER> <OBJDUMP_BIN>
 

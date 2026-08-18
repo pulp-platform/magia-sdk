@@ -1,0 +1,25 @@
+name: Format Check
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  clang-format:
+    name: clang-format (changed files vs main)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch main
+        run: git fetch origin main:refs/remotes/origin/main || true
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+
+      - name: Check formatting
+        run: bash scripts/ci/format-changed.sh check --committed

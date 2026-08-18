@@ -1,3 +1,7 @@
+// Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+
 #include "tile.h"
 #include "onnx_add_params.h"
 
@@ -12,22 +16,22 @@ int onnx_add_task(void)
     size_t vl;
 
     params_addr = mmio32(SPATZ_DATA);
-    params = (volatile onnx_add_params_t *) params_addr;
+    params      = (volatile onnx_add_params_t *)params_addr;
 
-    A = (_Float16 *)params->chunk_A;
-    B = (_Float16 *)params->chunk_B;
-    C = (_Float16 *)params->chunk_C;
+    A   = (_Float16 *)params->chunk_A;
+    B   = (_Float16 *)params->chunk_B;
+    C   = (_Float16 *)params->chunk_C;
     avl = params->len;
 
     for (; avl > 0; avl -= vl) {
-        asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
 
-        asm volatile ("vle16.v v0, (%0)" :: "r"(A));
-        asm volatile ("vle16.v v8, (%0)" :: "r"(B));
+        asm volatile("vle16.v v0, (%0)" ::"r"(A));
+        asm volatile("vle16.v v8, (%0)" ::"r"(B));
 
-        asm volatile ("vfadd.vv v16, v0, v8");
+        asm volatile("vfadd.vv v16, v0, v8");
 
-        asm volatile ("vse16.v v16, (%0)" :: "r"(C));
+        asm volatile("vse16.v v16, (%0)" ::"r"(C));
 
         A += vl;
         B += vl;
