@@ -10,14 +10,6 @@
 #include "network.h"
 #include "data.h"
 
-// TODO: use performace_utils.h API when rebased
-static inline uint32_t read_cycles(void)
-{
-    uint32_t value;
-    asm volatile("csrr %0, 0xB00" : "=r"(value));
-    return value;
-}
-
 int init_fsync(fsync_controller_t *fsync_ctrl)
 {
     fsync_config_t fsync_cfg;
@@ -148,9 +140,9 @@ int main(void)
 
     sync(&fsync_ctrl, &eu_ctrl);
 
-    cycle_start = read_cycles();
+    cycle_start = perf_get_cycles();
     RunNetwork();
-    cycle_stop = read_cycles();
+    cycle_stop = perf_get_cycles();
 
     printf("[CV32 (%d)] Run completed in %d cycles\n", hid, cycle_stop - cycle_start);
 
