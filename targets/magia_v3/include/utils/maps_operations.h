@@ -2,6 +2,7 @@
 #define MAPS_OPERATIONS_H
 
 #include "utils/maps_utils.h"
+#include "utils/maps_operation_indexing.h"
 
 #include "eventunit.h"
 #include "redmule.h"
@@ -77,66 +78,6 @@ typedef enum {
     MAPS_COLLECTIVE_RELEASE = 1u,
 } maps_collective_phase_t;
 
-static inline float maps_operation_f16_to_f32(uint16_t value)
-{
-    const uint32_t sign = (uint32_t)(value & 0x8000u) << 16;
-    uint32_t mantissa = value & 0x03ffu;
-    int32_t exponent = (int32_t)((value >> 10) & 0x1fu);
-    union { uint32_t bits; float value; } result;
-
-    if (exponent == 0) {
-        if (mantissa == 0u) {
-            result.bits = sign;
-            return result.value;
-        }
-        exponent = 1;
-        while ((mantissa & 0x0400u) == 0u) {
-            mantissa <<= 1;
-            --exponent;
-        }
-        mantissa &= 0x03ffu;
-    } else if (exponent == 31) {
-        result.bits = sign | 0x7f800000u | (mantissa << 13);
-        return result.value;
-    }
-    result.bits = sign | ((uint32_t)(exponent + 112) << 23) |
-                  (mantissa << 13);
-    return result.value;
-}
-
-static inline uint16_t maps_operation_f32_to_f16(float value)
-{
-    union { float value; uint32_t bits; } input = {.value = value};
-    const uint32_t sign = (input.bits >> 16) & 0x8000u;
-    int32_t exponent = (int32_t)((input.bits >> 23) & 0xffu) - 112;
-    uint32_t mantissa = input.bits & 0x007fffffu;
-
-    if (((input.bits >> 23) & 0xffu) == 0xffu)
-        return (uint16_t)(sign | (mantissa != 0u ? 0x7e00u : 0x7c00u));
-    if (exponent >= 31)
-        return (uint16_t)(sign | 0x7c00u);
-    if (exponent <= 0) {
-        if (exponent < -10)
-            return (uint16_t)sign;
-        mantissa |= 0x00800000u;
-        const uint32_t shift = (uint32_t)(14 - exponent);
-        uint32_t result = mantissa >> shift;
-        const uint32_t halfway = 1u << (shift - 1u);
-        if ((mantissa & halfway) &&
-            ((mantissa & (halfway - 1u)) || (result & 1u)))
-            ++result;
-        return (uint16_t)(sign | result);
-    }
-    mantissa += 0x00000fffu + ((mantissa >> 13) & 1u);
-    if (mantissa & 0x00800000u) {
-        mantissa = 0u;
-        if (++exponent >= 31)
-            return (uint16_t)(sign | 0x7c00u);
-    }
-    return (uint16_t)(sign | ((uint32_t)exponent << 10) |
-                      (mantissa >> 13));
-}
-
 static inline float maps_operation_exp_f32(float value)
 {
     if (value <= -80.0f)
@@ -157,6 +98,48 @@ static inline float maps_operation_exp_f32(float value)
         .bits = (uint32_t)(exponent + 127) << 23
     };
     return polynomial * scale.value;
+}
+
+static inline float maps_operation_param_f32(uint32_t bits)
+{
+    union { uint32_t bits; float value; } parameter = {.bits = bits};
+    return parameter.value;
+}
+
+static inline uint32_t maps_operation_low_u16(uint32_t value)
+{
+    return value & 0xffffu;
+}
+
+static inline uint32_t maps_operation_high_u16(uint32_t value)
+{
+    return value >> 16;
+}
+
+static inline uint32_t maps_operation_global_offset(
+    const tile_plan_t *plan, const subslice_desc_t *subslice, uint32_t axis)
+{
+    const slice_desc_t *slice = get_slice(plan, subslice->slice_id);
+    return slice->full_offset[axis] + subslice->offset[axis];
+}
+
+static inline float maps_operation_sigmoid_f32(float value)
+{
+    const float minimum = maps_operation_f16_to_f32(
+        maps_operation_f32_to_f16(-11.0f));
+    const float clamped = value > minimum ? value : minimum;
+    const float coefficient = maps_operation_f16_to_f32(
+        maps_operation_f32_to_f16(1477.0f));
+    const float bias = maps_operation_f16_to_f32(
+        maps_operation_f32_to_f16(15360.0f));
+    const uint16_t scaled = maps_operation_f32_to_f16(-clamped * coefficient);
+    const uint16_t biased = maps_operation_f32_to_f16(
+        maps_operation_f16_to_f32(scaled) + bias);
+    const uint16_t exponential_bits =
+        (uint16_t)maps_operation_f16_to_f32(biased);
+    const float exponential = maps_operation_f16_to_f32(exponential_bits);
+    const uint16_t denominator = maps_operation_f32_to_f16(1.0f + exponential);
+    return 1.0f / maps_operation_f16_to_f32(denominator);
 }
 
 static inline uint32_t maps_operation_elems(const subslice_desc_t *value)
@@ -214,7 +197,8 @@ static inline int maps_execute_elementwise_f16(const tile_plan_t *plan,
             maps_operation_broadcast_index(
                 &op->outputs[0], &op->inputs[1], index);
         const float right = rhs
-            ? maps_operation_f16_to_f32(rhs[rhs_index]) : 0.0f;
+            ? maps_operation_f16_to_f32(rhs[rhs_index])
+            : maps_operation_param_f32(op->params[0]);
         float result;
 
         switch (op->kind) {
@@ -226,6 +210,9 @@ static inline int maps_execute_elementwise_f16(const tile_plan_t *plan,
             break;
         case OP_EXP:
             result = maps_operation_exp_f32(left);
+            break;
+        case OP_SIGMOID:
+            result = maps_operation_sigmoid_f32(left);
             break;
         case OP_SUB:
             result = left - right;
@@ -422,28 +409,148 @@ static inline int maps_execute_split_f16(const tile_plan_t *plan,
     return offset == maps_operation_elems(&op->inputs[0]) ? 0 : -2;
 }
 
-static inline int maps_execute_im2col_1x1_f16(const tile_plan_t *plan,
-                                              const op_desc_t *op,
-                                              uint32_t slot)
+static inline int maps_execute_im2col_f16(const tile_plan_t *plan,
+                                          const op_desc_t *op,
+                                          uint32_t slot)
 {
     if (op->num_inputs != 1u || op->num_outputs != 1u ||
         op->inputs[0].rank != 4u || op->outputs[0].rank != 2u ||
         op->inputs[0].shape[0] != 1u)
         return -1;
+    const uint8_t *input = (const uint8_t *)local_subslice_addr(
+        plan, &op->inputs[0], slot);
+    uint8_t *output = (uint8_t *)local_subslice_addr(
+        plan, &op->outputs[0], slot);
+    const uint32_t kernel_h = maps_operation_low_u16(op->params[0]);
+    const uint32_t kernel_w = maps_operation_high_u16(op->params[0]);
+    const uint32_t stride_h = maps_operation_low_u16(op->params[1]);
+    const uint32_t stride_w = maps_operation_high_u16(op->params[1]);
+    const uint32_t dilation_h = maps_operation_low_u16(op->params[2]);
+    const uint32_t dilation_w = maps_operation_high_u16(op->params[2]);
+    const uint32_t pad_top = maps_operation_low_u16(op->params[3]);
+    const uint32_t pad_left = maps_operation_high_u16(op->params[3]);
+    const uint32_t input_h = maps_operation_low_u16(op->params[5]);
+    const uint32_t input_w = maps_operation_high_u16(op->params[5]);
+    const uint32_t output_h = maps_operation_low_u16(op->params[6]);
+    const uint32_t output_w = maps_operation_high_u16(op->params[6]);
+    const uint32_t kernel_elements = kernel_h * kernel_w;
+    if (kernel_elements == 0u || stride_h == 0u || stride_w == 0u ||
+        output_h == 0u || output_w == 0u ||
+        op->outputs[0].shape[1] % kernel_elements != 0u)
+        return -2;
+
+    const uint32_t input_origin_n = maps_operation_global_offset(
+        plan, &op->inputs[0], 0u);
+    const uint32_t input_origin_c = maps_operation_global_offset(
+        plan, &op->inputs[0], 1u);
+    const uint32_t input_origin_h = maps_operation_global_offset(
+        plan, &op->inputs[0], 2u);
+    const uint32_t input_origin_w = maps_operation_global_offset(
+        plan, &op->inputs[0], 3u);
+    const uint32_t output_origin = maps_operation_global_offset(
+        plan, &op->outputs[0], 0u);
+    for (uint32_t row = 0u; row < op->outputs[0].shape[0]; ++row) {
+        const uint32_t global_row = output_origin + row;
+        for (uint32_t column = 0u; column < op->outputs[0].shape[1]; ++column) {
+            const uint32_t global_column = maps_operation_global_offset(
+                plan, &op->outputs[0], 1u) + column;
+            const uint32_t input_origin[4] = {
+                input_origin_n, input_origin_c, input_origin_h, input_origin_w};
+            maps_local_nchw_t local;
+            uint16_t value = 0u;
+            if (maps_im2col_local_nchw(
+                    global_row, global_column, output_h, output_w,
+                    kernel_h, kernel_w, stride_h, stride_w,
+                    dilation_h, dilation_w, pad_top, pad_left,
+                    input_h, input_w, input_origin, op->inputs[0].shape,
+                    &local)) {
+                const uint32_t input_offset =
+                    local.batch * op->inputs[0].strides_bytes[0] +
+                    local.channel * op->inputs[0].strides_bytes[1] +
+                    local.row * op->inputs[0].strides_bytes[2] +
+                    local.column * op->inputs[0].strides_bytes[3];
+                value = *(const uint16_t *)(input + input_offset);
+            }
+            const uint32_t output_offset =
+                row * op->outputs[0].strides_bytes[0] +
+                column * op->outputs[0].strides_bytes[1];
+            *(uint16_t *)(output + output_offset) = value;
+        }
+    }
+    return 0;
+}
+
+static inline int maps_execute_transpose_f16(const tile_plan_t *plan,
+                                              const op_desc_t *op,
+                                              uint32_t slot)
+{
+    if (op->num_inputs != 1u || op->num_outputs != 1u ||
+        op->inputs[0].rank != op->outputs[0].rank ||
+        op->inputs[0].rank > MAPS_MAX_RANK)
+        return -1;
+    const uint8_t *input = (const uint8_t *)local_subslice_addr(
+        plan, &op->inputs[0], slot);
+    uint8_t *output = (uint8_t *)local_subslice_addr(
+        plan, &op->outputs[0], slot);
+    const uint32_t rank = op->outputs[0].rank;
+    uint32_t input_origin[MAPS_MAX_RANK];
+    uint32_t output_origin[MAPS_MAX_RANK];
+    for (uint32_t axis = 0u; axis < rank; ++axis) {
+        input_origin[axis] = maps_operation_global_offset(
+            plan, &op->inputs[0], axis);
+        output_origin[axis] = maps_operation_global_offset(
+            plan, &op->outputs[0], axis);
+    }
+    return maps_local_transpose_f16(
+        input, output, rank, op->inputs[0].shape,
+        op->inputs[0].strides_bytes, input_origin, op->outputs[0].shape,
+        op->outputs[0].strides_bytes, output_origin, op->params);
+}
+
+static inline int maps_execute_depthwise_conv_f16(const tile_plan_t *plan,
+                                                   const op_desc_t *op,
+                                                   uint32_t slot)
+{
+    if ((op->num_inputs != 2u && op->num_inputs != 3u) ||
+        op->num_outputs != 1u || op->inputs[0].rank != 4u ||
+        op->inputs[1].rank != 4u || op->outputs[0].rank != 4u)
+        return -1;
     const uint16_t *input = (const uint16_t *)local_subslice_addr(
         plan, &op->inputs[0], slot);
+    const uint16_t *weight = (const uint16_t *)local_subslice_addr(
+        plan, &op->inputs[1], slot);
+    const uint16_t *bias = op->num_inputs == 3u
+        ? (const uint16_t *)local_subslice_addr(plan, &op->inputs[2], slot)
+        : 0;
     uint16_t *output = (uint16_t *)local_subslice_addr(
         plan, &op->outputs[0], slot);
-    const uint32_t channels = op->inputs[0].shape[1];
-    const uint32_t spatial =
-        op->inputs[0].shape[2] * op->inputs[0].shape[3];
-    if (op->outputs[0].shape[0] != spatial ||
-        op->outputs[0].shape[1] != channels)
+    const uint32_t stride_h = op->params[0];
+    const uint32_t stride_w = op->params[1];
+    const uint32_t dilation_h = op->params[2];
+    const uint32_t dilation_w = op->params[3];
+    const uint32_t pad_top = op->params[4];
+    const uint32_t pad_left = op->params[5];
+    const uint32_t channel_multiplier = op->params[6];
+    if (stride_h == 0u || stride_w == 0u || channel_multiplier == 0u)
         return -2;
-    for (uint32_t row = 0u; row < spatial; ++row)
-        for (uint32_t channel = 0u; channel < channels; ++channel)
-            output[row * channels + channel] = input[channel * spatial + row];
-    return 0;
+    const uint32_t input_origin_h = maps_operation_global_offset(
+        plan, &op->inputs[0], 2u);
+    const uint32_t input_origin_w = maps_operation_global_offset(
+        plan, &op->inputs[0], 3u);
+    const uint32_t output_origin_h = maps_operation_global_offset(
+        plan, &op->outputs[0], 2u);
+    const uint32_t output_origin_w = maps_operation_global_offset(
+        plan, &op->outputs[0], 3u);
+    const uint32_t weight_origin_c = maps_operation_global_offset(
+        plan, &op->inputs[1], 0u);
+    const uint32_t input_origin_c = maps_operation_global_offset(
+        plan, &op->inputs[0], 1u);
+    return maps_local_depthwise_conv_f16(
+        input, weight, bias, output, op->inputs[0].shape,
+        op->inputs[1].shape, op->outputs[0].shape, input_origin_c,
+        input_origin_h, input_origin_w, weight_origin_c, output_origin_h,
+        output_origin_w, stride_h, stride_w, dilation_h, dilation_w,
+        pad_top, pad_left, channel_multiplier);
 }
 
 static inline int maps_execute_output_reformat_1x1_f16(
@@ -537,6 +644,7 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
 #endif
     case OP_NEG:
     case OP_EXP:
+    case OP_SIGMOID:
     case OP_SUB:
     case OP_DIV:
     case OP_MUL:
@@ -550,7 +658,11 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
     case OP_SPLIT:
         return maps_execute_split_f16(plan, op, slot);
     case OP_IM2COL:
-        return maps_execute_im2col_1x1_f16(plan, op, slot);
+        return maps_execute_im2col_f16(plan, op, slot);
+    case OP_TRANSPOSE:
+        return maps_execute_transpose_f16(plan, op, slot);
+    case OP_DEPTHWISE_CONV:
+        return maps_execute_depthwise_conv_f16(plan, op, slot);
     case OP_OUTPUT_REFORMAT:
         return maps_execute_output_reformat_1x1_f16(plan, op, slot);
     default:

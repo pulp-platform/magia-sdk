@@ -119,6 +119,7 @@ typedef struct {
 #define FIFO_HEADER_SIZE     (sizeof(fifo_header_t))
 #define FIFO_RING_STATE_SIZE (sizeof(fifo_ring_state_t))
 #define FIFO_SLOT_META_SIZE  (sizeof(fifo_slot_t))
+#define FIFO_SLOT_OFFSET_SIZE (sizeof(uint32_t))
 
 /**
  * Get pointer to a tile's FIFO header in L1.
@@ -159,6 +160,14 @@ static inline uint8_t *fifo_slots_base(fifo_header_t *hdr)
 static inline fifo_slot_t *
 fifo_slot_at(fifo_header_t *hdr, uint32_t producer_idx, uint32_t counter)
 {
+    if (hdr->slot_stride == 0u) {
+        uint32_t *offsets = (uint32_t *)fifo_slots_base(hdr);
+        uint8_t *slots = (uint8_t *)(offsets + hdr->num_producers + 1u);
+        uint32_t ring_bytes = offsets[producer_idx + 1u] - offsets[producer_idx];
+        uint32_t stride = ring_bytes / hdr->num_slots;
+        return (fifo_slot_t *)(slots + offsets[producer_idx] +
+                              (counter % hdr->num_slots) * stride);
+    }
     uint32_t slot = producer_idx * hdr->num_slots + (counter % hdr->num_slots);
     return (fifo_slot_t *)(fifo_slots_base(hdr) + slot * hdr->slot_stride);
 }
@@ -198,6 +207,31 @@ fifo_init(uint32_t hartid, uint32_t num_producers, uint32_t num_slots, uint32_t 
         rs[p].tail = 0;
     }
 
+    asm volatile("fence w, w" ::: "memory");
+}
+
+static inline void fifo_init_variable(uint32_t hartid, uint32_t num_producers,
+                                      uint32_t num_slots,
+                                      const uint32_t *slot_data_sizes)
+{
+    fifo_header_t *hdr = fifo_get_header(hartid);
+    hdr->num_producers = num_producers;
+    hdr->num_slots = num_slots;
+    hdr->slot_stride = 0u;
+    hdr->scan_cursor = 0u;
+
+    fifo_ring_state_t *states = fifo_ring_states(hdr);
+    for (uint32_t producer = 0u; producer < num_producers; ++producer) {
+        states[producer].head = 0u;
+        states[producer].tail = 0u;
+    }
+    uint32_t *offsets = (uint32_t *)fifo_slots_base(hdr);
+    offsets[0] = 0u;
+    for (uint32_t producer = 0u; producer < num_producers; ++producer) {
+        uint32_t aligned = (slot_data_sizes[producer] + 3u) & ~3u;
+        offsets[producer + 1u] = offsets[producer] +
+            num_slots * (FIFO_SLOT_META_SIZE + aligned);
+    }
     asm volatile("fence w, w" ::: "memory");
 }
 

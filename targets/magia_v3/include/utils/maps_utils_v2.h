@@ -40,6 +40,7 @@ typedef struct {
     uint32_t l1_offset_bytes;
     uint32_t num_producers;
     uint32_t num_slots;
+    const uint32_t *slot_data_sizes;
     uint32_t slot_data_size;
 } fifo_desc_t;
 
@@ -80,9 +81,17 @@ static inline uint32_t maps_fifo_tag(uint32_t transition_id, uint32_t slot)
 static inline void maps_fifo_init(const fifo_tile_plan_t *plan)
 {
     uint32_t data_offset = plan->l1_data_base - get_l1_base(plan->hartid);
-    uint32_t slot_stride = FIFO_SLOT_META_SIZE + ((plan->fifo.slot_data_size + 3u) & ~3u);
-    uint32_t fifo_bytes = FIFO_HEADER_SIZE + plan->fifo.num_producers * FIFO_RING_STATE_SIZE +
-                          plan->fifo.num_producers * plan->fifo.num_slots * slot_stride;
+    uint32_t fifo_bytes = FIFO_HEADER_SIZE +
+        plan->fifo.num_producers * FIFO_RING_STATE_SIZE;
+    if (plan->fifo.slot_data_sizes) {
+        fifo_bytes += (plan->fifo.num_producers + 1u) * FIFO_SLOT_OFFSET_SIZE;
+        for (uint32_t producer = 0u; producer < plan->fifo.num_producers; ++producer)
+            fifo_bytes += plan->fifo.num_slots * (FIFO_SLOT_META_SIZE +
+                ((plan->fifo.slot_data_sizes[producer] + 3u) & ~3u));
+    } else {
+        fifo_bytes += plan->fifo.num_producers * plan->fifo.num_slots *
+            (FIFO_SLOT_META_SIZE + ((plan->fifo.slot_data_size + 3u) & ~3u));
+    }
 
     if (plan->fifo.num_producers == 0u)
         return;
@@ -90,8 +99,12 @@ static inline void maps_fifo_init(const fifo_tile_plan_t *plan)
     if (plan->fifo.l1_offset_bytes != 0u || fifo_bytes > data_offset)
         maps_trap();
 
-    fifo_init(plan->hartid, plan->fifo.num_producers, plan->fifo.num_slots,
-              plan->fifo.slot_data_size);
+    if (plan->fifo.slot_data_sizes)
+        fifo_init_variable(plan->hartid, plan->fifo.num_producers,
+                           plan->fifo.num_slots, plan->fifo.slot_data_sizes);
+    else
+        fifo_init(plan->hartid, plan->fifo.num_producers,
+                  plan->fifo.num_slots, plan->fifo.slot_data_size);
 }
 
 /* Copy a packed FIFO payload to a potentially strided MAPS destination. */
@@ -192,15 +205,7 @@ static inline uint32_t maps_fifo_peek_from(const fifo_tile_plan_t *plan,
 
     asm volatile("fence r, r" ::: "memory");
 
-    /* The generated descriptor owns this immutable layout.  Do not use the
-     * remotely-read header's layout fields when selecting a slot: only head
-     * and tail are concurrently shared state. */
-    uint32_t slot_stride = FIFO_SLOT_META_SIZE + ((plan->fifo.slot_data_size + 3u) & ~3u);
-    uint32_t slot_index = producer_idx * plan->fifo.num_slots +
-                          (rs->head % plan->fifo.num_slots);
-    fifo_slot_t *slot = (fifo_slot_t *)((uint8_t *)hdr + FIFO_HEADER_SIZE +
-                                        plan->fifo.num_producers * FIFO_RING_STATE_SIZE +
-                                        slot_index * slot_stride);
+    fifo_slot_t *slot = fifo_slot_at(hdr, producer_idx, rs->head);
     out->data_ptr     = (uint32_t)fifo_slot_data(slot);
     out->src          = producer_idx;
     out->tag          = slot->tag;
