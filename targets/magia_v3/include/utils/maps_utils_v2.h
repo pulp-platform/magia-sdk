@@ -72,6 +72,21 @@ typedef struct fifo_tile_plan {
     fifo_desc_t fifo;
 } fifo_tile_plan_t;
 
+#ifdef MAPS_EXPERIMENT_TRACE
+#define MAPS_EXPERIMENT_MAX_TOKENS 64u
+typedef struct {
+    uint32_t starts[NUM_HARTS][MAPS_EXPERIMENT_MAX_TOKENS];
+    uint32_t ends[NUM_HARTS][MAPS_EXPERIMENT_MAX_TOKENS];
+} maps_fifo_experiment_trace_t;
+
+static inline maps_fifo_experiment_trace_t *maps_fifo_experiment_trace(void)
+{
+    static maps_fifo_experiment_trace_t trace
+        __attribute__((section(".l2_bulk.maps_experiment_trace")));
+    return &trace;
+}
+#endif
+
 static inline uint32_t maps_fifo_tag(uint32_t transition_id, uint32_t slot)
 {
     /* Preserve the old ready-flag namespace: transition_id * 16 + slot. */
@@ -300,8 +315,9 @@ static inline void maps_fifo_run_tile_token(const fifo_tile_plan_t *plan, uint32
                             maps_read_cycle() - step_start);
     }
 
+    uint32_t token_end = maps_read_cycle();
     maps_trace_duration((const tile_plan_t *)plan, token, slot, "token", token,
-                        maps_read_cycle() - token_start);
+                        token_end - token_start);
 }
 
 static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint32_t num_tokens,
@@ -309,12 +325,39 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
                                              eu_controller_t *eu_ctrl)
 {
     uint32_t run_start = maps_read_cycle();
+#ifdef MAPS_EXPERIMENT_TRACE
+    if (num_tokens > MAPS_EXPERIMENT_MAX_TOKENS)
+        maps_trap();
+    maps_fifo_experiment_trace_t *trace = maps_fifo_experiment_trace();
+#endif
 
-    for (uint32_t token = 0; token < num_tokens; ++token)
+    for (uint32_t token = 0; token < num_tokens; ++token) {
+#ifdef MAPS_EXPERIMENT_TRACE
+        trace->starts[plan->hartid][token] = maps_read_cycle();
+#endif
         maps_fifo_run_tile_token(plan, token, idma_ctrl, eu_ctrl);
+#ifdef MAPS_EXPERIMENT_TRACE
+        trace->ends[plan->hartid][token] = maps_read_cycle();
+#endif
+    }
 
     maps_trace_duration((const tile_plan_t *)plan, 0u, 0u, "run", num_tokens,
                         maps_read_cycle() - run_start);
+}
+
+static inline void maps_fifo_flush_experiment_trace(const fifo_tile_plan_t *plan,
+                                                    uint32_t num_tokens)
+{
+#ifdef MAPS_EXPERIMENT_TRACE
+    maps_fifo_experiment_trace_t *trace = maps_fifo_experiment_trace();
+    for (uint32_t token = 0; token < num_tokens; ++token)
+        printf("MAPS_TOKEN tile=%u token=%u start=%u end=%u output=%u\n",
+               plan->hartid, token, trace->starts[plan->hartid][token],
+               trace->ends[plan->hartid][token], plan->num_l2_writes != 0u);
+#else
+    (void)plan;
+    (void)num_tokens;
+#endif
 }
 
 #endif /* MAPS_UTILS_V2_H */

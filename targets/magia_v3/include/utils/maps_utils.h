@@ -23,7 +23,7 @@
 #define MAPS_ENABLE_TRACE 0u
 #endif
 */
-#if MAPS_ENABLE_TRACE
+#if MAPS_ENABLE_TRACE || defined(MAPS_EXPERIMENT_TRACE)
 #include "utils/printf.h"
 #endif
 
@@ -441,7 +441,7 @@ static inline volatile uint32_t *maps_ready_flag_addr(uint32_t hartid,
 /* GVSoC's CV32 model implements cycle but not cycleh. */
 static inline uint32_t maps_read_cycle(void)
 {
-#if MAPS_ENABLE_TRACE
+#if MAPS_ENABLE_TRACE || defined(MAPS_EXPERIMENT_TRACE)
     uint32_t cycle;
     __asm__ volatile("rdcycle %0" : "=r"(cycle));
     return cycle;
