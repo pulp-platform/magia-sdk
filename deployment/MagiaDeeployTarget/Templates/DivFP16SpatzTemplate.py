@@ -5,9 +5,9 @@ from Deeploy.DeeployTypes import NetworkContext, NodeTemplate, OperatorRepresent
 class _MagiaDivFP16Spatz(NodeTemplate):
     def alignToContext(self, ctxt: NetworkContext,
                        operatorRepresentation: OperatorRepresentation) -> Tuple[NetworkContext, Dict, List[str]]:
-        ctxt.lookup(operatorRepresentation['input1'])
-        ctxt.lookup(operatorRepresentation['input2'])
-        ctxt.lookup(operatorRepresentation['output'])
+        ctxt.lookup(operatorRepresentation['A'])
+        ctxt.lookup(operatorRepresentation['B'])
+        ctxt.lookup(operatorRepresentation['C'])
         operatorRepresentation['offset'] = 0
 
         return ctxt, operatorRepresentation, []
@@ -17,5 +17,5 @@ referenceTemplate = _MagiaDivFP16Spatz("""
 #ifdef ENABLE_NODE_LOGS
 printf("[CV32 (%d)] Running node: ${nodeName} (${nodeOp})\\n", get_hartid());
 #endif
-MAGIA_div_fp16_spatz(${input1}, ${input2}, ${output}, ${size});
+MAGIA_div_fp16_spatz(${A}, ${B}, ${C}, ${size});
 """)
