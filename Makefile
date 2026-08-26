@@ -62,7 +62,7 @@ tiles 			?= 2
 spatz			?= 1
 verbose			?= 0
 pulp_cores		?= 8
-pulp_cluster	:= $(shell [ $(pulp_cores) -gt 1 ] && echo 1 || echo 0)
+pulp_cluster		?= 0
 
 LLVM_CMAKE			?= cmake
 LLVM_DIR			?= llvm
@@ -82,7 +82,7 @@ CMAKE ?= cmake
 
 GVSOC_WORK_DIR ?= ./gvsoc_work
 ifeq ($(target_platform), magia_v3)
-GVRUN_TARGET_ARGS ?= --attr magia_v3/n_tiles_x=$(tiles) --attr magia_v3/n_tiles_y=$(tiles) --attr magia_v3/nb_pulp_cores=$(pulp_cores) --attr magia_v3/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin
+GVRUN_TARGET_ARGS ?= --attr magia_v3/n_tiles_x=$(tiles) --attr magia_v3/n_tiles_y=$(tiles) $(if $(filter 1,$(pulp_cluster)),--attr magia_v3/nb_pulp_cores=$(pulp_cores),) --attr magia_v3/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin
 else
 GVRUN_TARGET_ARGS ?= --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin
 endif
@@ -292,6 +292,11 @@ else ifeq ($(target_platform), magia_v3)
 	sed -i -E "s/^[[:space:]]*N_TILES_X[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_X           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
 	sed -i -E "s/^[[:space:]]*N_TILES_Y[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_Y           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
 	sed -i -E "s/^[[:space:]]*NB_PULP_CORES[[:space:]]*=[[:space:]]*[0-9]+/    NB_PULP_CORES       = $(pulp_cores)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
+ifeq ($(pulp_cluster), 1)
+	sed -i 's/^\([[:space:]]*PULP_ENABLE[[:space:]]*=[[:space:]]*\)False/\1True/' $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
+else
+	sed -i 's/^\([[:space:]]*PULP_ENABLE[[:space:]]*=[[:space:]]*\)True/\1False/' $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
+endif
 	cd $(GVSOC_DIR)	&& \
 	make build TARGETS=magia_v3
 else

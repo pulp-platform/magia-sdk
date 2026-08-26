@@ -111,7 +111,7 @@ The following *optional* parameters can be specified when running the make comma
 
 `spatz`: **0**|**1** (**Default**: 1). Enable compilation of GVSoC and tests with Spatz enabled
 
-`pulp_cluster`: **0**|**1** (**Default**: 1). Enable compilation of GVSoC and tests with PULP clusters enabled.
+`pulp_cluster`: **0**|**1** (**Default**: 0). Enable compilation of GVSoC and tests with PULP clusters enabled.
 
 `verbose`: **0**|**1** (**Default**: 0). When 1, `make build` restores the full CMake configure trace and per-file compiler command lines. Leave at 0 for concise progress output.
 
