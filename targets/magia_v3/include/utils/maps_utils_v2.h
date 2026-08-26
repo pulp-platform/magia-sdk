@@ -124,62 +124,31 @@ static inline void maps_fifo_init(const fifo_tile_plan_t *plan)
 
 /* Copy a packed FIFO payload to a potentially strided MAPS destination. */
 static inline void maps_fifo_unpack(const fifo_msg_t *msg, const subslice_desc_t *dst,
-                                    uint32_t dst_addr)
+                                    uint32_t dst_addr, idma_controller_t *idma_ctrl,
+                                    eu_controller_t *eu_ctrl)
 {
-    const uint8_t *src = (const uint8_t *)msg->data_ptr;
-    volatile uint8_t *out = (volatile uint8_t *)dst_addr;
-
     if (msg->desc.rank != dst->rank || msg->elem_bytes != dst->elem_bytes ||
         msg->desc.num_elems != maps_shape_elems(dst->rank, dst->shape)) {
         maps_trap();
     }
 
-    /* MAPS matrix fragments are packed in FIFO slots.  The common rank-2
-     * destination has contiguous elements within each row but a stride between
-     * rows.  Copying it row-wise avoids the generic per-element div/mod address
-     * reconstruction below. */
-    if (dst->rank == 2u && dst->strides_bytes[1] == msg->elem_bytes) {
-        uint32_t row_bytes = dst->shape[1] * msg->elem_bytes;
+    tensor_sub_slice_t packed;
+    fifo_packed_slice(&msg->desc, msg->elem_bytes, &packed);
 
-        if (msg->elem_bytes == sizeof(uint16_t) &&
-            (((uint32_t)src | dst_addr | dst->strides_bytes[0]) & 1u) == 0u) {
-            const uint16_t *src16 = (const uint16_t *)src;
-            volatile uint16_t *out16 = (volatile uint16_t *)out;
-            uint32_t row_elems = dst->shape[1];
-
-            for (uint32_t row = 0u; row < dst->shape[0]; ++row) {
-                uint32_t src_offset = row * row_elems;
-                uint32_t dst_offset = row * (dst->strides_bytes[0] / sizeof(uint16_t));
-
-                for (uint32_t elem = 0u; elem < row_elems; ++elem)
-                    out16[dst_offset + elem] = src16[src_offset + elem];
-            }
-            return;
-        }
-
-        for (uint32_t row = 0u; row < dst->shape[0]; ++row) {
-            uint32_t src_offset = row * row_bytes;
-            uint32_t dst_offset = row * dst->strides_bytes[0];
-
-            for (uint32_t byte = 0u; byte < row_bytes; ++byte)
-                out[dst_offset + byte] = src[src_offset + byte];
-        }
-        return;
+    tensor_sub_slice_t destination = {
+        .rank = dst->rank,
+        .num_elems = msg->desc.num_elems,
+    };
+    for (uint32_t dimension = 0u; dimension < dst->rank; ++dimension) {
+        destination.dims[dimension].start = 0u;
+        destination.dims[dimension].length = dst->shape[dimension];
+        destination.dims[dimension].stride = dst->strides_bytes[dimension];
     }
 
-    for (uint32_t elem = 0; elem < msg->desc.num_elems; ++elem) {
-        uint32_t remaining = elem;
-        uint32_t dst_offset = 0u;
-
-        for (uint32_t d = dst->rank; d-- > 0u;) {
-            uint32_t coordinate = remaining % dst->shape[d];
-            remaining /= dst->shape[d];
-            dst_offset += coordinate * dst->strides_bytes[d];
-        }
-
-        for (uint32_t byte = 0; byte < msg->elem_bytes; ++byte)
-            out[dst_offset + byte] = src[elem * msg->elem_bytes + byte];
-    }
+    if (idma_memcpy_md_to_nd(
+            idma_ctrl, 1u, dst_addr, msg->data_ptr, &packed, &destination,
+            msg->elem_bytes, eu_ctrl) != 0)
+        maps_trap();
 }
 
 static inline void maps_fifo_issue_send(const fifo_tile_plan_t *plan,
@@ -233,7 +202,9 @@ static inline uint32_t maps_fifo_peek_from(const fifo_tile_plan_t *plan,
 static inline void maps_fifo_wait_recv(const fifo_tile_plan_t *plan,
                                        const fifo_recv_desc_t *recv,
                                        uint32_t token,
-                                       uint32_t slot)
+                                       uint32_t slot,
+                                       idma_controller_t *idma_ctrl,
+                                       eu_controller_t *eu_ctrl)
 {
     fifo_msg_t msg;
     uint32_t expected_tag = maps_fifo_tag(recv->transition_id, slot);
@@ -253,8 +224,10 @@ static inline void maps_fifo_wait_recv(const fifo_tile_plan_t *plan,
             maps_trap();
         }
 
-        maps_fifo_unpack(&msg, &recv->dst,
-                         local_subslice_addr((const tile_plan_t *)plan, &recv->dst, slot));
+        maps_fifo_unpack(
+            &msg, &recv->dst,
+            local_subslice_addr((const tile_plan_t *)plan, &recv->dst, slot),
+            idma_ctrl, eu_ctrl);
         fifo_release(plan->hartid, msg.src);
         maps_trace_event((const tile_plan_t *)plan, token, slot, "fifo-recv",
                          recv->transition_id);
@@ -287,7 +260,8 @@ static inline void maps_fifo_run_tile_token(const fifo_tile_plan_t *plan, uint32
     }
     for (uint32_t i = 0; i < plan->num_recvs; ++i) {
         uint32_t step_start = maps_read_cycle();
-        maps_fifo_wait_recv(plan, &plan->recvs[i], token, slot);
+        maps_fifo_wait_recv(
+            plan, &plan->recvs[i], token, slot, idma_ctrl, eu_ctrl);
         maps_trace_duration((const tile_plan_t *)plan, token, slot, "recv",
                             plan->recvs[i].transition_id,
                             maps_read_cycle() - step_start);
