@@ -75,6 +75,10 @@ static int alloc_l1(void **params, uint32_t M, uint32_t K, uint32_t O, uint32_t 
     matmul_params->batch_len = total_batches;
     matmul_params->a_batched = a_batched;
     matmul_params->b_batched = b_batched;
+    matmul_params->shard_bias = 0u;
+    matmul_params->bias_mode = MATMUL_BIAS_NONE;
+    matmul_params->bias_batched = 0u;
+    matmul_params->transpose_b = 0u;
 
     *params = (void *) matmul_params;
 

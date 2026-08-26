@@ -41,6 +41,20 @@ static void matmul_scalar(const _Float16 *A, const _Float16 *B, _Float16 *Y, con
     }
 }
 
+static void matmul_transposed_b_scalar(
+    const _Float16 *A, const _Float16 *B, _Float16 *Y,
+    const size_t dim_M, const size_t dim_K, const size_t dim_O)
+{
+    for (size_t m = 0; m < dim_M; ++m) {
+        for (size_t o = 0; o < dim_O; ++o) {
+            _Float16 acc = 0.0f;
+            for (size_t k = 0; k < dim_K; ++k)
+                acc = fma16(A[m * dim_K + k], B[o * dim_K + k], acc);
+            Y[m * dim_O + o] = acc;
+        }
+    }
+}
+
 /*
  * The Spatz VLSU corrupts vector accesses to non-aligned addresses. The B rows and the Y
  * rows are read and written unit-stride and step by dim_O, so every row is 4-byte aligned
@@ -143,6 +157,20 @@ static void matmul(const _Float16 *A, const _Float16 *B, _Float16 *Y, const size
     }
 }
 
+static void add_bias(const _Float16 *bias, _Float16 *Y, const size_t dim_M,
+                     const size_t dim_O, uint32_t mode)
+{
+    if (!bias || mode == MATMUL_BIAS_NONE)
+        return;
+    for (size_t m = 0; m < dim_M; ++m)
+        for (size_t o = 0; o < dim_O; ++o) {
+            const size_t bias_index = mode == MATMUL_BIAS_SCALAR
+                ? 0 : (mode == MATMUL_BIAS_ROW
+                    ? m : (mode == MATMUL_BIAS_COLUMN ? o : m * dim_O + o));
+            Y[m * dim_O + o] += bias[bias_index];
+        }
+}
+
 int matmul_fp16_spatz_task(void)
 {
     volatile matmul_fp16_spatz_params_t *params;
@@ -154,6 +182,10 @@ int matmul_fp16_spatz_task(void)
     uint32_t batch_len;
     uint32_t a_batched;
     uint32_t b_batched;
+    uint32_t bias_mode;
+    uint32_t bias_batched;
+    uint32_t transpose_b;
+    const _Float16 *bias;
 
     params_addr = mmio32(SPATZ_DATA);
     params = (volatile matmul_fp16_spatz_params_t *) params_addr;
@@ -164,6 +196,10 @@ int matmul_fp16_spatz_task(void)
     batch_len = params->batch_len;
     a_batched = params->a_batched;
     b_batched = params->b_batched;
+    bias = (const _Float16 *)params->shard_bias;
+    bias_mode = params->bias_mode;
+    bias_batched = params->bias_batched;
+    transpose_b = params->transpose_b;
     M = params->M;
     K = params->K;
     O = params->O;
@@ -180,10 +216,20 @@ int matmul_fp16_spatz_task(void)
         const _Float16 *current_B = shard_B + ((b_batched ? b : 0) * size_B_2d);
         _Float16 *current_Y = shard_Y + (b * size_Y_2d);
 
-        if (matmul_vector_safe(current_B, current_Y, O))
+        if (transpose_b)
+            matmul_transposed_b_scalar(current_A, current_B, current_Y, M, K, O);
+        else if (matmul_vector_safe(current_B, current_Y, O))
             matmul(current_A, current_B, current_Y, M, K, O);
         else
             matmul_scalar(current_A, current_B, current_Y, M, K, O);
+        const _Float16 *current_bias = bias;
+        if (bias_batched) {
+            const size_t bias_batch_elements = bias_mode == MATMUL_BIAS_MATRIX
+                ? size_Y_2d : (bias_mode == MATMUL_BIAS_ROW
+                    ? M : (bias_mode == MATMUL_BIAS_COLUMN ? O : 1u));
+            current_bias += b * bias_batch_elements;
+        }
+        add_bias(current_bias, current_Y, M, O, bias_mode);
     }
 
     return 0;
