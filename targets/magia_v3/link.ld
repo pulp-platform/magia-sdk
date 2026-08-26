@@ -65,16 +65,24 @@ SECTIONS
         _l2_bulk_end = .;
     } > l2_bulk :bulk
 
-    /* Scratch payload, NOLOAD so it never enters the ELF. Nothing zeroes it - unlike
-     * .bss, which crt0 clears from hart 0 only - so anything placed here must be
-     * written before it is read. */
+    /* MAPS application state must remain in the directly addressed application-data
+     * window.  Consume its named subsection before the generic network arena below. */
     .l2_arena (NOLOAD) : {
         . = ALIGN(4);
         _l2_arena_start = .;
-        *(.l2_arena)
-        *(.l2_arena.*)
+        *(.l2_arena.maps_application)
         _l2_arena_end = .;
     } > dataram :data
+
+    /* Large model scratch payload, NOLOAD so it never enters the ELF. Nothing zeroes
+     * it, so anything placed here must be written before it is read. */
+    .l2_model_arena (NOLOAD) : {
+        . = ALIGN(4);
+        _l2_model_arena_start = .;
+        *(.l2_arena)
+        *(.l2_arena.*)
+        _l2_model_arena_end = .;
+    } > l2_bulk
 
     .vectors :
     {
