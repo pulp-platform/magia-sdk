@@ -6,10 +6,18 @@
 #include "utils/maps_idma.h"
 #include "utils/printf.h"
 
-static const uint8_t source[128]
+static const uint8_t source[16384]
     __attribute__((section(".l2_bulk.maps_transfer"))) = {
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
         16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+        [63] = 63,
+        [64] = 0xee,
+        [128] = 128,
+        [191] = 191,
+        [192] = 0xee,
+        [16256] = 0x80,
+        [16319] = 0xbf,
+        [16320] = 0xee,
     };
 
 static tensor_sub_slice_t slice(
@@ -27,6 +35,13 @@ static uint32_t check(const uint8_t *actual, const uint8_t *expected, uint32_t c
     for (uint32_t index = 0u; index < count; ++index)
         errors += actual[index] != expected[index];
     return errors;
+}
+
+static uint32_t read_cycle(void)
+{
+    uint32_t cycle;
+    __asm__ volatile("rdcycle %0" : "=r"(cycle));
+    return cycle;
 }
 
 int main(void)
@@ -92,6 +107,26 @@ int main(void)
     const uint8_t expected_3d[] = {0u, 1u, 4u, 5u, 16u, 17u, 20u, 21u};
     errors += check(l1 + 96u, expected_3d, 8u);
 
+    const TensorRange strided_to_packed_source_ranges[] = {
+        {0u, 128u, 128u}, {0u, 64u, 1u}};
+    const TensorRange strided_to_packed_destination_ranges[] = {
+        {0u, 8192u, 1u}};
+    tensor_sub_slice_t strided_to_packed_source = slice(
+        2u, 8192u, strided_to_packed_source_ranges);
+    tensor_sub_slice_t strided_to_packed_destination = slice(
+        1u, 8192u, strided_to_packed_destination_ranges);
+    const uint32_t strided_to_packed_start = read_cycle();
+    idma_memcpy_md_to_nd(
+        &idma, 0u, (uint32_t)(l1 + 256u), (uint32_t)source,
+        &strided_to_packed_source, &strided_to_packed_destination, 1u, &event_unit);
+    const uint32_t strided_to_packed_cycles = read_cycle() - strided_to_packed_start;
+    for (uint32_t index = 0u; index < 8192u; ++index) {
+        const uint32_t source_index = (index / 64u) * 128u + index % 64u;
+        errors += l1[256u + index] != source[source_index];
+    }
+    errors += strided_to_packed_cycles >= 20000u;
+
+    printf("MAPS transfer strided-to-packed cycles: %u\n", strided_to_packed_cycles);
     printf("MAPS transfer errors: %u\n", errors);
     return (int)errors;
 }
