@@ -99,6 +99,9 @@ static inline int maps_execute_matmul_spatz(
 #if MAPS_HAS_GROUP_NORMALIZE_SPATZ_TASK
 #include "group_normalize_fp16_spatz_params.h"
 #endif
+#if MAPS_HAS_REDUCE_SUM_SPATZ_TASK
+#include "reducesum_fp16_spatz_params.h"
+#endif
 
 static inline int maps_wait_for_spatz(maps_operation_runtime_t *runtime)
 {
@@ -106,6 +109,40 @@ static inline int maps_wait_for_spatz(maps_operation_runtime_t *runtime)
         return -1;
     return (int)spatz_get_exit_code();
 }
+
+#if MAPS_HAS_REDUCE_SUM_SPATZ_TASK
+static inline int maps_execute_reducesum_spatz(
+    const tile_plan_t *plan, const op_desc_t *op, uint32_t slot,
+    maps_operation_runtime_t *runtime)
+{
+    if (!runtime || !runtime->spatz_initialized ||
+        runtime->reducesum_fp16_task == 0u || op->num_inputs != 1u ||
+        op->num_outputs != 1u || op->inputs[0].elem_type != ELEM_F16 ||
+        op->outputs[0].elem_type != ELEM_F16 || op->inputs[0].rank == 0u ||
+        op->params[0] != op->inputs[0].rank - 1u ||
+        runtime->spatz_params_bytes < sizeof(reducesum_fp16_spatz_params_t) ||
+        ((uintptr_t)runtime->spatz_params & 0xfu) != 0u)
+        return -1;
+
+    const uint32_t reduce_dim = op->inputs[0].shape[op->inputs[0].rank - 1u];
+    const uint32_t input_elements = maps_operation_elems(&op->inputs[0]);
+    const uint32_t output_elements = maps_operation_elems(&op->outputs[0]);
+    if (reduce_dim == 0u || input_elements / reduce_dim != output_elements)
+        return -2;
+
+    volatile reducesum_fp16_spatz_params_t *params =
+        (volatile reducesum_fp16_spatz_params_t *)runtime->spatz_params;
+    params->shard_X = local_subslice_addr(plan, &op->inputs[0], slot);
+    params->shard_Y = local_subslice_addr(plan, &op->outputs[0], slot);
+    params->reduce_dim = reduce_dim;
+    params->inner_dim = 1u;
+    params->outer_start = 0u;
+    params->outer_len = output_elements;
+    spatz_run_task_with_params(runtime->reducesum_fp16_task,
+                               (uint32_t)runtime->spatz_params);
+    return maps_wait_for_spatz(runtime);
+}
+#endif
 
 #if MAPS_HAS_ADD_SPATZ_TASK
 static inline int maps_execute_add_spatz(const tile_plan_t *plan,

@@ -4,10 +4,10 @@
 
 """Input data and golden model for the FP16 Spatz reducesum kernel test.
 
-Reduces the middle axis of an outer x reduce x inner view. The kernel keeps one
-FP16 accumulator per inner element and adds the rows in ascending order, so the
-golden model accumulates the same way and the results must be exact. INNER stays
-below VLMAX (256 @ e16/m8, VLEN = 512) so that the kernel takes a single chunk.
+Reduces the middle axis of an outer x reduce x inner view. The kernel matches
+MAPS's scalar implementation: each output accumulator is FP32, traverses rows
+in ascending order, and rounds to FP16 only at the final store. INNER stays
+below VLMAX so the test also covers a complete vector chunk.
 """
 
 # NOTE: the innermost (contiguous) dimension is deliberately ODD here. The Spatz
@@ -69,10 +69,10 @@ def main():
 
     G = np.zeros((OUTER, INNER), dtype=np.float16)
     for o in range(OUTER):
-        acc = np.zeros(INNER, dtype=np.float16)
-        for r in range(REDUCE):          # same order as the kernel's row loop
-            acc = (acc + X[o, r]).astype(np.float16)
-        G[o] = acc
+        acc = X[o, 0].astype(np.float32)
+        for r in range(1, REDUCE):       # same order as MAPS's scalar loop
+            acc = acc + X[o, r].astype(np.float32)
+        G[o] = acc.astype(np.float16)
 
     f = open_data({"OUTER_DIM": OUTER, "REDUCE_DIM": REDUCE, "INNER_DIM": INNER,
                    "OUT_LEN": OUTER * INNER, "ULP_TOLL": 0})

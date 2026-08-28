@@ -32,6 +32,9 @@
 #ifndef MAPS_HAS_GROUP_NORMALIZE_SPATZ_TASK
 #define MAPS_HAS_GROUP_NORMALIZE_SPATZ_TASK 0u
 #endif
+#ifndef MAPS_HAS_REDUCE_SUM_SPATZ_TASK
+#define MAPS_HAS_REDUCE_SUM_SPATZ_TASK 0u
+#endif
 
 #ifndef MAPS_KERNEL_ABI_VERSION
 #define MAPS_KERNEL_ABI_VERSION 2u
@@ -57,6 +60,7 @@ typedef struct {
     uint32_t group_reduce_fp16_task;
     uint32_t group_centered_reduce_fp16_task;
     uint32_t group_normalize_fp16_task;
+    uint32_t reducesum_fp16_task;
     void *spatz_params;
     uint32_t spatz_params_bytes;
     uint32_t spatz_initialized;
@@ -841,8 +845,13 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
 #else
         return maps_execute_elementwise_f16(plan, op, slot);
 #endif
-    case OP_REDUCE_MAX:
     case OP_REDUCE_SUM:
+#if MAPS_HAS_REDUCE_SUM_SPATZ_TASK
+        return maps_execute_reducesum_spatz(plan, op, slot, runtime);
+#else
+        return maps_execute_reduce_f16(plan, op, slot);
+#endif
+    case OP_REDUCE_MAX:
         return maps_execute_reduce_f16(plan, op, slot);
     case OP_ALL_REDUCE_MAX:
     case OP_ALL_REDUCE_SUM:

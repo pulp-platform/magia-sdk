@@ -1,40 +1,40 @@
 #include "tile.h"
 #include "reducesum_fp16_spatz_params.h"
 
-/* Sums 'reduce_dim' rows of 'inner_dim' elements each. The accumulator is FP16,
- * like every other operand of these kernels, so long reductions lose precision
- * and can reach Inf beyond 65504. */
+/* Sums 'reduce_dim' rows of 'inner_dim' elements each. The accumulator stays
+ * FP32 until the final store, matching MAPS's scalar ReduceSum association. */
 static inline void reduce_sum_core(const _Float16 *src, _Float16 *dst, const size_t reduce_dim, const size_t inner_dim)
 {
     size_t avl = inner_dim;
     size_t vl;
 
     for (; avl > 0; avl -= vl) {
-        asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile ("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl));
+        const _Float16 *p_src = src + (inner_dim - avl);
+        asm volatile ("vle16.v v8, (%0)" :: "r"(p_src));
+        asm volatile ("vfwcvt.f.f.v v0, v8");
 
-        asm volatile ("vmv.v.i v0, 0");
-
-        for (size_t r = 0; r < reduce_dim; r++) {
+        for (size_t r = 1; r < reduce_dim; r++) {
             const _Float16 *p_src = src + (r * inner_dim) + (inner_dim - avl);
-
             asm volatile ("vle16.v v8, (%0)" :: "r"(p_src));
-            asm volatile ("vfadd.vv v0, v0, v8");
+            asm volatile ("vfwadd.wv v0, v0, v8");
         }
 
         _Float16 *p_dst = dst + (inner_dim - avl);
-        asm volatile ("vse16.v v0, (%0)" :: "r"(p_dst) : "memory");
+        asm volatile ("vfncvt.f.f.w v8, v0");
+        asm volatile ("vse16.v v8, (%0)" :: "r"(p_dst) : "memory");
     }
 }
 
-/* Same accumulation order as the vector path, one output element at a time.
- * Used when the vector accesses would not be 4-byte aligned. */
+/* Same FP32 accumulation order as MAPS's scalar implementation. Used when the
+ * vector accesses would not be 4-byte aligned. */
 static inline void reduce_sum_core_scalar(const _Float16 *src, _Float16 *dst, const size_t reduce_dim, const size_t inner_dim)
 {
     for (size_t i = 0; i < inner_dim; i++) {
-        _Float16 acc = 0.0f;
+        float acc = src[i];
 
-        for (size_t r = 0; r < reduce_dim; r++)
-            acc = (_Float16)(acc + src[(r * inner_dim) + i]);
+        for (size_t r = 1; r < reduce_dim; r++)
+            acc += src[(r * inner_dim) + i];
 
         dst[i] = acc;
     }
