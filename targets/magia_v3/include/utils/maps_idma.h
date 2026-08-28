@@ -132,6 +132,17 @@ static inline int idma_memcpy_md_to_nd(
         row_bytes = normalized_source.length[1] * element_bytes;
         destination_stride = row_bytes;
         repetitions = normalized_source.length[0];
+    } else if (normalized_source.rank == 1u &&
+               normalized_destination.rank == 2u &&
+               normalized_source.stride[0] == element_bytes &&
+               normalized_destination.stride[1] == element_bytes &&
+               normalized_source.length[0] ==
+                   normalized_destination.length[0] *
+                   normalized_destination.length[1]) {
+        row_bytes = normalized_destination.length[1] * element_bytes;
+        source_stride = row_bytes;
+        destination_stride = normalized_destination.stride[0];
+        repetitions = normalized_destination.length[0];
     }
     if (repetitions != 0u) {
         const uint32_t axi_address = direction == 0u

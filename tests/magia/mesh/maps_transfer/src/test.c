@@ -126,7 +126,27 @@ int main(void)
     }
     errors += strided_to_packed_cycles >= 20000u;
 
+    const TensorRange packed_to_strided_source_ranges[] = {
+        {0u, 8192u, 1u}};
+    const TensorRange packed_to_strided_destination_ranges[] = {
+        {0u, 128u, 128u}, {0u, 64u, 1u}};
+    tensor_sub_slice_t packed_to_strided_source = slice(
+        1u, 8192u, packed_to_strided_source_ranges);
+    tensor_sub_slice_t packed_to_strided_destination = slice(
+        2u, 8192u, packed_to_strided_destination_ranges);
+    const uint32_t packed_to_strided_start = read_cycle();
+    idma_memcpy_md_to_nd(
+        &idma, 0u, (uint32_t)(l1 + 17000u), (uint32_t)source,
+        &packed_to_strided_source, &packed_to_strided_destination, 1u, &event_unit);
+    const uint32_t packed_to_strided_cycles = read_cycle() - packed_to_strided_start;
+    for (uint32_t index = 0u; index < 8192u; ++index) {
+        const uint32_t destination_index = (index / 64u) * 128u + index % 64u;
+        errors += l1[17000u + destination_index] != source[index];
+    }
+    errors += packed_to_strided_cycles >= 20000u;
+
     printf("MAPS transfer strided-to-packed cycles: %u\n", strided_to_packed_cycles);
+    printf("MAPS transfer packed-to-strided cycles: %u\n", packed_to_strided_cycles);
     printf("MAPS transfer errors: %u\n", errors);
     return (int)errors;
 }
