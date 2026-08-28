@@ -331,6 +331,26 @@ static inline int maps_execute_all_reduce(const tile_plan_t *plan,
     if (local_index == collective->num_participants)
         return -1;
 
+    if (collective->num_participants == 1u) {
+        const collective_participant_desc_t *participant =
+            &collective->participants[0];
+        const uint16_t *input = (const uint16_t *)(
+            remote_tile_l1_base(participant->hartid) +
+            participant->l1_data_base_offset +
+            participant->input_l1_offset_bytes +
+            slot * participant->input_slot_bytes);
+        volatile uint16_t *output = (volatile uint16_t *)(
+            remote_tile_l1_base(participant->hartid) +
+            participant->l1_data_base_offset +
+            participant->output_l1_offset_bytes +
+            slot * participant->output_slot_bytes);
+        const uint32_t elements = maps_operation_elems(&op->outputs[0]);
+        for (uint32_t element = 0u; element < elements; ++element)
+            output[element] = input[element];
+        __asm__ volatile("fence rw, rw" ::: "memory");
+        return 0;
+    }
+
     const uint32_t root_hartid = collective->participants[0].hartid;
     if (plan->hartid != root_hartid) {
         maps_collective_publish(
