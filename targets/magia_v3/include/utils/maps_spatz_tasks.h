@@ -102,6 +102,9 @@ static inline int maps_execute_matmul_spatz(
 #if MAPS_HAS_REDUCE_SUM_SPATZ_TASK
 #include "reducesum_fp16_spatz_params.h"
 #endif
+#if MAPS_HAS_BINARY_BCAST_SPATZ_TASK
+#include "binary_bcast_fp16_spatz_params.h"
+#endif
 
 static inline int maps_wait_for_spatz(maps_operation_runtime_t *runtime)
 {
@@ -264,6 +267,40 @@ static inline int maps_execute_mul_spatz(const tile_plan_t *plan,
     params->mode = mode;
     spatz_run_task_with_params(
         runtime->mul_bcast_fp16_task, (uint32_t)runtime->spatz_params);
+    return maps_wait_for_spatz(runtime);
+}
+#endif
+
+#if MAPS_HAS_BINARY_BCAST_SPATZ_TASK
+static inline int maps_execute_binary_bcast_spatz(const tile_plan_t *plan,
+    const op_desc_t *op, uint32_t slot, maps_operation_runtime_t *runtime)
+{
+    if (!runtime || !runtime->spatz_initialized ||
+        runtime->binary_bcast_fp16_task == 0u || op->num_inputs != 2u ||
+        op->num_outputs != 1u || op->inputs[0].elem_type != ELEM_F16 ||
+        op->inputs[1].elem_type != ELEM_F16 || op->outputs[0].elem_type != ELEM_F16 ||
+        runtime->spatz_params_bytes < sizeof(binary_bcast_fp16_spatz_params_t))
+        return -1;
+    const uint32_t elements = maps_operation_elems(&op->outputs[0]);
+    const subslice_desc_t *full = &op->inputs[0];
+    const subslice_desc_t *broadcast = &op->inputs[1];
+    if (maps_operation_elems(full) != elements) {
+        full = &op->inputs[1];
+        broadcast = &op->inputs[0];
+    }
+    uint32_t rows, row_len, mode;
+    if (maps_operation_elems(full) != elements ||
+        maps_mul_broadcast_params(&op->outputs[0], broadcast, &rows, &row_len, &mode) != 0)
+        return -2;
+    volatile binary_bcast_fp16_spatz_params_t *params =
+        (volatile binary_bcast_fp16_spatz_params_t *)runtime->spatz_params;
+    params->shard_A = local_subslice_addr(plan, full, slot);
+    params->shard_B = local_subslice_addr(plan, broadcast, slot);
+    params->shard_Y = local_subslice_addr(plan, &op->outputs[0], slot);
+    params->rows = rows; params->row_len = row_len;
+    params->mode = mode == MUL_BCAST_SCALAR ? BINARY_BCAST_SCALAR : BINARY_BCAST_ROW;
+    params->operation = op->kind == OP_SUB ? BINARY_BCAST_SUB : BINARY_BCAST_DIV;
+    spatz_run_task_with_params(runtime->binary_bcast_fp16_task, (uint32_t)runtime->spatz_params);
     return maps_wait_for_spatz(runtime);
 }
 #endif
