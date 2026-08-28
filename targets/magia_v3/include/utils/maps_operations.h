@@ -426,21 +426,33 @@ static inline void maps_operation_zero(uint32_t address, uint32_t bytes)
 
 static inline int maps_execute_split_f16(const tile_plan_t *plan,
                                          const op_desc_t *op,
-                                         uint32_t slot)
+                                         uint32_t slot,
+                                         maps_operation_runtime_t *runtime)
 {
     if (op->num_inputs != 1u || op->num_outputs == 0u ||
         op->num_outputs > MAPS_MAX_OP_OUTPUTS || op->params[0] != 1u)
         return -1;
-    const uint16_t *input = (const uint16_t *)local_subslice_addr(
-        plan, &op->inputs[0], slot);
+    const uint32_t input = local_subslice_addr(plan, &op->inputs[0], slot);
     uint32_t offset = 0u;
     for (uint32_t output_index = 0u; output_index < op->num_outputs;
          ++output_index) {
         const uint32_t elements = maps_operation_elems(&op->outputs[output_index]);
-        uint16_t *output = (uint16_t *)local_subslice_addr(
+        const uint32_t output = local_subslice_addr(
             plan, &op->outputs[output_index], slot);
-        for (uint32_t index = 0u; index < elements; ++index)
-            output[index] = input[offset + index];
+        const uint32_t bytes = elements * sizeof(uint16_t);
+        if (runtime && runtime->idma_ctrl && runtime->eu_ctrl) {
+            if (idma_memcpy_1d(runtime->idma_ctrl, 1u, output,
+                               input + offset * sizeof(uint16_t), bytes) != 0)
+                return -2;
+            if (!eu_idma_wait_o2a(runtime->eu_ctrl, MAPS_WAIT_MODE))
+                return -2;
+        } else {
+            const uint16_t *source = (const uint16_t *)(input +
+                offset * sizeof(uint16_t));
+            uint16_t *destination = (uint16_t *)output;
+            for (uint32_t index = 0u; index < elements; ++index)
+                destination[index] = source[index];
+        }
         offset += elements;
     }
     return offset == maps_operation_elems(&op->inputs[0]) ? 0 : -2;
@@ -865,7 +877,7 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
     case OP_ALL_REDUCE_SUM:
         return maps_execute_all_reduce(plan, op, slot);
     case OP_SPLIT:
-        return maps_execute_split_f16(plan, op, slot);
+        return maps_execute_split_f16(plan, op, slot, runtime);
     case OP_IM2COL:
         return maps_execute_im2col_f16(plan, op, slot, runtime);
     case OP_TRANSPOSE:
