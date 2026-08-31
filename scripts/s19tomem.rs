@@ -27,7 +27,7 @@
 use std::env;
 use std::fs;
 use std::io::{self, Write, BufWriter};
-use std::process::ExitCode;
+use std::process;
 
 const MEM_START: u32 = 0xcc00_0000;
 const INSTR_SIZE: u32 = 0x8000;
@@ -79,16 +79,24 @@ fn parse_s3_line(line: &[u8], mut store: impl FnMut(u32, u8)) {
     if line.len() < 4 || &line[0..2] != b"S3" {
         return;
     }
-    let Some(count) = hex_byte(&line[2..4]) else { return };
-    let count = count as usize;
+    let count = match hex_byte(&line[2..4]) {
+        Some(c) => c as usize,
+        None => return,
+    };
     if count < 5 || line.len() < 4 + count * 2 {
         return;
     }
     let data_len = count - 5;
-    let Some(addr) = hex_u32(&line[4..12]) else { return };
+    let addr = match hex_u32(&line[4..12]) {
+        Some(a) => a,
+        None => return,
+    };
     for i in 0..data_len {
         let off = 12 + i * 2;
-        let Some(byte) = hex_byte(&line[off..off + 2]) else { continue };
+        let byte = match hex_byte(&line[off..off + 2]) {
+            Some(b) => b,
+            None => continue,
+        };
         store(addr.wrapping_add(i as u32), byte);
     }
 }
@@ -111,11 +119,11 @@ fn write_mem_file(path: &str, base: u32, mem: &[u8], trailing_newline: bool) -> 
     w.flush()
 }
 
-fn main() -> ExitCode {
+fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         eprintln!("usage: {} <input.s19> [instr_out.txt] [data_out.txt]", args[0]);
-        return ExitCode::FAILURE;
+        process::exit(1);
     }
     let in_path = &args[1];
     let instr_path = args.get(2).map(String::as_str).unwrap_or("stim_instr.txt");
@@ -125,7 +133,7 @@ fn main() -> ExitCode {
         Ok(b) => b,
         Err(e) => {
             eprintln!("error: could not read '{}': {}", in_path, e);
-            return ExitCode::FAILURE;
+            process::exit(1);
         }
     };
 
@@ -151,14 +159,12 @@ fn main() -> ExitCode {
 
     if let Err(e) = write_mem_file(instr_path, MEM_START, &instr_mem, true) {
         eprintln!("error: could not write '{}': {}", instr_path, e);
-        return ExitCode::FAILURE;
+        process::exit(1);
     }
     if let Err(e) = write_mem_file(data_path, DATA_BASE, &data_mem, false) {
         eprintln!("error: could not write '{}': {}", data_path, e);
-        return ExitCode::FAILURE;
+        process::exit(1);
     }
-
-    ExitCode::SUCCESS
 }
 
 // Trims leading/trailing whitespace (spaces, '\r' from CRLF endings, etc.)
