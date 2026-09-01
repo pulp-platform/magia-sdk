@@ -335,7 +335,7 @@ extern void eu_redmule_init(eu_controller_t *ctrl, uint32_t enable_irq)
     __attribute__((alias("eu32_redmule_init"), used, visibility("default")));
 // eu32_redmule_wait is now a static inline (see eventunit32.h), so it cannot be an
 // alias target; expose the external symbol via a thin wrapper for legacy/test callers.
-uint32_t __attribute__((used, visibility("default"))) eu_redmule_wait(eu_controller_t *ctrl,
+uint32_t __attribute__((used, visibility("default"))) eu_redmule_wait(eu_controller_t *ctrl, 
                                                                       eu_wait_mode_t mode)
 {
     return eu32_redmule_wait(ctrl, mode);
@@ -345,13 +345,12 @@ extern void eu_idma_init(eu_controller_t *ctrl, uint32_t enable_irq)
 // eu32_idma_wait_a2o / eu32_idma_wait_o2a are now static inlines (see
 // eventunit32.h), so they cannot be alias targets; expose the external symbols
 // via thin wrappers for legacy/test callers.
-uint32_t __attribute__((used, visibility("default"))) eu_idma_wait_a2o(eu_controller_t *ctrl,
+uint32_t __attribute__((used, visibility("default"))) eu_idma_wait_a2o(eu_controller_t *ctrl, 
                                                                        eu_wait_mode_t mode)
 {
     return eu32_idma_wait_a2o(ctrl, mode);
 }
-uint32_t __attribute__((used, visibility("default"))) eu_idma_wait_o2a(eu_controller_t *ctrl,
-                                                                       eu_wait_mode_t mode)
+uint32_t __attribute__((used, visibility("default"))) eu_idma_wait_o2a(eu_controller_t *ctrl, eu_wait_mode_t mode)
 {
     return eu32_idma_wait_o2a(ctrl, mode);
 }
