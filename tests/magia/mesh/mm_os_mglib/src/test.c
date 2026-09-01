@@ -346,7 +346,7 @@ int main(void)
             }
         }
     }
-    printf("Number of errors: %d\n", errors);
+    printf("TILE %d DICE: Number of errors: %d\n", hartid, errors);
 
     return errors;
 }
