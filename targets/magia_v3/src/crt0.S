@@ -81,6 +81,17 @@ _start:
 
 skip_bss_clear:
 
+# clear the per-tile .tile_bss on every hart (per-tile aliased memory, so
+  # each control core must zero its own copy - unlike the shared-L2 .bss above)
+  la      t0, _tile_bss_start
+  la      t1, _tile_bss_end
+  bgeu    t0, t1, 3f
+2:
+  sw      zero, 0(t0)
+  addi    t0, t0, 4
+  bltu    t0, t1, 2b
+3:
+
   /* Stack initialization: top of the CV32 stack band (0x14000), grows down.
    * Must use _stack_start (region top), NOT `stack` (region bottom + _min_stack),
    * otherwise sp starts near the floor and underflows past 0x10000. */
