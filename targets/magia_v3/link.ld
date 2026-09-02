@@ -20,8 +20,8 @@ __DYNAMIC  =  0;
 
 MEMORY
 {
-    instrram    : ORIGIN = 0xcc000000, LENGTH = 0x8000
-    dataram     : ORIGIN = 0xcc010000, LENGTH = 0xF00000
+    instrram    : ORIGIN = 0xcc000000, LENGTH = 0x20000
+    dataram     : ORIGIN = 0xcc020000, LENGTH = 0xF00000
     stack       : ORIGIN = 0x00010000, LENGTH = 0x4000 /* 16K for control core CV32 (0x10000-0x14000); PULP 0x14000-0x1C000, Spatz 0x1C000-0x20000 */
 }
 

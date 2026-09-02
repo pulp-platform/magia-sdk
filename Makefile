@@ -345,3 +345,44 @@ llvm:
 		../llvm && \
 	make -j$(LLVM_JOBS) all && \
 	make install
+
+deploy:
+ifndef test
+	$(error Proper formatting is: make deploy test=<test_name> platform=rtl|gvsoc)
+endif
+ifndef platform
+	$(error Proper formatting is: make deploy test=<test_name> platform=rtl|gvsoc)
+endif
+	python deployment/generate.py \
+		-s ./deployment/tests/$(test) \
+		-d ./tests/magia/mesh/$(test) && \
+	$(MAKE) clean build tiles=$(tiles) compiler=$(compiler) eval=$(eval) && \
+	$(MAKE) run test=test_$(test) platform=$(platform)
+
+deploy_with_spatz:
+ifeq ($(or $(test),$(platform)),)
+	$(error Proper formatting is: make deploy_with_spatz test=<test>_fp16_spatz platform=<rtl|gvsoc>)
+endif
+
+# enable per node execution trace in each template
+# e.g: Running node: <name> <op>
+ifdef enable_node_logs
+	python3 deployment/generate_with_spatz.py -t $(test) -vv --enable-node-logs
+else
+	python3 deployment/generate_with_spatz.py -t $(test) -vv
+endif
+
+# MAGIA V2 needs GCC_PULP
+# MAGIA V3 needs GCC_MULTILIB
+# Notice: make clean is needed when switching target platform
+ifeq ($(target_platform),magia_v2)
+	$(MAKE) build test=$(subst /,_,$(test)) compiler=GCC_PULP
+	$(MAKE) run test=$(subst /,_,$(test)) platform=$(platform) compiler=GCC_PULP \
+		GVRUN_COMMON_ARGS="--work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)/n_tiles_x=$(tiles) --attr $(target_platform)/n_tiles_y=$(tiles) --attr $(target_platform)/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin"
+else ifeq ($(target_platform),magia_v3)
+	$(MAKE) build test=$(subst /,_,$(test)) compiler=GCC_MULTILIB pulp_cores=0
+	$(MAKE) run test=$(subst /,_,$(test)) platform=$(platform) compiler=GCC_MULTILIB \
+		GVRUN_COMMON_ARGS="--work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin"
+else
+	$(error Unsupported target_platform)
+endif
