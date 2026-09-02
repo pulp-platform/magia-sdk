@@ -360,17 +360,29 @@ endif
 	$(MAKE) run test=test_$(test) platform=$(platform)
 
 deploy_with_spatz:
-ifndef test
-	$(error Proper formatting is: make deploy_with_spatz test=<net>/fp16/spatz platform=gvsoc)
+ifeq ($(or $(test),$(platform)),)
+	$(error Proper formatting is: make deploy_with_spatz test=<test>_fp16_spatz platform=<rtl|gvsoc>)
 endif
-ifndef platform
-	$(error Proper formatting is: make deploy_with_spatz test=<net>/fp16/spatz platform=gvsoc)
-endif
+
+# enable per node execution trace in each template
+# e.g: Running node: <name> <op>
 ifdef enable_node_logs
 	python3 deployment/generate_with_spatz.py -t $(test) -vv --enable-node-logs
 else
 	python3 deployment/generate_with_spatz.py -t $(test) -vv
 endif
-	$(MAKE) build tiles=$(tiles) target_platform=magia_v2 spatz=1 compiler=GCC_PULP test=$(subst /,_,$(test))
-	$(MAKE) run test=$(subst /,_,$(test)) platform=$(platform) target_platform=magia_v2 tiles=$(tiles) \
-		GVRUN_COMMON_ARGS="--work-dir $(GVSOC_WORK_DIR) --attr magia_v2/n_tiles_x=$(tiles) --attr magia_v2/n_tiles_y=$(tiles) --attr magia_v2/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin"
+
+# MAGIA V2 needs GCC_PULP
+# MAGIA V3 needs GCC_MULTILIB
+# Notice: make clean is needed when switching target platform
+ifeq ($(target_platform),magia_v2)
+	$(MAKE) build test=$(subst /,_,$(test)) compiler=GCC_PULP
+	$(MAKE) run test=$(subst /,_,$(test)) platform=$(platform) compiler=GCC_PULP \
+		GVRUN_COMMON_ARGS="--work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)/n_tiles_x=$(tiles) --attr $(target_platform)/n_tiles_y=$(tiles) --attr $(target_platform)/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin"
+else ifeq ($(target_platform),magia_v3)
+	$(MAKE) build test=$(subst /,_,$(test)) compiler=GCC_MULTILIB pulp_cores=0
+	$(MAKE) run test=$(subst /,_,$(test)) platform=$(platform) compiler=GCC_MULTILIB \
+		GVRUN_COMMON_ARGS="--work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin"
+else
+	$(error Unsupported target_platform)
+endif
