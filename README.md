@@ -416,3 +416,29 @@ add_cv32_executable_with_spatz(
 
 ### Run Tests
 To run test a special Makefile rule can be used: `make run test=<test_name> platform=<rtl|gvsoc>`.
+
+
+## Deployment
+
+On top of the single-kernel tests, the SDK can deploy a **whole neural network** via
+[Deeploy](https://github.com/pulp-platform/Deeploy): Deeploy parses the network graph and,
+node by node, emits a C call to a MAGIA kernel. Two `Makefile` rules drive this flow (see
+[`deployment/README.md`](deployment/README.md) for details, the operator list and how to
+add a new operator):
+
+- **`make deploy_with_spatz test=<name>/<fmt>/<arch> platform=<rtl|gvsoc> tiles=<N>`** — the
+  **CV32 + Spatz** path. Runs `deployment/generate_with_spatz.py` to generate the network C
+  code (into `tests/spatz_on_magia/deeploy_<name>_<fmt>_<arch>/`, with the per-operator
+  Spatz kernels embedded), builds the CV32 executable with the embedded Spatz binary and
+  runs it. This is the path used to deploy the reference networks (ResNet, BERT,
+  EfficientNet, tiny-ViT, YOLOv8n).
+
+- **`make deploy test=<name> platform=<rtl|gvsoc> tiles=<N>`** — the **CV32-host-only** path.
+  Runs `deployment/generate.py` to generate the network and runs it on the plain CV32 host,
+  without offloading to an accelerator.
+
+Example:
+
+```bash
+make deploy_with_spatz test=yolo-reduced/fp16/spatz platform=gvsoc tiles=2
+```
