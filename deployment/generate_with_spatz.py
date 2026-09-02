@@ -23,6 +23,10 @@ from Deeploy.CommonExtensions import DataTypes
 def normalize_spatz_types(code: str) -> str:
     return code.replace("float16_t", "float16")
 
+
+def add_float16_include(code: str) -> str:
+    return code.replace('#include <stdint.h>\n', '#include <stdint.h>\n#include "tile.h"\n', 1)
+
 def extract_operators(network_source: str, format: str, arch: str) -> list:
     pattern = re.compile(rf"MAGIA_([a-z0-9]+)_{format}_{arch}\s*\(")
     return sorted(set(pattern.findall(network_source)))
@@ -196,6 +200,7 @@ def main(test, enable_node_logs=False) -> None:
     logger.debug(f"generating {data_header_path}")
     data_header = generate_test_header(inputs, outputs)
     data_header = normalize_spatz_types(data_header)
+    data_header = add_float16_include(data_header)
     data_header, data_source = split_test_header_definitions(data_header)
     with open(data_header_path, "w") as f:
         f.write(data_header)
