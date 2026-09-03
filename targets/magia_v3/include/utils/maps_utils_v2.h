@@ -324,10 +324,21 @@ static inline void maps_fifo_flush_experiment_trace(const fifo_tile_plan_t *plan
 {
 #ifdef MAPS_EXPERIMENT_TRACE
     maps_fifo_experiment_trace_t *trace = maps_fifo_experiment_trace();
+    maps_experiment_duration_trace_t *durations = maps_experiment_duration_trace();
     for (uint32_t token = 0; token < num_tokens; ++token)
         printf("MAPS_TOKEN tile=%u token=%u start=%u end=%u output=%u\n",
                plan->hartid, token, trace->starts[plan->hartid][token],
                trace->ends[plan->hartid][token], plan->num_l2_writes != 0u);
+    uint32_t count = durations->counts[plan->hartid];
+    if (count > MAPS_EXPERIMENT_MAX_DURATION_EVENTS)
+        count = MAPS_EXPERIMENT_MAX_DURATION_EVENTS;
+    for (uint32_t event = 0u; event < count; ++event) {
+        const maps_experiment_duration_event_t *entry =
+            &durations->events[plan->hartid][event];
+        const char *phase = entry->phase == 0u ? "op" : entry->phase == 1u ? "send" : "recv";
+        printf("maps t%u tok %u slot %u %s %u cycles %u\n", plan->hartid,
+               entry->token, entry->slot, phase, entry->index, entry->cycles);
+    }
 #else
     (void)plan;
     (void)num_tokens;

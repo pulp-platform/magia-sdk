@@ -27,6 +27,28 @@
 #include "utils/printf.h"
 #endif
 
+#ifdef MAPS_EXPERIMENT_TRACE
+#define MAPS_EXPERIMENT_MAX_DURATION_EVENTS 512u
+typedef struct {
+    uint32_t token;
+    uint32_t slot;
+    uint32_t phase;
+    uint32_t index;
+    uint32_t cycles;
+} maps_experiment_duration_event_t;
+typedef struct {
+    uint32_t counts[NUM_HARTS];
+    maps_experiment_duration_event_t events[NUM_HARTS][MAPS_EXPERIMENT_MAX_DURATION_EVENTS];
+} maps_experiment_duration_trace_t;
+
+static inline maps_experiment_duration_trace_t *maps_experiment_duration_trace(void)
+{
+    static maps_experiment_duration_trace_t trace
+        __attribute__((section(".l2_bulk.maps_experiment_trace")));
+    return &trace;
+}
+#endif
+
 #ifndef MAPS_ENABLE_EVENT_TRACE
 #define MAPS_ENABLE_EVENT_TRACE MAPS_ENABLE_TRACE
 #endif
@@ -474,6 +496,17 @@ static inline void maps_trace_duration(const tile_plan_t *plan,
 #if MAPS_ENABLE_TRACE
     printf("maps t%d tok %d slot %d %s %d cycles %u\n", plan->hartid, token, slot, phase,
            index, cycles);
+#elif defined(MAPS_EXPERIMENT_TRACE)
+    maps_experiment_duration_trace_t *trace = maps_experiment_duration_trace();
+    uint32_t event = trace->counts[plan->hartid]++;
+    if (event < MAPS_EXPERIMENT_MAX_DURATION_EVENTS) {
+        maps_experiment_duration_event_t *entry = &trace->events[plan->hartid][event];
+        entry->token = token;
+        entry->slot = slot;
+        entry->phase = phase[0] == 'o' ? 0u : phase[0] == 's' ? 1u : 2u;
+        entry->index = index;
+        entry->cycles = cycles;
+    }
 #else
     (void)plan;
     (void)token;
