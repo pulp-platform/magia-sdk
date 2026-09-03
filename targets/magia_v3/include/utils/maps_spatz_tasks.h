@@ -102,6 +102,9 @@ static inline int maps_execute_matmul_spatz(
 #if MAPS_HAS_REDUCE_SUM_SPATZ_TASK
 #include "reducesum_fp16_spatz_params.h"
 #endif
+#if MAPS_HAS_REDUCE_MAX_SPATZ_TASK
+#include "reducemax_fp16_spatz_params.h"
+#endif
 #if MAPS_HAS_BINARY_BCAST_SPATZ_TASK
 #include "binary_bcast_fp16_spatz_params.h"
 #endif
@@ -112,6 +115,48 @@ static inline int maps_wait_for_spatz(maps_operation_runtime_t *runtime)
         return -1;
     return (int)spatz_get_exit_code();
 }
+
+#if MAPS_HAS_REDUCE_SUM_SPATZ_TASK
+static inline int maps_execute_reducesum_spatz_buffer(
+    uint32_t input, uint32_t output, uint32_t reduce_dim, uint32_t elements,
+    maps_operation_runtime_t *runtime)
+{
+    if (!runtime || !runtime->spatz_initialized || runtime->reducesum_fp16_task == 0u ||
+        runtime->spatz_params_bytes < sizeof(reducesum_fp16_spatz_params_t))
+        return -1;
+    volatile reducesum_fp16_spatz_params_t *params =
+        (volatile reducesum_fp16_spatz_params_t *)runtime->spatz_params;
+    params->shard_X = input;
+    params->shard_Y = output;
+    params->reduce_dim = reduce_dim;
+    params->inner_dim = elements;
+    params->outer_start = 0u;
+    params->outer_len = 1u;
+    spatz_run_task_with_params(runtime->reducesum_fp16_task,
+                               (uint32_t)runtime->spatz_params);
+    return maps_wait_for_spatz(runtime);
+}
+#endif
+
+#if MAPS_HAS_REDUCE_MAX_SPATZ_TASK
+static inline int maps_execute_reducemax_spatz_buffer(
+    uint32_t input, uint32_t output, uint32_t reduce_dim, uint32_t elements,
+    maps_operation_runtime_t *runtime)
+{
+    if (!runtime || !runtime->spatz_initialized || runtime->reducemax_fp16_task == 0u ||
+        runtime->spatz_params_bytes < sizeof(reducemax_fp16_spatz_params_t))
+        return -1;
+    volatile reducemax_fp16_spatz_params_t *params =
+        (volatile reducemax_fp16_spatz_params_t *)runtime->spatz_params;
+    params->shard_X = input;
+    params->shard_Y = output;
+    params->reduce_dim = reduce_dim;
+    params->inner_dim = elements;
+    spatz_run_task_with_params(runtime->reducemax_fp16_task,
+                               (uint32_t)runtime->spatz_params);
+    return maps_wait_for_spatz(runtime);
+}
+#endif
 
 #if MAPS_HAS_REDUCE_SUM_SPATZ_TASK
 static inline int maps_execute_reducesum_spatz(

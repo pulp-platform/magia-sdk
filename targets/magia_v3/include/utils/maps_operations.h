@@ -35,6 +35,9 @@
 #ifndef MAPS_HAS_REDUCE_SUM_SPATZ_TASK
 #define MAPS_HAS_REDUCE_SUM_SPATZ_TASK 0u
 #endif
+#ifndef MAPS_HAS_REDUCE_MAX_SPATZ_TASK
+#define MAPS_HAS_REDUCE_MAX_SPATZ_TASK 0u
+#endif
 #ifndef MAPS_HAS_BINARY_BCAST_SPATZ_TASK
 #define MAPS_HAS_BINARY_BCAST_SPATZ_TASK 0u
 #endif
@@ -64,6 +67,7 @@ typedef struct {
     uint32_t group_centered_reduce_fp16_task;
     uint32_t group_normalize_fp16_task;
     uint32_t reducesum_fp16_task;
+    uint32_t reducemax_fp16_task;
     uint32_t binary_bcast_fp16_task;
     void *spatz_params;
     uint32_t spatz_params_bytes;
@@ -94,6 +98,10 @@ typedef enum {
     MAPS_COLLECTIVE_ARRIVAL = 0u,
     MAPS_COLLECTIVE_RELEASE = 1u,
 } maps_collective_phase_t;
+
+static inline int maps_execute_collective_reduce_spatz_buffer(
+    uint32_t input, uint32_t output, uint32_t reduce_dim, uint32_t elements,
+    uint32_t kind, maps_operation_runtime_t *runtime);
 
 static inline float maps_operation_exp_f32(float value)
 {
@@ -321,7 +329,8 @@ static inline void maps_collective_wait(const tile_plan_t *plan,
 
 static inline int maps_execute_all_reduce(const tile_plan_t *plan,
                                           const op_desc_t *op,
-                                          uint32_t slot)
+                                          uint32_t slot,
+                                          maps_operation_runtime_t *runtime)
 {
     const collective_desc_t *collective = &op->collective;
     if (collective->num_participants == 0u ||
@@ -339,24 +348,26 @@ static inline int maps_execute_all_reduce(const tile_plan_t *plan,
     if (local_index == collective->num_participants)
         return -1;
 
+    if (!runtime || !runtime->idma_ctrl || !runtime->eu_ctrl)
+        return -1;
+
     if (collective->num_participants == 1u) {
         const collective_participant_desc_t *participant =
             &collective->participants[0];
-        const uint16_t *input = (const uint16_t *)(
+        const uint32_t input =
             remote_tile_l1_base(participant->hartid) +
             participant->l1_data_base_offset +
             participant->input_l1_offset_bytes +
-            slot * participant->input_slot_bytes);
-        volatile uint16_t *output = (volatile uint16_t *)(
+            slot * participant->input_slot_bytes;
+        const uint32_t output =
             remote_tile_l1_base(participant->hartid) +
             participant->l1_data_base_offset +
             participant->output_l1_offset_bytes +
-            slot * participant->output_slot_bytes);
-        const uint32_t elements = maps_operation_elems(&op->outputs[0]);
-        for (uint32_t element = 0u; element < elements; ++element)
-            output[element] = input[element];
-        __asm__ volatile("fence rw, rw" ::: "memory");
-        return 0;
+            slot * participant->output_slot_bytes;
+        const uint32_t bytes = maps_operation_elems(&op->outputs[0]) * sizeof(uint16_t);
+        if (idma_memcpy_1d(runtime->idma_ctrl, 1u, output, input, bytes) != 0)
+            return -2;
+        return eu_idma_wait_o2a(runtime->eu_ctrl, MAPS_WAIT_MODE) ? 0 : -2;
     }
 
     const uint32_t root_hartid = collective->participants[0].hartid;
@@ -379,33 +390,42 @@ static inline int maps_execute_all_reduce(const tile_plan_t *plan,
                 collective, slot, MAPS_COLLECTIVE_ARRIVAL, index));
 
     const uint32_t elements = maps_operation_elems(&op->outputs[0]);
-    for (uint32_t element = 0u; element < elements; ++element) {
-        float result = 0.0f;
-        for (uint32_t index = 0u; index < collective->num_participants; ++index) {
-            const collective_participant_desc_t *participant =
-                &collective->participants[index];
-            const uint16_t *input = (const uint16_t *)(
-                remote_tile_l1_base(participant->hartid) +
-                participant->l1_data_base_offset +
-                participant->input_l1_offset_bytes +
-                slot * participant->input_slot_bytes);
-            const float value = maps_operation_f16_to_f32(input[element]);
-            if (index == 0u || op->kind == OP_ALL_REDUCE_MAX)
-                result = index == 0u || value > result ? value : result;
-            else
-                result += value;
-        }
-        const uint16_t reduced = maps_operation_f32_to_f16(result);
-        for (uint32_t index = 0u; index < collective->num_participants; ++index) {
-            const collective_participant_desc_t *participant =
-                &collective->participants[index];
-            volatile uint16_t *output = (volatile uint16_t *)(
-                remote_tile_l1_base(participant->hartid) +
-                participant->l1_data_base_offset +
-                participant->output_l1_offset_bytes +
-                slot * participant->output_slot_bytes);
-            output[element] = reduced;
-        }
+    const uint32_t bytes = elements * sizeof(uint16_t);
+    const uint32_t params_bytes = 32u;
+    const uint32_t gathered = ((uint32_t)(uintptr_t)runtime->spatz_params + params_bytes + 15u) & ~15u;
+    const uint32_t gathered_bytes = collective->num_participants * bytes;
+    if (gathered + gathered_bytes > (uint32_t)(uintptr_t)runtime->spatz_params +
+            runtime->spatz_params_bytes)
+        return -2;
+
+    for (uint32_t index = 0u; index < collective->num_participants; ++index) {
+        const collective_participant_desc_t *participant = &collective->participants[index];
+        const uint32_t input = remote_tile_l1_base(participant->hartid) +
+            participant->l1_data_base_offset + participant->input_l1_offset_bytes +
+            slot * participant->input_slot_bytes;
+        if (idma_memcpy_1d(runtime->idma_ctrl, 1u, gathered + index * bytes,
+                           input, bytes) != 0 ||
+            !eu_idma_wait_o2a(runtime->eu_ctrl, MAPS_WAIT_MODE))
+            return -2;
+    }
+
+    const collective_participant_desc_t *root = &collective->participants[0];
+    const uint32_t output = remote_tile_l1_base(root->hartid) +
+        root->l1_data_base_offset + root->output_l1_offset_bytes +
+        slot * root->output_slot_bytes;
+    if (maps_execute_collective_reduce_spatz_buffer(
+            gathered, output, collective->num_participants, elements,
+            op->kind, runtime) != 0)
+        return -2;
+
+    for (uint32_t index = 1u; index < collective->num_participants; ++index) {
+        const collective_participant_desc_t *participant = &collective->participants[index];
+        const uint32_t destination = remote_tile_l1_base(participant->hartid) +
+            participant->l1_data_base_offset + participant->output_l1_offset_bytes +
+            slot * participant->output_slot_bytes;
+        if (idma_memcpy_1d(runtime->idma_ctrl, 1u, destination, output, bytes) != 0 ||
+            !eu_idma_wait_o2a(runtime->eu_ctrl, MAPS_WAIT_MODE))
+            return -2;
     }
 
     __asm__ volatile("fence rw, rw" ::: "memory");
@@ -781,6 +801,26 @@ static inline int maps_execute_output_reformat_1x1_f16(
 
 #include "utils/maps_spatz_tasks.h"
 
+static inline int maps_execute_collective_reduce_spatz_buffer(
+    uint32_t input, uint32_t output, uint32_t reduce_dim, uint32_t elements,
+    uint32_t kind, maps_operation_runtime_t *runtime)
+{
+    if (kind == OP_ALL_REDUCE_SUM) {
+#if MAPS_HAS_REDUCE_SUM_SPATZ_TASK
+        return maps_execute_reducesum_spatz_buffer(input, output, reduce_dim,
+                                                   elements, runtime);
+#else
+        return -1;
+#endif
+    }
+#if MAPS_HAS_REDUCE_MAX_SPATZ_TASK
+    return maps_execute_reducemax_spatz_buffer(input, output, reduce_dim,
+                                                elements, runtime);
+#else
+    return -1;
+#endif
+}
+
 static inline int maps_execute_operation(const tile_plan_t *plan,
                                          const op_desc_t *op,
                                          uint32_t slot,
@@ -875,7 +915,7 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
         return maps_execute_reduce_f16(plan, op, slot);
     case OP_ALL_REDUCE_MAX:
     case OP_ALL_REDUCE_SUM:
-        return maps_execute_all_reduce(plan, op, slot);
+        return maps_execute_all_reduce(plan, op, slot, runtime);
     case OP_SPLIT:
         return maps_execute_split_f16(plan, op, slot, runtime);
     case OP_IM2COL:
