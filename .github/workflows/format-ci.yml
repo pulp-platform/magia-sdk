@@ -19,7 +19,7 @@ jobs:
       - name: Install clang-format
         run: |
           sudo apt-get update
-          sudo apt-get install clang-format-15
+          sudo apt-get install clang-format-15=1:15.0.0-1~exp1~exp1
 
       - name: Check formatting
         run: bash scripts/ci/format-changed.sh check --committed
