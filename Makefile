@@ -100,7 +100,7 @@ GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
 CMAKE ?= cmake
 
 GVSOC_WORK_DIR ?= ./gvsoc_work
-GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)/n_tiles_x=$(tiles) --attr $(target_platform)/n_tiles_y=$(tiles) --attr $(target_platform)/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --attr $(target_platform)/nb_pulp_cores=$(pulp_cores) --trace-level=trace --trace=kill-module
+GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace --trace=kill-module
 GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
 GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 profile_tile		?=
@@ -225,7 +225,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|verilator|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVRUN) --target $(target_platform) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
+	$(GVRUN) --target=$(target_platform):n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
 else ifeq ($(platform), rtl)
 	$(MAKE) rtl_stimuli test=$(test)
 	cd $(BUILD_DIR_ABS)													&& \
@@ -272,7 +272,7 @@ endif
 ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
 	$(error No test found with name: $(test))
 endif
-	$(GVRUN) --target magia_v2 --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG) $(GVSOC_TRACE_ARG)
+	$(GVRUN) --target $(target_platform) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG) $(GVSOC_TRACE_ARG)
 	$(GVSOC2PERFETTO_BIN) $(GVSOC2PERFETTO_VCD) \
 		-o $(GVSOC2PERFETTO_OUT) \
 		--state-map 'fsm_state=0:idle,1:preload,2:routine,3:storing,4:finished,5:acknowledge' \
@@ -384,11 +384,8 @@ endif
 	cd $(GVSOC_DIR)	&& \
 	make build TARGETS=magia_v2
 else ifeq ($(target_platform), magia_v3)
-	sed -i -E "s/^[[:space:]]*N_TILES_X[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_X           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
-	sed -i -E "s/^[[:space:]]*N_TILES_Y[[:space:]]*=[[:space:]]*[0-9]+/    N_TILES_Y           = $(tiles)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
-	sed -i -E "s/^[[:space:]]*NB_PULP_CORES[[:space:]]*=[[:space:]]*[0-9]+/    NB_PULP_CORES       = $(pulp_cores)/" $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
 	cd $(GVSOC_DIR)	&& \
-	make build TARGETS=magia_v3
+	make build TARGETS="magia_v3:n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores)"
 else
 	$(error unrecognized platform (acceptable platforms: magia_v2, magia_v3).)
 endif
@@ -413,17 +410,23 @@ gvsoc_init:
 	git fetch origin $(GVSOC_GVRUN_COMMIT) && \
 	git checkout $(GVSOC_GVRUN_COMMIT)
 
+# Set TORCH=1 to also install the "gemm" extra (torch, CPU build via uv).
+TORCH ?= 0
+ifeq ($(TORCH),1)
+PIP_EXTRAS := [gemm]
+endif
+
 gvsoc_uv:
 	uv venv --python 3.12 gvsoc_venv && \
 	source gvsoc_venv/bin/activate && \
-	uv pip install .
+	uv pip install .$(PIP_EXTRAS)
 
 gvsoc_venv:
 	eval "$(pyenv init -)" && \
 	pyenv local 3.12 && \
 	python -m venv gvsoc_venv && \
 	source gvsoc_venv/bin/activate && \
-	pip install .
+	pip install .$(PIP_EXTRAS)
 
 llvm:
 	mkdir -p $(LLVM_DIR)

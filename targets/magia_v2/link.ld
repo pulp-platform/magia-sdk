@@ -18,6 +18,12 @@
 SEARCH_DIR(.)
 __DYNAMIC  =  0;
 
+/* Pin the ELF entry point to _start. Without this, ld defaults the entry to the
+ * first byte of .text, which the loader uses as the core boot address. Under -flto
+ * the link may place another function (e.g. to_x) first, so the entry would boot
+ * into arbitrary code with an uninitialized register file instead of crt0. */
+ENTRY(_start)
+
 MEMORY
 {
     instrram    : ORIGIN = 0xcc000000, LENGTH = 0x8000
@@ -148,6 +154,19 @@ SECTIONS
         . = ALIGN(4);
         stack = . ;
         _stack = . ;
+    } > stack :NONE
+
+    /* Per-tile-aliased scratch (private to each tile, unlike the shared-L2 .bss).
+     * Placed above the stack top so the downward-growing stack never reaches it.
+     * Zeroed by every hart in crt0 (see _tile_bss_start/_tile_bss_end). */
+    _tile_bss_size = 0x400;   /* 1 KiB per-tile scratch */
+    .tile_bss (NOLOAD): {
+        . = ALIGN(4);
+        _tile_bss_start = . ;
+        *(.tile_bss)
+        *(.tile_bss.*)
+        . = _tile_bss_start + _tile_bss_size ;   /* fixed 1 KiB reservation */
+        _tile_bss_end = . ;
     } > stack :NONE
 
 }
