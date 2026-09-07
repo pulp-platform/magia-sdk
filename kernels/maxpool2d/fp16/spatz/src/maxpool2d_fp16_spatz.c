@@ -11,7 +11,7 @@
 #include "maxpool2d_fp16_spatz_params.h"
 #include "maxpool2d_fp16_spatz_task_bin.h"
 
-#define HID get_hartid()
+#define HID         get_hartid()
 #define KERNEL_NAME "maxpool2d_fp16_spatz"
 
 static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shape[4])
@@ -33,8 +33,8 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shap
     size_t local_out_size;
 
     total_channels = input_shape[0] * input_shape[1];
-    shard = total_channels / NUM_HARTS;
-    left  = total_channels % NUM_HARTS;
+    shard          = total_channels / NUM_HARTS;
+    left           = total_channels % NUM_HARTS;
 
     c_start = HID * shard + (HID < left ? HID : left);
     c_end   = c_start + shard + (HID < left ? 1 : 0);
@@ -60,21 +60,28 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t output_shap
     if (!shard_Y)
         return ENOMEM;
 
-    maxpool_params->shard_X  = shard_X;
-    maxpool_params->shard_Y  = shard_Y;
-    maxpool_params->c_start  = (uint32_t) c_start;
-    maxpool_params->c_len    = (uint32_t) c_len;
-    maxpool_params->h_in     = input_shape[2];
-    maxpool_params->w_in     = input_shape[3];
-    maxpool_params->h_out    = output_shape[2];
-    maxpool_params->w_out    = output_shape[3];
+    maxpool_params->shard_X = shard_X;
+    maxpool_params->shard_Y = shard_Y;
+    maxpool_params->c_start = (uint32_t)c_start;
+    maxpool_params->c_len   = (uint32_t)c_len;
+    maxpool_params->h_in    = input_shape[2];
+    maxpool_params->w_in    = input_shape[3];
+    maxpool_params->h_out   = output_shape[2];
+    maxpool_params->w_out   = output_shape[3];
 
-    *params = (void *) maxpool_params;
+    *params = (void *)maxpool_params;
 
     return 0;
 }
 
-static int init_input_params(void *params, const float16 *X, uint32_t kernel_h, uint32_t kernel_w, uint32_t stride_h, uint32_t stride_w, uint32_t pad_h, uint32_t pad_w)
+static int init_input_params(void *params,
+                             const float16 *X,
+                             uint32_t kernel_h,
+                             uint32_t kernel_w,
+                             uint32_t stride_h,
+                             uint32_t stride_w,
+                             uint32_t pad_h,
+                             uint32_t pad_w)
 {
     volatile maxpool2d_fp16_spatz_params_t *maxpool_params;
     idma_controller_t idma_ctrl;
@@ -83,10 +90,10 @@ static int init_input_params(void *params, const float16 *X, uint32_t kernel_h, 
     uint32_t c_start;
     uint32_t c_len;
 
-    maxpool_params = (volatile maxpool2d_fp16_spatz_params_t *) params;
-    in_hw_len = maxpool_params->h_in * maxpool_params->w_in;
-    c_start   = maxpool_params->c_start;
-    c_len     = maxpool_params->c_len;
+    maxpool_params = (volatile maxpool2d_fp16_spatz_params_t *)params;
+    in_hw_len      = maxpool_params->h_in * maxpool_params->w_in;
+    c_start        = maxpool_params->c_start;
+    c_len          = maxpool_params->c_len;
 
     if (c_len > 0) {
         idma_ctrl_init(&idma_ctrl);
@@ -94,16 +101,20 @@ static int init_input_params(void *params, const float16 *X, uint32_t kernel_h, 
 
         /* This tile's channels [c_start, c_start+c_len) are contiguous in L2. The Spatz task
            writes every output (one max per window), so shard_Y is not zeroed here. */
-        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (X + c_start * in_hw_len), (uint32_t) maxpool_params->shard_X, c_len * in_hw_len * sizeof(float16));
+        idma_memcpy_1d(&idma_ctrl,
+                       0,
+                       (uint32_t)(X + c_start * in_hw_len),
+                       (uint32_t)maxpool_params->shard_X,
+                       c_len * in_hw_len * sizeof(float16));
         eu_idma_wait_a2o(&eu_ctrl, WFE);
     }
 
-    maxpool_params->kernel_h  = kernel_h;
-    maxpool_params->kernel_w  = kernel_w;
-    maxpool_params->stride_h  = stride_h;
-    maxpool_params->stride_w  = stride_w;
-    maxpool_params->pad_h     = pad_h;
-    maxpool_params->pad_w     = pad_w;
+    maxpool_params->kernel_h = kernel_h;
+    maxpool_params->kernel_w = kernel_w;
+    maxpool_params->stride_h = stride_h;
+    maxpool_params->stride_w = stride_w;
+    maxpool_params->pad_h    = pad_h;
+    maxpool_params->pad_w    = pad_w;
 
     return 0;
 }
@@ -118,7 +129,10 @@ static int offload_spatz_task(void *params)
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         goto exit;
     }
 
@@ -137,10 +151,10 @@ static int store_result(void *params, float16 *Y)
     uint32_t c_start;
     uint32_t c_len;
 
-    maxpool_params = (volatile maxpool2d_fp16_spatz_params_t *) params;
-    out_hw_len = maxpool_params->h_out * maxpool_params->w_out;
-    c_start    = maxpool_params->c_start;
-    c_len      = maxpool_params->c_len;
+    maxpool_params = (volatile maxpool2d_fp16_spatz_params_t *)params;
+    out_hw_len     = maxpool_params->h_out * maxpool_params->w_out;
+    c_start        = maxpool_params->c_start;
+    c_len          = maxpool_params->c_len;
 
     if (c_len == 0)
         return 0;
@@ -149,13 +163,26 @@ static int store_result(void *params, float16 *Y)
     eu_ctrl_init(&eu_ctrl);
 
     /* This tile's output channels [c_start, c_start+c_len) are contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (Y + c_start * out_hw_len), (uint32_t) maxpool_params->shard_Y, c_len * out_hw_len * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   1,
+                   (uint32_t)(Y + c_start * out_hw_len),
+                   (uint32_t)maxpool_params->shard_Y,
+                   c_len * out_hw_len * sizeof(float16));
     eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
 
-void MAGIA_maxpool2d_fp16_spatz(const float16* X, float16 *Y, uint32_t kernel_h, uint32_t kernel_w, uint32_t stride_h, uint32_t stride_w, uint32_t pad_h, uint32_t pad_w, uint32_t input_shape[4], uint32_t output_shape[4])
+void MAGIA_maxpool2d_fp16_spatz(const float16 *X,
+                                float16 *Y,
+                                uint32_t kernel_h,
+                                uint32_t kernel_w,
+                                uint32_t stride_h,
+                                uint32_t stride_w,
+                                uint32_t pad_h,
+                                uint32_t pad_w,
+                                uint32_t input_shape[4],
+                                uint32_t output_shape[4])
 {
     int ret;
     volatile maxpool2d_fp16_spatz_params_t *params;
@@ -168,13 +195,19 @@ void MAGIA_maxpool2d_fp16_spatz(const float16* X, float16 *Y, uint32_t kernel_h,
 
     ret = init_input_params(params, X, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 
     ret = offload_spatz_task(params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 

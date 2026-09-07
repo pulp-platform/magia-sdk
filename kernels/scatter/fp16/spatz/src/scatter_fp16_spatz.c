@@ -11,12 +11,17 @@
 #include "scatter_fp16_spatz_params.h"
 #include "scatter_fp16_spatz_task_bin.h"
 
-#define HID get_hartid()
+#define HID         get_hartid()
 #define KERNEL_NAME "scatter_fp16_spatz"
 
-static int allocate_l1(void **params, uint32_t outer_size, uint32_t inner_size, uint32_t axis, uint32_t data_axis_dim, uint32_t indices_axis_dim)
+static int allocate_l1(void **params,
+                       uint32_t outer_size,
+                       uint32_t inner_size,
+                       uint32_t axis,
+                       uint32_t data_axis_dim,
+                       uint32_t indices_axis_dim)
 {
-    volatile scatter_fp16_spatz_params_t * scatter_params;
+    volatile scatter_fp16_spatz_params_t *scatter_params;
     uintptr_t shard_data;
     uintptr_t shard_indices;
     uintptr_t shard_updates;
@@ -31,13 +36,13 @@ static int allocate_l1(void **params, uint32_t outer_size, uint32_t inner_size, 
     uint32_t elems_indices;
 
     shard = outer_size / NUM_HARTS;
-    left = outer_size % NUM_HARTS;
+    left  = outer_size % NUM_HARTS;
 
     iter_start = HID * shard + (HID < left ? HID : left);
-    iter_end = iter_start + shard + (HID < left ? 1 : 0);
-    iter_len = iter_end - iter_start;
+    iter_end   = iter_start + shard + (HID < left ? 1 : 0);
+    iter_len   = iter_end - iter_start;
 
-    elems_data = iter_len * data_axis_dim * inner_size;
+    elems_data    = iter_len * data_axis_dim * inner_size;
     elems_indices = iter_len * indices_axis_dim * inner_size;
 
     l1_alloc_init();
@@ -62,26 +67,28 @@ static int allocate_l1(void **params, uint32_t outer_size, uint32_t inner_size, 
     if (!shard_output)
         return ENOMEM;
 
-    scatter_params->shard_data = shard_data;
+    scatter_params->shard_data    = shard_data;
     scatter_params->shard_indices = shard_indices;
     scatter_params->shard_updates = shard_updates;
-    scatter_params->shard_output = shard_output;
+    scatter_params->shard_output  = shard_output;
 
-    scatter_params->outer_per_tile = iter_len;
-    scatter_params->elems_per_tile = elems_data;
+    scatter_params->outer_per_tile         = iter_len;
+    scatter_params->elems_per_tile         = elems_data;
     scatter_params->elems_indices_per_tile = elems_indices;
-    scatter_params->outer_start = iter_start;
-    scatter_params->inner_size = inner_size;
-    scatter_params->data_axis_dim = data_axis_dim;
-    scatter_params->indices_axis_dim = indices_axis_dim;
-    scatter_params->axis = axis;
+    scatter_params->outer_start            = iter_start;
+    scatter_params->inner_size             = inner_size;
+    scatter_params->data_axis_dim          = data_axis_dim;
+    scatter_params->indices_axis_dim       = indices_axis_dim;
+    scatter_params->axis                   = axis;
 
-    *params = (void *) scatter_params;
+    *params = (void *)scatter_params;
     return 0;
-
 }
 
-static int init_input_params(void *params, const float16 *input, const int64_t *indices, const float16 *updates)
+static int init_input_params(void *params,
+                             const float16 *input,
+                             const int64_t *indices,
+                             const float16 *updates)
 {
     volatile scatter_fp16_spatz_params_t *scatter_params;
     idma_controller_t idma_ctrl;
@@ -97,21 +104,21 @@ static int init_input_params(void *params, const float16 *input, const int64_t *
     uint32_t data_axis_dim;
     uint32_t indices_axis_dim;
 
-    scatter_params = (volatile scatter_fp16_spatz_params_t *) params;
+    scatter_params = (volatile scatter_fp16_spatz_params_t *)params;
 
     shard_indices = scatter_params->shard_indices;
 
-    elems_per_tile = scatter_params->elems_per_tile;
+    elems_per_tile         = scatter_params->elems_per_tile;
     elems_indices_per_tile = scatter_params->elems_indices_per_tile;
-    iter_start = scatter_params->outer_start;
-    inner_size = scatter_params->inner_size;
-    data_axis_dim = scatter_params->data_axis_dim;
-    indices_axis_dim = scatter_params->indices_axis_dim;
+    iter_start             = scatter_params->outer_start;
+    inner_size             = scatter_params->inner_size;
+    data_axis_dim          = scatter_params->data_axis_dim;
+    indices_axis_dim       = scatter_params->indices_axis_dim;
 
     if (elems_per_tile == 0)
         return 0;
 
-    global_offset_data = iter_start * data_axis_dim * inner_size;
+    global_offset_data    = iter_start * data_axis_dim * inner_size;
     global_offset_indices = iter_start * indices_axis_dim * inner_size;
 
     /* indices are int64 in L2 but int32 in L1 -> narrowing conversion, staged scalar. */
@@ -123,10 +130,18 @@ static int init_input_params(void *params, const float16 *input, const int64_t *
 
     /* data and updates are plain fp16 copies of contiguous L2 blocks. shard_output is not
        zeroed here: the Spatz task's step 1 copies shard_data over it in full. */
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (input + global_offset_data), (uint32_t) scatter_params->shard_data, elems_per_tile * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   0,
+                   (uint32_t)(input + global_offset_data),
+                   (uint32_t)scatter_params->shard_data,
+                   elems_per_tile * sizeof(float16));
     eu_idma_wait_a2o(&eu_ctrl, WFE);
     if (elems_indices_per_tile) {
-        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (updates + global_offset_indices), (uint32_t) scatter_params->shard_updates, elems_indices_per_tile * sizeof(float16));
+        idma_memcpy_1d(&idma_ctrl,
+                       0,
+                       (uint32_t)(updates + global_offset_indices),
+                       (uint32_t)scatter_params->shard_updates,
+                       elems_indices_per_tile * sizeof(float16));
         eu_idma_wait_a2o(&eu_ctrl, WFE);
     }
 
@@ -143,7 +158,10 @@ static int offload_spatz_task(void *params)
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         goto exit;
     }
 
@@ -164,11 +182,11 @@ static int store_result(void *params, float16 *output)
     uint32_t inner_size;
     uint32_t data_axis_dim;
 
-    scatter_params = (volatile scatter_fp16_spatz_params_t *) params;
+    scatter_params = (volatile scatter_fp16_spatz_params_t *)params;
     elems_per_tile = scatter_params->elems_per_tile;
-    iter_start = scatter_params->outer_start;
-    inner_size = scatter_params->inner_size;
-    data_axis_dim = scatter_params->data_axis_dim;
+    iter_start     = scatter_params->outer_start;
+    inner_size     = scatter_params->inner_size;
+    data_axis_dim  = scatter_params->data_axis_dim;
 
     if (elems_per_tile == 0)
         return 0;
@@ -179,13 +197,25 @@ static int store_result(void *params, float16 *output)
     eu_ctrl_init(&eu_ctrl);
 
     /* This tile's output slice is contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (output + global_offset), (uint32_t) scatter_params->shard_output, elems_per_tile * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   1,
+                   (uint32_t)(output + global_offset),
+                   (uint32_t)scatter_params->shard_output,
+                   elems_per_tile * sizeof(float16));
     eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
 
-void MAGIA_scatter_fp16_spatz(const float16 *data, const int64_t *indices, const float16 *updates, float16 *output, uint32_t outer_size, uint32_t inner_size, uint32_t axis, uint32_t data_axis_dim, uint32_t indices_axis_dim)
+void MAGIA_scatter_fp16_spatz(const float16 *data,
+                              const int64_t *indices,
+                              const float16 *updates,
+                              float16 *output,
+                              uint32_t outer_size,
+                              uint32_t inner_size,
+                              uint32_t axis,
+                              uint32_t data_axis_dim,
+                              uint32_t indices_axis_dim)
 {
     int ret;
     void *params;
@@ -198,13 +228,19 @@ void MAGIA_scatter_fp16_spatz(const float16 *data, const int64_t *indices, const
 
     ret = init_input_params(params, data, indices, updates);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 
     ret = offload_spatz_task(params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 

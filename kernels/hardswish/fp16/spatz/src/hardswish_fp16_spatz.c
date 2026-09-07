@@ -11,7 +11,7 @@
 #include "hardswish_fp16_spatz_params.h"
 #include "hardswish_fp16_spatz_task_bin.h"
 
-#define HID get_hartid()
+#define HID         get_hartid()
 #define KERNEL_NAME "hardswish_fp16_spatz"
 
 static int alloc_l1(void **params, uint32_t size)
@@ -52,7 +52,7 @@ static int alloc_l1(void **params, uint32_t size)
     hardswish_params->len     = len;
     hardswish_params->end     = end;
 
-    *params = (void *) hardswish_params;
+    *params = (void *)hardswish_params;
 
     return 0;
 }
@@ -65,9 +65,9 @@ static int init_input_params(void *params, const float16 *X)
     uint32_t start;
     uint32_t len;
 
-    hardswish_params = (volatile hardswish_fp16_spatz_params_t *) params;
-    start = hardswish_params->start;
-    len   = hardswish_params->len;
+    hardswish_params = (volatile hardswish_fp16_spatz_params_t *)params;
+    start            = hardswish_params->start;
+    len              = hardswish_params->len;
 
     if (len == 0)
         return 0;
@@ -77,7 +77,11 @@ static int init_input_params(void *params, const float16 *X)
 
     /* This tile's slice [start, start+len) is contiguous in L2. The Spatz task writes every
        output (Y = hardswish(X)), so shard_Y is not zeroed here. */
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (X + start), (uint32_t) hardswish_params->shard_X, len * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   0,
+                   (uint32_t)(X + start),
+                   (uint32_t)hardswish_params->shard_X,
+                   len * sizeof(float16));
     eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
@@ -93,7 +97,10 @@ static int offload_spatz_task(void *params)
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         goto exit;
     }
 
@@ -111,9 +118,9 @@ static int store_result(void *params, float16 *dst)
     uint32_t start;
     uint32_t len;
 
-    hardswish_params = (volatile hardswish_fp16_spatz_params_t *) params;
-    start = hardswish_params->start;
-    len = hardswish_params->len;
+    hardswish_params = (volatile hardswish_fp16_spatz_params_t *)params;
+    start            = hardswish_params->start;
+    len              = hardswish_params->len;
 
     if (len == 0)
         return 0;
@@ -122,7 +129,11 @@ static int store_result(void *params, float16 *dst)
     eu_ctrl_init(&eu_ctrl);
 
     /* This tile's output slice [start, start+len) is contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (dst + start), (uint32_t) hardswish_params->shard_Y, len * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   1,
+                   (uint32_t)(dst + start),
+                   (uint32_t)hardswish_params->shard_Y,
+                   len * sizeof(float16));
     eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
@@ -141,13 +152,19 @@ void MAGIA_hardswish_fp16_spatz(const float16 *X, float16 *Y, uint32_t size)
 
     ret = init_input_params((void *)params, X);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 
     ret = offload_spatz_task((void *)params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 

@@ -11,7 +11,7 @@
 #include "mul_fp16_spatz_params.h"
 #include "mul_fp16_spatz_task_bin.h"
 
-#define HID get_hartid()
+#define HID         get_hartid()
 #define KERNEL_NAME "mul_fp16_spatz"
 
 static int alloc_l1(void **params, uint32_t total_elems)
@@ -28,11 +28,11 @@ static int alloc_l1(void **params, uint32_t total_elems)
     size_t left;
 
     elems = total_elems / NUM_HARTS;
-    left = total_elems % NUM_HARTS;
+    left  = total_elems % NUM_HARTS;
 
     elem_start = HID * elems + (HID < left ? HID : left);
-    elem_end = elem_start + elems + (HID < left ? 1 : 0);
-    elem_len = elem_end - elem_start;
+    elem_end   = elem_start + elems + (HID < left ? 1 : 0);
+    elem_len   = elem_end - elem_start;
 
     l1_alloc_init();
 
@@ -52,14 +52,14 @@ static int alloc_l1(void **params, uint32_t total_elems)
     if (!shard_C)
         return ENOMEM;
 
-    mul_params->shard_A = shard_A;
-    mul_params->shard_B = shard_B;
-    mul_params->shard_C = shard_C;
-    mul_params->elem_start = elem_start;
-    mul_params->elem_len = elem_len;
+    mul_params->shard_A     = shard_A;
+    mul_params->shard_B     = shard_B;
+    mul_params->shard_C     = shard_C;
+    mul_params->elem_start  = elem_start;
+    mul_params->elem_len    = elem_len;
     mul_params->total_elems = total_elems;
 
-    *params = (void *) mul_params;
+    *params = (void *)mul_params;
 
     return 0;
 }
@@ -72,9 +72,9 @@ static int init_input_params(void *params, const float16 *A, const float16 *B)
     uint32_t elem_start;
     uint32_t elem_len;
 
-    mul_params = (volatile mul_fp16_spatz_params_t *) params;
+    mul_params = (volatile mul_fp16_spatz_params_t *)params;
     elem_start = mul_params->elem_start;
-    elem_len = mul_params->elem_len;
+    elem_len   = mul_params->elem_len;
 
     if (elem_len == 0)
         return 0;
@@ -84,9 +84,17 @@ static int init_input_params(void *params, const float16 *A, const float16 *B)
 
     /* This tile's slice [elem_start, elem_start+elem_len) is contiguous in both operands.
        The Spatz task writes every output (C = A * B), so shard_C is not zeroed here. */
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (A + elem_start), (uint32_t) mul_params->shard_A, elem_len * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   0,
+                   (uint32_t)(A + elem_start),
+                   (uint32_t)mul_params->shard_A,
+                   elem_len * sizeof(float16));
     eu_idma_wait_a2o(&eu_ctrl, WFE);
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (B + elem_start), (uint32_t) mul_params->shard_B, elem_len * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   0,
+                   (uint32_t)(B + elem_start),
+                   (uint32_t)mul_params->shard_B,
+                   elem_len * sizeof(float16));
     eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
@@ -102,7 +110,10 @@ static int offload_spatz_task(void *params)
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         goto exit;
     }
 
@@ -120,9 +131,9 @@ static int store_result(void *params, float16 *C)
     uint32_t elem_start;
     uint32_t elem_len;
 
-    mul_params = (volatile mul_fp16_spatz_params_t *) params;
+    mul_params = (volatile mul_fp16_spatz_params_t *)params;
     elem_start = mul_params->elem_start;
-    elem_len = mul_params->elem_len;
+    elem_len   = mul_params->elem_len;
 
     if (elem_len == 0)
         return 0;
@@ -131,7 +142,11 @@ static int store_result(void *params, float16 *C)
     eu_ctrl_init(&eu_ctrl);
 
     /* This tile's output slice [elem_start, elem_start+elem_len) is contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (C + elem_start), (uint32_t) mul_params->shard_C, elem_len * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   1,
+                   (uint32_t)(C + elem_start),
+                   (uint32_t)mul_params->shard_C,
+                   elem_len * sizeof(float16));
     eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
@@ -150,13 +165,19 @@ void MAGIA_mul_fp16_spatz(const float16 *A, const float16 *B, float16 *C, uint32
 
     ret = init_input_params(params, A, B);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 
     ret = offload_spatz_task(params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 

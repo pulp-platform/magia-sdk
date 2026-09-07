@@ -1,19 +1,20 @@
 #include "tile.h"
 #include "transpose_fp16_spatz_params.h"
 
-static inline void transpose(const _Float16 *src, _Float16 *dst, const size_t len, const size_t stride)
+static inline void
+transpose(const _Float16 *src, _Float16 *dst, const size_t len, const size_t stride)
 {
     const _Float16 *p_src = src;
-    _Float16 *p_dst = dst;
-    size_t avl = len;
+    _Float16 *p_dst       = dst;
+    size_t avl            = len;
     size_t vl;
 
     size_t stride_bytes = stride * sizeof(_Float16);
 
     for (; avl > 0; avl -= vl) {
-        asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
-        asm volatile ("vlse16.v v0, (%0), %1" :: "r"(p_src), "r"(stride_bytes));
-        asm volatile ("vse16.v v0, (%0)" :: "r"(p_dst) : "memory");
+        asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile("vlse16.v v0, (%0), %1" ::"r"(p_src), "r"(stride_bytes));
+        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst) : "memory");
 
         p_src += vl * stride;
         p_dst += vl;
@@ -33,7 +34,6 @@ int transpose_fp16_spatz_task(void)
     volatile transpose_fp16_spatz_params_t *params;
     uintptr_t params_addr;
 
-
     const _Float16 *shard_input;
     _Float16 *shard_output;
     uint32_t *out_shape;
@@ -44,14 +44,14 @@ int transpose_fp16_spatz_task(void)
     uint32_t rank;
 
     params_addr = mmio32(SPATZ_DATA);
-    params = (volatile transpose_fp16_spatz_params_t *) params_addr;
+    params      = (volatile transpose_fp16_spatz_params_t *)params_addr;
 
-    shard_input  = (_Float16 *) params->shard_input;
-    shard_output = (_Float16 *) params->shard_output;
-    out_shape    = (uint32_t *) params->out_shape;
-    in_strides   = (uint32_t *) params->in_strides;
-    perm         = (uint32_t *) params->perm;
-    coord        = (uint32_t *) params->coord;
+    shard_input  = (_Float16 *)params->shard_input;
+    shard_output = (_Float16 *)params->shard_output;
+    out_shape    = (uint32_t *)params->out_shape;
+    in_strides   = (uint32_t *)params->in_strides;
+    perm         = (uint32_t *)params->perm;
+    coord        = (uint32_t *)params->coord;
     iter_len     = params->iteration_len;
     rank         = params->rank;
 
@@ -84,7 +84,7 @@ int transpose_fp16_spatz_task(void)
 
             shard_output += inner_len;
 
-            for (int k = (int) rank - 2; k >= 1; k--) {
+            for (int k = (int)rank - 2; k >= 1; k--) {
                 if (++coord[k] < out_shape[k])
                     break;
                 coord[k] = 0;

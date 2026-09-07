@@ -10,14 +10,14 @@ static inline void slice(const _Float16 *src, _Float16 *dst, const size_t len)
 
     p_src = src;
     p_dst = dst;
-    avl = len;
+    avl   = len;
 
     for (; avl > 0; avl -= vl) {
-        asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
 
-        asm volatile ("vle16.v v0, (%0)" :: "r"(p_src));
+        asm volatile("vle16.v v0, (%0)" ::"r"(p_src));
 
-        asm volatile ("vse16.v v0, (%0)" :: "r"(p_dst) : "memory");
+        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst) : "memory");
 
         p_src += vl;
         p_dst += vl;
@@ -39,15 +39,15 @@ int slice_fp16_spatz_task(void)
     uint32_t len_outer;
 
     params_addr = mmio32(SPATZ_DATA);
-    params = (volatile slice_fp16_spatz_params_t *) params_addr;
+    params      = (volatile slice_fp16_spatz_params_t *)params_addr;
 
-    src_base = (_Float16 *) params->shard_X;
-    dst_base = (_Float16 *) params->shard_Y;
-    slice_dim = params->slice_dim;
+    src_base      = (_Float16 *)params->shard_X;
+    dst_base      = (_Float16 *)params->shard_Y;
+    slice_dim     = params->slice_dim;
     out_slice_dim = params->out_slice_dim;
-    inner_dim = params->inner_dim;
-    start_idx = params->start_idx;
-    len_outer = params->len_outer;
+    inner_dim     = params->inner_dim;
+    start_idx     = params->start_idx;
+    len_outer     = params->len_outer;
 
     for (uint32_t o = 0; o < len_outer; o++) {
         const _Float16 *current_src;

@@ -12,28 +12,26 @@ int mul_fp16_spatz_task(void)
     size_t vl;
 
     params_addr = mmio32(SPATZ_DATA);
-    params = (volatile mul_fp16_spatz_params_t *) params_addr;
-    A = (_Float16 *) params->shard_A;
-    B = (_Float16 *) params->shard_B;
-    C = (_Float16 *) params->shard_C;
-    avl = params->elem_len;
+    params      = (volatile mul_fp16_spatz_params_t *)params_addr;
+    A           = (_Float16 *)params->shard_A;
+    B           = (_Float16 *)params->shard_B;
+    C           = (_Float16 *)params->shard_C;
+    avl         = params->elem_len;
 
     for (; avl > 0; avl -= vl) {
-        asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
 
-        asm volatile ("vle16.v v0, (%0)" :: "r"(A));
-        asm volatile ("vle16.v v8, (%0)" :: "r"(B));
+        asm volatile("vle16.v v0, (%0)" ::"r"(A));
+        asm volatile("vle16.v v8, (%0)" ::"r"(B));
 
-        asm volatile ("vfmul.vv v0, v0, v8");
+        asm volatile("vfmul.vv v0, v0, v8");
 
-        asm volatile ("vse16.v v0, (%0)" :: "r"(C) : "memory");
+        asm volatile("vse16.v v0, (%0)" ::"r"(C) : "memory");
 
         A += vl;
         B += vl;
         C += vl;
     }
-
-
 
     return 0;
 }

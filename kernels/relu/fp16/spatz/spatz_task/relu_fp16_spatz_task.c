@@ -3,7 +3,7 @@
 
 int relu_fp16_spatz_task(void)
 {
-    register _Float16 ZERO asm ("fs0") = 0.0f;
+    register _Float16 ZERO asm("fs0") = 0.0f;
     volatile relu_fp16_spatz_params_t *params;
     uintptr_t params_addr;
     _Float16 *X;
@@ -12,17 +12,17 @@ int relu_fp16_spatz_task(void)
     size_t vl;
 
     params_addr = mmio32(SPATZ_DATA);
-    params = (volatile relu_fp16_spatz_params_t *) params_addr;
+    params      = (volatile relu_fp16_spatz_params_t *)params_addr;
 
-    X = (_Float16 *)params->shard_X;
-    Y = (_Float16 *)params->shard_Y;
+    X   = (_Float16 *)params->shard_X;
+    Y   = (_Float16 *)params->shard_Y;
     avl = params->len;
 
     for (; avl > 0; avl -= vl) {
-        asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
-        asm volatile ("vle16.v v0, (%0)" :: "r"(X));
-        asm volatile ("vfmax.vf v8, v0, %0" :: "f"(ZERO));
-        asm volatile ("vse16.v v8, (%0)" :: "r"(Y));
+        asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile("vle16.v v0, (%0)" ::"r"(X));
+        asm volatile("vfmax.vf v8, v0, %0" ::"f"(ZERO));
+        asm volatile("vse16.v v8, (%0)" ::"r"(Y));
 
         X += vl;
         Y += vl;

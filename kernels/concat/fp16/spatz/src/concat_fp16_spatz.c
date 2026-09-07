@@ -11,7 +11,7 @@
 #include "concat_fp16_spatz_params.h"
 #include "concat_fp16_spatz_task_bin.h"
 
-#define HID get_hartid()
+#define HID         get_hartid()
 #define KERNEL_NAME "concat_fp16_spatz"
 
 static int alloc_l1(void **params, const uint32_t *lens, uint32_t num_inputs, uint32_t iterations)
@@ -30,11 +30,11 @@ static int alloc_l1(void **params, const uint32_t *lens, uint32_t num_inputs, ui
     size_t out_len;
 
     elems = iterations / NUM_HARTS;
-    left = iterations % NUM_HARTS;
+    left  = iterations % NUM_HARTS;
 
     iter_start = HID * elems + (HID < left ? HID : left);
-    iter_end = iter_start + elems + (HID < left ? 1 : 0);
-    iter_len = iter_end - iter_start;
+    iter_end   = iter_start + elems + (HID < left ? 1 : 0);
+    iter_len   = iter_end - iter_start;
 
     l1_alloc_init();
 
@@ -57,7 +57,7 @@ static int alloc_l1(void **params, const uint32_t *lens, uint32_t num_inputs, ui
             return ENOMEM;
 
         shard_input[i] = shard;
-        len_input[i] = lens[i];
+        len_input[i]   = lens[i];
         out_len += lens[i];
     }
 
@@ -65,14 +65,14 @@ static int alloc_l1(void **params, const uint32_t *lens, uint32_t num_inputs, ui
     if (!shard_output)
         return ENOMEM;
 
-    concat_params->shard_input = (uintptr_t) shard_input;
-    concat_params->len_input = (uintptr_t) len_input;
+    concat_params->shard_input  = (uintptr_t)shard_input;
+    concat_params->len_input    = (uintptr_t)len_input;
     concat_params->shard_output = shard_output;
-    concat_params->num_inputs = num_inputs;
-    concat_params->iter_start = iter_start;
-    concat_params->iter_len = iter_len;
+    concat_params->num_inputs   = num_inputs;
+    concat_params->iter_start   = iter_start;
+    concat_params->iter_len     = iter_len;
 
-    *params = (void *) concat_params;
+    *params = (void *)concat_params;
 
     return 0;
 }
@@ -89,13 +89,13 @@ static int init_input_params(void *params, const float16 **inputs)
     uint32_t num_inputs;
     uint32_t len_in;
 
-    concat_params = (volatile concat_fp16_spatz_params_t *) params;
+    concat_params = (volatile concat_fp16_spatz_params_t *)params;
 
-    shard_input = (uintptr_t *) concat_params->shard_input;
-    len_input = (uint32_t *) concat_params->len_input;
-    iter_start = concat_params->iter_start;
-    iter_len = concat_params->iter_len;
-    num_inputs = concat_params->num_inputs;
+    shard_input = (uintptr_t *)concat_params->shard_input;
+    len_input   = (uint32_t *)concat_params->len_input;
+    iter_start  = concat_params->iter_start;
+    iter_len    = concat_params->iter_len;
+    num_inputs  = concat_params->num_inputs;
 
     if (iter_len == 0)
         return 0;
@@ -109,7 +109,11 @@ static int init_input_params(void *params, const float16 **inputs)
     for (uint32_t i = 0; i < num_inputs; i++) {
         len_in = len_input[i];
         if (len_in) {
-            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (inputs[i] + iter_start * len_in), (uint32_t) shard_input[i], iter_len * len_in * sizeof(float16));
+            idma_memcpy_1d(&idma_ctrl,
+                           0,
+                           (uint32_t)(inputs[i] + iter_start * len_in),
+                           (uint32_t)shard_input[i],
+                           iter_len * len_in * sizeof(float16));
             eu_idma_wait_a2o(&eu_ctrl, WFE);
         }
     }
@@ -128,7 +132,10 @@ static int offload_spatz_task(void *params)
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         goto exit;
     }
 
@@ -150,12 +157,12 @@ static int store_result(void *params, float16 *concat_result, const uint32_t ite
     uint32_t start;
     uint32_t len;
 
-    concat_params = (volatile concat_fp16_spatz_params_t *) params;
-    len_input = (uint32_t *) concat_params->len_input;
+    concat_params     = (volatile concat_fp16_spatz_params_t *)params;
+    len_input         = (uint32_t *)concat_params->len_input;
     shard_output_base = concat_params->shard_output;
-    num_inputs = concat_params->num_inputs;
-    start = concat_params->iter_start;
-    len = concat_params->iter_len;
+    num_inputs        = concat_params->num_inputs;
+    start             = concat_params->iter_start;
+    len               = concat_params->iter_len;
 
     if (len == 0)
         return 0;
@@ -168,13 +175,21 @@ static int store_result(void *params, float16 *concat_result, const uint32_t ite
     eu_ctrl_init(&eu_ctrl);
 
     /* This tile's output rows [iter_start, iter_start+iter_len) are contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (concat_result + start * out_len), (uint32_t) shard_output_base, len * out_len * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   1,
+                   (uint32_t)(concat_result + start * out_len),
+                   (uint32_t)shard_output_base,
+                   len * out_len * sizeof(float16));
     eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
 
-void MAGIA_concat_fp16_spatz(const float16 **inputs, const uint32_t *lens, uint32_t num_inputs, float16 *concat_result, uint32_t iterations)
+void MAGIA_concat_fp16_spatz(const float16 **inputs,
+                             const uint32_t *lens,
+                             uint32_t num_inputs,
+                             float16 *concat_result,
+                             uint32_t iterations)
 {
     int ret;
     volatile concat_fp16_spatz_params_t *params;
@@ -187,13 +202,19 @@ void MAGIA_concat_fp16_spatz(const float16 **inputs, const uint32_t *lens, uint3
 
     ret = init_input_params(params, inputs);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 
     ret = offload_spatz_task(params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 

@@ -11,10 +11,16 @@
 #include "transpose_fp16_spatz_params.h"
 #include "transpose_fp16_spatz_task_bin.h"
 
-#define HID get_hartid()
+#define HID         get_hartid()
 #define KERNEL_NAME "transpose_fp16_spatz"
 
-static int alloc_l1(void **params, uint32_t *in_shape, uint32_t *out_shape, uint32_t rank, uint32_t iterations, uint32_t *out_shard_in_elems, uint32_t *out_shard_out_elems)
+static int alloc_l1(void **params,
+                    uint32_t *in_shape,
+                    uint32_t *out_shape,
+                    uint32_t rank,
+                    uint32_t iterations,
+                    uint32_t *out_shard_in_elems,
+                    uint32_t *out_shard_out_elems)
 {
     volatile transpose_fp16_spatz_params_t *trans_params;
 
@@ -37,7 +43,7 @@ static int alloc_l1(void **params, uint32_t *in_shape, uint32_t *out_shape, uint
     shard_in_elems  = 1;
     shard_out_elems = 1;
     for (uint32_t i = 1; i < rank; i++) {
-        shard_in_elems  *= in_shape[i];
+        shard_in_elems *= in_shape[i];
         shard_out_elems *= out_shape[i];
     }
 
@@ -92,19 +98,23 @@ static int alloc_l1(void **params, uint32_t *in_shape, uint32_t *out_shape, uint
         mmio32(out_shape_l1 + i * sizeof(uint32_t)) = out_shape[i];
 
     stride = 1;
-    for (int i = (int) rank - 1; i >= 0; i--) {
+    for (int i = (int)rank - 1; i >= 0; i--) {
         mmio32(in_strides_l1 + i * sizeof(uint32_t)) = stride;
         stride *= in_shape[i];
     }
 
-    *params = (void *) trans_params;
-    *out_shard_in_elems = shard_in_elems;
+    *params              = (void *)trans_params;
+    *out_shard_in_elems  = shard_in_elems;
     *out_shard_out_elems = shard_out_elems;
 
     return 0;
 }
 
-static int init_input_params(void *params, const float16 *input, const uint32_t *perm, uint32_t shard_in_elems, uint32_t shard_out_elems)
+static int init_input_params(void *params,
+                             const float16 *input,
+                             const uint32_t *perm,
+                             uint32_t shard_in_elems,
+                             uint32_t shard_out_elems)
 {
     volatile transpose_fp16_spatz_params_t *trans_params;
     idma_controller_t idma_ctrl;
@@ -115,10 +125,10 @@ static int init_input_params(void *params, const float16 *input, const uint32_t 
     uint32_t global_offset;
     uint32_t in_bytes;
 
-    trans_params = (volatile transpose_fp16_spatz_params_t *) params;
-    perm_base = trans_params->perm;
-    rank      = trans_params->rank;
-    iter_len  = trans_params->iteration_len;
+    trans_params = (volatile transpose_fp16_spatz_params_t *)params;
+    perm_base    = trans_params->perm;
+    rank         = trans_params->rank;
+    iter_len     = trans_params->iteration_len;
 
     /* Control metadata: small rank-sized arrays, staged scalar. */
     for (uint32_t i = 0; i < rank; i++)
@@ -128,7 +138,7 @@ static int init_input_params(void *params, const float16 *input, const uint32_t 
         return 0;
 
     global_offset = trans_params->iteration_start * shard_in_elems;
-    in_bytes = iter_len * shard_in_elems * sizeof(float16);
+    in_bytes      = iter_len * shard_in_elems * sizeof(float16);
 
     idma_ctrl_init(&idma_ctrl);
     eu_ctrl_init(&eu_ctrl);
@@ -136,7 +146,11 @@ static int init_input_params(void *params, const float16 *input, const uint32_t 
     /* perm[0] == 0, so this tile's slice of the outer axis is contiguous in L2. The
        Spatz task performs the (strided) transpose and fully writes shard_output, so
        shard_output is not zeroed here. */
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (input + global_offset), (uint32_t) trans_params->shard_input, in_bytes);
+    idma_memcpy_1d(&idma_ctrl,
+                   0,
+                   (uint32_t)(input + global_offset),
+                   (uint32_t)trans_params->shard_input,
+                   in_bytes);
     eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
@@ -152,7 +166,10 @@ static int offload_spatz_task(void *params)
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         goto exit;
     }
 
@@ -171,33 +188,44 @@ static int store_result(void *params, float16 *output, uint32_t shard_out_elems)
     uint32_t global_offset;
     uint32_t out_bytes;
 
-    trans_params = (volatile transpose_fp16_spatz_params_t *) params;
-    iter_len = trans_params->iteration_len;
+    trans_params = (volatile transpose_fp16_spatz_params_t *)params;
+    iter_len     = trans_params->iteration_len;
 
     if (iter_len == 0)
         return 0;
 
     global_offset = trans_params->iteration_start * shard_out_elems;
-    out_bytes = iter_len * shard_out_elems * sizeof(float16);
+    out_bytes     = iter_len * shard_out_elems * sizeof(float16);
 
     idma_ctrl_init(&idma_ctrl);
     eu_ctrl_init(&eu_ctrl);
 
     /* This tile's output slice of the outer axis is contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (output + global_offset), (uint32_t) trans_params->shard_output, out_bytes);
+    idma_memcpy_1d(&idma_ctrl,
+                   1,
+                   (uint32_t)(output + global_offset),
+                   (uint32_t)trans_params->shard_output,
+                   out_bytes);
     eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
 
-void MAGIA_transpose_fp16_spatz(const float16 *input, float16 *output, uint32_t *perm, uint32_t *in_shape, uint32_t *out_shape, uint32_t rank, uint32_t iterations)
+void MAGIA_transpose_fp16_spatz(const float16 *input,
+                                float16 *output,
+                                uint32_t *perm,
+                                uint32_t *in_shape,
+                                uint32_t *out_shape,
+                                uint32_t rank,
+                                uint32_t iterations)
 {
     int ret;
     volatile transpose_fp16_spatz_params_t *params;
     uint32_t shard_in_elems;
     uint32_t shard_out_elems;
 
-    ret = alloc_l1((void **)&params, in_shape, out_shape, rank, iterations, &shard_in_elems, &shard_out_elems);
+    ret = alloc_l1(
+        (void **)&params, in_shape, out_shape, rank, iterations, &shard_in_elems, &shard_out_elems);
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
@@ -205,13 +233,19 @@ void MAGIA_transpose_fp16_spatz(const float16 *input, float16 *output, uint32_t 
 
     ret = init_input_params((void *)params, input, perm, shard_in_elems, shard_out_elems);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 
     ret = offload_spatz_task((void *)params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 

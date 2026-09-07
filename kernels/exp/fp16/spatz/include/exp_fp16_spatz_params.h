@@ -11,4 +11,4 @@ typedef struct {
     uint32_t len;           /* Tile's shard len                                         */
 } exp_fp16_spatz_params_t;
 
-#endif  /* EXP_FP16_SPATZ_PARAMS_H_ */
+#endif /* EXP_FP16_SPATZ_PARAMS_H_ */

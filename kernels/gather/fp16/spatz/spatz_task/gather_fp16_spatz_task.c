@@ -10,12 +10,12 @@ static inline void gather(const _Float16 *src, _Float16 *dst, const size_t len)
 
     p_src = src;
     p_dst = dst;
-    avl = len;
+    avl   = len;
 
     for (; avl > 0; avl -= vl) {
-        asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
-        asm volatile ("vle16.v v0, (%0)" :: "r"(p_src));
-        asm volatile ("vse16.v v0, (%0)" :: "r"(p_dst) : "memory");
+        asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile("vle16.v v0, (%0)" ::"r"(p_src));
+        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst) : "memory");
 
         p_src += vl;
         p_dst += vl;
@@ -36,16 +36,16 @@ int gather_fp16_spatz_task(void)
     uint32_t index;
 
     params_addr = mmio32(SPATZ_DATA);
-    params = (volatile gather_fp16_spatz_params_t *) params_addr;
+    params      = (volatile gather_fp16_spatz_params_t *)params_addr;
 
-    input = (_Float16 *) params->shard_input;
-    output = (_Float16 *) params->shard_output;
+    input           = (_Float16 *)params->shard_input;
+    output          = (_Float16 *)params->shard_output;
     gather_dim_size = params->gather_dim_size;
-    axis_length = params->axis_length;
-    batch_len = params->batch_len;
-    index = params->index;
+    axis_length     = params->axis_length;
+    batch_len       = params->batch_len;
+    index           = params->index;
 
-    uint32_t in_batch_stride = gather_dim_size * axis_length;
+    uint32_t in_batch_stride     = gather_dim_size * axis_length;
     uint32_t target_shard_offset = index * axis_length;
 
     for (int b = 0; b < batch_len; b++) {

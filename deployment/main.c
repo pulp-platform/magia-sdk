@@ -16,8 +16,8 @@ int init_fsync(fsync_controller_t *fsync_ctrl)
 
     fsync_cfg.hartid = get_hartid();
     fsync_ctrl->base = NULL;
-    fsync_ctrl->cfg = &fsync_cfg;
-    fsync_ctrl->api = &fsync_api;
+    fsync_ctrl->cfg  = &fsync_cfg;
+    fsync_ctrl->api  = &fsync_api;
 
     fsync_init(fsync_ctrl);
 
@@ -30,8 +30,8 @@ int init_idma(idma_controller_t *idma_ctrl)
 
     idma_cfg.hartid = get_hartid();
     idma_ctrl->base = NULL;
-    idma_ctrl->cfg = &idma_cfg;
-    idma_ctrl->api = &idma_api;
+    idma_ctrl->cfg  = &idma_cfg;
+    idma_ctrl->api  = &idma_api;
 
     idma_init(idma_ctrl);
 
@@ -44,8 +44,8 @@ int init_event_unit(eu_controller_t *eu_ctrl)
 
     eu_cfg.hartid = get_hartid();
     eu_ctrl->base = NULL;
-    eu_ctrl->cfg = &eu_cfg;
-    eu_ctrl->api = &eu_api;
+    eu_ctrl->cfg  = &eu_cfg;
+    eu_ctrl->api  = &eu_api;
 
     eu_init(eu_ctrl);
     eu_spatz_init(eu_ctrl, 0);
@@ -87,7 +87,9 @@ int check_result()
     int n_mismatch = 0;
 
     for (uint32_t i = 0; i < OUTPUTS_NUM; i++)
-        n_mismatch += compare_fp16_bitwise((const float16 *)DeeployNetwork_outputs[i], (const float16 *)outputs[i], outputs_size[i]);
+        n_mismatch += compare_fp16_bitwise((const float16 *)DeeployNetwork_outputs[i],
+                                           (const float16 *)outputs[i],
+                                           outputs_size[i]);
 
     return n_mismatch;
 }

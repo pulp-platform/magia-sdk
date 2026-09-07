@@ -19,4 +19,4 @@ typedef struct {
     uint32_t axis;
 } scatter_fp16_spatz_params_t;
 
-#endif  /* SCATTER_FP16_SPATZ_PARAMS_H_ */
+#endif /* SCATTER_FP16_SPATZ_PARAMS_H_ */

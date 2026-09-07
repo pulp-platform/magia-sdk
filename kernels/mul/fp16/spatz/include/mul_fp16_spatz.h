@@ -5,4 +5,4 @@
 
 void MAGIA_mul_fp16_spatz(const float16 *A, const float16 *B, float16 *C, uint32_t total_elems);
 
-#endif  /* MUL_FP16_SPATZ_H_ */
+#endif /* MUL_FP16_SPATZ_H_ */

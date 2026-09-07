@@ -11,7 +11,7 @@
 #include "selu_fp16_spatz_params.h"
 #include "selu_fp16_spatz_task_bin.h"
 
-#define HID get_hartid()
+#define HID         get_hartid()
 #define KERNEL_NAME "selu_fp16_spatz"
 
 static int allocate_l1(void **params, uint32_t size)
@@ -28,11 +28,11 @@ static int allocate_l1(void **params, uint32_t size)
     size_t elems;
     size_t left;
 
-    elems = size / NUM_HARTS;
-    left = size % NUM_HARTS;
+    elems       = size / NUM_HARTS;
+    left        = size % NUM_HARTS;
     shard_start = HID * elems + (HID < left ? HID : left);
-    shard_end = shard_start + elems + (HID < left ? 1 : 0);
-    shard_len = shard_end - shard_start;
+    shard_end   = shard_start + elems + (HID < left ? 1 : 0);
+    shard_len   = shard_end - shard_start;
 
     l1_alloc_init();
 
@@ -58,13 +58,13 @@ static int allocate_l1(void **params, uint32_t size)
 
     selu_params->shard_X = shard_X;
     selu_params->shard_Y = shard_Y;
-    selu_params->alpha = alpha;
-    selu_params->gamma = gamma;
-    selu_params->start = shard_start;
-    selu_params->end = shard_end;
-    selu_params->len = shard_len;
+    selu_params->alpha   = alpha;
+    selu_params->gamma   = gamma;
+    selu_params->start   = shard_start;
+    selu_params->end     = shard_end;
+    selu_params->len     = shard_len;
 
-    *params = (void *) selu_params;
+    *params = (void *)selu_params;
 
     return 0;
 }
@@ -77,9 +77,9 @@ static int init_input_params(void *params, const float16 *X, float16 a, float16 
     uint32_t start;
     uint32_t len;
 
-    selu_params = (volatile selu_fp16_spatz_params_t *) params;
-    start = selu_params->start;
-    len = selu_params->len;
+    selu_params = (volatile selu_fp16_spatz_params_t *)params;
+    start       = selu_params->start;
+    len         = selu_params->len;
 
     mmio_fp16(selu_params->alpha) = a;
     mmio_fp16(selu_params->gamma) = g;
@@ -92,7 +92,11 @@ static int init_input_params(void *params, const float16 *X, float16 a, float16 
 
     /* This tile's slice [start, start+len) is contiguous in L2. The Spatz task writes every
        output (Y = selu(X, alpha, gamma)), so shard_Y is not zeroed here. */
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (X + start), (uint32_t) selu_params->shard_X, len * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   0,
+                   (uint32_t)(X + start),
+                   (uint32_t)selu_params->shard_X,
+                   len * sizeof(float16));
     eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
@@ -108,7 +112,10 @@ static int offload_spatz_task(void *params)
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         goto exit;
     }
 
@@ -118,7 +125,7 @@ exit:
     return ret;
 }
 
-static int store_result(void* params, float16 *dst)
+static int store_result(void *params, float16 *dst)
 {
     volatile selu_fp16_spatz_params_t *selu_params;
     idma_controller_t idma_ctrl;
@@ -126,9 +133,9 @@ static int store_result(void* params, float16 *dst)
     uint32_t start;
     uint32_t len;
 
-    selu_params = (volatile selu_fp16_spatz_params_t *) params;
-    start = selu_params->start;
-    len = selu_params->len;
+    selu_params = (volatile selu_fp16_spatz_params_t *)params;
+    start       = selu_params->start;
+    len         = selu_params->len;
 
     if (len == 0)
         return 0;
@@ -137,13 +144,18 @@ static int store_result(void* params, float16 *dst)
     eu_ctrl_init(&eu_ctrl);
 
     /* This tile's output slice [start, start+len) is contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (dst + start), (uint32_t) selu_params->shard_Y, len * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   1,
+                   (uint32_t)(dst + start),
+                   (uint32_t)selu_params->shard_Y,
+                   len * sizeof(float16));
     eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
 
-void MAGIA_selu_fp16_spatz(const float16 *X, float16 *Y, uint32_t size, float16 alpha, float16 gamma)
+void MAGIA_selu_fp16_spatz(
+    const float16 *X, float16 *Y, uint32_t size, float16 alpha, float16 gamma)
 {
     int ret;
     volatile selu_fp16_spatz_params_t *params;
@@ -162,7 +174,10 @@ void MAGIA_selu_fp16_spatz(const float16 *X, float16 *Y, uint32_t size, float16 
 
     ret = offload_spatz_task(params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 

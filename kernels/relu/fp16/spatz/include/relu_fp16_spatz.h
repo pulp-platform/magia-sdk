@@ -5,4 +5,4 @@
 
 void MAGIA_relu_fp16_spatz(const float16 *X, float16 *Y, uint32_t size);
 
-#endif  /* RELU_FP16_SPATZ_H_ */
+#endif /* RELU_FP16_SPATZ_H_ */

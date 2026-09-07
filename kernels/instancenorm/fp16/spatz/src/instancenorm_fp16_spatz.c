@@ -11,7 +11,7 @@
 #include "instancenorm_fp16_spatz_params.h"
 #include "instancenorm_fp16_spatz_task_bin.h"
 
-#define HID get_hartid()
+#define HID         get_hartid()
 #define KERNEL_NAME "instancenorm_fp16_spatz"
 
 static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t *out_num_channels)
@@ -32,9 +32,9 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t *out_num_ch
     uint32_t inst_end;
     uint32_t inst_len;
 
-    num_channels = input_shape[1];
+    num_channels    = input_shape[1];
     total_instances = input_shape[0] * input_shape[1];
-    instance_len = input_shape[2] * input_shape[3];
+    instance_len    = input_shape[2] * input_shape[3];
 
     shard = total_instances / NUM_HARTS;
     left  = total_instances % NUM_HARTS;
@@ -79,13 +79,17 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t *out_num_ch
     instancenorm_params->hw_len       = instance_len;
     instancenorm_params->num_channels = num_channels;
 
-    *params = (void *) instancenorm_params;
+    *params           = (void *)instancenorm_params;
     *out_num_channels = num_channels;
 
     return 0;
 }
 
-static int init_input_params(void *params, const float16 *input, const float16 *scale, const float16 *B, const float16 epsilon)
+static int init_input_params(void *params,
+                             const float16 *input,
+                             const float16 *scale,
+                             const float16 *B,
+                             const float16 epsilon)
 {
     volatile instancenorm_fp16_spatz_params_t *instancenorm_params;
     idma_controller_t idma_ctrl;
@@ -95,11 +99,11 @@ static int init_input_params(void *params, const float16 *input, const float16 *
     uint32_t inst_len;
     uint32_t hw_len;
 
-    instancenorm_params = (volatile instancenorm_fp16_spatz_params_t *) params;
-    inst_start   = instancenorm_params->inst_start;
-    inst_len     = instancenorm_params->inst_len;
-    hw_len       = instancenorm_params->hw_len;
-    num_channels = instancenorm_params->num_channels;
+    instancenorm_params = (volatile instancenorm_fp16_spatz_params_t *)params;
+    inst_start          = instancenorm_params->inst_start;
+    inst_len            = instancenorm_params->inst_len;
+    hw_len              = instancenorm_params->hw_len;
+    num_channels        = instancenorm_params->num_channels;
 
     mmio_fp16(instancenorm_params->eps) = epsilon;
 
@@ -107,9 +111,17 @@ static int init_input_params(void *params, const float16 *input, const float16 *
     eu_ctrl_init(&eu_ctrl);
 
     /* Per-channel gamma/beta (full num_channels, contiguous) are needed by every tile. */
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) scale, (uint32_t) instancenorm_params->gamma, num_channels * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   0,
+                   (uint32_t)scale,
+                   (uint32_t)instancenorm_params->gamma,
+                   num_channels * sizeof(float16));
     eu_idma_wait_a2o(&eu_ctrl, WFE);
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) B, (uint32_t) instancenorm_params->beta, num_channels * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   0,
+                   (uint32_t)B,
+                   (uint32_t)instancenorm_params->beta,
+                   num_channels * sizeof(float16));
     eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     if (inst_len == 0)
@@ -117,7 +129,11 @@ static int init_input_params(void *params, const float16 *input, const float16 *
 
     /* This tile's instances [inst_start, inst_end) are contiguous in L2. The Spatz task fully
        writes shard_output, so it is not zeroed here. */
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t) (input + inst_start * hw_len), (uint32_t) instancenorm_params->shard_input, inst_len * hw_len * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   0,
+                   (uint32_t)(input + inst_start * hw_len),
+                   (uint32_t)instancenorm_params->shard_input,
+                   inst_len * hw_len * sizeof(float16));
     eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     return 0;
@@ -133,7 +149,10 @@ static int offload_spatz_task(void *params)
 
     ret = eu_spatz_wait(&eu_ctrl, WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         goto exit;
     }
 
@@ -152,10 +171,10 @@ static int store_result(void *params, float16 *output)
     uint32_t inst_len;
     uint32_t hw_len;
 
-    instancenorm_params = (volatile instancenorm_fp16_spatz_params_t *) params;
-    inst_start = instancenorm_params->inst_start;
-    inst_len   = instancenorm_params->inst_len;
-    hw_len     = instancenorm_params->hw_len;
+    instancenorm_params = (volatile instancenorm_fp16_spatz_params_t *)params;
+    inst_start          = instancenorm_params->inst_start;
+    inst_len            = instancenorm_params->inst_len;
+    hw_len              = instancenorm_params->hw_len;
 
     if (inst_len == 0)
         return 0;
@@ -164,13 +183,22 @@ static int store_result(void *params, float16 *output)
     eu_ctrl_init(&eu_ctrl);
 
     /* This tile's output instances [inst_start, inst_end) are contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl, 1, (uint32_t) (output + inst_start * hw_len), (uint32_t) instancenorm_params->shard_output, inst_len * hw_len * sizeof(float16));
+    idma_memcpy_1d(&idma_ctrl,
+                   1,
+                   (uint32_t)(output + inst_start * hw_len),
+                   (uint32_t)instancenorm_params->shard_output,
+                   inst_len * hw_len * sizeof(float16));
     eu_idma_wait_o2a(&eu_ctrl, WFE);
 
     return 0;
 }
 
-void MAGIA_instancenorm_fp16_spatz(const float16 *input, float16 *output, const float16 *scale, const float16 *B, const float16 epsilon, uint32_t input_shape[4])
+void MAGIA_instancenorm_fp16_spatz(const float16 *input,
+                                   float16 *output,
+                                   const float16 *scale,
+                                   const float16 *B,
+                                   const float16 epsilon,
+                                   uint32_t input_shape[4])
 {
     int ret;
     volatile instancenorm_fp16_spatz_params_t *params;
@@ -184,13 +212,19 @@ void MAGIA_instancenorm_fp16_spatz(const float16 *input, float16 *output, const 
 
     ret = init_input_params((void *)params, input, scale, B, epsilon);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 
     ret = offload_spatz_task((void *)params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
         return;
     }
 
