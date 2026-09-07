@@ -44,3 +44,24 @@ scripts/gvsoc2perfetto-rs
 # Editor
 .vscode/
 llvm/
+
+# --- Deeploy deployment flow + local artifacts (from sc/onnx_deeploy) ---
+__pycache__/
+*.pyc
+*.code-workspace
+.env
+.env.*
+.env.local
+states/
+tests/spatz_on_magia/deeploy_*
+deployment/tests/*/*/*/download/
+debug_*
+output/
+output_*.txt
+insn.txt
+list/
+next_steps.*
+power_report.csv
+trace_file.txt
+transcript
+gvsoc_config.json

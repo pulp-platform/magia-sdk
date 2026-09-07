@@ -9,6 +9,7 @@ Generates a header with the binary as uint32_t array in custom linker section.
 """
 
 import argparse
+import re
 
 def bytes_to_words(data):
     """Convert bytes to uint32_t words (little-endian)."""
@@ -29,8 +30,10 @@ def generate_header(binary_path, output_path, array_name, section_name, address)
     
     # Convert to words
     words = bytes_to_words(data)
-    guard = f"__{array_name.upper()}_H__"
-    
+    # Sanitize into a valid C identifier (e.g. 'tiny-vit' -> 'tiny_vit')
+    c_name = re.sub(r'[^0-9A-Za-z_]', '_', array_name)
+    guard = f"__{c_name.upper()}_H__"
+
     # Write header file
     with open(output_path, 'w') as f:
         # Header guard and includes
@@ -38,19 +41,24 @@ def generate_header(binary_path, output_path, array_name, section_name, address)
         f.write(f"#ifndef {guard}\n")
         f.write(f"#define {guard}\n\n")
         f.write(f"#include <stdint.h>\n\n")
-        
+
         # Binary array with section attribute
+        # Guarded so a network build can embed the array in a single translation
+        # unit while every other unit that includes this header only gets the
+        # task/entry macros (avoids multiple-definition of the array symbol).
         f.write(f"/* Binary array in {section_name} section (target: {address}) */\n")
-        f.write(f"const uint32_t {array_name}[] ")
+        f.write("#ifndef SPATZ_BINARY_NO_DEFINE\n")
+        f.write(f"const uint32_t {c_name}[] ")
         f.write(f"__attribute__((section(\"{section_name}\"), aligned(4), used)) = {{\n")
-        
+
         # Write words (8 per line for readability)
         for i in range(0, len(words), 8):
             line = words[i:i+8]
             f.write("    " + ", ".join(line))
             f.write(",\n" if i + 8 < len(words) else "\n")
-        
-        f.write("};\n\n")
+
+        f.write("};\n")
+        f.write("#endif /* SPATZ_BINARY_NO_DEFINE */\n\n")
         f.write(f"#endif /* {guard} */\n")
     
     print(f"Generated: {output_path} ({len(data)} bytes = {len(words)} words)")
