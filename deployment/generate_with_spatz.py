@@ -191,7 +191,7 @@ def main(test, enable_node_logs=False) -> None:
     dst_src_dir.mkdir(parents=True, exist_ok=True)
 
     # prepare formatting code command
-    clang_format = "{BasedOnStyle: llvm, IndentWidth: 4, ColumnLimit: 80}"
+    clang_format = "{BasedOnStyle: llvm, IndentWidth: 4, ColumnLimit: 80, SortIncludes: false}"
     clang_cmd = lambda path: f'clang-format -i --style="{clang_format}" {path}'
 
     # header for data inputs and outputs
