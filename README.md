@@ -91,7 +91,7 @@ The following *optional* parameters can be specified when running the make comma
 
 `ISA`: **rv32imcxgap9**|**rv32imafc** (**Default**: rv32imcxgap9) ISA target for the GCC toolcahin.
 
-`platform`: **rtl**|**gvsoc**. Selects the simulation platform. GVSoC is currently WIP, some tests may fail.
+`platform`: **rtl**|**verilator**|**gvsoc**. Selects the simulation platform. `rtl` simulates the RTL with QuestaSim, `verilator` simulates the same RTL with Verilator (see [Simulating with Verilator](#simulating-with-verilator)). GVSoC is currently WIP, some tests may fail. `make MAGIA` and `make rtl-clean` accept `rtl` and `verilator` and default to `rtl`; `make run` requires the flag explicitly.
 
 `tiles`: **2**|**4**|**8**|**16** (**Default**: 2). Selects number of rows and columns for the mesh architecture.
 
@@ -127,6 +127,11 @@ Once the [Prerequisites](#prerequisites) are in place:
 
     `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode>`
 
+    This builds the QuestaSim libraries. To build a Verilator model of the same RTL instead, add
+    `platform=verilator` (see [Simulating with Verilator](#simulating-with-verilator)):
+
+    `make MAGIA platform=verilator <target_platform> <tiles> <fsync_mode>`
+
     and/or the GVSoC module **NOTE: GCC AND G++ 11.2.0 AND ABOVE IS MANDATORY**:
 
     `make gvsoc <tiles>`
@@ -158,6 +163,83 @@ To ensure a clean re-build of the RTL, you can run:
 `make rtl-clean`
 
 before building the RTL back using the `make MAGIA` command.
+
+## Simulating with Verilator
+
+`platform=verilator` runs the same RTL as `platform=rtl`, but on a
+[Verilator](https://verilator.org) model instead of QuestaSim — no simulator license needed. The
+two flows share the entire software side: the SDK produces exactly the same `verif` ELF, `$readmemh`
+stimuli and disassembly, and both drive the same `magia_tb` testbench with the same plusargs.
+
+The flow has the same build-then-run shape as `platform=rtl`, and takes the same `tiles`,
+`target_platform` and `fsync_mode`:
+
+```sh
+make MAGIA platform=verilator tiles=4        # build the model  (minutes)
+make build test=test_helloworld tiles=4      # build the test
+make run test=test_helloworld platform=verilator tiles=4
+```
+
+`make MAGIA platform=verilator` applies exactly the same parameter edits to the RTL as the QuestaSim
+build does, then Verilates instead of running `build-hw`. The mesh geometry is compiled into the
+model, so **`tiles` must be the same for `MAGIA`, `build` and `run`**, and the model has to be
+rebuilt whenever `tiles`, `target_platform`, `fsync_mode` or the RTL itself changes — `make run`
+never rebuilds it, and errors out if there is no model at all.
+
+To remove a Verilator build: `make rtl-clean platform=verilator` (without `platform=verilator` this
+still does the QuestaSim `hw-clean-all`, which deletes `.bender` and thereby invalidates any
+Verilator model built from the same checkout).
+
+Requirements:
+
+- A MAGIA checkout containing the Verilator flow (`verilator/verilator.mk`). This is **not** in the
+  commit pinned by `scripts/deps.env` yet, so point `MAGIA_RTL_DIR` at a checkout that has it.
+- Verilator >= 5.046 — earlier versions miss the hierarchical-block fixes the flow depends on.
+- `mesh_dv=1`: the flow is mesh-only, so `tiles=1` is rejected (it forces `mesh_dv=0`).
+- Not `target_platform=magia_v1`: it selects CV32E40X, whose hierarchical core traces would need
+  per-tile filenames resolved at run time. Also rejected.
+
+Both constraints are checked by `make MAGIA`, which stops with an explanatory error rather than
+letting the build fail later.
+
+Options:
+
+`verilator_jobs`: **N** (**Default**: 16). Parallelism used to *build* the model. Unrelated to simulation speed.
+
+`verilator_threads`: **N** (**Default**: 4). Threads the *simulation* runs on. Compiled into the model, so it only has an effect on `make MAGIA platform=verilator`.
+
+`MAGIA_VERILATOR_BIN`: Path to the model. **Default**: `$(MAGIA_RTL_DIR)/verilator/build/obj_dir/Vmagia_tb`. Override to run a model kept outside the MAGIA checkout.
+
+`gui`: **0**|**1** (**Default**: 0). Dumps an FST waveform of the run to `<test_name>.fst` in the test directory, and prints ready-to-paste `gtkwave` and `surfer` commands when the simulation ends. This is what `gui` means for Verilator — there is no interactive simulator window as with QuestaSim. Dumping is off otherwise and costs nothing. Override the filename with `VERILATOR_FST`.
+
+`fast_sim` is QuestaSim-only and is ignored.
+
+Outputs, all in `$(MAGIA_RTL_DIR)/sw/tests/<test_name>/`:
+
+- **stdout**, also teed to `transcript_verilator`. Printing from the tiles appears as
+  `[mhartid N] ...`.
+- `trace_core_<hartid>.log`, one per core.
+- `<test_name>.fst`, the waveform, if `gui=1` was given.
+- `build/` with the ELF and the stimuli, exactly as in the `rtl` flow. No `modelsim.ini`/`work`
+  symlinks are created — the verilated model is self-contained.
+
+Pass/fail is decided by the testbench's end-of-simulation line rather than by the exit code alone,
+because the model also exits 0 when it runs out of events without reaching `$finish`:
+
+```sh
+./scripts/sim_ret_errors_verilator.sh $MAGIA_RTL_DIR/sw/tests/test_helloworld/transcript_verilator
+```
+
+It exits 0 on success, 1 on a failing simulation, 2 if the log is missing, and 3 if the simulation
+never reported an end-of-simulation line (hung or killed).
+
+Two things to keep in mind:
+
+- **Nothing bounds a hung run.** If a tile never signals end-of-computation the simulation waits
+  forever; interrupt it with Ctrl-C.
+- **Let a waveform run reach `$finish`.** A run killed earlier leaves the FST unclosed, and its
+  signal hierarchy is still sitting in the `<dump>.fst.hier` companion file — such a dump only reads
+  in place and loses every signal name the moment it is moved.
 
 ## Adding your own test
 
