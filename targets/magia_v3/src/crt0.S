@@ -129,7 +129,7 @@ exit:
  add     a1, a1, a0
  add     a1, a1, a0
  sh      s0, 0(a1)
- li      a1, 0x00010000
+ li      a1, 0x00000738
  cv.elw	 zero, 0(a1)
 
 .section .vectors, "ax"
