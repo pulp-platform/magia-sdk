@@ -193,7 +193,7 @@ endif
 ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
 	$(error No test found with name: $(test))
 endif
-	$(GVRUN) --target $(target_platform) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG) $(GVSOC_TRACE_ARG)
+	$(GVRUN) --target=$(target_platform):n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG) $(GVSOC_TRACE_ARG)
 	$(GVSOC2PERFETTO_BIN) $(GVSOC2PERFETTO_VCD) \
 		-o $(GVSOC2PERFETTO_OUT) \
 		--state-map 'fsm_state=0:idle,1:preload,2:routine,3:storing,4:finished,5:acknowledge' \
@@ -213,7 +213,6 @@ ifndef test
 	$(error Proper formatting is: make debug_profiling test=<test_name>)
 endif
 	$(GVSOC2PERFETTO_BIN) $(GVSOC2PERFETTO_VCD) \
-
 		-o $(GVSOC2PERFETTO_OUT) \
 		--state-map 'fsm_state=0:idle,1:preload,2:routine,3:storing,4:finished,5:acknowledge' \
 		--state-map 'me_state=0:idle,1:decomposing' \
