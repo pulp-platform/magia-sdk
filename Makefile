@@ -165,7 +165,7 @@ ifeq ($(platform), gvsoc)
 	$(GVRUN) --target=$(target_platform):n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
 else ifeq ($(platform), rtl)
 	mkdir -p $(BUILD_DIR_ABS) && cd $(BUILD_DIR_ABS) && mkdir -p build
-	cp ./build/bin/$(test) $(BUILD_DIR_ABS)/build/verif
+	cp $(BIN_ABS_PATH)/$(test) $(BUILD_DIR_ABS)/build/verif
 	objcopy --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
 	scripts/parse_s19.pl $(BIN).s19 > $(BIN).txt
 	python3 scripts/s19tomem.py $(BIN).txt $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
