@@ -34,6 +34,8 @@ typedef struct {
     uint32_t slot;
     uint32_t phase;
     uint32_t index;
+    uint32_t start_cycle;
+    uint32_t end_cycle;
     uint32_t cycles;
 } maps_experiment_duration_event_t;
 typedef struct {
@@ -505,6 +507,8 @@ static inline void maps_trace_duration(const tile_plan_t *plan,
         entry->slot = slot;
         entry->phase = phase[0] == 'o' ? 0u : phase[0] == 's' ? 1u : 2u;
         entry->index = index;
+        entry->end_cycle = maps_read_cycle();
+        entry->start_cycle = entry->end_cycle - cycles;
         entry->cycles = cycles;
     }
 #else

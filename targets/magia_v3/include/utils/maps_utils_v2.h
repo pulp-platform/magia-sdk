@@ -336,8 +336,9 @@ static inline void maps_fifo_flush_experiment_trace(const fifo_tile_plan_t *plan
         const maps_experiment_duration_event_t *entry =
             &durations->events[plan->hartid][event];
         const char *phase = entry->phase == 0u ? "op" : entry->phase == 1u ? "send" : "recv";
-        printf("maps t%u tok %u slot %u %s %u cycles %u\n", plan->hartid,
-               entry->token, entry->slot, phase, entry->index, entry->cycles);
+        printf("maps t%u tok %u slot %u %s %u start %u end %u cycles %u\n", plan->hartid,
+               entry->token, entry->slot, phase, entry->index, entry->start_cycle,
+               entry->end_cycle, entry->cycles);
     }
 #else
     (void)plan;
