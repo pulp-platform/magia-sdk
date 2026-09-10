@@ -10,6 +10,7 @@
 #include "eventunit32.h"
 #include "redmule.h"
 #include "mg_event.h"
+#include "addr_map/tile_addr_map.h" // REDMULE_BASE, used by mg_redmule_hw_done()
 
 /**
  * Issue an asynchronous RedMulE GEMM job and stamp `event` with the id needed
@@ -48,22 +49,51 @@ extern void mg_redmule_gemm_start(redmule_controller_t *ctrl);
 extern void mg_redmule_gemm_commit(redmule_controller_t *ctrl);
 
 /**
- * Completion counter. Defined in mg_redmule.c and advanced from both the
- * acquire/backpressure path (mg_redmule_gemm/enqueue) and mg_redmule_wait()
- * below; shared so both observe a single instance. Only the low 8 bits are
+ * Completion counter. Defined in mg_redmule.c. Kept coherent with
+ * mg_redmule_hw_done() by the acquire/backpressure path (mg_redmule_gemm/enqueue)
+ * and mg_redmule_wait() so external readers still see a sane value, but it is no
+ * longer the wait predicate (see mg_redmule_hw_done()). Only the low 8 bits are
  * significant (see mg_seq_ge()).
  */
 extern uint8_t mg_redmule_completed;
 
 /**
+ * Authoritative RedMulE job-completion count, read from the HWPE controller's
+ * RUNNING_JOB register. In hwpe_ctrl_target this is `job_running_id_q`: an 8-bit
+ * up-counter that resets to 0 and is bumped once per job_done pulse (same event
+ * that pops the job FIFO and frees a queue slot). Despite the register name it
+ * is a retired-job count, and it is already 0-based - no offset to subtract,
+ * unlike the iDMA DONE_ID (see mg_idma_hw_done).
+ *
+ * WHY NOT THE EVENT UNIT: "a RedMulE job finished" reaches the core as one
+ * OR-latched Event Unit buffer bit. With the depth-2 job queue two jobs can
+ * retire while the core is parked elsewhere - e.g. in an iDMA wait whose cv.elw
+ * keeps waking on the still-latched iDMA bit - and their two completions then
+ * collapse into a single edge. A wait that counts edges falls permanently one
+ * behind and its next cv.elw never wakes. RUNNING_JOB counts every completion
+ * and cannot coalesce.
+ */
+static inline __ALWAYS_INLINE_ uint8_t mg_redmule_hw_done(void)
+{
+#if defined(REDMULE_MM) && (REDMULE_MM == 1)
+    return (uint8_t)mmio32(REDMULE_BASE + REDMULE_REG_OFFS + REDMULE_RUNNING_JOB);
+#else
+    // Custom-instruction path: no HW job queue, only ever one job in flight, so
+    // the SW pulse count cannot coalesce - fall back to it.
+    return mg_redmule_completed;
+#endif
+}
+
+/**
  * Block (per `mode`) until `event` (as produced by mg_redmule_gemm) has
  * completed, then run its callback if set.
  *
- * RedMulE jobs complete strictly in issue order, so this consumes hardware
- * completion pulses one at a time - advancing a completion counter - until
- * that counter has caught up with `event`'s id. That may happen immediately,
- * if the job already completed while waiting on a later event, or only after
- * spinning on new pulses.
+ * The predicate is the HWPE RUNNING_JOB completion counter, not the Event Unit
+ * done-latch. In WFE mode cv.elw is used only to sleep between checks: the
+ * RedMulE done-latch is cleared before each sleep so the pending/next job
+ * completion is guaranteed to produce a fresh rising edge, and the counter is
+ * re-tested after the clear in case that completion raced it. A stale or
+ * coalesced EU edge can then only cost an extra spin, never a permanent stall.
  *
  * Defined here as a static inline (rather than out-of-line in mg_redmule.c) so
  * it folds into its call sites under -O/-flto.
@@ -71,21 +101,23 @@ extern uint8_t mg_redmule_completed;
 static inline __ALWAYS_INLINE_ void
 mg_redmule_wait(eu_controller_t *eu, eu_wait_mode_t mode, mg_event_t *event)
 {
+    (void)eu;
     uint8_t target = (uint8_t)(event->id + 1);
 
-    // the event may already be done - e.g. its completion pulse was consumed
-    // while waiting on a later id - in which case we must not wait on the
-    // hardware at all.
-    while (!mg_seq_ge(mg_redmule_completed, target)) {
-        // not yet the right one: spin back into the hardware wait.
-        if (eu32_redmule_wait(eu, mode)) {
-            // update the completion counter whenever a pulse was seen: it
-            // always retires exactly one FIFO-ordered job, whether or not it
-            // is the one we are waiting for.
-            mg_redmule_completed++;
+    while (!mg_seq_ge(mg_redmule_hw_done(), target)) {
+        if (mode == WFE) {
+            eu_clear_events(EU_REDMULE_DONE_MASK);
+            if (mg_seq_ge(mg_redmule_hw_done(), target))
+                break;
+            evt_read32(EU_CORE_EVENT_WAIT);
         }
+        // POLLING: fall through and re-read the HW counter.
     }
+    mg_redmule_completed = mg_redmule_hw_done();
 
-    // our event is the one that just completed (or had already completed).
+#if PROFILE_CMP == 1
+    stnl_cmp_f();
+#endif
+
     mg_event_trigger(event);
 }

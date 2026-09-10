@@ -39,13 +39,21 @@ void mg_redmule_gemm(redmule_controller_t *ctrl,
                      mg_event_t *event,
                      mg_event_callback_t callback)
 {
+    (void)eu;
     int32_t id;
     while ((id = redmule_acquire(ctrl)) < 0) {
-        // Hardware queue (depth 2) is full: drain one completion pulse to
-        // free a slot before retrying the acquire.
-        if (eu32_redmule_wait(eu, mode)) {
-            mg_redmule_completed++;
+        // Hardware job queue (depth 2) is full: wait for a job to retire (which
+        // frees a FIFO slot) before retrying the acquire. Gate on the HWPE
+        // RUNNING_JOB completion counter (mg_redmule_hw_done), not a coalescing
+        // Event Unit done-pulse: two back-to-back completions merge into one
+        // latched EU bit, so an edge-counting wait would stall here forever.
+        if (mode == WFE) {
+            uint8_t seen = mg_redmule_hw_done();
+            eu_clear_events(EU_REDMULE_DONE_MASK);
+            if (mg_redmule_hw_done() == seen)
+                evt_read32(EU_CORE_EVENT_WAIT);
         }
+        mg_redmule_completed = mg_redmule_hw_done();
     }
     mg_event_init(event, id, callback);
     redmule_gemm(ctrl, x, w, y, m, n, k);
@@ -63,13 +71,21 @@ void mg_redmule_gemm_enqueue(redmule_controller_t *ctrl,
                              mg_event_t *event,
                              mg_event_callback_t callback)
 {
+    (void)eu;
     int32_t id;
     while ((id = redmule_acquire(ctrl)) < 0) {
-        // Hardware queue (depth 2) is full: drain one completion pulse to
-        // free a slot before retrying the acquire.
-        if (eu32_redmule_wait(eu, mode)) {
-            mg_redmule_completed++;
+        // Hardware job queue (depth 2) is full: wait for a job to retire (which
+        // frees a FIFO slot) before retrying the acquire. Gate on the HWPE
+        // RUNNING_JOB completion counter (mg_redmule_hw_done), not a coalescing
+        // Event Unit done-pulse: two back-to-back completions merge into one
+        // latched EU bit, so an edge-counting wait would stall here forever.
+        if (mode == WFE) {
+            uint8_t seen = mg_redmule_hw_done();
+            eu_clear_events(EU_REDMULE_DONE_MASK);
+            if (mg_redmule_hw_done() == seen)
+                evt_read32(EU_CORE_EVENT_WAIT);
         }
+        mg_redmule_completed = mg_redmule_hw_done();
     }
     mg_event_init(event, id, callback);
     redmule16_gemm_enqueue(ctrl, x, w, y, m, n, k);

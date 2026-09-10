@@ -39,17 +39,24 @@ static inline __ALWAYS_INLINE_ void mg_idma_issue(eu_controller_t *eu,
                                                   mg_event_t *event,
                                                   mg_event_callback_t callback)
 {
-    uint8_t idx = dir ? 1 : 0;
+    (void)eu;
+    uint8_t  idx    = dir ? 1 : 0;
+    uint32_t clr_ms = dir ? EU_IDMA_O2A_DONE_MASK : EU_IDMA_A2O_DONE_MASK;
     // WORKAROUND: backpressure - block until this direction has a free slot in
-    // the (software-emulated) HW job queue before issuing. Draining a
-    // completion pulse here shares mg_idma_completed[idx] with mg_idma_wait();
-    // that is safe because same-direction transfers retire strictly FIFO.
-    while ((uint8_t)(mg_idma_issued[idx] - mg_idma_completed[idx]) >= MG_IDMA_HW_QUEUE_DEPTH) {
-        uint32_t done = dir ? eu32_idma_wait_o2a(eu, mode) : eu32_idma_wait_a2o(eu, mode);
-        if (done) {
-            mg_idma_completed[idx]++;
+    // the (software-emulated) depth-1 HW job queue before issuing. Gate on the
+    // iDMA's own retired-transfer count (mg_idma_hw_done), not a tally of Event
+    // Unit done-pulses: two back-to-back completions collapse into one latched
+    // EU bit, which would leave this loop (and mg_idma_wait) permanently one
+    // behind and its next cv.elw asleep forever.
+    while ((uint8_t)(mg_idma_issued[idx] - mg_idma_hw_done(dir)) >= MG_IDMA_HW_QUEUE_DEPTH) {
+        if (mode == WFE) {
+            eu_clear_events(clr_ms);
+            if ((uint8_t)(mg_idma_issued[idx] - mg_idma_hw_done(dir)) < MG_IDMA_HW_QUEUE_DEPTH)
+                break;
+            evt_read32(EU_CORE_EVENT_WAIT);
         }
     }
+    mg_idma_completed[idx] = mg_idma_hw_done(dir);
     mg_event_init(event, (int32_t)mg_idma_issued[idx], callback);
     mg_idma_issued[idx]++;
 }
