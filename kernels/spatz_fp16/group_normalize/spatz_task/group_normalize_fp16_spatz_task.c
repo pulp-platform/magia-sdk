@@ -1,6 +1,51 @@
 #include "tile.h"
 #include "group_normalize_fp16_spatz_params.h"
 
+static inline float sqrtf_sp(float value)
+{
+    float result;
+    asm volatile("fsqrt.s %0, %1" : "=f"(result) : "f"(value));
+    return result;
+}
+
+static inline void normalize_channel(const _Float16 *input, _Float16 *output,
+                                     const _Float16 mean,
+                                     const _Float16 inverse_stddev,
+                                     const uint32_t elements)
+{
+    uint32_t remaining = elements;
+    size_t vl;
+    while (remaining != 0u) {
+        asm volatile("vsetvli %0, %1, e16, m8, ta, ma"
+                     : "=r"(vl) : "r"(remaining));
+        asm volatile("vle16.v v0, (%0)" :: "r"(input));
+        asm volatile("vfsub.vf v0, v0, %0" :: "f"(mean));
+        asm volatile("vfmul.vf v0, v0, %0" :: "f"(inverse_stddev));
+        asm volatile("vse16.v v0, (%0)" :: "r"(output));
+        input += vl;
+        output += vl;
+        remaining -= vl;
+    }
+}
+
+static inline void affine_channel(_Float16 *output, const _Float16 scale,
+                                  const _Float16 bias,
+                                  const uint32_t elements)
+{
+    uint32_t remaining = elements;
+    size_t vl;
+    while (remaining != 0u) {
+        asm volatile("vsetvli %0, %1, e16, m8, ta, ma"
+                     : "=r"(vl) : "r"(remaining));
+        asm volatile("vle16.v v0, (%0)" :: "r"(output));
+        asm volatile("vfmul.vf v0, v0, %0" :: "f"(scale));
+        asm volatile("vfadd.vf v0, v0, %0" :: "f"(bias));
+        asm volatile("vse16.v v0, (%0)" :: "r"(output));
+        output += vl;
+        remaining -= vl;
+    }
+}
+
 int group_normalize_fp16_spatz_task(void)
 {
     volatile group_normalize_fp16_spatz_params_t *params =
@@ -16,36 +61,30 @@ int group_normalize_fp16_spatz_task(void)
     const uint32_t local_channels =
         params->local_elements / params->local_spatial_elements;
     uint32_t active_group = params->num_groups;
-    float group_mean = 0.0f;
-    float inverse_stddev = 0.0f;
+    _Float16 group_mean = 0.0f;
+    _Float16 inverse_stddev = 0.0f;
     for (uint32_t local_channel = 0; local_channel < local_channels;
          ++local_channel) {
-        const uint32_t affine_channel =
+        const uint32_t affine_index =
             params->channel_offset + local_channel - params->scale_channel_offset;
         const uint32_t group =
             (params->channel_offset + local_channel) /
             params->channels_per_group;
-        /* Mean and inverse standard deviation are shared by every channel in
-         * the group. Keep the element arithmetic unchanged, but do the costly
-         * scalar square root and division only when the group changes. */
+        /* Match the full-mesh GroupNorm arithmetic: normalize in FP16, store,
+         * then apply the FP16 affine transform in a separate vector pass. */
         if (group != active_group) {
-            float stddev;
-            asm volatile("fsqrt.s %0, %1"
-                         : "=f"(stddev)
-                         : "f"((float)variance[group] + params->epsilon));
             active_group = group;
-            group_mean = (float)mean[group];
-            inverse_stddev = 1.0f / stddev;
+            group_mean = mean[group];
+            inverse_stddev = (_Float16)(1.0f / sqrtf_sp(
+                (float)variance[group] + params->epsilon));
         }
         const uint32_t channel_start =
             local_channel * params->local_spatial_elements;
-        const uint32_t channel_end =
-            channel_start + params->local_spatial_elements;
-        for (uint32_t index = channel_start; index < channel_end; ++index)
-            output[index] = (_Float16)(
-                ((float)input[index] - group_mean) * inverse_stddev *
-                    (float)scale[affine_channel] +
-                (float)bias[affine_channel]);
+        normalize_channel(input + channel_start, output + channel_start,
+                          group_mean, inverse_stddev,
+                          params->local_spatial_elements);
+        affine_channel(output + channel_start, scale[affine_index],
+                       bias[affine_index], params->local_spatial_elements);
     }
     return 0;
 }

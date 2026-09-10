@@ -1,27 +1,24 @@
 #include "tile.h"
 #include "reducesum_fp16_spatz_params.h"
 
-/* Sums 'reduce_dim' rows of 'inner_dim' elements each. The accumulator stays
- * FP32 until the final store, matching MAPS's scalar ReduceSum association. */
+/* Sums 'reduce_dim' rows of 'inner_dim' elements each in FP16. */
 static inline void reduce_sum_core(const _Float16 *src, _Float16 *dst, const size_t reduce_dim, const size_t inner_dim)
 {
     size_t avl = inner_dim;
     size_t vl;
 
     for (; avl > 0; avl -= vl) {
-        asm volatile ("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
         const _Float16 *p_src = src + (inner_dim - avl);
         asm volatile ("vle16.v v8, (%0)" :: "r"(p_src));
-        asm volatile ("vfwcvt.f.f.v v0, v8");
 
         for (size_t r = 1; r < reduce_dim; r++) {
             const _Float16 *p_src = src + (r * inner_dim) + (inner_dim - avl);
-            asm volatile ("vle16.v v8, (%0)" :: "r"(p_src));
-            asm volatile ("vfwadd.wv v0, v0, v8");
+            asm volatile ("vle16.v v16, (%0)" :: "r"(p_src));
+            asm volatile ("vfadd.vv v8, v8, v16");
         }
 
         _Float16 *p_dst = dst + (inner_dim - avl);
-        asm volatile ("vfncvt.f.f.w v8, v0");
         asm volatile ("vse16.v v8, (%0)" :: "r"(p_dst) : "memory");
     }
 }
