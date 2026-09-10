@@ -912,7 +912,11 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
         return maps_execute_reduce_f16(plan, op, slot);
 #endif
     case OP_REDUCE_MAX:
+#if MAPS_HAS_REDUCE_MAX_SPATZ_TASK
+        return maps_execute_reducemax_spatz(plan, op, slot, runtime);
+#else
         return maps_execute_reduce_f16(plan, op, slot);
+#endif
     case OP_ALL_REDUCE_MAX:
     case OP_ALL_REDUCE_SUM:
         return maps_execute_all_reduce(plan, op, slot, runtime);
