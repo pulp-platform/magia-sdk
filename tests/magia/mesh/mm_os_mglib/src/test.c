@@ -302,7 +302,7 @@ int main(void)
                 mg_redmule_wait(&eu_ctrl, WAIT_MODE, redmule_evt_curr);
 
             } else {
-                mg_redmule_gemm_start(&redmule_ctrl);
+                // mg_redmule_gemm_start(&redmule_ctrl);
                 mg_redmule_wait(&eu_ctrl, WAIT_MODE, redmule_evt_curr);
             }
         }

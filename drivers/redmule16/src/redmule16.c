@@ -43,6 +43,19 @@ int32_t redmule16_acquire(redmule_controller_t *ctrl)
 }
 
 /**
+ * Reads the hardware RUNNING_JOB register, which returns the job ID
+ * of the currently running job, or the last run job if Redmule is currently idle.
+ */
+int32_t redmule16_running_job(redmule_controller_t *ctrl)
+{
+#if REDMULE_MM == 1
+    return (int32_t)HWPE_READ(REDMULE_REG_OFFS + REDMULE_RUNNING_JOB);
+#else
+    return 0;
+#endif
+}
+
+/**
  * Writes the hardware COMMIT_TRIGGER register, which commits and triggers
  * a hardware job.
  */
@@ -104,6 +117,9 @@ extern int redmule_init(redmule_controller_t *ctrl)
 extern int32_t redmule_acquire(redmule_controller_t *ctrl)
     __attribute__((alias("redmule16_acquire"), used, visibility("default")));
 
+extern int32_t redmule_running_job(redmule_controller_t *ctrl)
+    __attribute__((alias("redmule16_running_job"), used, visibility("default")));
+
 extern int redmule_gemm(redmule_controller_t *ctrl,
                         uint32_t x,
                         uint32_t w,
@@ -115,7 +131,8 @@ extern int redmule_gemm(redmule_controller_t *ctrl,
 
 /* Export the RedmulE-specific controller API */
 redmule_controller_api_t redmule_api = {
-    .init    = redmule16_init,
-    .acquire = redmule16_acquire,
-    .gemm    = redmule16_gemm,
+    .init        = redmule16_init,
+    .acquire     = redmule16_acquire,
+    .gemm        = redmule16_gemm,
+    .running_job = redmule16_running_job,
 };

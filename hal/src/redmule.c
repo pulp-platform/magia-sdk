@@ -47,6 +47,7 @@ m; (void) n; (void) k; return 1;
 __attribute__((weak)) redmule_controller_api_t redmule_api = {
     .init = redmule_init,
     /*     .wait = redmule_wait, */
-    .acquire = redmule_acquire,
-    .gemm    = redmule_gemm,
+    .acquire     = redmule_acquire,
+    .gemm        = redmule_gemm,
+    .running_job = redmule_running_job,
 };

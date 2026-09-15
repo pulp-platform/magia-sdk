@@ -39,19 +39,18 @@ static inline __ALWAYS_INLINE_ void mg_idma_issue(eu_controller_t *eu,
                                                   mg_event_t *event,
                                                   mg_event_callback_t callback)
 {
-    uint8_t idx = dir ? 1 : 0;
     // WORKAROUND: backpressure - block until this direction has a free slot in
     // the (software-emulated) HW job queue before issuing. Draining a
     // completion pulse here shares mg_idma_completed[idx] with mg_idma_wait();
     // that is safe because same-direction transfers retire strictly FIFO.
-    while ((uint8_t)(mg_idma_issued[idx] - mg_idma_completed[idx]) >= MG_IDMA_HW_QUEUE_DEPTH) {
+    while ((uint8_t)(mg_idma_issued[dir] - mg_idma_completed[dir]) >= MG_IDMA_HW_QUEUE_DEPTH) {
         uint32_t done = dir ? eu32_idma_wait_o2a(eu, mode) : eu32_idma_wait_a2o(eu, mode);
         if (done) {
-            mg_idma_completed[idx]++;
+            mg_idma_completed[dir]++;
         }
     }
-    mg_event_init(event, (int32_t)mg_idma_issued[idx], callback);
-    mg_idma_issued[idx]++;
+    mg_event_init(event, (int32_t)mg_idma_issued[dir], callback);
+    mg_idma_issued[dir]++;
 }
 
 void mg_idma_memcpy_1d(idma_controller_t *idma,
