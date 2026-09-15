@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include "eventunit32.h"
 #include "redmule.h"
+#include "redmule16.h"
 #include "mg_event.h"
 
 /**
@@ -73,19 +74,13 @@ mg_redmule_wait(eu_controller_t *eu, eu_wait_mode_t mode, mg_event_t *event)
 {
     uint8_t target = (uint8_t)(event->id + 1);
 
-    // the event may already be done - e.g. its completion pulse was consumed
-    // while waiting on a later id - in which case we must not wait on the
-    // hardware at all.
     while (!mg_seq_ge(mg_redmule_completed, target)) {
-        // not yet the right one: spin back into the hardware wait.
         if (eu32_redmule_wait(eu, mode)) {
-            // update the completion counter whenever a pulse was seen: it
-            // always retires exactly one FIFO-ordered job, whether or not it
-            // is the one we are waiting for.
-            mg_redmule_completed++;
+            uint32_t job_id = (uint32_t)HWPE_READ(REDMULE_REG_OFFS + REDMULE_RUNNING_JOB);
+            mg_redmule_completed =
+                (mg_redmule_completed + 1) > job_id ? (mg_redmule_completed + 1) : job_id;
         }
     }
 
-    // our event is the one that just completed (or had already completed).
     mg_event_trigger(event);
 }

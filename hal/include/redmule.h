@@ -45,6 +45,12 @@ extern int redmule_init(redmule_controller_t *ctrl);
 extern int32_t redmule_acquire(redmule_controller_t *ctrl);
 
 /**
+ * Reads the hardware RUNNING_JOB register, which returns the job ID
+ * of the currently running job, or the last run job if Redmule is currently idle.
+ */
+extern int32_t redmule_running_job(redmule_controller_t *ctrl);
+
+/**
  * This function prepares and execute an accelerated generic matrix multiplication.
  * (N x M * M x K) + (N x K) = (N x K)
  */
@@ -71,6 +77,7 @@ struct redmule_controller_api {
                 uint16_t m,
                 uint16_t n,
                 uint16_t k);
+    int32_t (*running_job)(redmule_controller_t *ctrl);
 };
 
 /*
