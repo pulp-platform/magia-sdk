@@ -34,6 +34,12 @@ The following steps assume the default target platform, `magia_v2`, on which Spa
 
     From the SDK's root directory. If you have done it correctly, you'll see a "(gvsoc_venv)" preceding your terminal command line.
 
+    If you intend to generate new GEMM tests (`tests/magia/mesh/mm_generator`, which relies on PyTorch), pass `TORCH=1` to also install PyTorch (CPU build) into the environment:
+
+    `make gvsoc_uv TORCH=1`  (or `make gvsoc_pyenv TORCH=1`)
+
+    This is not needed to build or run the existing tests, so it is disabled by default to keep the environment lightweight.
+
 1. RISC-V GCC toolchain: make sure it is installed and visible in the `$PATH` environment variable. You can check if and where the compiler is installed by running the following command on your root (`/`) directory:
 
     `find . ! -readable -prune -o -name "riscv32-unknown-elf-gcc" -print`
@@ -357,7 +363,8 @@ To read the full logs, download the `gitlab-logs` artifact from the failed GitHu
 
 ## Code Style
 
-The repository ships a `.clang-format` file (LLVM-based, 100-column limit). Formatting is enforced in CI on the C/C++ files changed in your branch (vs. `main`); see [Format CI](#format-ci) below.
+The repository ships a `.clang-format` file (LLVM-based, 100-column limit). 
+Formatting is not enforced in CI on the C/C++ files changed in your branch (vs. `main`), but we strongly suggest you run the *make format* command on the repository before pushing for a PR.
 
 ### `make format`
 
@@ -367,11 +374,7 @@ Run from the repo root to apply `.clang-format` to all C/C++ files (`*.c *.h *.c
 make format
 ```
 
-Files outside the branch's diff are never touched, avoiding noisy reformats of pre-existing code. The selection logic lives in `scripts/ci/format-changed.sh` and is shared with CI.
-
-### Format CI
-
-The `Format Check` GitHub Actions workflow (`.github/workflows/format-ci.yml`) runs on every push and pull request. It invokes `scripts/ci/format-changed.sh check --committed`, which runs `clang-format --dry-run --Werror` on the same set of changed files. The job fails if any of those files are not properly formatted — run `make format` locally and commit the result to fix it.
+Files outside the branch's diff are never touched, avoiding noisy reformats of pre-existing code. The selection logic lives in `scripts/ci/format-changed.sh`.
 
 ### VS Code setup
 

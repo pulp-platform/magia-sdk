@@ -43,6 +43,32 @@ int32_t redmule16_acquire(redmule_controller_t *ctrl)
 }
 
 /**
+ * Reads the hardware RUNNING_JOB register, which returns the job ID
+ * of the currently running job, or the last run job if Redmule is currently idle.
+ */
+int32_t redmule16_running_job(redmule_controller_t *ctrl)
+{
+#if REDMULE_MM == 1
+    return (int32_t)HWPE_READ(REDMULE_REG_OFFS + REDMULE_RUNNING_JOB);
+#else
+    return 0;
+#endif
+}
+
+/**
+ * Writes the hardware COMMIT_TRIGGER register, which commits and triggers
+ * a hardware job.
+ */
+int32_t redmule16_trigger(redmule_controller_t *ctrl)
+{
+#if REDMULE_MM == 1
+    redmule_mm_trigger();
+#else
+    return 0;
+#endif
+}
+
+/**
  * Configure and launch an FP16 GEMM on the RedMulE accelerator.
  * Computes: Y = X * W + Y  where X is [M x N], W is [N x K], Y is [M x K].
  *
@@ -77,15 +103,22 @@ int redmule16_gemm(redmule_controller_t *ctrl,
     redmule_mm_marith(
         y, w, x); // Launch GEMM with matrix addresses via memory-mapped HWPE registers
 #endif
+    redmule_mm_commit_trigger();
 
     return 0;
 }
+
+// redmule16_gemm_enqueue / _commit / _start are defined as static inline in
+// redmule16.h so they fold into their mglib call sites (see the note there).
 
 extern int redmule_init(redmule_controller_t *ctrl)
     __attribute__((alias("redmule16_init"), used, visibility("default")));
 
 extern int32_t redmule_acquire(redmule_controller_t *ctrl)
     __attribute__((alias("redmule16_acquire"), used, visibility("default")));
+
+extern int32_t redmule_running_job(redmule_controller_t *ctrl)
+    __attribute__((alias("redmule16_running_job"), used, visibility("default")));
 
 extern int redmule_gemm(redmule_controller_t *ctrl,
                         uint32_t x,
@@ -98,7 +131,8 @@ extern int redmule_gemm(redmule_controller_t *ctrl,
 
 /* Export the RedmulE-specific controller API */
 redmule_controller_api_t redmule_api = {
-    .init    = redmule16_init,
-    .acquire = redmule16_acquire,
-    .gemm    = redmule16_gemm,
+    .init        = redmule16_init,
+    .acquire     = redmule16_acquire,
+    .gemm        = redmule16_gemm,
+    .running_job = redmule16_running_job,
 };

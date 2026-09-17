@@ -105,6 +105,7 @@ add_subdirectory(targets)
 add_subdirectory(hal)
 # add_subdirectory(devices)
 add_subdirectory(drivers)
+add_subdirectory(mglib)
 add_subdirectory(kernels)
 
 ################################################################################
