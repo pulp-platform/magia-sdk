@@ -4,7 +4,7 @@
 #
 # Alberto Dequino <alberto.dequino@unibo.it>
 
-add_subdirectory(hello_world)
+# add_subdirectory(hello_world)
 # add_subdirectory(fsync_levels)
 # add_subdirectory(fsync_rc)
 # add_subdirectory(fsync_diag)
@@ -41,7 +41,17 @@ endif()
 # add_subdirectory(pouya_spmv_ss_1)
 # add_subdirectory(pouya_spmv_profiling)
 add_subdirectory(pouya_spmv_eqworkload)
-add_subdirectory(pouya_spmv_eq_no_pipeline)
+add_subdirectory(pouya_spmv_eqworkload2)
+# add_subdirectory(pouya_spmv_eq_no_pipeline)
+add_subdirectory(pouya_spmv_eqworkload_profiling)
+add_subdirectory(pouya_spmv_eqworkload2_profiling)
+add_subdirectory(pouya_start_time_test)
+add_subdirectory(pouya_spmv_geo)
+add_subdirectory(pouya_spmv_geo2)
+add_subdirectory(pouya_spmv_geo2_dbg)
+
+# add_subdirectory(pouya_geocsr_phase1)
+# add_subdirectory(pouya_communication)
 
 # add_subdirectory(fsync_levels)
 # add_subdirectory(fsync_rc)

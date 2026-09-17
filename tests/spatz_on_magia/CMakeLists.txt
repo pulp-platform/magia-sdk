@@ -23,6 +23,7 @@
 # add_subdirectory(onnx_softmax)
 # add_subdirectory(onnx_sub)
 # add_subdirectory(onnx_swish)
-add_subdirectory(pouya_spatz_gemv)
-add_subdirectory(pouya_spatz_csr)
+# add_subdirectory(pouya_spatz_gemv)
+# add_subdirectory(pouya_spatz_gemv_dbg)
+# add_subdirectory(pouya_spatz_csr)
 

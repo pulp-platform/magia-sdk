@@ -6,8 +6,8 @@
 #include "eventunit.h"
 
 
-#include "sme3Da.h"
-//#include "poisson3Da.h"
+//#include "sme3Da.h"
+#include "poisson3Da.h"
 //#include "raefsky5.h"
 //#include "ex6.h"
 //#include "cavity05.h"
@@ -28,24 +28,25 @@
 
 /*
 --------------------------------------------------
-Packed CSR entry format
+CSR value/column format
 
-bits[15:0]  = signed int16 value
-bits[31:16] = uint16 column
+Each logical CSR entry occupies TWO uint32_t words:
+
+    word[2*i]     = 32-bit value
+    word[2*i + 1] = 32-bit column
+
+Therefore:
+
+    value0, column0,
+    value1, column1,
+    value2, column2,
+    ...
+
+Each CSR entry = 8 bytes.
 --------------------------------------------------
 */
-typedef uint32_t csr_entry_t;
 
-/*
---------------------------------------------------
-Packing / unpacking
---------------------------------------------------
-*/
-#define GET_VALUE(x) \
-    ((int16_t)((x) & 0xFFFF))
-
-#define GET_COL(x) \
-    ((uint16_t)((x) >> 16))
+typedef uint32_t csr_word_t;
 
 /*
 --------------------------------------------------
@@ -62,6 +63,10 @@ static uint32_t fsync_wait_cycle[128] __attribute__((section(".l2"), aligned(64)
 static uint32_t compute_cycle[128] __attribute__((section(".l2"), aligned(64))) = {0};
 static uint32_t DMA_bytes[128] __attribute__((section(".l2"), aligned(64))) = {0};
 static uint32_t computed_pure[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t loc_nnz[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t loc_row[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t inner_loop[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t sequential[128] __attribute__((section(".l2"), aligned(64))) = {0};
 
 /*
 =====================================================
@@ -167,13 +172,19 @@ int main(void)
         return 0;
     }
 
+
+    uint32_t y_id = GET_Y_ID(hartid);
+    uint32_t x_id = GET_X_ID(hartid);
+
     /*
     ==============================================================
     Start performance measurement
     ==============================================================
     */
+
     perf_start();
     int32_t run_time = perf_get_cycles();
+    int32_t sequential_start = 0;
     /*
     ==============================================================
     Row partitioning across cores
@@ -184,15 +195,15 @@ int main(void)
     switch(NUM_CORES)
     {
         case 1:
-            core_start_row = core_start_row_1;
+            //core_start_row = core_start_row_1;
             break;
 
         case 4:
-            core_start_row = core_start_row_4;
+            //core_start_row = core_start_row_4;
             break;
 
         case 16:
-            core_start_row = core_start_row_16;
+            //core_start_row = core_start_row_16;
             break;
 
         case 64:
@@ -200,7 +211,7 @@ int main(void)
             break;
 
         case 256:
-            core_start_row = core_start_row_256;
+            //core_start_row = core_start_row_256;
             break;
 
         default:
@@ -216,25 +227,57 @@ int main(void)
     L1 memory layout
     ==============================================================
     */
+
     uint32_t l1 = get_l1_base(hartid);
+
+    /*
+    ==============================================================
+    x vector partitioning across cores
+
+    Each core gets floor(N / NUM_CORES) elements; the first
+    (N % NUM_CORES) cores get one extra element each.
+
+    e.g. N=13, NUM_CORES=5 -> local counts: 3, 3, 3, 2, 2
+    ==============================================================
+    */
+    uint32_t x_base_count = N / NUM_CORES;
+    uint32_t x_remainder   = N % NUM_CORES;
+
+    uint32_t local_x_count =
+        (hartid < x_remainder)
+        ? (x_base_count + 1)
+        : x_base_count;
+
+    uint32_t x_start_idx =
+        (hartid < x_remainder)
+        ? hartid * (x_base_count + 1)
+        : x_remainder * (x_base_count + 1) +
+          (hartid - x_remainder) * x_base_count;
 
     /*
     --------------------------------------------------
     x vector buffer
+
+    Only this core's local partition of x is stored here
+    now (local_x_count elements, not N). Rows on this core
+    that reference x elements owned by other cores read them
+    directly through the global L1 address encoded offline in
+    valcol_l2 (transparent NoC access) -- no change needed to
+    the compute loop below.
     --------------------------------------------------
     */
     uint32_t addr_x = l1;
-
+    //printf("addr_x = 0x%x\n", addr_x);
     /*
     --------------------------------------------------
     Double buffers for streamed CSR entries
     --------------------------------------------------
     */
     uint32_t tile_buffer_bytes =
-        MAX_TILE_NNZ * sizeof(csr_entry_t);
+        2 * MAX_TILE_NNZ * sizeof(csr_word_t);
 
     uint32_t addr_valcol_buf0 =
-        addr_x + N * sizeof(int32_t);
+        addr_x + local_x_count * sizeof(int32_t);
 
     uint32_t addr_valcol_buf1 =
         addr_valcol_buf0 +
@@ -257,50 +300,39 @@ int main(void)
     volatile int16_t *local_x =
         (int16_t*)addr_x;
 
-    volatile csr_entry_t *valcol_buf[2];
+    volatile csr_word_t *valcol_buf[2];
 
     valcol_buf[0] =
-        (csr_entry_t*)addr_valcol_buf0;
+        (csr_word_t*)addr_valcol_buf0;
 
     valcol_buf[1] =
-        (csr_entry_t*)addr_valcol_buf1;
+        (csr_word_t*)addr_valcol_buf1;
 
     volatile int32_t *local_y =
         (int32_t*)addr_ylocal;
 
     /*
     ==============================================================
-    Bring x vector -> L1
+    Bring this core's x partition -> L1
     ==============================================================
     */
+
     uint64_t dma_bytes = 0;
     uint32_t dma_wait_start = perf_get_cycles();
     idma_memcpy_1d(
         &idma_ctrl,
         0,
-        (uint32_t)x,
+        (uint32_t)(x + x_start_idx),
         addr_x,
-        N * sizeof(int32_t)
+        local_x_count * sizeof(int32_t)
     );
-    dma_bytes += N * sizeof(int32_t);
+    dma_bytes += local_x_count * sizeof(int32_t);
     
     eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
     uint32_t dma_wait_end = perf_get_cycles();
     uint32_t dma_wait_time = dma_wait_end - dma_wait_start;
-    
+    //printf("value of L1 in local_x [0x%x] = %u\n",local_x, *local_x);
 
-    /*
-    ==============================================================
-    Synchronization
-    ==============================================================
-    */
-    /*
-    uint32_t fsync_wait_start = perf_get_cycles();
-    fsync_sync_global(&fsync_ctrl);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-    uint32_t fsync_wait_end = perf_get_cycles();
-    uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start;
-    */
     /*
     ==============================================================
     Double-buffered tiled SpMV
@@ -347,14 +379,17 @@ int main(void)
     --------------------------------------------------
     */
     dma_wait_start = perf_get_cycles();
+
     idma_memcpy_1d(
         &idma_ctrl,
         0,
-        (uint32_t)&valcol_l2[first_start_nnz],
+        (uint32_t)&valcol_l2[2 * first_start_nnz],
         (uint32_t)valcol_buf[current_buf],
-        first_tile_nnz * sizeof(csr_entry_t)
+        2 * first_tile_nnz * sizeof(csr_word_t)
     );
-    dma_bytes += first_tile_nnz * sizeof(csr_entry_t);
+
+    dma_bytes +=
+        2 * first_tile_nnz * sizeof(csr_word_t);
     
     eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
     dma_wait_end = perf_get_cycles();
@@ -365,17 +400,13 @@ int main(void)
     Main tile loop
     ==============================================================
     */
-
-    //uint32_t fsync_wait_start = perf_get_cycles();
-    //fsync_sync_global(&fsync_ctrl);
-    //eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-    //uint32_t fsync_wait_end = perf_get_cycles();
-    //uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start;
+    sequential_start = perf_get_cycles() - run_time;
 
     uint32_t computed_time_pure = 0;
     uint32_t computed_time_pure_start = 0;
     uint32_t computed_time = 0;
-
+    uint32_t inner_forloop_start = 0;
+    uint32_t inner_forloop_time = 0;
     uint32_t compute_start = perf_get_cycles();
 
     uint32_t first_for_loop_iteration = num_tiles;
@@ -385,6 +416,8 @@ int main(void)
     for (uint32_t tile = 0;
          tile < num_tiles;
          tile++) {
+
+        inner_forloop_start = perf_get_cycles();
         /*
         --------------------------------------------------
         Current tile row range (local)
@@ -464,12 +497,16 @@ int main(void)
             idma_memcpy_1d(
                 &idma_ctrl,
                 0,
-                (uint32_t)&valcol_l2[next_start_nnz],
+                (uint32_t)&valcol_l2[2 * next_start_nnz],
                 (uint32_t)valcol_buf[next_buf],
-                next_tile_nnz * sizeof(csr_entry_t)
+                2 * next_tile_nnz * sizeof(csr_word_t)
             );
-            dma_bytes += next_tile_nnz * sizeof(csr_entry_t);
+
+            dma_bytes +=
+                2 * next_tile_nnz * sizeof(csr_word_t);
         }
+
+        inner_forloop_time += (perf_get_cycles() - inner_forloop_start);
 
         /*
         ==========================================================
@@ -508,41 +545,35 @@ int main(void)
             
 
             for (uint32_t j = local_start;
-                 j < local_end;
-                 j++) {
+                j < local_end;
+                j++) {
 
                 /*
                 --------------------------------------------------
-                Single 32-bit load
+                One logical CSR entry occupies two uint32 words:
+
+                    [2*j]     = value
+                    [2*j + 1] = L1 address of x element
                 --------------------------------------------------
                 */
-                
-                csr_entry_t packed =
-                    valcol_buf[current_buf][j];
 
-                /*
-                --------------------------------------------------
-                Unpack value and column
-                --------------------------------------------------
-                */
-                int16_t value =
-                    GET_VALUE(packed);
+                int32_t value =
+                    (int32_t)valcol_buf[current_buf][2 * j];
 
-                uint16_t col =
-                    GET_COL(packed);
+                uint32_t x_addr =
+                    valcol_buf[current_buf][2 * j + 1];
+
+                int16_t x_value =
+                    *(volatile int16_t *)x_addr;
 
                 /*
                 --------------------------------------------------
                 SpMV MAC
                 --------------------------------------------------
                 */
-                
                 sum +=
-                    ((int32_t)value) *
-                    ((int32_t)local_x[col]);
-                
+                    value * (int32_t)x_value;
             }
-            
 
             local_y[i] = sum;
         }
@@ -568,6 +599,7 @@ int main(void)
         current_buf ^= 1;
         next_buf    ^= 1;
     }
+
     
     /*
     ==============================================================
@@ -613,11 +645,19 @@ int main(void)
     compute_cycle[hartid] = computed_time;
     DMA_bytes[hartid] = dma_bytes;
     computed_pure[hartid] = computed_time_pure;
+    loc_nnz[hartid] = local_nnz;
+    loc_row[hartid] = local_rows;
+    inner_loop[hartid] = inner_forloop_time;
+    sequential[hartid] = sequential_start;
+
 
 
     fsync_sync_global(&fsync_ctrl);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);    
 
+
+
+    /*
 
     printf(
         "core %u rows=%u nnz=%u runtime=%u compute=%u PureComp=%u fsync=%u dmaC=%u dmaB=%u dma/cycle=%u\n",
@@ -632,7 +672,7 @@ int main(void)
         DMA_bytes[hartid],
         DMA_bytes[hartid] / DMA_wait_cycle[hartid]
     );
-
+    */
 
 
 
@@ -643,6 +683,11 @@ int main(void)
     ==============================================================
     */
     if (hartid == 0) {
+
+        for (int i=0; i<64; i++){
+            printf("%u\n", run_time_cycle[i]);
+                
+        }
 
         int errors = 0;
 
@@ -699,7 +744,13 @@ int main(void)
         --------------------------------------------------------------
         */
         //              CSR entries              +      x vector       +        rowptr              +         y
-        uint32_t BW = (NNZ * sizeof(csr_entry_t) + N * sizeof(int16_t) + (M + 1) * sizeof(uint32_t) + M * sizeof(int32_t)) * clock_freq_MHz / max_run_time;
+        uint32_t BW =
+                (
+                    2 * NNZ * sizeof(csr_word_t) +
+                    N * sizeof(int16_t) +
+                    (M + 1) * sizeof(uint32_t) +
+                    M * sizeof(int32_t)
+                ) * clock_freq_MHz / max_run_time;
 
         /*
         --------------------------------------------------------------
@@ -707,11 +758,13 @@ int main(void)
         --------------------------------------------------------------
         */
 
-        /* per core */
+        /* per core (core 0's local_x_count used as representative sample;
+           actual local x partition size varies by +/-1 element across
+           cores depending on N % NUM_CORES) */
         uint32_t l1_per_core_bytes =
-            N * sizeof(int16_t) +          // local_x
-            2 * tile_buffer_bytes +        // ping-pong buffers
-            local_rows * sizeof(int32_t);  // local_y
+            local_x_count * sizeof(int16_t) +  // local_x
+            2 * tile_buffer_bytes +            // ping-pong buffers
+            local_rows * sizeof(int32_t);      // local_y
 
         /* whole chip */
         uint32_t total_l1_bytes =
@@ -732,11 +785,11 @@ int main(void)
             sizeof(compute_cycle);
 
         uint32_t l2_bytes =
-            NNZ * sizeof(csr_entry_t) +        // packed matrix
-            (M + 1) * sizeof(uint32_t) +       // rowptr
-            N * sizeof(int16_t) +              // x
-            M * sizeof(int32_t) +              // y
-            M * sizeof(int32_t) +              // y_expected
+            2 * NNZ * sizeof(csr_word_t) +   // value + column
+            (M + 1) * sizeof(uint32_t) +     // rowptr
+            N * sizeof(int16_t) +             // x
+            M * sizeof(int32_t) +             // y
+            M * sizeof(int32_t) +             // y_expected
             profiling_bytes;
 
         /*

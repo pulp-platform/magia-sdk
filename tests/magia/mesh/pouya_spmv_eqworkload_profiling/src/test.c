@@ -62,6 +62,10 @@ static uint32_t fsync_wait_cycle[128] __attribute__((section(".l2"), aligned(64)
 static uint32_t compute_cycle[128] __attribute__((section(".l2"), aligned(64))) = {0};
 static uint32_t DMA_bytes[128] __attribute__((section(".l2"), aligned(64))) = {0};
 static uint32_t computed_pure[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t loc_nnz[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t loc_row[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t inner_loop[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t sequential[128] __attribute__((section(".l2"), aligned(64))) = {0};
 
 /*
 =====================================================
@@ -167,6 +171,12 @@ int main(void)
         return 0;
     }
 
+
+    uint32_t y_id = GET_Y_ID(hartid);
+    uint32_t x_id = GET_X_ID(hartid);
+
+    printf("Core[%u]  X = %u   Y = %u\n", hartid, x_id, y_id);
+
     /*
     ==============================================================
     Start performance measurement
@@ -174,6 +184,7 @@ int main(void)
     */
     perf_start();
     int32_t run_time = perf_get_cycles();
+    int32_t sequential_start = 0;
     /*
     ==============================================================
     Row partitioning across cores
@@ -286,7 +297,8 @@ int main(void)
     
     eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
     uint32_t dma_wait_end = perf_get_cycles();
-    uint32_t dma_wait_time = dma_wait_end - dma_wait_start;
+    uint32_t dma_wait_time = 0;
+    dma_wait_time = dma_wait_end - dma_wait_start;
     
 
     /*
@@ -358,7 +370,7 @@ int main(void)
     
     eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
     dma_wait_end = perf_get_cycles();
-    dma_wait_time += (dma_wait_end - dma_wait_start);
+    //dma_wait_time += (dma_wait_end - dma_wait_start);
 
     /*
     ==============================================================
@@ -370,12 +382,15 @@ int main(void)
     //fsync_sync_global(&fsync_ctrl);
     //eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     //uint32_t fsync_wait_end = perf_get_cycles();
-    //uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start;
+    //uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start; 
+
+    sequential_start = perf_get_cycles() - run_time;
 
     uint32_t computed_time_pure = 0;
     uint32_t computed_time_pure_start = 0;
     uint32_t computed_time = 0;
-
+    uint32_t inner_forloop_start = 0;
+    uint32_t inner_forloop_time = 0;
     uint32_t compute_start = perf_get_cycles();
 
     uint32_t first_for_loop_iteration = num_tiles;
@@ -385,6 +400,8 @@ int main(void)
     for (uint32_t tile = 0;
          tile < num_tiles;
          tile++) {
+
+        inner_forloop_start = perf_get_cycles();
         /*
         --------------------------------------------------
         Current tile row range (local)
@@ -471,6 +488,8 @@ int main(void)
             dma_bytes += next_tile_nnz * sizeof(csr_entry_t);
         }
 
+        inner_forloop_time += (perf_get_cycles() - inner_forloop_start);
+
         /*
         ==========================================================
         Compute current tile
@@ -478,7 +497,7 @@ int main(void)
         */
         second_for_loop_iteration += tile_row_end - tile_row_start;
 
-        computed_time_pure_start = perf_get_cycles();
+        
 
         for (uint32_t i = tile_row_start;
              i < tile_row_end;
@@ -505,6 +524,8 @@ int main(void)
             
 
             third_for_loop_iteration += local_end - local_start;
+
+            computed_time_pure_start = perf_get_cycles();
             
 
             for (uint32_t j = local_start;
@@ -542,11 +563,12 @@ int main(void)
                     ((int32_t)local_x[col]);
                 
             }
+            computed_time_pure += (perf_get_cycles() - computed_time_pure_start);
             
 
             local_y[i] = sum;
         }
-        computed_time_pure += (perf_get_cycles() - computed_time_pure_start);
+        
 
         /*
         ==========================================================
@@ -557,7 +579,7 @@ int main(void)
             dma_wait_start = perf_get_cycles();
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
             dma_wait_end = perf_get_cycles();
-            dma_wait_time += (dma_wait_end - dma_wait_start);
+            //dma_wait_time += (dma_wait_end - dma_wait_start);
         }
 
         /*
@@ -586,7 +608,7 @@ int main(void)
     dma_wait_start = perf_get_cycles();
     eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
     dma_wait_end = perf_get_cycles();
-    dma_wait_time += (dma_wait_end - dma_wait_start);
+    //dma_wait_time += (dma_wait_end - dma_wait_start);
 
     uint32_t compute_end = perf_get_cycles();
     computed_time = compute_end - compute_start;
@@ -613,11 +635,23 @@ int main(void)
     compute_cycle[hartid] = computed_time;
     DMA_bytes[hartid] = dma_bytes;
     computed_pure[hartid] = computed_time_pure;
+    loc_nnz[hartid] = local_nnz;
+    loc_row[hartid] = local_rows;
+    inner_loop[hartid] = inner_forloop_time;
+    sequential[hartid] = sequential_start;
+
 
 
     fsync_sync_global(&fsync_ctrl);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
+
+
+    
+
+
+
+    /*
 
     printf(
         "core %u rows=%u nnz=%u runtime=%u compute=%u PureComp=%u fsync=%u dmaC=%u dmaB=%u dma/cycle=%u\n",
@@ -632,7 +666,7 @@ int main(void)
         DMA_bytes[hartid],
         DMA_bytes[hartid] / DMA_wait_cycle[hartid]
     );
-
+    */
 
 
 
@@ -643,6 +677,11 @@ int main(void)
     ==============================================================
     */
     if (hartid == 0) {
+
+        for (int i=0; i<64; i++){
+            printf("%u\n", computed_pure[i]);
+                
+        }
 
         int errors = 0;
 

@@ -6,9 +6,9 @@
 #include "eventunit.h"
 
 
-#include "sme3Da.h"
+//#include "sme3Da.h"
 //#include "poisson3Da.h"
-//#include "raefsky5.h"
+#include "raefsky5.h"
 //#include "ex6.h"
 //#include "cavity05.h"
 //#include "g7jac140.h"
@@ -19,7 +19,7 @@
 //#include "sctap1-2b.h"
 //#include "testbig.h"
 
-//#include "test.h"
+//#include "test.h" 
 
 
 #define WAIT_MODE WFE
@@ -62,6 +62,10 @@ static uint32_t fsync_wait_cycle[128] __attribute__((section(".l2"), aligned(64)
 static uint32_t compute_cycle[128] __attribute__((section(".l2"), aligned(64))) = {0};
 static uint32_t DMA_bytes[128] __attribute__((section(".l2"), aligned(64))) = {0};
 static uint32_t computed_pure[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t loc_nnz[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t loc_row[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t inner_loop[128] __attribute__((section(".l2"), aligned(64))) = {0};
+static uint32_t sequential[128] __attribute__((section(".l2"), aligned(64))) = {0};
 
 /*
 =====================================================
@@ -174,6 +178,7 @@ int main(void)
     */
     perf_start();
     int32_t run_time = perf_get_cycles();
+    int32_t sequential_start = 0;
     /*
     ==============================================================
     Row partitioning across cores
@@ -250,6 +255,16 @@ int main(void)
         tile_buffer_bytes;
 
     /*
+    --------------------------------------------------
+    rowptr local buffer (CSR row pointers for this
+    core's row range, brought in from L2 once)
+    --------------------------------------------------
+    */
+    uint32_t addr_rowptr =
+        addr_ylocal +
+        local_rows * sizeof(int32_t);
+
+    /*
     ==============================================================
     Local pointers
     ==============================================================
@@ -268,9 +283,13 @@ int main(void)
     volatile int32_t *local_y =
         (int32_t*)addr_ylocal;
 
+    volatile uint32_t *rowptr_local =
+        (uint32_t*)addr_rowptr;
+
     /*
     ==============================================================
-    Bring x vector -> L1
+    Bring x vector and rowptr -> L1
+    (launch both, then wait once so the transfers overlap)
     ==============================================================
     */
     uint64_t dma_bytes = 0;
@@ -283,7 +302,17 @@ int main(void)
         N * sizeof(int32_t)
     );
     dma_bytes += N * sizeof(int32_t);
-    
+    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+
+    idma_memcpy_1d(
+        &idma_ctrl,
+        0,
+        (uint32_t)&rowptr_l2[start_row],
+        addr_rowptr,
+        (local_rows + 1) * sizeof(uint32_t)
+    );
+    dma_bytes += (local_rows + 1) * sizeof(uint32_t);
+
     eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
     uint32_t dma_wait_end = perf_get_cycles();
     uint32_t dma_wait_time = dma_wait_end - dma_wait_start;
@@ -333,10 +362,10 @@ int main(void)
         start_row + first_tile_rows;
 
     uint32_t first_start_nnz =
-        rowptr_l2[start_row];
+        rowptr_local[0];
 
     uint32_t first_end_nnz =
-        rowptr_l2[first_global_row_end];
+        rowptr_local[first_tile_rows];
 
     uint32_t first_tile_nnz =
         first_end_nnz - first_start_nnz;
@@ -372,10 +401,13 @@ int main(void)
     //uint32_t fsync_wait_end = perf_get_cycles();
     //uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start;
 
+    sequential_start = perf_get_cycles() - run_time;
+
     uint32_t computed_time_pure = 0;
     uint32_t computed_time_pure_start = 0;
     uint32_t computed_time = 0;
-
+    uint32_t inner_forloop_start = 0;
+    uint32_t inner_forloop_time = 0;
     uint32_t compute_start = perf_get_cycles();
 
     uint32_t first_for_loop_iteration = num_tiles;
@@ -402,25 +434,16 @@ int main(void)
 
         /*
         --------------------------------------------------
-        Convert to global rows
-        --------------------------------------------------
-        */
-        uint32_t global_tile_start =
-            start_row + tile_row_start;
-
-        uint32_t global_tile_end =
-            start_row + tile_row_end;
-
-        /*
-        --------------------------------------------------
         Current tile nnz range
+        (rowptr_local is already indexed by local row,
+        so no global-row conversion is needed here)
         --------------------------------------------------
         */
         uint32_t start_nnz =
-            rowptr_l2[global_tile_start];
+            rowptr_local[tile_row_start];
 
         uint32_t end_nnz =
-            rowptr_l2[global_tile_end];
+            rowptr_local[tile_row_end];
 
         uint32_t tile_nnz =
             end_nnz - start_nnz;
@@ -441,17 +464,11 @@ int main(void)
                 next_row_end = local_rows;
             }
 
-            uint32_t next_global_start =
-                start_row + next_row_start;
-
-            uint32_t next_global_end =
-                start_row + next_row_end;
-
             uint32_t next_start_nnz =
-                rowptr_l2[next_global_start];
+                rowptr_local[next_row_start];
 
             uint32_t next_end_nnz =
-                rowptr_l2[next_global_end];
+                rowptr_local[next_row_end];
 
             uint32_t next_tile_nnz =
                 next_end_nnz - next_start_nnz;
@@ -471,6 +488,8 @@ int main(void)
             dma_bytes += next_tile_nnz * sizeof(csr_entry_t);
         }
 
+        inner_forloop_time += (perf_get_cycles() - inner_forloop_start);
+
         /*
         ==========================================================
         Compute current tile
@@ -486,21 +505,19 @@ int main(void)
             
             
 
-            uint32_t global_row =
-                start_row + i;
-
             int32_t sum = 0;
 
             /*
             ------------------------------------------------------
-            Convert global CSR offsets into local tile offsets
+            Convert local CSR offsets (from L1 rowptr_local)
+            into local tile offsets
             ------------------------------------------------------
             */
             uint32_t local_start =
-                rowptr_l2[global_row] - start_nnz;
+                rowptr_local[i] - start_nnz;
 
             uint32_t local_end =
-                rowptr_l2[global_row + 1] - start_nnz;
+                rowptr_local[i + 1] - start_nnz;
 
             
 
@@ -589,7 +606,7 @@ int main(void)
     dma_wait_time += (dma_wait_end - dma_wait_start);
 
     uint32_t compute_end = perf_get_cycles();
-    computed_time = compute_end - compute_start;
+    computed_time = compute_end - compute_start; 
 
     /*
     ==============================================================
@@ -603,8 +620,8 @@ int main(void)
     uint32_t fsync_wait_time = fsync_wait_end - fsync_wait_start;
 
     uint32_t local_nnz =
-    rowptr_l2[end_row] -
-    rowptr_l2[start_row];
+    rowptr_local[local_rows] -
+    rowptr_local[0];
     
 
     run_time_cycle[hartid] = perf_get_cycles() - run_time;
@@ -613,12 +630,16 @@ int main(void)
     compute_cycle[hartid] = computed_time;
     DMA_bytes[hartid] = dma_bytes;
     computed_pure[hartid] = computed_time_pure;
+    loc_nnz[hartid] = local_nnz;
+    loc_row[hartid] = local_rows;
+    inner_loop[hartid] = inner_forloop_time;
+    sequential[hartid] = sequential_start;
 
 
     fsync_sync_global(&fsync_ctrl);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
-
+    /*
     printf(
         "core %u rows=%u nnz=%u runtime=%u compute=%u PureComp=%u fsync=%u dmaC=%u dmaB=%u dma/cycle=%u\n",
         hartid,
@@ -633,7 +654,7 @@ int main(void)
         DMA_bytes[hartid] / DMA_wait_cycle[hartid]
     );
 
-
+    */
 
 
 
@@ -643,6 +664,11 @@ int main(void)
     ==============================================================
     */
     if (hartid == 0) {
+
+        for (int i=0; i<64; i++){
+            printf("%u\n", computed_pure[i]);
+                
+        }
 
         int errors = 0;
 
