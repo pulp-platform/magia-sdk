@@ -100,6 +100,13 @@ GVRUN ?= $(GVSOC_DIR)/install/bin/gvrun
 CMAKE ?= cmake
 
 GVSOC_WORK_DIR ?= ./gvsoc_work
+
+ifeq ($(target_platform), magia_v3)
+GVRUN_TARGET		:= $(target_platform):n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores)
+else
+GVRUN_TARGET		:= $(target_platform)
+endif
+
 GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace --trace=kill-module
 GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
 GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
@@ -225,7 +232,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|verilator|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVRUN) --target=$(target_platform):n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
+	$(GVRUN) --target=$(GVRUN_TARGET) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
 else ifeq ($(platform), rtl)
 	$(MAKE) rtl_stimuli test=$(test)
 	cd $(BUILD_DIR_ABS)													&& \
@@ -272,7 +279,7 @@ endif
 ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
 	$(error No test found with name: $(test))
 endif
-	$(GVRUN) --target=$(target_platform):n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG) $(GVSOC_TRACE_ARG)
+	$(GVRUN) --target=$(GVRUN_TARGET) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG) $(GVSOC_TRACE_ARG)
 	$(GVSOC2PERFETTO_BIN) $(GVSOC2PERFETTO_VCD) \
 		-o $(GVSOC2PERFETTO_OUT) \
 		--state-map 'fsm_state=0:idle,1:preload,2:routine,3:storing,4:finished,5:acknowledge' \
@@ -488,6 +495,22 @@ ifeq ($(target_platform),magia_v2)
 else ifeq ($(target_platform),magia_v3)
 	$(MAKE) build test=$(subst /,_,$(test)) compiler=GCC_MULTILIB pulp_cores=0
 	$(MAKE) run test=$(subst /,_,$(test)) platform=$(platform) compiler=GCC_MULTILIB \
+		GVRUN_COMMON_ARGS="--work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin"
+else
+	$(error Unsupported target_platform)
+endif
+
+run_spatz_test:
+ifeq ($(or $(test),$(platform)),)
+	$(error Proper formatting is: make run_spatz_test test=<test_name> platform=<rtl|gvsoc>)
+endif
+ifeq ($(target_platform),magia_v2)
+	$(MAKE) build test=$(test) compiler=GCC_PULP
+	$(MAKE) run test=$(test) platform=$(platform) compiler=GCC_PULP \
+		GVRUN_COMMON_ARGS="--work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)/n_tiles_x=$(tiles) --attr $(target_platform)/n_tiles_y=$(tiles) --attr $(target_platform)/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin"
+else ifeq ($(target_platform),magia_v3)
+	$(MAKE) build test=$(test) compiler=GCC_MULTILIB pulp_cores=0
+	$(MAKE) run test=$(test) platform=$(platform) compiler=GCC_MULTILIB \
 		GVRUN_COMMON_ARGS="--work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin"
 else
 	$(error Unsupported target_platform)
