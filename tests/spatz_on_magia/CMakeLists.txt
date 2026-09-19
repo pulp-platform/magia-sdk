@@ -26,4 +26,5 @@
 # add_subdirectory(pouya_spatz_gemv)
 # add_subdirectory(pouya_spatz_gemv_dbg)
 # add_subdirectory(pouya_spatz_csr)
+add_subdirectory(pouya_spatz_geo)
 

@@ -2,8 +2,8 @@
 #include "eventunit.h"
 
 #include "compare_utils.h"
-//#include "data.h"
-#include "data_sample.h"
+#include "data.h"
+//#include "data_sample.h"
 #include "onnx_spmv_mem_layout.h"
 #include "onnx_spmv_params.h"
 #include "spatz_csr_task_bin.h"
