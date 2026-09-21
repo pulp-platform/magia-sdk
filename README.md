@@ -119,6 +119,8 @@ The following *optional* parameters can be specified when running the make comma
 
 `pulp_cluster`: **0**|**1** (**Default**: 1). Enable compilation of GVSoC and tests with PULP clusters enabled.
 
+`control_core`: **CV32E40P**|**CV32E40X** (**Default**: CV32E40P). Selects the control core version.
+
 `verbose`: **0**|**1** (**Default**: 0). When 1, `make build` restores the full CMake configure trace and per-file compiler command lines. Leave at 0 for concise progress output.
 
 `test`: When set on `make build` (e.g. `make build test=<test_name>`), builds only that single test target instead of the whole test suite. The name is the same test binary name used by `make run test=...`.
@@ -131,7 +133,7 @@ Once the [Prerequisites](#prerequisites) are in place:
 
 2. Build the Magia RTL architecture (*this command may take time and return an error, please be patient.*):
 
-    `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode>`
+    `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode> <control_core>`
 
     This builds the QuestaSim libraries. To build a Verilator model of the same RTL instead, add
     `platform=verilator` (see [Simulating with Verilator](#simulating-with-verilator)):
@@ -148,15 +150,15 @@ Once the [Prerequisites](#prerequisites) are in place:
 
 3. To compile and build the test binaries for a desired architecture run:
 
-    `make clean build <target_platform> <tiles> <compiler> <eval>`
+    `make clean build <target_platform> <tiles> <compiler> <eval> <control_core>`
 
     To build a single test instead of the whole suite, pass `test=<test_name>`; add `verbose=1` for full compiler/CMake output:
 
-    `make build test=<test_name>` (or `make build verbose=1`)
+    `make build test=<test_name> <control_core>` (or `make build verbose=1`)
 
     To run one of the tests:
 
-    `make run test=<test_name> <platform>`
+    `make run test=<test_name> <platform> <control_core>`
 
 ***WARNING: YOU HAVE TO REBUILD BOTH RTL/GVSOC AND THE TEST BINARY EACH TIME YOU WANT TO TEST A MAGIA MESH WITH A DIFFERENT NUMBER OF TILES.***
 
