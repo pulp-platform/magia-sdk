@@ -70,6 +70,7 @@ profile_cmo		?= 0
 profile_snc		?= 0
 
 target_platform ?= magia_v3
+control_core 	?= CV32E40P
 compiler 		?= GCC_MULTILIB
 ifeq ($(target_platform), magia_v2)
 ISA				?= rv32imcxgap9
@@ -167,7 +168,7 @@ endif
 ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
 endif
-	$(CMAKE) -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz) -DPULP_TESTS=$(pulp_cluster) -DPULP_CORE_COUNT=$(pulp_cores) -DPULP_CLUSTER=$(pulp_cluster) -B $(CMAKE_BUILDDIR) $(if $(filter 1,$(verbose)),--trace-expand,)
+	$(CMAKE) -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DCONTROL_CORE=$(control_core) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz) -DPULP_TESTS=$(pulp_cluster) -DPULP_CORE_COUNT=$(pulp_cores) -DPULP_CLUSTER=$(pulp_cluster) -B $(CMAKE_BUILDDIR) $(if $(filter 1,$(verbose)),--trace-expand,)
 	$(CMAKE) --build $(CMAKE_BUILDDIR) $(if $(filter 1,$(verbose)),--verbose,) $(if $(test),--target $(test),) -- --no-print-directory
 
 set_mesh:
@@ -232,14 +233,14 @@ else ifeq ($(platform), rtl)
 	cp -sf "$(MAGIA_DIR_ABS)/sim/modelsim.ini" modelsim.ini    			&& \
 	ln -sfn "$(MAGIA_DIR_ABS)/sim/work" work
 	cd $(MAGIA_RTL_DIR) 												&& \
-	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv) fast_sim=$(fast_sim)
+	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv) fast_sim=$(fast_sim) core=$(control_core)
 else ifeq ($(platform), verilator)
 	@test -x "$(MAGIA_VERILATOR_BIN)" || {								\
 	  echo "error: no Verilator model at $(MAGIA_VERILATOR_BIN)" >&2;	\
 	  echo "       build it in the MAGIA repo first:" >&2;				\
 	  echo "         make verilate core=CV32E40P mesh_dv=1" >&2;		\
 	  exit 1; }
-	$(MAKE) rtl_stimuli test=$(test)
+	$(MAKE) rtl_stimuli test=$(test) core=$(control_core)
 # No modelsim.ini/work symlinks: the verilated model is self-contained. Run it
 # straight rather than via the MAGIA repo's `make verilate-run`, whose `all`
 # prerequisite would try to recompile the test from sources that only exist for
@@ -308,9 +309,9 @@ endif
 # Hardware build command, the only part of `make MAGIA` that differs per simulator.
 # Recursively expanded on purpose: set_mesh rewrites mesh_dv while the target runs.
 ifeq ($(hw_platform), verilator)
-HW_BUILD_CMD = make verilate > verilate.log mesh_dv=$(mesh_dv) VERILATOR_JOBS=$(verilator_jobs) VERILATOR_THREADS=$(verilator_threads)
+HW_BUILD_CMD = make verilate > verilate.log mesh_dv=$(mesh_dv) VERILATOR_JOBS=$(verilator_jobs) VERILATOR_THREADS=$(verilator_threads) core=$(control_core)
 else
-HW_BUILD_CMD = make build-hw > build-hw.log mesh_dv=$(mesh_dv) fast_sim=$(fast_sim)
+HW_BUILD_CMD = make build-hw > build-hw.log mesh_dv=$(mesh_dv) fast_sim=$(fast_sim) core=$(control_core)
 endif
 
 MAGIA: set_mesh
@@ -336,13 +337,10 @@ ifeq ($(shell expr $(tiles_2) \> 256), 1)
 endif
 ifeq ($(target_platform), magia_v1)
 	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_RTL_DIR)/Makefile
-	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40P/\1CV32E40X/' $(MAGIA_RTL_DIR)/Makefile
 else ifeq ($(target_platform), magia_v2)
 	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_RTL_DIR)/Makefile
-	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40X/\1CV32E40P/' $(MAGIA_RTL_DIR)/Makefile
 else ifeq ($(target_platform), magia_v3)
 	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_RTL_DIR)/Makefile
-	sed -i -E 's/^(core[[:space:]]*\?=[[:space:]]*)CV32E40X/\1CV32E40P/' $(MAGIA_RTL_DIR)/Makefile
 else
 	$(error unrecognized platform (acceptable platform: magia).)
 endif
@@ -362,9 +360,9 @@ ifneq (,$(filter $(build_mode), update synth profile))
 	source setup_env.sh 												&& \
 	make python_deps || true											&& \
 	curl --proto '=https' --tlsv1.2 https://pulp-platform.github.io/bender/init -sSf | sh -s -- --local && \
-	export PATH=$$(pwd):$$PATH											&& \
-	python -m pip install --upgrade "setuptools<81"						&& \
-	make vsim-scripts > vsim-scripts.log mesh_dv=$(mesh_dv)	&& \
+	export PATH=$$(pwd):$$PATH														&& \
+	python -m pip install --upgrade "setuptools<81"									&& \
+	make vsim-scripts > vsim-scripts.log mesh_dv=$(mesh_dv)	core=$(control_core)	&& \
 	make floonoc-patch || true											&& \
 	$(HW_BUILD_CMD)
 else

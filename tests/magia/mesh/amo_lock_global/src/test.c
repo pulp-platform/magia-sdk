@@ -10,16 +10,12 @@
 #include "tile.h"
 #include "fsync.h"
 #include "eventunit.h"
-#include "utils/cache_fill.h"
 
-#define WAIT_MODE         POLLING
-#define CACHE_HEAT_CYCLES (3)
+#define WAIT_MODE         WFE
+#define CACHE_HEAT_CYCLES (1)
 
 int main(void)
 {
-    // Filling up the cache
-    fill_icache();
-
     /**
      * 0. Get the mesh-tile's hartid, and also initialize fsync + eu
      */
@@ -73,7 +69,6 @@ int main(void)
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 #endif
     for (int i = 0; i < CACHE_HEAT_CYCLES; i++) {
-        sentinel_start();
         /**
          * 2a. Amo lock test, get the lock to enter the protected code area.
          */
@@ -97,7 +92,6 @@ int main(void)
          */
         amo_unlock(tail_a, mynode);
         // amo_unlock_naive(tail_a);
-        sentinel_end();
 
         /**
          * 3. Synch all the tiles and return
