@@ -129,8 +129,12 @@ exit:
  add     a1, a1, a0
  add     a1, a1, a0
  sh      s0, 0(a1)
+#if CV32E40P == 1
  li      a1, 0x00000738
  cv.elw	 zero, 0(a1)
+#elif CV32E40X == 1
+ wfi
+#endif
 
 .section .vectors, "ax"
 .option norvc;
