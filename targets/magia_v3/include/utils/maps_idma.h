@@ -28,6 +28,22 @@ typedef struct {
     uint32_t base_offset;
 } maps_idma_normalized_t;
 
+static inline void maps_idma_squeeze(
+    const tensor_sub_slice_t *slice, maps_idma_normalized_t *squeezed)
+{
+    squeezed->rank = 0u;
+    squeezed->base_offset = 0u;
+    for (uint32_t dimension = 0u; dimension < slice->rank; ++dimension) {
+        const TensorRange *range = &slice->dims[dimension];
+        squeezed->base_offset += range->start * range->stride;
+        if (range->length == 1u)
+            continue;
+        squeezed->length[squeezed->rank] = range->length;
+        squeezed->stride[squeezed->rank] = range->stride;
+        ++squeezed->rank;
+    }
+}
+
 static inline void maps_idma_normalize(
     const tensor_sub_slice_t *slice, maps_idma_normalized_t *normalized)
 {
@@ -101,6 +117,11 @@ static inline int idma_memcpy_md_to_nd(
     if (source->num_elems == 0u)
         return 0;
 
+    maps_idma_normalized_t squeezed_source;
+    maps_idma_normalized_t squeezed_destination;
+    maps_idma_squeeze(source, &squeezed_source);
+    maps_idma_squeeze(destination, &squeezed_destination);
+
     maps_idma_normalized_t normalized_source;
     maps_idma_normalized_t normalized_destination;
     maps_idma_normalize(source, &normalized_source);
@@ -115,50 +136,89 @@ static inline int idma_memcpy_md_to_nd(
     uint32_t row_bytes_3d = 0u;
     uint32_t repetitions_2 = 0u;
     uint32_t repetitions_3 = 0u;
-    if (normalized_source.rank == 3u &&
-        normalized_destination.rank == 3u &&
-        normalized_source.length[0] == normalized_destination.length[0] &&
-        normalized_source.length[1] == normalized_destination.length[1] &&
-        normalized_source.length[2] == normalized_destination.length[2] &&
-        normalized_source.stride[2] == element_bytes &&
-        normalized_destination.stride[2] == element_bytes) {
-        row_bytes_3d = normalized_source.length[2] * element_bytes;
-        repetitions_2 = normalized_source.length[1];
-        repetitions_3 = normalized_source.length[0];
-        source_stride_2 = normalized_source.stride[1];
-        destination_stride_2 = normalized_destination.stride[1];
-        source_stride_3 = normalized_source.stride[0];
-        destination_stride_3 = normalized_destination.stride[0];
-    } else if (normalized_source.rank == 3u &&
-               normalized_destination.rank == 1u &&
-               normalized_source.stride[2] == element_bytes &&
-               normalized_destination.stride[0] == element_bytes &&
-               normalized_destination.length[0] ==
-                   normalized_source.length[0] *
-                   normalized_source.length[1] *
-                   normalized_source.length[2]) {
-        row_bytes_3d = normalized_source.length[2] * element_bytes;
-        repetitions_2 = normalized_source.length[1];
-        repetitions_3 = normalized_source.length[0];
-        source_stride_2 = normalized_source.stride[1];
+    if (squeezed_source.rank == 3u &&
+        squeezed_destination.rank == 3u &&
+        squeezed_source.length[0] == squeezed_destination.length[0] &&
+        squeezed_source.length[1] == squeezed_destination.length[1] &&
+        squeezed_source.length[2] == squeezed_destination.length[2] &&
+        squeezed_source.stride[2] == element_bytes &&
+        squeezed_destination.stride[2] == element_bytes) {
+        row_bytes_3d = squeezed_source.length[2] * element_bytes;
+        repetitions_2 = squeezed_source.length[1];
+        repetitions_3 = squeezed_source.length[0];
+        source_stride_2 = squeezed_source.stride[1];
+        destination_stride_2 = squeezed_destination.stride[1];
+        source_stride_3 = squeezed_source.stride[0];
+        destination_stride_3 = squeezed_destination.stride[0];
+    } else if (squeezed_source.rank == 3u &&
+               squeezed_destination.rank == 1u &&
+               squeezed_source.stride[2] == element_bytes &&
+               squeezed_destination.stride[0] == element_bytes &&
+               squeezed_destination.length[0] ==
+                   squeezed_source.length[0] * squeezed_source.length[1] *
+                   squeezed_source.length[2]) {
+        row_bytes_3d = squeezed_source.length[2] * element_bytes;
+        repetitions_2 = squeezed_source.length[1];
+        repetitions_3 = squeezed_source.length[0];
+        source_stride_2 = squeezed_source.stride[1];
         destination_stride_2 = row_bytes_3d;
-        source_stride_3 = normalized_source.stride[0];
+        source_stride_3 = squeezed_source.stride[0];
         destination_stride_3 = repetitions_2 * row_bytes_3d;
-    } else if (normalized_source.rank == 1u &&
-               normalized_destination.rank == 3u &&
-               normalized_source.stride[0] == element_bytes &&
-               normalized_destination.stride[2] == element_bytes &&
-               normalized_source.length[0] ==
-                   normalized_destination.length[0] *
-                   normalized_destination.length[1] *
-                   normalized_destination.length[2]) {
-        row_bytes_3d = normalized_destination.length[2] * element_bytes;
-        repetitions_2 = normalized_destination.length[1];
-        repetitions_3 = normalized_destination.length[0];
+    } else if (squeezed_source.rank == 1u &&
+               squeezed_destination.rank == 3u &&
+               squeezed_source.stride[0] == element_bytes &&
+               squeezed_destination.stride[2] == element_bytes &&
+               squeezed_source.length[0] ==
+                   squeezed_destination.length[0] *
+                   squeezed_destination.length[1] *
+                   squeezed_destination.length[2]) {
+        row_bytes_3d = squeezed_destination.length[2] * element_bytes;
+        repetitions_2 = squeezed_destination.length[1];
+        repetitions_3 = squeezed_destination.length[0];
         source_stride_2 = row_bytes_3d;
-        destination_stride_2 = normalized_destination.stride[1];
+        destination_stride_2 = squeezed_destination.stride[1];
         source_stride_3 = repetitions_2 * row_bytes_3d;
-        destination_stride_3 = normalized_destination.stride[0];
+        destination_stride_3 = squeezed_destination.stride[0];
+    } else if (squeezed_source.rank == 2u &&
+        squeezed_destination.rank == 2u &&
+        squeezed_source.length[0] == squeezed_destination.length[0] &&
+        squeezed_source.length[1] == squeezed_destination.length[1] &&
+        (squeezed_source.stride[1] != element_bytes ||
+         squeezed_destination.stride[1] != element_bytes)) {
+        row_bytes_3d = element_bytes;
+        repetitions_2 = squeezed_source.length[1];
+        repetitions_3 = squeezed_source.length[0];
+        source_stride_2 = squeezed_source.stride[1];
+        destination_stride_2 = squeezed_destination.stride[1];
+        source_stride_3 = squeezed_source.stride[0];
+        destination_stride_3 = squeezed_destination.stride[0];
+    } else if (squeezed_source.rank == 2u &&
+               squeezed_destination.rank == 1u &&
+               squeezed_source.stride[1] != element_bytes &&
+               squeezed_destination.stride[0] == element_bytes &&
+               squeezed_destination.length[0] ==
+                   squeezed_source.length[0] * squeezed_source.length[1]) {
+        row_bytes_3d = element_bytes;
+        repetitions_2 = squeezed_source.length[1];
+        repetitions_3 = squeezed_source.length[0];
+        source_stride_2 = squeezed_source.stride[1];
+        destination_stride_2 = element_bytes;
+        source_stride_3 = squeezed_source.stride[0];
+        destination_stride_3 = repetitions_2 * element_bytes;
+    } else if (squeezed_source.rank == 1u &&
+               squeezed_destination.rank == 2u &&
+               squeezed_source.stride[0] == element_bytes &&
+               squeezed_destination.stride[1] != element_bytes &&
+               squeezed_source.length[0] ==
+                   squeezed_destination.length[0] *
+                   squeezed_destination.length[1]) {
+        row_bytes_3d = element_bytes;
+        repetitions_2 = squeezed_destination.length[1];
+        repetitions_3 = squeezed_destination.length[0];
+        source_stride_2 = element_bytes;
+        destination_stride_2 = squeezed_destination.stride[1];
+        source_stride_3 = repetitions_2 * element_bytes;
+        destination_stride_3 = squeezed_destination.stride[0];
     }
     if (repetitions_3 != 0u) {
         const uint32_t axi_address = direction == 0u
@@ -185,7 +245,16 @@ static inline int idma_memcpy_md_to_nd(
     uint32_t destination_stride = 0u;
     uint32_t row_bytes = 0u;
     uint32_t repetitions = 0u;
-    if (normalized_source.rank == 2u &&
+    if (normalized_source.rank == 1u &&
+        normalized_destination.rank == 1u &&
+        normalized_source.length[0] == normalized_destination.length[0] &&
+        (normalized_source.stride[0] != element_bytes ||
+         normalized_destination.stride[0] != element_bytes)) {
+        source_stride = normalized_source.stride[0];
+        destination_stride = normalized_destination.stride[0];
+        row_bytes = element_bytes;
+        repetitions = normalized_source.length[0];
+    } else if (normalized_source.rank == 2u &&
         normalized_destination.rank == 2u &&
         normalized_source.length[0] == normalized_destination.length[0] &&
         normalized_source.length[1] == normalized_destination.length[1] &&
