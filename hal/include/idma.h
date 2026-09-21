@@ -79,11 +79,6 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl,
  * each row. That is what lets a caller drop a narrow rectangle into the middle of a
  * wider L1 buffer - idma_memcpy_2d is the special case obi_std == len.
  *
- * NB: the hardware has a third dimension (IDMA_*_STRIDE_3 / IDMA_REPS_3) but the GVSoC
- * magia_v3 model only ever issues one dmrep/dmstr pair, so those registers are inert
- * there and a 3D descriptor would silently be executed as 2D. Hence no 3D entry point:
- * decompose into several 2D transfers instead.
- *
  * @param ctrl     IDMA controller handle.
  * @param dir      Copy direction. 0 = AXI to OBI (L2 to L1), !0 = OBI to AXI (L1 to L2).
  * @param axi_addr AXI (L2) address of the first element.
@@ -103,6 +98,40 @@ extern int idma_memcpy_2d_ex(idma_controller_t *ctrl,
                              uint32_t axi_std,
                              uint32_t obi_std,
                              uint32_t reps);
+
+/**
+ * Start a 3-dimensional memory copy with independent strides on both sides.
+ *
+ * Dimension 1 is a contiguous row of `row_bytes`. Dimension 2 repeats the row
+ * `reps_2` times, advancing by the corresponding dimension-2 stride. Dimension
+ * 3 repeats the resulting page `reps_3` times. Dimension-3 strides are measured
+ * between the starts of consecutive pages.
+ *
+ * @param ctrl         IDMA controller handle.
+ * @param dir          Copy direction. 0 = AXI to OBI, !0 = OBI to AXI.
+ * @param axi_addr     AXI address of the first element.
+ * @param obi_addr     OBI address of the first element.
+ * @param row_bytes    Number of contiguous bytes per row.
+ * @param axi_stride_2 AXI byte stride between rows.
+ * @param obi_stride_2 OBI byte stride between rows.
+ * @param reps_2       Number of rows per page.
+ * @param axi_stride_3 AXI byte stride between page starts.
+ * @param obi_stride_3 OBI byte stride between page starts.
+ * @param reps_3       Number of pages.
+ *
+ * @return 0 on successful dispatch.
+ */
+extern int idma_memcpy_3d(idma_controller_t *ctrl,
+                          uint8_t dir,
+                          uint32_t axi_addr,
+                          uint32_t obi_addr,
+                          uint32_t row_bytes,
+                          uint32_t axi_stride_2,
+                          uint32_t obi_stride_2,
+                          uint32_t reps_2,
+                          uint32_t axi_stride_3,
+                          uint32_t obi_stride_3,
+                          uint32_t reps_3);
 
 /**
  * WIP
@@ -133,6 +162,18 @@ struct idma_controller_api {
                         uint32_t axi_std,
                         uint32_t obi_std,
                         uint32_t reps);
+
+    int (*memcpy_3d)(idma_controller_t *ctrl,
+                     uint8_t dir,
+                     uint32_t axi_addr,
+                     uint32_t obi_addr,
+                     uint32_t row_bytes,
+                     uint32_t axi_stride_2,
+                     uint32_t obi_stride_2,
+                     uint32_t reps_2,
+                     uint32_t axi_stride_3,
+                     uint32_t obi_stride_3,
+                     uint32_t reps_3);
 };
 
 /*

@@ -29,6 +29,33 @@ __attribute__((weak)) int idma_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, u
     return 1;
 }
 
+__attribute__((weak)) int idma_memcpy_3d(
+    idma_controller_t *ctrl,
+    uint8_t dir,
+    uint32_t axi_addr,
+    uint32_t obi_addr,
+    uint32_t row_bytes,
+    uint32_t axi_stride_2,
+    uint32_t obi_stride_2,
+    uint32_t reps_2,
+    uint32_t axi_stride_3,
+    uint32_t obi_stride_3,
+    uint32_t reps_3)
+{
+    (void)ctrl;
+    (void)dir;
+    (void)axi_addr;
+    (void)obi_addr;
+    (void)row_bytes;
+    (void)axi_stride_2;
+    (void)obi_stride_2;
+    (void)reps_2;
+    (void)axi_stride_3;
+    (void)obi_stride_3;
+    (void)reps_3;
+    return 1;
+}
+
 /*
 __attribute__((weak)) int idma_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps){
     (void) ctrl;
@@ -50,4 +77,5 @@ __attribute__((weak)) idma_controller_api_t idma_api = {
 /*     .wait = idma_wait, */
     .memcpy_1d = idma_memcpy_1d,
     .memcpy_2d = idma_memcpy_2d,
+    .memcpy_3d = idma_memcpy_3d,
 };

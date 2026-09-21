@@ -108,6 +108,79 @@ static inline int idma_memcpy_md_to_nd(
     source_address += normalized_source.base_offset;
     destination_address += normalized_destination.base_offset;
 
+    uint32_t source_stride_2 = 0u;
+    uint32_t destination_stride_2 = 0u;
+    uint32_t source_stride_3 = 0u;
+    uint32_t destination_stride_3 = 0u;
+    uint32_t row_bytes_3d = 0u;
+    uint32_t repetitions_2 = 0u;
+    uint32_t repetitions_3 = 0u;
+    if (normalized_source.rank == 3u &&
+        normalized_destination.rank == 3u &&
+        normalized_source.length[0] == normalized_destination.length[0] &&
+        normalized_source.length[1] == normalized_destination.length[1] &&
+        normalized_source.length[2] == normalized_destination.length[2] &&
+        normalized_source.stride[2] == element_bytes &&
+        normalized_destination.stride[2] == element_bytes) {
+        row_bytes_3d = normalized_source.length[2] * element_bytes;
+        repetitions_2 = normalized_source.length[1];
+        repetitions_3 = normalized_source.length[0];
+        source_stride_2 = normalized_source.stride[1];
+        destination_stride_2 = normalized_destination.stride[1];
+        source_stride_3 = normalized_source.stride[0];
+        destination_stride_3 = normalized_destination.stride[0];
+    } else if (normalized_source.rank == 3u &&
+               normalized_destination.rank == 1u &&
+               normalized_source.stride[2] == element_bytes &&
+               normalized_destination.stride[0] == element_bytes &&
+               normalized_destination.length[0] ==
+                   normalized_source.length[0] *
+                   normalized_source.length[1] *
+                   normalized_source.length[2]) {
+        row_bytes_3d = normalized_source.length[2] * element_bytes;
+        repetitions_2 = normalized_source.length[1];
+        repetitions_3 = normalized_source.length[0];
+        source_stride_2 = normalized_source.stride[1];
+        destination_stride_2 = row_bytes_3d;
+        source_stride_3 = normalized_source.stride[0];
+        destination_stride_3 = repetitions_2 * row_bytes_3d;
+    } else if (normalized_source.rank == 1u &&
+               normalized_destination.rank == 3u &&
+               normalized_source.stride[0] == element_bytes &&
+               normalized_destination.stride[2] == element_bytes &&
+               normalized_source.length[0] ==
+                   normalized_destination.length[0] *
+                   normalized_destination.length[1] *
+                   normalized_destination.length[2]) {
+        row_bytes_3d = normalized_destination.length[2] * element_bytes;
+        repetitions_2 = normalized_destination.length[1];
+        repetitions_3 = normalized_destination.length[0];
+        source_stride_2 = row_bytes_3d;
+        destination_stride_2 = normalized_destination.stride[1];
+        source_stride_3 = repetitions_2 * row_bytes_3d;
+        destination_stride_3 = normalized_destination.stride[0];
+    }
+    if (repetitions_3 != 0u) {
+        const uint32_t axi_address = direction == 0u
+            ? source_address : destination_address;
+        const uint32_t obi_address = direction == 0u
+            ? destination_address : source_address;
+        const uint32_t axi_stride_2 = direction == 0u
+            ? source_stride_2 : destination_stride_2;
+        const uint32_t obi_stride_2 = direction == 0u
+            ? destination_stride_2 : source_stride_2;
+        const uint32_t axi_stride_3 = direction == 0u
+            ? source_stride_3 : destination_stride_3;
+        const uint32_t obi_stride_3 = direction == 0u
+            ? destination_stride_3 : source_stride_3;
+        const int result = idma_memcpy_3d(
+            controller, direction, axi_address, obi_address, row_bytes_3d,
+            axi_stride_2, obi_stride_2, repetitions_2,
+            axi_stride_3, obi_stride_3, repetitions_3);
+        maps_idma_wait(event_unit, direction);
+        return result;
+    }
+
     uint32_t source_stride = 0u;
     uint32_t destination_stride = 0u;
     uint32_t row_bytes = 0u;

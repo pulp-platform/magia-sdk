@@ -20,6 +20,11 @@ static const uint8_t source[16384]
         [16320] = 0xee,
     };
 
+static uint8_t destination[64]
+    __attribute__((section(".l2_bulk.maps_transfer_destination"))) = {
+        [0 ... 63] = 0xee,
+    };
+
 static tensor_sub_slice_t slice(
     uint32_t rank, uint32_t elements, const TensorRange *ranges)
 {
@@ -106,6 +111,54 @@ int main(void)
         &source_3d, &destination_3d, 1u, &event_unit);
     const uint8_t expected_3d[] = {0u, 1u, 4u, 5u, 16u, 17u, 20u, 21u};
     errors += check(l1 + 96u, expected_3d, 8u);
+
+    const TensorRange destination_strided_3d_ranges[] = {
+        {0u, 2u, 24u}, {0u, 2u, 6u}, {0u, 2u, 1u}};
+    tensor_sub_slice_t destination_strided_3d = slice(
+        3u, 8u, destination_strided_3d_ranges);
+    for (uint32_t index = 0u; index < 32u; ++index)
+        l1[128u + index] = 0xee;
+    idma_memcpy_md_to_nd(
+        &idma, 0u, (uint32_t)(l1 + 128u), (uint32_t)source,
+        &source_3d, &destination_strided_3d, 1u, &event_unit);
+    const uint32_t destination_strided_positions[] = {
+        0u, 1u, 6u, 7u, 24u, 25u, 30u, 31u};
+    for (uint32_t index = 0u; index < 8u; ++index)
+        errors += l1[128u + destination_strided_positions[index]] != expected_3d[index];
+    for (uint32_t index = 0u; index < 32u; ++index) {
+        uint32_t is_payload = 0u;
+        for (uint32_t payload = 0u; payload < 8u; ++payload)
+            is_payload |= index == destination_strided_positions[payload];
+        if (!is_payload)
+            errors += l1[128u + index] != 0xee;
+    }
+
+    const TensorRange source_strided_3d_ranges[] = {
+        {0u, 2u, 24u}, {0u, 2u, 6u}, {0u, 2u, 1u}};
+    const TensorRange destination_l2_3d_ranges[] = {
+        {0u, 2u, 32u}, {0u, 2u, 8u}, {0u, 2u, 1u}};
+    tensor_sub_slice_t source_strided_3d = slice(
+        3u, 8u, source_strided_3d_ranges);
+    tensor_sub_slice_t destination_l2_3d = slice(
+        3u, 8u, destination_l2_3d_ranges);
+    for (uint32_t index = 0u; index < 32u; ++index)
+        l1[192u + index] = 0xee;
+    for (uint32_t index = 0u; index < 8u; ++index)
+        l1[192u + destination_strided_positions[index]] = 0xa0u + index;
+    idma_memcpy_md_to_nd(
+        &idma, 1u, (uint32_t)destination, (uint32_t)(l1 + 192u),
+        &source_strided_3d, &destination_l2_3d, 1u, &event_unit);
+    const uint32_t destination_l2_positions[] = {
+        0u, 1u, 8u, 9u, 32u, 33u, 40u, 41u};
+    for (uint32_t index = 0u; index < 8u; ++index)
+        errors += destination[destination_l2_positions[index]] != 0xa0u + index;
+    for (uint32_t index = 0u; index < 64u; ++index) {
+        uint32_t is_payload = 0u;
+        for (uint32_t payload = 0u; payload < 8u; ++payload)
+            is_payload |= index == destination_l2_positions[payload];
+        if (!is_payload)
+            errors += destination[index] != 0xee;
+    }
 
     const TensorRange strided_to_packed_source_ranges[] = {
         {0u, 128u, 128u}, {0u, 64u, 1u}};

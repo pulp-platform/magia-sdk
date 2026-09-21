@@ -176,6 +176,65 @@ int idma32_memcpy_2d_ex(idma_controller_t *ctrl,
     return 0;
 }
 
+/**
+ * Start a 3-dimensional memory copy with independent strides on both sides.
+ *
+ * The public dimension-3 stride is measured between page starts. The iDMA
+ * register advances from the final row of one page, so this function translates
+ * the public stride before programming the descriptor.
+ */
+int idma32_memcpy_3d(idma_controller_t *ctrl,
+                     uint8_t dir,
+                     uint32_t axi_addr,
+                     uint32_t obi_addr,
+                     uint32_t row_bytes,
+                     uint32_t axi_stride_2,
+                     uint32_t obi_stride_2,
+                     uint32_t reps_2,
+                     uint32_t axi_stride_3,
+                     uint32_t obi_stride_3,
+                     uint32_t reps_3)
+{
+    const uint32_t axi_hardware_stride_3 = reps_2 == 0u
+        ? axi_stride_3
+        : axi_stride_3 - (reps_2 - 1u) * axi_stride_2;
+    const uint32_t obi_hardware_stride_3 = reps_2 == 0u
+        ? obi_stride_3
+        : obi_stride_3 - (reps_2 - 1u) * obi_stride_2;
+#if IDMA_MM == 0
+    if (dir) { // OBI to AXI (L1 to L2): dst = AXI, src = OBI
+        idma_conf_out();
+        idma_set_addr_len_out(axi_addr, obi_addr, row_bytes);
+        idma_set_std2_rep2_out(axi_stride_2, obi_stride_2, reps_2);
+        idma_set_std3_rep3_out(
+            axi_hardware_stride_3, obi_hardware_stride_3, reps_3);
+        idma_start_out();
+    } else { // AXI to OBI (L2 to L1): dst = OBI, src = AXI
+        idma_conf_in();
+        idma_set_addr_len_in(obi_addr, axi_addr, row_bytes);
+        idma_set_std2_rep2_in(obi_stride_2, axi_stride_2, reps_2);
+        idma_set_std3_rep3_in(
+            obi_hardware_stride_3, axi_hardware_stride_3, reps_3);
+        idma_start_in();
+    }
+#else
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
+    if (dir) {
+        idma_mm_set_addr_len(dir, axi_addr, obi_addr, row_bytes);
+        idma_mm_set_std2_rep2(dir, axi_stride_2, obi_stride_2, reps_2);
+        idma_mm_set_std3_rep3(
+            dir, axi_hardware_stride_3, obi_hardware_stride_3, reps_3);
+    } else {
+        idma_mm_set_addr_len(dir, obi_addr, axi_addr, row_bytes);
+        idma_mm_set_std2_rep2(dir, obi_stride_2, axi_stride_2, reps_2);
+        idma_mm_set_std3_rep3(
+            dir, obi_hardware_stride_3, axi_hardware_stride_3, reps_3);
+    }
+    idma_mm_start(dir);
+#endif
+    return 0;
+}
+
 extern int idma_init(idma_controller_t *ctrl)
     __attribute__((alias("idma32_init"), used, visibility("default")));
 extern int idma_memcpy_1d(
@@ -198,6 +257,18 @@ extern int idma_memcpy_2d_ex(idma_controller_t *ctrl,
                              uint32_t obi_std,
                              uint32_t reps)
     __attribute__((alias("idma32_memcpy_2d_ex"), used, visibility("default")));
+extern int idma_memcpy_3d(idma_controller_t *ctrl,
+                          uint8_t dir,
+                          uint32_t axi_addr,
+                          uint32_t obi_addr,
+                          uint32_t row_bytes,
+                          uint32_t axi_stride_2,
+                          uint32_t obi_stride_2,
+                          uint32_t reps_2,
+                          uint32_t axi_stride_3,
+                          uint32_t obi_stride_3,
+                          uint32_t reps_3)
+    __attribute__((alias("idma32_memcpy_3d"), used, visibility("default")));
 
 /* Export the IDMA-specific controller API */
 idma_controller_api_t idma_api = {
@@ -206,4 +277,5 @@ idma_controller_api_t idma_api = {
     .memcpy_1d    = idma32_memcpy_1d,
     .memcpy_2d    = idma32_memcpy_2d,
     .memcpy_2d_ex = idma32_memcpy_2d_ex,
+    .memcpy_3d    = idma32_memcpy_3d,
 };
