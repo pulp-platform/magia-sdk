@@ -138,7 +138,6 @@ int main(void)
         for (uint32_t token = 0u; token < MOBILEVIT_SLICE_TOKENS; ++token)
             printf("REFERENCE_COMPLETION token=%u cycle=%u\n", token,
                    completion_cycles[token]);
-
         const float16 *references = data_at(SLICE_REFERENCES_OFFSET);
         for (uint32_t token = 0u; token < MOBILEVIT_SLICE_TOKENS; ++token) {
             uint32_t mismatches = 0u;
