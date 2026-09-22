@@ -64,6 +64,10 @@ elseif (CONTROL_CORE STREQUAL "CV32E40X")
     set(CV32E40X 1)
 endif ()
 
+if (COMPILER STREQUAL "GCC_PULP")
+    set(ISA rv32imcxgap9)
+endif ()
+
 message(STATUS "[MAGIA-SDK] ABI                     : ${ABI}")
 message(STATUS "[MAGIA-SDK] ISA                     : ${ISA}")
 if (${DISASSEMBLE_LIBRARIES})
@@ -71,6 +75,12 @@ if (${DISASSEMBLE_LIBRARIES})
 else()
     message(STATUS "[MAGIA-SDK] DISASSEMBLE_LIBRARIES : OFF")
 endif()
+
+# Set host-specific flags
+set(MESH_ARCH   "riscv32")
+set(MESH_FAMILY "riscv32")
+set(MESH_ENDIAN "little")
+set(MESH_SYSTEM "unknown")
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 
@@ -96,6 +106,7 @@ add_subdirectory(hal)
 # add_subdirectory(devices)
 add_subdirectory(drivers)
 add_subdirectory(mglib)
+add_subdirectory(kernels)
 
 ################################################################################
 # Testing                                                                      #

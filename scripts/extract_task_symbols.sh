@@ -13,7 +13,8 @@ TASK_ELF=$2
 TASK_HEADER=$3
 OBJDUMP=$4
 
-GUARD_NAME=$(echo "${TEST_NAME}_TASK_BIN" | tr 'a-z' 'A-Z')
+# Match the C-identifier sanitization done by bin2header.py (e.g. 'tiny-vit' -> 'TINY_VIT')
+GUARD_NAME=$(echo "${TEST_NAME}_TASK_BIN" | tr 'a-z' 'A-Z' | tr '-' '_')
 
 # Remove existing #endif from header
 sed -i "/#endif.*__${GUARD_NAME}_H__/d" "${TASK_HEADER}"

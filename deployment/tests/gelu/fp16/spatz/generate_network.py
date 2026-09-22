@@ -1,0 +1,76 @@
+import argparse
+import onnx
+import os
+
+import numpy as np
+import onnxruntime as ort
+
+
+def positive_int(value):
+    try:
+        ival = int(value)
+
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{value}' is not a valid Integer number.")
+
+    if ival <= 0:
+        raise argparse.ArgumentTypeError(f"Value must be positive ({value}).")
+
+    return ival
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generator of Input Data and Golden Model for Gelu test")
+
+    parser.add_argument("N", type=positive_int, help="Batch size")
+    parser.add_argument("C", type=positive_int, help="Number of input channels")
+    parser.add_argument("H", type=positive_int, help="Spatial height dimension")
+    parser.add_argument("W", type=positive_int, help="Spatial width dimension")
+
+    args = parser.parse_args()
+    return args
+
+
+def generate_input_data(args):
+    shape = (args.N, args.C, args.H, args.W)
+    # X = np.random.randn(*shape).astype(np.float16)
+    X = np.random.uniform(-2, 2, size=shape).astype(np.float16)
+    return X
+
+def run_onnx_gelu(X):
+    X_info = onnx.helper.make_tensor_value_info('X', onnx.TensorProto.FLOAT16, X.shape)
+    Y_info = onnx.helper.make_tensor_value_info('Y', onnx.TensorProto.FLOAT16, X.shape)
+
+    opset = onnx.helper.make_operatorsetid("", 20)
+    node_def = onnx.helper.make_node('Gelu', ['X'], ['Y'], approximate='tanh')
+    graph_def = onnx.helper.make_graph([node_def], 'onnx-gelu-test', [X_info], [Y_info])
+    model_def = onnx.helper.make_model(graph_def, producer_name='onnx-generator', opset_imports=[opset])
+
+    ses = ort.InferenceSession(model_def.SerializeToString())
+    res = ses.run(None, {'X': X})
+
+    return res[0], model_def
+
+
+def save_deployment_files(X, G, model_def):
+    deployment_dir = os.path.dirname(os.path.abspath(__file__))
+    os.makedirs(deployment_dir, exist_ok=True)
+
+    onnx.save(model_def, os.path.join(deployment_dir, "network.onnx"))
+    np.savez(os.path.join(deployment_dir, "inputs.npz"), X=X)
+    np.savez(os.path.join(deployment_dir, "outputs.npz"), Y=G)
+
+
+def main():
+    args = parse_args()
+
+    X = generate_input_data(args)
+    G, model_def = run_onnx_gelu(X)
+
+    save_deployment_files(X, G, model_def)
+
+    print(f"Deployment files generated with [N:{args.N}, C:{args.C}, H:{args.H}, W:{args.W}]")
+
+
+if __name__ == "__main__":
+    main()
