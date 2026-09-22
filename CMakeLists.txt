@@ -64,6 +64,10 @@ elseif (CONTROL_CORE STREQUAL "CV32E40X")
     set(CV32E40X 1)
 endif ()
 
+if (COMPILER STREQUAL "GCC_PULP")
+    set(ISA rv32imcxgap9)
+endif ()
+
 message(STATUS "[MAGIA-SDK] ABI                     : ${ABI}")
 message(STATUS "[MAGIA-SDK] ISA                     : ${ISA}")
 if (${DISASSEMBLE_LIBRARIES})
