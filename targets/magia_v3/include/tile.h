@@ -19,11 +19,14 @@
 #include "utils/fsync_isa_utils.h"
 // #include "utils/attention_utils.h"
 #include "utils/performance_utils.h"
-// #include "utils/amo_utils.h"
 #include "utils/eu_isa_utils.h"
 #include "utils/magia_spatz_utils.h"
 #include "utils/magia_pulp_utils.h"
 #include "utils/alloc.h"
 #include "utils/typedefs.h"
+
+#if CV32E40X == 1
+#include "utils/amo_utils.h"
+#endif
 
 #endif //_TILE_INCLUDE_GUARD_

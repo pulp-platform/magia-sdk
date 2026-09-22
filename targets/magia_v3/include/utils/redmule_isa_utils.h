@@ -127,17 +127,17 @@ redmule_mm_marith(volatile uint32_t y_base, volatile uint32_t w_base, volatile u
     return 0;
 }
 
-inline int redmule_mm_commit_trigger()
+inline void redmule_mm_commit_trigger()
 {
     HWPE_WRITE(0, REDMULE_TRIGGER);
 }
 
-inline int redmule_mm_commit()
+inline void redmule_mm_commit()
 {
     HWPE_WRITE(1, REDMULE_TRIGGER);
 }
 
-inline int redmule_mm_trigger()
+inline void redmule_mm_trigger()
 {
     HWPE_WRITE(2, REDMULE_TRIGGER);
 }
