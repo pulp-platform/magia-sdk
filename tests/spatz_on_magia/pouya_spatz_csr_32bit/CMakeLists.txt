@@ -13,7 +13,7 @@ set(TEST_NAME spatz_csr)
 add_spatz_task(
     TEST_NAME       ${TEST_NAME}
     TASK_SOURCES    ${CMAKE_CURRENT_SOURCE_DIR}/spatz_task/onnx_spmv_task.c
-    FIRST_TASK_NAME spmv_spatz_task
+    FIRST_TASK_NAME spatz_csr_task
     INCLUDE_DIRS
         ${CMAKE_CURRENT_SOURCE_DIR}/test_data
         ${CMAKE_CURRENT_SOURCE_DIR}/include

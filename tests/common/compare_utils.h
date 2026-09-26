@@ -338,4 +338,83 @@ chunk_compare_fp16_bitwise(uintptr_t addr_res, uintptr_t addr_exp, int idx_start
     return ret;
 }
 
+
+
+
+
+/* compare_utils.h only ships the fp16 bitwise/ULP compare above -- there is
+ * no fp32 counterpart in this SDK. This mirrors it exactly for fp32: same
+ * "reinterpret bits as a monotonically ordered integer, diff, ULP-tolerance"
+ * approach, just with float32's layout (8-bit exponent at bits[30:23],
+ * mask 0x7F800000) instead of float16's. */
+
+#define FP32_ULP_TOLL 2  /* tune as needed, same role as ULP_TOLL for fp16 */
+
+static inline bool fp32_is_invalid(uint32_t bits) {
+    return (bits & 0x7F800000u) == 0x7F800000u;  /* Inf or NaN */
+}
+
+static inline int32_t fp32_to_ordered(uint32_t bits) {
+    int32_t i = (int32_t)bits;
+    return (i < 0) ? (int32_t)(0x80000000u - (uint32_t)i) : i;
+}
+
+static inline bool vector_compare_fp32_bitwise(uintptr_t addr_res, uintptr_t addr_exp, int len)
+{
+    uint32_t expected;
+    uint32_t result;
+    int32_t  ord_exp;
+    int32_t  ord_res;
+    uint32_t offset;
+    int64_t  ulp_dif;
+    int64_t  ulp_avg;
+    bool     ret;
+
+    ulp_avg = 0;
+    ret     = true;
+    for (int i = 0; i < len; i++) {
+        offset = i * sizeof(uint32_t);
+
+        expected = mmio32(addr_exp + offset);
+        result   = mmio32(addr_res + offset);
+
+        /* Reject NaN or Inf */
+        if (fp32_is_invalid(expected) || fp32_is_invalid(result)) {
+            printf("[CV32 (%d)] Invalid FP32 value at idx %d\t-\texpected: %x\t-\tcomputed: %x\n",
+                   HID,
+                   i,
+                   expected,
+                   result);
+            ret = false;
+            continue;
+        }
+
+        ord_exp = fp32_to_ordered(expected);
+        ord_res = fp32_to_ordered(result);
+
+        ulp_dif = (int64_t)ord_exp - (int64_t)ord_res;
+        if (ulp_dif < 0) {
+            ulp_dif = -ulp_dif;
+        }
+        ulp_avg += ulp_dif;
+
+        if (ulp_dif > FP32_ULP_TOLL) {
+            printf(
+                "[CV32 (%d)] Mismatch at index %d\t-\texpected: %x\t-\tcomputed: %x\t-\tulp: %d\n",
+                HID,
+                i,
+                expected,
+                result,
+                (int32_t)ulp_dif);
+            ret = false;
+        }
+    }
+
+    ulp_avg = ulp_avg / len;
+    printf("[CV32 (%d)] Average ULP: %d\n", HID, (int32_t)ulp_avg);
+
+    return ret;
+}
+
+
 #endif /* COMPARE_UTILS_H_ */

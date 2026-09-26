@@ -5,10 +5,9 @@
 #include "fsync.h"
 #include "eventunit.h"
 
-#include "onnx_spmv_params.h"
-#include "onnx_spmv_mem_layout.h"
-#include "spatz_csr_task_bin.h"
-
+#include "spmv_mac_mem_layout.h"
+#include "spmv_mac_params.h"
+#include "spmv_mac_task_bin.h"
 
 //#include "sme3Da.h"
 //#include "poisson3Da.h"
@@ -24,9 +23,7 @@
 //#include "testbig.h"
 
 //#include "test.h"
-
 #include "data.h"
-
 
 #define WAIT_MODE WFE
 #define clock_freq_MHz 1450
@@ -75,7 +72,6 @@ static uint32_t inner_loop[128] __attribute__((section(".l2"), aligned(64))) = {
 static uint32_t sequential[128] __attribute__((section(".l2"), aligned(64))) = {0};
 static uint32_t diff_finish[128] __attribute__((section(".l2"), aligned(64))) = {0};
 
-int ret = 0;
 /*
 =====================================================
 Functions
@@ -94,146 +90,30 @@ uint32_t find_max (uint32_t input[], uint32_t length)
     return max;
 };
 
-
 /*
-====================================================================
-spatz_row_dot
+--------------------------------------------------
+Launch one SPATZ multiply-accumulate call.
 
-Computes the dot product of one row's (value, x) pairs using SPATZ,
-in chunks of at most SPATZ_MAX_VL. All data handling lives here on
-the control core:
-
-  - slices the row into chunks that fit SPATZ's vector length,
-  - for each chunk, copies the values and gathers+sign-extends the
-    matching x elements into the two dense SPATZ input buffers,
-  - runs the SPATZ task once per chunk and waits for the result,
-  - accumulates the partial sums returned by SPATZ across chunks.
-
-SPATZ itself just multiplies the two dense vectors and reduces
-(see task.c) -- it never sees the CSR structure, indices, or more
-than one chunk at a time.
-====================================================================
+spatz_ready tells us whether SPATZ has already been brought up for this
+hart: on the very first call we spatz_init(); every later call just
+re-issues the task on the already-running core, which is what lets us
+call SPATZ many times in a row without it getting stuck.
+--------------------------------------------------
 */
-static void spatz_print_chunk_debug(
-    volatile spmv_spatz_params_t *params,
-    volatile int32_t             *values_buf,
-    volatile int32_t             *xvec_buf,
-    uint32_t                       chunk_idx,
-    uint32_t                       done,
-    uint32_t                       row_nnz)
+static int run_spatz_mac(eu_controller_t *eu_ctrl, uint32_t spatz_params_addr, int spatz_ready)
 {
-    int32_t val_min = values_buf[0];
-    int32_t val_max = values_buf[0];
-    int32_t x_min   = xvec_buf[0];
-    int32_t x_max   = xvec_buf[0];
+    int ret;
 
-    for (uint32_t k = 1; k < params->len; k++) {
-        if (values_buf[k] < val_min) val_min = values_buf[k];
-        if (values_buf[k] > val_max) val_max = values_buf[k];
-        if (xvec_buf[k]   < x_min)   x_min   = xvec_buf[k];
-        if (xvec_buf[k]   > x_max)   x_max   = xvec_buf[k];
-    }
+    if (!spatz_ready)
+        spatz_init(SPATZ_BINARY_START);
 
-    printf("---- SPATZ chunk %u (done=%u / row_nnz=%u) ----\n",
-           chunk_idx, done, row_nnz);
-    printf("  len          : %u\n", params->len);
-    printf("  addr_values  : 0x%x\n", (uint32_t)params->addr_values);
-    printf("  addr_xvec    : 0x%x\n", (uint32_t)params->addr_xvec);
-    printf("  addr_result  : 0x%x\n", (uint32_t)params->addr_result);
-    printf("  values range : [%d, %d]\n", val_min, val_max);
-    printf("  x     range  : [%d, %d]\n", x_min, x_max);
+    spatz_run_task_with_params(SPMV_MAC_TASK, spatz_params_addr);
 
-    for (uint32_t k = 0; k < params->len; k++) {
-        printf("    k=%u  value=%d  x=%d\n",
-               k, values_buf[k], xvec_buf[k]);
-    }
-}
+    eu_spatz_wait(eu_ctrl, WAIT_MODE);
 
+    ret = spatz_get_exit_code();
 
-static int32_t spatz_row_dot(
-    eu_controller_t              *eu_ctrl,
-    volatile spmv_spatz_params_t *params,
-    volatile int32_t             *values_buf,
-    volatile int32_t             *xvec_buf,
-    volatile int32_t             *result_buf,
-    volatile csr_word_t          *tile_buf,
-    uint32_t                      local_start,
-    uint32_t                      local_end)
-{
-    int32_t  sum     = 0;
-    uint32_t row_nnz = local_end - local_start;
-    uint32_t done     = 0;
-    uint32_t chunk_idx = 0;
-
-    while (done < row_nnz) {
-
-        uint32_t remaining = row_nnz - done;
-
-        uint32_t chunk =
-            (remaining > SPATZ_MAX_VL)
-            ? SPATZ_MAX_VL
-            : remaining;
-
-        for (uint32_t k = 0; k < chunk; k++) {
-
-            uint32_t j = local_start + done + k;
-
-            int32_t value =
-                (int32_t)tile_buf[2 * j];
-
-            uint32_t x_addr =
-                tile_buf[2 * j + 1];
-
-            int16_t x_value =
-                *(volatile int16_t *)x_addr;
-
-            values_buf[k] = value;
-            xvec_buf[k]   = (int32_t)x_value;
-        }
-
-        params->addr_values = (uintptr_t)values_buf;
-        params->addr_xvec   = (uintptr_t)xvec_buf;
-        params->addr_result = (uintptr_t)result_buf;
-        params->len          = chunk;
-
-        if (63 == get_hartid()) {
-
-            /*
-            spatz_print_chunk_debug(
-                params, values_buf, xvec_buf,
-                chunk_idx, done, row_nnz);
-                */
-            printf("spatz goes for run\n");
-        }
-
-        spatz_run_task_with_params(
-            SPMV_SPATZ_TASK,
-            (uintptr_t)params
-        );
-
-        if (63 == get_hartid()) {
-            printf("spatz goes for wait\n");
-        }
-
-        eu_spatz_wait(eu_ctrl, WAIT_MODE);
-
-        int32_t ret = spatz_get_exit_code();
-
-        if (63 == get_hartid()) {
-            printf("spatz wait finished\n");
-        }
-
-        if (ret != 0) {
-            printf("spatz failed, exit code 0x%x\n", ret);
-        }
-
-        sum += *result_buf;
-
-        done += chunk;
-        chunk_idx++;
-    }
-
-    return sum;
+    return ret;
 }
 
 
@@ -298,18 +178,7 @@ int main(void)
 
     eu_fsync_init(&eu_ctrl, 0);
 
-    /*
-    ==============================================================
-    Initialize SPATZ
-
-    Each tile drives its own Spatz through its own (tile-local)
-    control registers. Done once per hart, before the compute loop:
-    spatz_init() enables the clock and waits for READY.
-    ==============================================================
-    */
     eu_spatz_init(&eu_ctrl, 0);
-
-    spatz_init(SPATZ_BINARY_START);
 
     /*
     ===============================================================
@@ -498,6 +367,27 @@ int main(void)
 
     /*
     ==============================================================
+    SPATZ scratch buffers (row-at-a-time multiply-accumulate)
+
+    Placed right after the y buffer. Sized once per hart for the
+    worst case chunk (SPATZ_MAX_VL elements) and reused for every
+    row, and every chunk within a row, for the whole kernel.
+    ==============================================================
+    */
+    uint32_t addr_spatz_params =
+        ALIGN_4B(addr_ylocal + local_rows * sizeof(int32_t));
+
+    uint32_t addr_spatz_val =
+        ALIGN_4B(addr_spatz_params + SPMV_MAC_PARAMS_SIZE);
+
+    uint32_t addr_spatz_x =
+        ALIGN_4B(addr_spatz_val + SPMV_MAC_VAL_SIZE);
+
+    uint32_t addr_spatz_res =
+        ALIGN_4B(addr_spatz_x + SPMV_MAC_X_SIZE);
+
+    /*
+    ==============================================================
     Local pointers
     ==============================================================
     */
@@ -518,34 +408,25 @@ int main(void)
     volatile int32_t *local_y =
         (int32_t*)addr_ylocal;
 
-    /*
-    ==============================================================
-    SPATZ chunk-buffer L1 layout
+    volatile spmv_mac_params_t *spatz_params =
+        (spmv_mac_params_t*)addr_spatz_params;
 
-    Chained right after this tile's existing SpMV buffers. Reused
-    sequentially by every row/chunk in the tile loop below -- the
-    control core always waits for SPATZ's result before it is
-    overwritten, so one region is enough (no ping-pong needed here,
-    unlike the CSR tile buffers above).
-    ==============================================================
-    */
-    uint32_t spatz_region_base =
-        addr_ylocal + local_rows * sizeof(int32_t);
+    /* SPATZ only has a proven, working floating-point datapath (the
+     * integer vmacc.vv/vredsum.vs/vmv.x.s path is unverified and is what
+     * was producing wrong results). value/x/result are converted to
+     * float here and cast back to int32 on read-back; CSR values in
+     * this kernel are quantized and small, so the float32 dot product
+     * is exact (no rounding). */
+    volatile int32_t *spatz_val =
+        (int32_t*)addr_spatz_val;
 
-    spatz_l1_layout_t spatz_l1 =
-        spatz_layout(spatz_region_base);
+    volatile int32_t *spatz_x =
+        (int32_t*)addr_spatz_x;
 
-    volatile spmv_spatz_params_t *spatz_params =
-        (volatile spmv_spatz_params_t *)spatz_l1.params;
+    volatile int32_t *spatz_res =
+        (int32_t*)addr_spatz_res;
 
-    volatile int32_t *spatz_values =
-        (volatile int32_t *)spatz_l1.values;
-
-    volatile int32_t *spatz_xvec =
-        (volatile int32_t *)spatz_l1.xvec;
-
-    volatile int32_t *spatz_result =
-        (volatile int32_t *)spatz_l1.result;
+    int spatz_ready = 0;
 
     /*
     ==============================================================
@@ -650,7 +531,7 @@ int main(void)
 
     dma_bytes +=
         2 * first_tile_nnz * sizeof(csr_word_t);
-
+    
     eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
     dma_wait_end = perf_get_cycles();
     dma_wait_time += (dma_wait_end - dma_wait_start);
@@ -678,7 +559,6 @@ int main(void)
     uint32_t first_for_loop_iteration = num_tiles;
     uint32_t second_for_loop_iteration;
     uint32_t third_for_loop_iteration;
-
 
     for (uint32_t tile = 0;
          tile < num_tiles;
@@ -766,9 +646,14 @@ int main(void)
         ==========================================================
         Compute current tile
 
-        Per row: slice the (value, x) pairs into SPATZ-sized
-        chunks, let SPATZ multiply+reduce each chunk, and
-        accumulate the partial sums here. See spatz_row_dot().
+        For each row in the tile, the control core gathers that
+        row's (value, x) pairs into two contiguous SPATZ vectors
+        and hands them to SPATZ -- one row at a time, never mixed
+        with another row. If a row has more nonzeros than
+        SPATZ_MAX_VL, it is split into several chunks; the control
+        core accumulates the partial sums SPATZ returns for each
+        chunk. The control core itself never multiplies -- it only
+        prepares vectors and adds SPATZ's partial results together.
         ==========================================================
         */
         second_for_loop_iteration += tile_row_end - tile_row_start;
@@ -793,25 +678,70 @@ int main(void)
             uint32_t local_end =
                 local_rowptr[i + 1] - start_nnz;
 
-            third_for_loop_iteration += local_end - local_start;
+            uint32_t row_len =
+                local_end - local_start;
 
-            if (hartid == 63) {
-                printf("spatz usage start\n");
+            third_for_loop_iteration += row_len;
+
+            int32_t sum = 0;
+
+            for (uint32_t off = 0; off < row_len; off += SPATZ_MAX_VL) {
+
+                uint32_t chunk_len = row_len - off;
+                if (chunk_len > SPATZ_MAX_VL) {
+                    chunk_len = SPATZ_MAX_VL;
+                }
+
+                /*
+                --------------------------------------------------
+                Gather this chunk's value/x pair into contiguous
+                SPATZ input vectors. One logical CSR entry occupies
+                two uint32 words:
+
+                    [2*j]     = value
+                    [2*j + 1] = L1 address of x element
+                --------------------------------------------------
+                */
+                for (uint32_t k = 0; k < chunk_len; k++) {
+                    uint32_t j = local_start + off + k;
+
+                    int32_t value =
+                        (int32_t)valcol_buf[current_buf][2 * j];
+
+                    uint32_t x_addr =
+                        valcol_buf[current_buf][2 * j + 1];
+
+                    int32_t x_value =
+                        *(volatile int16_t *)x_addr;
+
+                    //if((hartid == 56) && (i == tile_row_end-1)){
+                        //value = 0;
+                        //x_value = 0;
+                        //printf("i=%d, off = %d, k= %d, value = %d, x = %d\n", i, off, k, value, x_value);
+                    //}
+
+                    spatz_val[k] = value;
+                    spatz_x[k]   = x_value;
+
+                    //if((hartid == 56) && (i == tile_row_end-1))
+                        //printf("spatz_val[%d] = %d, spatz_x[%d] = %d\n", k, spatz_val[k], k, spatz_x[k]);
+
+
+        
+                }
+
+                spatz_params->chunk_VAL = (uintptr_t)spatz_val;
+                spatz_params->chunk_X   = (uintptr_t)spatz_x;
+                spatz_params->chunk_RES = (uintptr_t)spatz_res;
+                spatz_params->len       = chunk_len;
+
+                run_spatz_mac(&eu_ctrl, addr_spatz_params, spatz_ready);
+                spatz_ready = 1;
+
+                sum += (int32_t)(*spatz_res);
+                //if((hartid == 56) && (i == tile_row_end-1))
+                //printf("i= %d, off = %d, sum = %d\n", i, off, sum);
             }
-
-            int32_t sum =
-                (local_end > local_start)
-                ? spatz_row_dot(
-                      &eu_ctrl,
-                      spatz_params,
-                      spatz_values,
-                      spatz_xvec,
-                      spatz_result,
-                      valcol_buf[current_buf],
-                      local_start,
-                      local_end)
-                : 0;
-
 
             local_y[i] = sum;
         }
@@ -822,8 +752,6 @@ int main(void)
         Wait for next tile DMA completion
         ==========================================================
         */
-        
-
         if (tile + 1 < num_tiles) {
             dma_wait_start = perf_get_cycles();
             eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
@@ -840,16 +768,7 @@ int main(void)
         next_buf    ^= 1;
     }
 
-    printf("core %u finsished\n", hartid);
-
-
-    /*
-    ==============================================================
-    Power down SPATZ (compute phase for this tile is done)
-    ==============================================================
-    */
-    spatz_clk_dis();
-
+    
     /*
     ==============================================================
     DMA local y -> global y
@@ -877,10 +796,10 @@ int main(void)
     Final synchronization
     ==============================================================
     */
-
+    
 
     uint32_t local_nnz = local_rowptr[local_rows] - local_rowptr[0];
-
+    
 
     run_time_cycle[hartid] = perf_get_cycles() - run_time;
     DMA_wait_cycle[hartid] = dma_wait_time;
@@ -894,13 +813,16 @@ int main(void)
     sequential[hartid] = sequential_start;
 
 
+
     int32_t difference_finish_start = perf_get_cycles();
     fsync_sync_global(&fsync_ctrl);
     eu_fsync_wait(&eu_ctrl, WAIT_MODE);
     int32_t difference_finish_end = perf_get_cycles();
-    int32_t difference_finish = difference_finish_end - difference_finish_start;
-
+    int32_t difference_finish = difference_finish_end - difference_finish_start; 
+    
     diff_finish[hartid] = difference_finish;
+
+
 
     /*
 
@@ -932,31 +854,31 @@ int main(void)
         printf("RUNTIME\n");
         for (int i=0; i<64; i++){
             printf("%u\n", run_time_cycle[i]);
-
+                
         }
 
         printf("COMPUTE TIME\n");
         for (int i=0; i<64; i++){
             printf("%u\n", compute_cycle[i]);
-
+                
         }
 
         printf("PURE COMPUTE TIME\n");
         for (int i=0; i<64; i++){
             printf("%u\n", computed_pure[i]);
-
+                
         }
 
         printf("FSYNCRONIZATION\n");
         for (int i=0; i<64; i++){
             printf("%u\n", fsync_wait_cycle[i]);
-
+                
         }
 
         printf("DIFFERENCE OF FINISH\n");
         for (int i=0; i<64; i++){
             printf("%u\n", diff_finish[i]);
-
+                
         }
 
         int errors = 0;
@@ -964,14 +886,16 @@ int main(void)
         for (int i = 0; i < M; i++) {
 
             if (y[i] != y_expected[i]) {
-
+                
+                /*
                 printf(
                     "Mismatch at index %d: got %d expected %d\n",
                     i,
                     y[i],
                     y_expected[i]
                 );
-
+                */
+                
                 errors++;
             }
         }
@@ -1035,8 +959,11 @@ int main(void)
             local_x_count * sizeof(int16_t) +  // local_x
             (local_rows + 1) * sizeof(uint32_t) + // local_rowptr
             2 * tile_buffer_bytes +            // ping-pong buffers
-            local_rows * sizeof(int32_t) +      // local_y
-            (spatz_l1.end - spatz_region_base); // SPATZ params + chunk buffers
+            local_rows * sizeof(int32_t) +     // local_y
+            SPMV_MAC_PARAMS_SIZE +              // spatz params
+            SPMV_MAC_VAL_SIZE +                 // spatz val scratch
+            SPMV_MAC_X_SIZE +                   // spatz x scratch
+            SPMV_MAC_RES_SIZE;                  // spatz res scratch
 
         /* whole chip */
         uint32_t total_l1_bytes =

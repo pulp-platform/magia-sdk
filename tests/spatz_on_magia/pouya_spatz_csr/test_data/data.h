@@ -5,11 +5,11 @@
 
 #define DIM_M 8
 #define DIM_K 8
-#define NNZ   28   /* padded: each row rounded up to an even nonzero-count so
+#define NNZ   22   /* padded: each row rounded up to an even nonzero-count so
                      * every row segment starts 4-byte aligned for vle16.v */
 
 
-static const uint32_t row_ptr[] = {0, 2, 6, 10, 14, 18, 22, 26, 28};
+static const uint32_t row_ptr[] = {0, 2, 5, 8, 11, 14, 17, 20, 22};
 
 static const uint16_t col_idx[] = {
     0, 1, 
@@ -34,7 +34,7 @@ static const float16 values[] = {
 
 /* x[k] = k + 1 */
 static const float16 x[] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
-
+/*Golden result*/
 static const float16 G[] = {
     8.0f, 15.0f, 29.0f, 29.0f, 31.0f, 40.0f, 41.0f, 37.0f};
 
