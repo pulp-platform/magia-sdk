@@ -107,7 +107,7 @@ clone_gvsoc:
   script:
     - source gvsoc_venv/bin/activate && export CC=/usr/sepp/bin/gcc-11.2.0 && export CXX=/usr/sepp/bin/g++-11.2.0 && make gvsoc tiles=${tiles}
   artifacts:
-    paths: [ "gvsoc/install" , "gvsoc/pulp/pulp/chips/magia_v2/arch.py"]
+    paths: [ "gvsoc/install" , "gvsoc/pulp/pulp/chips/magia_v3/arch.py"]
 
 gvsoc_tiles_4:
   extends: .gvsoc
@@ -140,42 +140,42 @@ gvsoc_tiles_1:
   artifacts:
     paths: [ "$MAGIA/work", "$MAGIA/sim/work", "$MAGIA/sim/modelsim.ini", "$MAGIA/scripts/sim_ret_errors.sh", "$MAGIA/scripts/compile.tcl", "$MAGIA/Makefile", "$MAGIA/hw/mesh/magia_pkg.sv", "$MAGIA/hw/tile/magia_tile_pkg.sv" ]
 
-magia_v3_tiles_4_CV32E40P:
+magia_tiles_4_CV32E40P:
   extends: .MAGIA
   stage: build_tiles_4_CV32E40P
   variables:
     tiles: 4
-    target_platform: magia_v3
+    target_platform: magia
     control_core: CV32E40P
   dependencies:
     - clone_magia
 
-magia_v3_tiles_1_CV32E40P:
+magia_tiles_1_CV32E40P:
   extends: .MAGIA
   stage: build_tiles_1_CV32E40P
   variables:
     tiles: 1
-    target_platform: magia_v3
+    target_platform: magia
     control_core: CV32E40P
   dependencies:
     - clone_magia
 
-magia_v3_tiles_4_CV32E40X:
+magia_tiles_4_CV32E40X:
   extends: .MAGIA
   stage: build_tiles_4_CV32E40X
   variables:
     tiles: 4
-    target_platform: magia_v3
+    target_platform: magia
     control_core: CV32E40X
   dependencies:
     - clone_magia
 
-magia_v3_tiles_1_CV32E40X:
+magia_tiles_1_CV32E40X:
   extends: .MAGIA
   stage: build_tiles_1_CV32E40X
   variables:
     tiles: 1
-    target_platform: magia_v3
+    target_platform: magia
     control_core: CV32E40X
   dependencies:
     - clone_magia
@@ -187,12 +187,12 @@ magia_v3_tiles_1_CV32E40X:
   artifacts:
     paths: [ "build", "targets/${target_platform}/include/addr_map/tile_addr_map.h" ]
 
-build_test_magia_v3_tiles_4_spatz_CV32E40P:
+build_test_magia_tiles_4_spatz_CV32E40P:
   extends: .build
   stage: build_test_tiles_4_spatz_CV32E40P
   variables:
     tiles: 4
-    target_platform: magia_v3
+    target_platform: magia
     compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
     spatz: 1
@@ -201,12 +201,12 @@ build_test_magia_v3_tiles_4_spatz_CV32E40P:
   dependencies:
     - python_gvsoc
 
-build_test_magia_v3_tiles_1_spatz_CV32E40P:
+build_test_magia_tiles_1_spatz_CV32E40P:
   extends: .build
   stage: build_test_tiles_1_spatz_CV32E40P
   variables:
     tiles: 1
-    target_platform: magia_v3
+    target_platform: magia
     compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
     spatz: 1
@@ -215,12 +215,12 @@ build_test_magia_v3_tiles_1_spatz_CV32E40P:
   dependencies:
     - python_gvsoc
 
-build_test_magia_v3_tiles_4_cluster_CV32E40P:
+build_test_magia_tiles_4_cluster_CV32E40P:
   extends: .build
   stage: build_test_tiles_4_cluster_CV32E40P
   variables:
     tiles: 4
-    target_platform: magia_v3
+    target_platform: magia
     compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
     spatz: 0
@@ -229,12 +229,12 @@ build_test_magia_v3_tiles_4_cluster_CV32E40P:
   dependencies:
     - python_gvsoc
 
-build_test_magia_v3_tiles_1_cluster_CV32E40P:
+build_test_magia_tiles_1_cluster_CV32E40P:
   extends: .build
   stage: build_test_tiles_1_cluster_CV32E40P
   variables:
     tiles: 1
-    target_platform: magia_v3
+    target_platform: magia
     compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
     spatz: 0
@@ -243,12 +243,12 @@ build_test_magia_v3_tiles_1_cluster_CV32E40P:
   dependencies:
     - python_gvsoc
 
-build_test_magia_v3_tiles_4_spatz+cluster_CV32E40P:
+build_test_magia_tiles_4_spatz+cluster_CV32E40P:
   extends: .build
   stage: build_test_tiles_4_spatz+cluster_CV32E40P
   variables:
     tiles: 4
-    target_platform: magia_v3
+    target_platform: magia
     compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
     spatz: 1
@@ -257,12 +257,12 @@ build_test_magia_v3_tiles_4_spatz+cluster_CV32E40P:
   dependencies:
     - python_gvsoc
 
-build_test_magia_v3_tiles_1_spatz+cluster_CV32E40P:
+build_test_magia_tiles_1_spatz+cluster_CV32E40P:
   extends: .build
   stage: build_test_tiles_1_spatz+cluster_CV32E40P
   variables:
     tiles: 1
-    target_platform: magia_v3
+    target_platform: magia
     compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
     spatz: 1
@@ -271,12 +271,12 @@ build_test_magia_v3_tiles_1_spatz+cluster_CV32E40P:
   dependencies:
     - python_gvsoc
 
-build_test_magia_v3_tiles_4_spatz_CV32E40X:
+build_test_magia_tiles_4_spatz_CV32E40X:
   extends: .build
   stage: build_test_tiles_4_spatz_CV32E40X
   variables:
     tiles: 4
-    target_platform: magia_v3
+    target_platform: magia
     compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
     spatz: 1
@@ -285,12 +285,12 @@ build_test_magia_v3_tiles_4_spatz_CV32E40X:
   dependencies:
     - python_gvsoc
 
-build_test_magia_v3_tiles_1_spatz_CV32E40X:
+build_test_magia_tiles_1_spatz_CV32E40X:
   extends: .build
   stage: build_test_tiles_1_spatz_CV32E40X
   variables:
     tiles: 1
-    target_platform: magia_v3
+    target_platform: magia
     compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
     spatz: 1
@@ -299,12 +299,12 @@ build_test_magia_v3_tiles_1_spatz_CV32E40X:
   dependencies:
     - python_gvsoc
 
-build_test_magia_v3_tiles_4_cluster_CV32E40X:
+build_test_magia_tiles_4_cluster_CV32E40X:
   extends: .build
   stage: build_test_tiles_4_cluster_CV32E40X
   variables:
     tiles: 4
-    target_platform: magia_v3
+    target_platform: magia
     compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
     spatz: 0
@@ -313,12 +313,12 @@ build_test_magia_v3_tiles_4_cluster_CV32E40X:
   dependencies:
     - python_gvsoc
 
-build_test_magia_v3_tiles_1_cluster_CV32E40X:
+build_test_magia_tiles_1_cluster_CV32E40X:
   extends: .build
   stage: build_test_tiles_1_cluster_CV32E40X
   variables:
     tiles: 1
-    target_platform: magia_v3
+    target_platform: magia
     compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
     spatz: 0
@@ -327,12 +327,12 @@ build_test_magia_v3_tiles_1_cluster_CV32E40X:
   dependencies:
     - python_gvsoc
 
-build_test_magia_v3_tiles_4_spatz+cluster_CV32E40X:
+build_test_magia_tiles_4_spatz+cluster_CV32E40X:
   extends: .build
   stage: build_test_tiles_4_spatz+cluster_CV32E40X
   variables:
     tiles: 4
-    target_platform: magia_v3
+    target_platform: magia
     compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
     spatz: 1
@@ -341,12 +341,12 @@ build_test_magia_v3_tiles_4_spatz+cluster_CV32E40X:
   dependencies:
     - python_gvsoc
 
-build_test_magia_v3_tiles_1_spatz+cluster_CV32E40X:
+build_test_magia_tiles_1_spatz+cluster_CV32E40X:
   extends: .build
   stage: build_test_tiles_1_spatz+cluster_CV32E40X
   variables:
     tiles: 1
-    target_platform: magia_v3
+    target_platform: magia
     compiler: GCC_MULTILIB
     CMAKE: cmake-3.28.3
     spatz: 1
@@ -375,7 +375,7 @@ build_test_magia_v3_tiles_1_spatz+cluster_CV32E40X:
     paths: [ "*.log" ]
     expire_in: 2 weeks
 
-magia_v3_tiles_4_rtl_sim_spatz_CV32E40P:
+magia_tiles_4_rtl_sim_spatz_CV32E40P:
   extends: [.sim]
   stage: test_tiles_4_spatz_CV32E40P
   variables:
@@ -387,11 +387,11 @@ magia_v3_tiles_4_rtl_sim_spatz_CV32E40P:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv, test_alloc, test_mm_os_mglib, onnx_add, onnx_ceil, onnx_clip, onnx_floor, onnx_relu, onnx_sub]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_4_CV32E40P
-    - build_test_magia_v3_tiles_4_spatz_CV32E40P
+    - magia_tiles_4_CV32E40P
+    - build_test_magia_tiles_4_spatz_CV32E40P
 
 
-magia_v3_tiles_4_gvsoc_sim_spatz_CV32E40P:
+magia_tiles_4_gvsoc_sim_spatz_CV32E40P:
   extends: [.sim_gvsoc]
   stage: test_tiles_4_spatz_CV32E40P
   variables:
@@ -403,14 +403,14 @@ magia_v3_tiles_4_gvsoc_sim_spatz_CV32E40P:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv, test_alloc, test_mm_os_mglib, onnx_add, onnx_ceil, onnx_clip, onnx_div, onnx_floor, onnx_relu, onnx_sub]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_4_CV32E40P
+    - magia_tiles_4_CV32E40P
     - clone_gvsoc
     - gvsoc_tiles_4
-    - build_test_magia_v3_tiles_4_spatz_CV32E40P
+    - build_test_magia_tiles_4_spatz_CV32E40P
     - python_gvsoc
 
 
-magia_v3_tiles_1_rtl_sim_spatz_CV32E40P:
+magia_tiles_1_rtl_sim_spatz_CV32E40P:
   extends: [.sim]
   stage: test_tiles_1_spatz_CV32E40P
   variables:
@@ -422,11 +422,11 @@ magia_v3_tiles_1_rtl_sim_spatz_CV32E40P:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_mm_os_mglib, test_fsync_lr, test_gemv, test_alloc,  onnx_add, onnx_ceil, onnx_clip, onnx_floor, onnx_relu, onnx_sub]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_1_CV32E40P
-    - build_test_magia_v3_tiles_1_spatz_CV32E40P
+    - magia_tiles_1_CV32E40P
+    - build_test_magia_tiles_1_spatz_CV32E40P
 
 
-magia_v3_tiles_1_gvsoc_sim_spatz_CV32E40P:
+magia_tiles_1_gvsoc_sim_spatz_CV32E40P:
   extends: [.sim_gvsoc]
   stage: test_tiles_1_spatz_CV32E40P
   variables:
@@ -438,13 +438,13 @@ magia_v3_tiles_1_gvsoc_sim_spatz_CV32E40P:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_mm_os_mglib, test_fsync_lr, test_gemv, test_alloc, onnx_add, onnx_ceil, onnx_clip, onnx_div, onnx_floor, onnx_relu, onnx_sub]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_1_CV32E40P
+    - magia_tiles_1_CV32E40P
     - clone_gvsoc
     - gvsoc_tiles_1
-    - build_test_magia_v3_tiles_1_spatz_CV32E40P
+    - build_test_magia_tiles_1_spatz_CV32E40P
     - python_gvsoc
 
-magia_v3_tiles_4_rtl_sim_cluster_CV32E40P:
+magia_tiles_4_rtl_sim_cluster_CV32E40P:
   extends: [.sim]
   stage: test_tiles_4_cluster_CV32E40P
   variables:
@@ -456,11 +456,11 @@ magia_v3_tiles_4_rtl_sim_cluster_CV32E40P:
       - TESTNAME: [hello_pulp_2, multi_task]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_4_CV32E40P
-    - build_test_magia_v3_tiles_4_cluster_CV32E40P
+    - magia_tiles_4_CV32E40P
+    - build_test_magia_tiles_4_cluster_CV32E40P
 
 
-magia_v3_tiles_4_gvsoc_sim_cluster_CV32E40P:
+magia_tiles_4_gvsoc_sim_cluster_CV32E40P:
   extends: [.sim_gvsoc]
   stage: test_tiles_4_cluster_CV32E40P
   variables:
@@ -472,14 +472,14 @@ magia_v3_tiles_4_gvsoc_sim_cluster_CV32E40P:
       - TESTNAME: [hello_pulp_2, multi_task]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_4_CV32E40P
+    - magia_tiles_4_CV32E40P
     - clone_gvsoc
     - gvsoc_tiles_4
-    - build_test_magia_v3_tiles_4_cluster_CV32E40P
+    - build_test_magia_tiles_4_cluster_CV32E40P
     - python_gvsoc
 
 
-magia_v3_tiles_1_rtl_sim_cluster_CV32E40P:
+magia_tiles_1_rtl_sim_cluster_CV32E40P:
   extends: [.sim]
   stage: test_tiles_1_cluster_CV32E40P
   variables:
@@ -491,11 +491,11 @@ magia_v3_tiles_1_rtl_sim_cluster_CV32E40P:
       - TESTNAME: [hello_pulp_2, multi_task]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_1_CV32E40P
-    - build_test_magia_v3_tiles_1_cluster_CV32E40P
+    - magia_tiles_1_CV32E40P
+    - build_test_magia_tiles_1_cluster_CV32E40P
 
 
-magia_v3_tiles_1_gvsoc_sim_cluster_CV32E40P:
+magia_tiles_1_gvsoc_sim_cluster_CV32E40P:
   extends: [.sim_gvsoc]
   stage: test_tiles_1_cluster_CV32E40P
   variables:
@@ -507,13 +507,13 @@ magia_v3_tiles_1_gvsoc_sim_cluster_CV32E40P:
       - TESTNAME: [hello_pulp_2, multi_task]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_1_CV32E40P
+    - magia_tiles_1_CV32E40P
     - clone_gvsoc
     - gvsoc_tiles_1
-    - build_test_magia_v3_tiles_1_cluster_CV32E40P
+    - build_test_magia_tiles_1_cluster_CV32E40P
     - python_gvsoc
 
-magia_v3_tiles_4_rtl_sim_spatz+cluster_CV32E40P:
+magia_tiles_4_rtl_sim_spatz+cluster_CV32E40P:
   extends: [.sim]
   stage: test_tiles_4_spatz+cluster_CV32E40P
   variables:
@@ -525,11 +525,11 @@ magia_v3_tiles_4_rtl_sim_spatz+cluster_CV32E40P:
       - TESTNAME: [hello_spatz_pulp_2, multi_task]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_4_CV32E40P
-    - build_test_magia_v3_tiles_4_spatz+cluster_CV32E40P
+    - magia_tiles_4_CV32E40P
+    - build_test_magia_tiles_4_spatz+cluster_CV32E40P
 
 
-magia_v3_tiles_4_gvsoc_sim_spatz+cluster_CV32E40P:
+magia_tiles_4_gvsoc_sim_spatz+cluster_CV32E40P:
   extends: [.sim_gvsoc]
   stage: test_tiles_4_spatz+cluster_CV32E40P
   variables:
@@ -541,14 +541,14 @@ magia_v3_tiles_4_gvsoc_sim_spatz+cluster_CV32E40P:
       - TESTNAME: [hello_spatz_pulp_2, multi_task]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_4_CV32E40P
+    - magia_tiles_4_CV32E40P
     - clone_gvsoc
     - gvsoc_tiles_4
-    - build_test_magia_v3_tiles_4_spatz+cluster_CV32E40P
+    - build_test_magia_tiles_4_spatz+cluster_CV32E40P
     - python_gvsoc
 
 
-magia_v3_tiles_1_rtl_sim_spatz+cluster_CV32E40P:
+magia_tiles_1_rtl_sim_spatz+cluster_CV32E40P:
   extends: [.sim]
   stage: test_tiles_1_spatz+cluster_CV32E40P
   variables:
@@ -560,11 +560,11 @@ magia_v3_tiles_1_rtl_sim_spatz+cluster_CV32E40P:
       - TESTNAME: [hello_spatz_pulp_2, multi_task]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_1_CV32E40P
-    - build_test_magia_v3_tiles_1_spatz+cluster_CV32E40P
+    - magia_tiles_1_CV32E40P
+    - build_test_magia_tiles_1_spatz+cluster_CV32E40P
 
 
-magia_v3_tiles_1_gvsoc_sim_spatz+cluster_CV32E40P:
+magia_tiles_1_gvsoc_sim_spatz+cluster_CV32E40P:
   extends: [.sim_gvsoc]
   stage: test_tiles_1_spatz+cluster_CV32E40P
   variables:
@@ -576,13 +576,13 @@ magia_v3_tiles_1_gvsoc_sim_spatz+cluster_CV32E40P:
       - TESTNAME: [hello_spatz_pulp_2, multi_task]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_1_CV32E40P
+    - magia_tiles_1_CV32E40P
     - clone_gvsoc
     - gvsoc_tiles_1
-    - build_test_magia_v3_tiles_1_spatz+cluster_CV32E40P
+    - build_test_magia_tiles_1_spatz+cluster_CV32E40P
     - python_gvsoc
 
-magia_v3_tiles_4_rtl_sim_spatz_CV32E40X:
+magia_tiles_4_rtl_sim_spatz_CV32E40X:
   extends: [.sim]
   stage: test_tiles_4_spatz_CV32E40X
   variables:
@@ -594,10 +594,10 @@ magia_v3_tiles_4_rtl_sim_spatz_CV32E40X:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_cemm_global, test_mm_os_mglib, onnx_add]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_4_CV32E40X
-    - build_test_magia_v3_tiles_4_spatz_CV32E40X
+    - magia_tiles_4_CV32E40X
+    - build_test_magia_tiles_4_spatz_CV32E40X
 
-magia_v3_tiles_1_rtl_sim_spatz_CV32E40X:
+magia_tiles_1_rtl_sim_spatz_CV32E40X:
   extends: [.sim]
   stage: test_tiles_1_spatz_CV32E40X
   variables:
@@ -609,10 +609,10 @@ magia_v3_tiles_1_rtl_sim_spatz_CV32E40X:
       - TESTNAME: [test_helloworld, test_fsync_levels, test_cemm_global, test_mm_os_mglib, onnx_add]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_1_CV32E40X
-    - build_test_magia_v3_tiles_1_spatz_CV32E40X
+    - magia_tiles_1_CV32E40X
+    - build_test_magia_tiles_1_spatz_CV32E40X
 
-magia_v3_tiles_4_rtl_sim_cluster_CV32E40X:
+magia_tiles_4_rtl_sim_cluster_CV32E40X:
   extends: [.sim]
   stage: test_tiles_4_cluster_CV32E40X
   variables:
@@ -624,10 +624,10 @@ magia_v3_tiles_4_rtl_sim_cluster_CV32E40X:
       - TESTNAME: [hello_pulp_2, multi_task]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_4_CV32E40X
-    - build_test_magia_v3_tiles_4_cluster_CV32E40X
+    - magia_tiles_4_CV32E40X
+    - build_test_magia_tiles_4_cluster_CV32E40X
 
-magia_v3_tiles_1_rtl_sim_cluster_CV32E40X:
+magia_tiles_1_rtl_sim_cluster_CV32E40X:
   extends: [.sim]
   stage: test_tiles_1_cluster_CV32E40X
   variables:
@@ -639,10 +639,10 @@ magia_v3_tiles_1_rtl_sim_cluster_CV32E40X:
       - TESTNAME: [hello_pulp_2, multi_task]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_1_CV32E40X
-    - build_test_magia_v3_tiles_1_cluster_CV32E40X
+    - magia_tiles_1_CV32E40X
+    - build_test_magia_tiles_1_cluster_CV32E40X
 
-magia_v3_tiles_4_rtl_sim_spatz+cluster_CV32E40X:
+magia_tiles_4_rtl_sim_spatz+cluster_CV32E40X:
   extends: [.sim]
   stage: test_tiles_4_spatz+cluster_CV32E40X
   variables:
@@ -654,10 +654,10 @@ magia_v3_tiles_4_rtl_sim_spatz+cluster_CV32E40X:
       - TESTNAME: [hello_spatz_pulp_2, multi_task]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_4_CV32E40X
-    - build_test_magia_v3_tiles_4_spatz+cluster_CV32E40X
+    - magia_tiles_4_CV32E40X
+    - build_test_magia_tiles_4_spatz+cluster_CV32E40X
 
-magia_v3_tiles_1_rtl_sim_spatz+cluster_CV32E40X:
+magia_tiles_1_rtl_sim_spatz+cluster_CV32E40X:
   extends: [.sim]
   stage: test_tiles_1_spatz+cluster_CV32E40X
   variables:
@@ -669,8 +669,8 @@ magia_v3_tiles_1_rtl_sim_spatz+cluster_CV32E40X:
       - TESTNAME: [hello_spatz_pulp_2, multi_task]
   dependencies:
     - clone_magia
-    - magia_v3_tiles_1_CV32E40X
-    - build_test_magia_v3_tiles_1_spatz+cluster_CV32E40X
+    - magia_tiles_1_CV32E40X
+    - build_test_magia_tiles_1_spatz+cluster_CV32E40X
 
 cleanup:
   stage: postscript

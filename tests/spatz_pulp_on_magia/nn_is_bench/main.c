@@ -70,7 +70,7 @@
 //
 // Overlapping properly would need engine-to-engine event chaining (RedMulE's
 // done triggering Spatz without the CV32 in the loop) or a second control
-// thread. Neither exists on magia_v3.
+// thread. Neither exists on magia.
 //
 // This is safe because the event unit latches events and eu_clear_events()
 // clears only the bits it is given, so events for the three engines never

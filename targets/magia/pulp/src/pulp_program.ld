@@ -14,7 +14,7 @@
  * limitations under the License.
  * SPDX-License-Identifier: Apache-2.0
  *
- * Linker script for PULP embedded binary in CV32 instrram (magia_v3).
+ * Linker script for PULP embedded binary in CV32 instrram (magia).
  *
  * Memory layout when embedded:
  *   0xCC000000:              CV32 .text
