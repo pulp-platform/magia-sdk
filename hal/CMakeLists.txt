@@ -17,23 +17,7 @@ target_include_directories(hal
   "include"
 )
 
-if(${TARGET_PLATFORM} STREQUAL "magia_v1")
-target_link_libraries(hal
-  PUBLIC
-    "idma_lib"
-    "redmule_lib"
-    "fsync_lib"
-    "eu_lib"
-)
-elseif(${TARGET_PLATFORM} STREQUAL "magia_v2")
-target_link_libraries(hal
-  PUBLIC
-    "idma_lib"
-    "redmule_lib"
-    "fsync_lib"
-    "eu_lib"
-)
-elseif(${TARGET_PLATFORM} STREQUAL "magia_v3")
+if(${TARGET_PLATFORM} STREQUAL "magia")
 target_link_libraries(hal
   PUBLIC
     "idma_lib"

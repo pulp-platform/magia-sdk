@@ -7,9 +7,7 @@
 
 # Define mappings for devices
 set(DEVICE_MAPPINGS
-    magia_v1:
-    magia_v2:
-    magia_v3:
+    magia:
     pulp:
 )
 

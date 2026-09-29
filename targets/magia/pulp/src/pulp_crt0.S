@@ -14,7 +14,7 @@
  * limitations under the License.
  * SPDX-License-Identifier: Apache-2.0
  *
- * PULP cluster CRT0 for embedded binary in CV32 instrram (magia_v3).
+ * PULP cluster CRT0 for embedded binary in CV32 instrram (magia).
  *
  * Bare-metal dynamic dispatch programming model.
  *
