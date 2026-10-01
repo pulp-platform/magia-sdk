@@ -505,7 +505,12 @@ static inline void maps_trace_duration(const tile_plan_t *plan,
         maps_experiment_duration_event_t *entry = &trace->events[plan->hartid][event];
         entry->token = token;
         entry->slot = slot;
-        entry->phase = phase[0] == 'o' ? 0u : phase[0] == 's' ? 1u : 2u;
+        entry->phase = phase[0] == 'o' ? 0u :
+                       phase[0] == 's' ? 1u :
+                       phase[0] == 'l' && phase[3] == 'r' ? 3u :
+                       phase[0] == 'l' && phase[3] == 'w' ? 4u :
+                       phase[0] == 't' ? 5u :
+                       phase[0] == 'r' && phase[1] == 'u' ? 6u : 2u;
         entry->index = index;
         entry->end_cycle = maps_read_cycle();
         entry->start_cycle = entry->end_cycle - cycles;

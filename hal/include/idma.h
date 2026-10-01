@@ -11,6 +11,7 @@
 /** Forward declaration of the idma controller instance and API structure. */
 typedef struct idma_controller idma_controller_t;
 typedef struct idma_controller_api idma_controller_api_t;
+typedef uint32_t idma_ticket_t;
 
 /**
  * WIP
@@ -45,6 +46,32 @@ extern int idma_init(idma_controller_t *ctrl);
  */
 extern int idma_memcpy_1d(
     idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len);
+
+/**
+ * Submit a 1-dimensional copy and return its hardware transfer ID.
+ *
+ * Unlike idma_memcpy_1d, the returned ticket can be polled independently of
+ * later transfers. A return value of zero means that the transfer was not
+ * accepted (for example because the hardware queue is full).
+ */
+extern idma_ticket_t idma_submit_1d(
+    idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len);
+
+/** Return non-zero once `ticket` has completed in the selected direction. */
+extern uint32_t idma_ticket_is_done(uint8_t dir, idma_ticket_t ticket);
+
+/** Submit a 3-dimensional copy and return its hardware transfer ID. */
+extern idma_ticket_t idma_submit_3d(idma_controller_t *ctrl,
+                                    uint8_t dir,
+                                    uint32_t axi_addr,
+                                    uint32_t obi_addr,
+                                    uint32_t row_bytes,
+                                    uint32_t axi_stride_2,
+                                    uint32_t obi_stride_2,
+                                    uint32_t reps_2,
+                                    uint32_t axi_stride_3,
+                                    uint32_t obi_stride_3,
+                                    uint32_t reps_3);
 
 /**
  * Start 2-dimensional memory copy.

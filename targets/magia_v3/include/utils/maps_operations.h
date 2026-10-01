@@ -50,6 +50,7 @@
 #endif
 #define MAPS_OPERATION_TASK_SCRATCH_OFFSET 0xC0000u
 #define MAPS_OPERATION_TASK_SCRATCH_BYTES 0x10000u
+#define MAPS_TREE_ALL_REDUCE_MAX_ELEMENTS 4u
 
 typedef struct {
     idma_controller_t *idma_ctrl;
@@ -327,6 +328,99 @@ static inline void maps_collective_wait(const tile_plan_t *plan,
     __asm__ volatile("fence rw, rw" ::: "memory");
 }
 
+static inline uint32_t maps_collective_input_address(
+    const collective_participant_desc_t *participant, uint32_t slot)
+{
+    return remote_tile_l1_base(participant->hartid) +
+        participant->l1_data_base_offset +
+        participant->input_l1_offset_bytes +
+        slot * participant->input_slot_bytes;
+}
+
+static inline uint32_t maps_collective_output_address(
+    const collective_participant_desc_t *participant, uint32_t slot)
+{
+    return remote_tile_l1_base(participant->hartid) +
+        participant->l1_data_base_offset +
+        participant->output_l1_offset_bytes +
+        slot * participant->output_slot_bytes;
+}
+
+static inline int maps_execute_tree_all_reduce(
+    const tile_plan_t *plan, const collective_desc_t *collective,
+    uint32_t slot, uint32_t elements, uint32_t kind, uint32_t local_index,
+    maps_operation_runtime_t *runtime)
+{
+    const collective_participant_desc_t *local =
+        &collective->participants[local_index];
+    const volatile uint16_t *input = (const volatile uint16_t *)
+        maps_collective_input_address(local, slot);
+    volatile float *partial = (volatile float *)runtime->spatz_params;
+    for (uint32_t element = 0u; element < elements; ++element) {
+        partial[element] = maps_operation_f16_to_f32(input[element]);
+    }
+
+    const uint32_t scratch_offset =
+        (uint32_t)(uintptr_t)runtime->spatz_params -
+        remote_tile_l1_base(plan->hartid);
+    const uint32_t first_child = 2u * local_index + 1u;
+    for (uint32_t child = first_child;
+         child < collective->num_participants && child <= first_child + 1u;
+         ++child) {
+        maps_collective_wait(
+            plan,
+            maps_collective_flag_index(
+                collective, slot, MAPS_COLLECTIVE_ARRIVAL, child));
+        const volatile float *child_partial = (const volatile float *)(
+            remote_tile_l1_base(collective->participants[child].hartid) +
+            scratch_offset);
+        for (uint32_t element = 0u; element < elements; ++element) {
+            const float value = child_partial[element];
+            if (kind == OP_ALL_REDUCE_SUM)
+                partial[element] += value;
+            else if (value > partial[element])
+                partial[element] = value;
+        }
+    }
+
+    __asm__ volatile("fence rw, rw" ::: "memory");
+    if (local_index != 0u) {
+        const uint32_t parent = (local_index - 1u) / 2u;
+        maps_collective_publish(
+            plan, collective->participants[parent].hartid,
+            maps_collective_flag_index(
+                collective, slot, MAPS_COLLECTIVE_ARRIVAL, local_index));
+        maps_collective_wait(
+            plan,
+            maps_collective_flag_index(
+                collective, slot, MAPS_COLLECTIVE_RELEASE, local_index));
+    } else {
+        volatile uint16_t *output = (volatile uint16_t *)
+            maps_collective_output_address(local, slot);
+        for (uint32_t element = 0u; element < elements; ++element)
+            output[element] = maps_operation_f32_to_f16(partial[element]);
+        __asm__ volatile("fence rw, rw" ::: "memory");
+    }
+
+    const volatile uint16_t *output = (const volatile uint16_t *)
+        maps_collective_output_address(local, slot);
+    for (uint32_t child = first_child;
+         child < collective->num_participants && child <= first_child + 1u;
+         ++child) {
+        volatile uint16_t *child_output = (volatile uint16_t *)
+            maps_collective_output_address(
+                &collective->participants[child], slot);
+        for (uint32_t element = 0u; element < elements; ++element)
+            child_output[element] = output[element];
+        __asm__ volatile("fence rw, rw" ::: "memory");
+        maps_collective_publish(
+            plan, collective->participants[child].hartid,
+            maps_collective_flag_index(
+                collective, slot, MAPS_COLLECTIVE_RELEASE, child));
+    }
+    return 0;
+}
+
 static inline int maps_execute_all_reduce(const tile_plan_t *plan,
                                           const op_desc_t *op,
                                           uint32_t slot,
@@ -351,23 +445,22 @@ static inline int maps_execute_all_reduce(const tile_plan_t *plan,
     if (!runtime || !runtime->idma_ctrl || !runtime->eu_ctrl)
         return -1;
 
+    const uint32_t elements = maps_operation_elems(&op->outputs[0]);
+
+    if (elements <= MAPS_TREE_ALL_REDUCE_MAX_ELEMENTS)
+        return maps_execute_tree_all_reduce(
+            plan, collective, slot, elements, op->kind, local_index,
+            runtime);
+
     if (collective->num_participants == 1u) {
         const collective_participant_desc_t *participant =
             &collective->participants[0];
-        const uint32_t input =
-            remote_tile_l1_base(participant->hartid) +
-            participant->l1_data_base_offset +
-            participant->input_l1_offset_bytes +
-            slot * participant->input_slot_bytes;
-        const uint32_t output =
-            remote_tile_l1_base(participant->hartid) +
-            participant->l1_data_base_offset +
-            participant->output_l1_offset_bytes +
-            slot * participant->output_slot_bytes;
-        const uint32_t bytes = maps_operation_elems(&op->outputs[0]) * sizeof(uint16_t);
-        if (idma_memcpy_1d(runtime->idma_ctrl, 1u, output, input, bytes) != 0)
-            return -2;
-        return eu_idma_wait_o2a(runtime->eu_ctrl, MAPS_WAIT_MODE) ? 0 : -2;
+        const uint32_t input = maps_collective_input_address(participant, slot);
+        const uint32_t output = maps_collective_output_address(participant, slot);
+        const uint32_t bytes = elements * sizeof(uint16_t);
+        return maps_idma_copy_1d_ticketed(
+            runtime->idma_ctrl, 1u, output, input, bytes,
+            runtime->eu_ctrl) == 0 ? 0 : -2;
     }
 
     const uint32_t root_hartid = collective->participants[0].hartid;
@@ -389,7 +482,6 @@ static inline int maps_execute_all_reduce(const tile_plan_t *plan,
             maps_collective_flag_index(
                 collective, slot, MAPS_COLLECTIVE_ARRIVAL, index));
 
-    const uint32_t elements = maps_operation_elems(&op->outputs[0]);
     const uint32_t bytes = elements * sizeof(uint16_t);
     const uint32_t params_bytes = 32u;
     const uint32_t gathered = ((uint32_t)(uintptr_t)runtime->spatz_params + params_bytes + 15u) & ~15u;
@@ -403,9 +495,9 @@ static inline int maps_execute_all_reduce(const tile_plan_t *plan,
         const uint32_t input = remote_tile_l1_base(participant->hartid) +
             participant->l1_data_base_offset + participant->input_l1_offset_bytes +
             slot * participant->input_slot_bytes;
-        if (idma_memcpy_1d(runtime->idma_ctrl, 1u, gathered + index * bytes,
-                           input, bytes) != 0 ||
-            !eu_idma_wait_o2a(runtime->eu_ctrl, MAPS_WAIT_MODE))
+        if (maps_idma_copy_1d_ticketed(
+                runtime->idma_ctrl, 1u, gathered + index * bytes,
+                input, bytes, runtime->eu_ctrl) != 0)
             return -2;
     }
 
@@ -423,8 +515,9 @@ static inline int maps_execute_all_reduce(const tile_plan_t *plan,
         const uint32_t destination = remote_tile_l1_base(participant->hartid) +
             participant->l1_data_base_offset + participant->output_l1_offset_bytes +
             slot * participant->output_slot_bytes;
-        if (idma_memcpy_1d(runtime->idma_ctrl, 1u, destination, output, bytes) != 0 ||
-            !eu_idma_wait_o2a(runtime->eu_ctrl, MAPS_WAIT_MODE))
+        if (maps_idma_copy_1d_ticketed(
+                runtime->idma_ctrl, 1u, destination, output, bytes,
+                runtime->eu_ctrl) != 0)
             return -2;
     }
 
@@ -461,10 +554,10 @@ static inline int maps_execute_split_f16(const tile_plan_t *plan,
             plan, &op->outputs[output_index], slot);
         const uint32_t bytes = elements * sizeof(uint16_t);
         if (runtime && runtime->idma_ctrl && runtime->eu_ctrl) {
-            if (idma_memcpy_1d(runtime->idma_ctrl, 1u, output,
-                               input + offset * sizeof(uint16_t), bytes) != 0)
-                return -2;
-            if (!eu_idma_wait_o2a(runtime->eu_ctrl, MAPS_WAIT_MODE))
+            if (maps_idma_copy_1d_ticketed(
+                    runtime->idma_ctrl, 1u, output,
+                    input + offset * sizeof(uint16_t), bytes,
+                    runtime->eu_ctrl) != 0)
                 return -2;
         } else {
             const uint16_t *source = (const uint16_t *)(input +
@@ -590,12 +683,13 @@ static inline int maps_execute_im2col_f16(
         maps_operation_high_u16(op->params[4]) == 0u &&
         op->inputs[0].shape[1] == local_k &&
         op->inputs[0].shape[2] * op->inputs[0].shape[3] == local_n) {
-        if (idma_memcpy_2d_ex(
+        if (maps_idma_copy_2d_ticketed(
                 runtime->idma_ctrl, 1u, output, input,
                 local_n * sizeof(uint16_t), op->outputs[0].strides_bytes[0],
-                op->inputs[0].strides_bytes[1], local_k) != 0)
+                op->inputs[0].strides_bytes[1], local_k,
+                runtime->eu_ctrl) != 0)
             return -2;
-        return eu_idma_wait_o2a(runtime->eu_ctrl, MAPS_WAIT_MODE) ? 0 : -2;
+        return 0;
     }
 
     if (output_w == 0u || local_n % output_w != 0u ||
@@ -671,14 +765,12 @@ static inline int maps_execute_im2col_f16(
             (valid_y_start * output_w + valid_x_start) *
                 op->outputs[0].strides_bytes[1];
         if (stride_w == 1u) {
-            if (idma_memcpy_2d_ex(
+            if (maps_idma_copy_2d_ticketed(
                     runtime->idma_ctrl, 1u, destination, source,
                     (valid_x_end - valid_x_start) * sizeof(uint16_t),
                     output_w * sizeof(uint16_t),
                     stride_h * op->inputs[0].strides_bytes[2],
-                    valid_y_end - valid_y_start) != 0)
-                return -2;
-            if (!eu_idma_wait_o2a(runtime->eu_ctrl, MAPS_WAIT_MODE))
+                    valid_y_end - valid_y_start, runtime->eu_ctrl) != 0)
                 return -2;
         } else {
             for (uint32_t y = valid_y_start; y < valid_y_end; ++y) {
@@ -690,11 +782,10 @@ static inline int maps_execute_im2col_f16(
                     const uint32_t element_destination = output +
                         local_kernel * op->outputs[0].strides_bytes[0] +
                         (y * output_w + x) * op->outputs[0].strides_bytes[1];
-                    if (idma_memcpy_1d(runtime->idma_ctrl, 1u,
-                                       element_destination, element_source,
-                                       sizeof(uint16_t)) != 0)
-                        return -2;
-                    if (!eu_idma_wait_o2a(runtime->eu_ctrl, MAPS_WAIT_MODE))
+                    if (maps_idma_copy_1d_ticketed(
+                            runtime->idma_ctrl, 1u,
+                            element_destination, element_source,
+                            sizeof(uint16_t), runtime->eu_ctrl) != 0)
                         return -2;
                 }
             }

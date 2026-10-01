@@ -71,6 +71,93 @@ int idma32_memcpy_1d(
 #endif
 }
 
+idma_ticket_t idma32_submit_1d(
+    idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
+{
+    (void)ctrl;
+#if IDMA_MM == 0
+    /* The instruction interface does not expose a transfer ID. */
+    (void)dir;
+    (void)axi_addr;
+    (void)obi_addr;
+    (void)len;
+    return 0u;
+#else
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
+    if (dir)
+        idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
+    else
+        idma_mm_set_addr_len(dir, obi_addr, axi_addr, len);
+    idma_mm_set_std2_rep2(dir, 0, 0, 1);
+    idma_mm_set_std3_rep3(dir, 0, 0, 1);
+    /* Reading NEXT_ID dispatches the descriptor. Do not use idma_mm_start:
+     * that helper deliberately polls when STALLING=1, while this API must
+     * remain asynchronous for every build configuration. */
+    return mmio32(IDMA_NEXT_ID_ADDR(dir, 0));
+#endif
+}
+
+uint32_t idma32_ticket_is_done(uint8_t dir, idma_ticket_t ticket)
+{
+#if IDMA_MM == 0
+    (void)dir;
+    (void)ticket;
+    return 0u;
+#else
+    if (ticket == 0u)
+        return 0u;
+    const uint32_t done = mmio32(IDMA_DONE_ID_ADDR(dir, 0));
+    return (int32_t)(done - ticket) >= 0;
+#endif
+}
+
+idma_ticket_t idma32_submit_3d(idma_controller_t *ctrl,
+                               uint8_t dir,
+                               uint32_t axi_addr,
+                               uint32_t obi_addr,
+                               uint32_t row_bytes,
+                               uint32_t axi_stride_2,
+                               uint32_t obi_stride_2,
+                               uint32_t reps_2,
+                               uint32_t axi_stride_3,
+                               uint32_t obi_stride_3,
+                               uint32_t reps_3)
+{
+    (void)ctrl;
+#if IDMA_MM == 0
+    (void)dir;
+    (void)axi_addr;
+    (void)obi_addr;
+    (void)row_bytes;
+    (void)axi_stride_2;
+    (void)obi_stride_2;
+    (void)reps_2;
+    (void)axi_stride_3;
+    (void)obi_stride_3;
+    (void)reps_3;
+    return 0u;
+#else
+    const uint32_t axi_hardware_stride_3 = reps_2 == 0u
+        ? axi_stride_3 : axi_stride_3 - (reps_2 - 1u) * axi_stride_2;
+    const uint32_t obi_hardware_stride_3 = reps_2 == 0u
+        ? obi_stride_3 : obi_stride_3 - (reps_2 - 1u) * obi_stride_2;
+
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
+    if (dir) {
+        idma_mm_set_addr_len(dir, axi_addr, obi_addr, row_bytes);
+        idma_mm_set_std2_rep2(dir, axi_stride_2, obi_stride_2, reps_2);
+        idma_mm_set_std3_rep3(
+            dir, axi_hardware_stride_3, obi_hardware_stride_3, reps_3);
+    } else {
+        idma_mm_set_addr_len(dir, obi_addr, axi_addr, row_bytes);
+        idma_mm_set_std2_rep2(dir, obi_stride_2, axi_stride_2, reps_2);
+        idma_mm_set_std3_rep3(
+            dir, obi_hardware_stride_3, axi_hardware_stride_3, reps_3);
+    }
+    return mmio32(IDMA_NEXT_ID_ADDR(dir, 0));
+#endif
+}
+
 /**
  * Start 2-dimensional memory copy.
  *
@@ -240,6 +327,23 @@ extern int idma_init(idma_controller_t *ctrl)
 extern int idma_memcpy_1d(
     idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
     __attribute__((alias("idma32_memcpy_1d"), used, visibility("default")));
+extern idma_ticket_t idma_submit_1d(
+    idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
+    __attribute__((alias("idma32_submit_1d"), used, visibility("default")));
+extern uint32_t idma_ticket_is_done(uint8_t dir, idma_ticket_t ticket)
+    __attribute__((alias("idma32_ticket_is_done"), used, visibility("default")));
+extern idma_ticket_t idma_submit_3d(idma_controller_t *ctrl,
+                                    uint8_t dir,
+                                    uint32_t axi_addr,
+                                    uint32_t obi_addr,
+                                    uint32_t row_bytes,
+                                    uint32_t axi_stride_2,
+                                    uint32_t obi_stride_2,
+                                    uint32_t reps_2,
+                                    uint32_t axi_stride_3,
+                                    uint32_t obi_stride_3,
+                                    uint32_t reps_3)
+    __attribute__((alias("idma32_submit_3d"), used, visibility("default")));
 extern int idma_memcpy_2d(idma_controller_t *ctrl,
                           uint8_t dir,
                           uint32_t axi_addr,

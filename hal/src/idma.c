@@ -29,6 +29,51 @@ __attribute__((weak)) int idma_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, u
     return 1;
 }
 
+__attribute__((weak)) idma_ticket_t idma_submit_1d(
+    idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
+{
+    (void)ctrl;
+    (void)dir;
+    (void)axi_addr;
+    (void)obi_addr;
+    (void)len;
+    return 0u;
+}
+
+__attribute__((weak)) uint32_t idma_ticket_is_done(uint8_t dir, idma_ticket_t ticket)
+{
+    (void)dir;
+    (void)ticket;
+    return 0u;
+}
+
+__attribute__((weak)) idma_ticket_t idma_submit_3d(
+    idma_controller_t *ctrl,
+    uint8_t dir,
+    uint32_t axi_addr,
+    uint32_t obi_addr,
+    uint32_t row_bytes,
+    uint32_t axi_stride_2,
+    uint32_t obi_stride_2,
+    uint32_t reps_2,
+    uint32_t axi_stride_3,
+    uint32_t obi_stride_3,
+    uint32_t reps_3)
+{
+    (void)ctrl;
+    (void)dir;
+    (void)axi_addr;
+    (void)obi_addr;
+    (void)row_bytes;
+    (void)axi_stride_2;
+    (void)obi_stride_2;
+    (void)reps_2;
+    (void)axi_stride_3;
+    (void)obi_stride_3;
+    (void)reps_3;
+    return 0u;
+}
+
 __attribute__((weak)) int idma_memcpy_3d(
     idma_controller_t *ctrl,
     uint8_t dir,

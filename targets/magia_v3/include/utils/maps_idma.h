@@ -8,6 +8,7 @@
 
 #define MAPS_IDMA_MAX_RANK 6u
 #define IDMA_ND_MAX_RANK MAPS_IDMA_MAX_RANK
+#define MAPS_IDMA_UNSUPPORTED_TICKET UINT32_MAX
 
 typedef struct {
     uint32_t start;
@@ -98,6 +99,177 @@ static inline void maps_idma_wait(
         eu_idma_wait_a2o(event_unit, WFE);
     else
         eu_idma_wait_o2a(event_unit, WFE);
+}
+
+static inline void maps_idma_wait_ticket(
+    eu_controller_t *event_unit, uint8_t direction, idma_ticket_t ticket)
+{
+    while (!idma_ticket_is_done(direction, ticket)) {
+        maps_idma_wait(event_unit, direction);
+    }
+}
+
+/* Blocking MAPS movers must wait for their own descriptor.  Waiting for the
+ * next direction event is insufficient once asynchronous FIFO sends share the
+ * engine: an older send may produce that event first. */
+static inline int maps_idma_copy_1d_ticketed(
+    idma_controller_t *controller, uint8_t direction,
+    uint32_t axi_address, uint32_t obi_address, uint32_t bytes,
+    eu_controller_t *event_unit)
+{
+#if IDMA_MM == 0
+    int result = idma_memcpy_1d(
+        controller, direction, axi_address, obi_address, bytes);
+    maps_idma_wait(event_unit, direction);
+    return result;
+#else
+    idma_ticket_t ticket;
+    while ((ticket = idma_submit_1d(
+                controller, direction, axi_address, obi_address, bytes)) == 0u)
+        maps_idma_wait(event_unit, direction);
+    maps_idma_wait_ticket(event_unit, direction, ticket);
+    return 0;
+#endif
+}
+
+static inline int maps_idma_copy_3d_ticketed(
+    idma_controller_t *controller, uint8_t direction,
+    uint32_t axi_address, uint32_t obi_address, uint32_t row_bytes,
+    uint32_t axi_stride_2, uint32_t obi_stride_2, uint32_t repetitions_2,
+    uint32_t axi_stride_3, uint32_t obi_stride_3, uint32_t repetitions_3,
+    eu_controller_t *event_unit)
+{
+#if IDMA_MM == 0
+    int result = idma_memcpy_3d(
+        controller, direction, axi_address, obi_address, row_bytes,
+        axi_stride_2, obi_stride_2, repetitions_2,
+        axi_stride_3, obi_stride_3, repetitions_3);
+    maps_idma_wait(event_unit, direction);
+    return result;
+#else
+    idma_ticket_t ticket;
+    while ((ticket = idma_submit_3d(
+                controller, direction, axi_address, obi_address, row_bytes,
+                axi_stride_2, obi_stride_2, repetitions_2,
+                axi_stride_3, obi_stride_3, repetitions_3)) == 0u)
+        maps_idma_wait(event_unit, direction);
+    maps_idma_wait_ticket(event_unit, direction, ticket);
+    return 0;
+#endif
+}
+
+static inline int maps_idma_copy_2d_ticketed(
+    idma_controller_t *controller, uint8_t direction,
+    uint32_t axi_address, uint32_t obi_address, uint32_t row_bytes,
+    uint32_t axi_stride, uint32_t obi_stride, uint32_t repetitions,
+    eu_controller_t *event_unit)
+{
+#if IDMA_MM == 0
+    int result = idma_memcpy_2d_ex(
+        controller, direction, axi_address, obi_address, row_bytes,
+        axi_stride, obi_stride, repetitions);
+    maps_idma_wait(event_unit, direction);
+    return result;
+#else
+    /* The third dimension has one repetition, so its stride is unused.  Pass
+     * the end-of-page value that normalizes to a zero hardware stride. */
+    uint32_t axi_page = repetitions == 0u
+        ? 0u : (repetitions - 1u) * axi_stride;
+    uint32_t obi_page = repetitions == 0u
+        ? 0u : (repetitions - 1u) * obi_stride;
+    return maps_idma_copy_3d_ticketed(
+        controller, direction, axi_address, obi_address, row_bytes,
+        axi_stride, obi_stride, repetitions, axi_page, obi_page, 1u,
+        event_unit);
+#endif
+}
+
+/**
+ * Submit one rank-N source slice into a packed destination without waiting.
+ *
+ * Unit dimensions and contiguous adjacent dimensions are normalized first.
+ * Layouts expressible by one hardware 1-D/2-D/3-D descriptor are accepted;
+ * layouts requiring multiple descriptors return MAPS_IDMA_UNSUPPORTED_TICKET
+ * without dispatching. Zero means the hardware temporarily rejected a valid
+ * descriptor because its transfer queue is full.
+ */
+static inline idma_ticket_t maps_idma_submit_to_packed(
+    idma_controller_t *controller,
+    uint8_t direction,
+    uint32_t destination_address,
+    uint32_t source_address,
+    const tensor_sub_slice_t *source,
+    uint32_t element_bytes)
+{
+    if (controller == 0 || source == 0 || source->rank > MAPS_IDMA_MAX_RANK ||
+        source->num_elems == 0u || element_bytes == 0u)
+        return MAPS_IDMA_UNSUPPORTED_TICKET;
+
+    maps_idma_normalized_t normalized;
+    maps_idma_normalize(source, &normalized);
+    source_address += normalized.base_offset;
+
+    uint32_t row_bytes = element_bytes;
+    uint32_t source_stride_2 = 0u;
+    uint32_t packed_stride_2 = 0u;
+    uint32_t repetitions_2 = 1u;
+    uint32_t source_stride_3 = 0u;
+    uint32_t packed_stride_3 = 0u;
+    uint32_t repetitions_3 = 1u;
+
+    if (normalized.rank == 0u) {
+        row_bytes = source->num_elems * element_bytes;
+    } else if (normalized.rank == 1u) {
+        if (normalized.stride[0] == element_bytes) {
+            row_bytes = normalized.length[0] * element_bytes;
+        } else {
+            source_stride_2 = normalized.stride[0];
+            packed_stride_2 = element_bytes;
+            repetitions_2 = normalized.length[0];
+        }
+    } else if (normalized.rank == 2u) {
+        if (normalized.stride[1] == element_bytes) {
+            row_bytes = normalized.length[1] * element_bytes;
+            source_stride_2 = normalized.stride[0];
+            packed_stride_2 = row_bytes;
+            repetitions_2 = normalized.length[0];
+        } else {
+            source_stride_2 = normalized.stride[1];
+            packed_stride_2 = element_bytes;
+            repetitions_2 = normalized.length[1];
+            source_stride_3 = normalized.stride[0];
+            packed_stride_3 = normalized.length[1] * element_bytes;
+            repetitions_3 = normalized.length[0];
+        }
+    } else if (normalized.rank == 3u &&
+               normalized.stride[2] == element_bytes) {
+        row_bytes = normalized.length[2] * element_bytes;
+        source_stride_2 = normalized.stride[1];
+        packed_stride_2 = row_bytes;
+        repetitions_2 = normalized.length[1];
+        source_stride_3 = normalized.stride[0];
+        packed_stride_3 = normalized.length[1] * row_bytes;
+        repetitions_3 = normalized.length[0];
+    } else {
+        return MAPS_IDMA_UNSUPPORTED_TICKET;
+    }
+
+    const uint32_t axi_address = direction == 0u
+        ? source_address : destination_address;
+    const uint32_t obi_address = direction == 0u
+        ? destination_address : source_address;
+    const uint32_t axi_stride_2 = direction == 0u
+        ? source_stride_2 : packed_stride_2;
+    const uint32_t obi_stride_2 = direction == 0u
+        ? packed_stride_2 : source_stride_2;
+    const uint32_t axi_stride_3 = direction == 0u
+        ? source_stride_3 : packed_stride_3;
+    const uint32_t obi_stride_3 = direction == 0u
+        ? packed_stride_3 : source_stride_3;
+    return idma_submit_3d(
+        controller, direction, axi_address, obi_address, row_bytes,
+        axi_stride_2, obi_stride_2, repetitions_2,
+        axi_stride_3, obi_stride_3, repetitions_3);
 }
 
 static inline int idma_memcpy_md_to_nd(
@@ -233,11 +405,10 @@ static inline int idma_memcpy_md_to_nd(
             ? source_stride_3 : destination_stride_3;
         const uint32_t obi_stride_3 = direction == 0u
             ? destination_stride_3 : source_stride_3;
-        const int result = idma_memcpy_3d(
+        const int result = maps_idma_copy_3d_ticketed(
             controller, direction, axi_address, obi_address, row_bytes_3d,
             axi_stride_2, obi_stride_2, repetitions_2,
-            axi_stride_3, obi_stride_3, repetitions_3);
-        maps_idma_wait(event_unit, direction);
+            axi_stride_3, obi_stride_3, repetitions_3, event_unit);
         return result;
     }
 
@@ -295,10 +466,9 @@ static inline int idma_memcpy_md_to_nd(
             ? source_stride : destination_stride;
         const uint32_t obi_stride = direction == 0u
             ? destination_stride : source_stride;
-        const int result = idma_memcpy_2d_ex(
+        const int result = maps_idma_copy_2d_ticketed(
             controller, direction, axi_address, obi_address, row_bytes,
-            axi_stride, obi_stride, repetitions);
-        maps_idma_wait(event_unit, direction);
+            axi_stride, obi_stride, repetitions, event_unit);
         return result;
     }
 
@@ -322,11 +492,11 @@ static inline int idma_memcpy_md_to_nd(
             ? source_block : destination_block;
         const uint32_t obi_address = direction == 0u
             ? destination_block : source_block;
-        const int result = idma_memcpy_1d(
-            controller, direction, axi_address, obi_address, block_bytes);
+        const int result = maps_idma_copy_1d_ticketed(
+            controller, direction, axi_address, obi_address, block_bytes,
+            event_unit);
         if (result != 0)
             return result;
-        maps_idma_wait(event_unit, direction);
     }
     return 0;
 }

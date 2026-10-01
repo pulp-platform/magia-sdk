@@ -72,6 +72,24 @@ typedef struct fifo_tile_plan {
     fifo_desc_t fifo;
 } fifo_tile_plan_t;
 
+typedef struct maps_fifo_pending_send {
+    fifo_pending_push_t push;
+    struct maps_fifo_pending_send *next;
+    uint32_t token;
+    uint32_t slot;
+    uint32_t transition_id;
+    uint32_t start_cycle;
+} maps_fifo_pending_send_t;
+
+typedef struct {
+    maps_fifo_pending_send_t *sends;
+    uint32_t num_sends;
+} maps_fifo_token_state_t;
+
+/* The MAGIA v3 RTL job FIFO has 16 entries.  GVSoC may apply backpressure
+ * earlier, which is handled by the retry path below. */
+#define MAPS_FIFO_MAX_PENDING_SENDS 16u
+
 #ifdef MAPS_EXPERIMENT_TRACE
 #define MAPS_EXPERIMENT_MAX_TOKENS 64u
 typedef struct {
@@ -174,6 +192,155 @@ static inline void maps_fifo_issue_send(const fifo_tile_plan_t *plan,
     maps_trace_event((const tile_plan_t *)plan, token, slot, "fifo-sent", send->transition_id);
 }
 
+static inline int maps_fifo_start_send(const fifo_tile_plan_t *plan,
+                                       const fifo_send_desc_t *send,
+                                       uint32_t token,
+                                       uint32_t slot,
+                                       idma_controller_t *idma_ctrl,
+                                       eu_controller_t *eu_ctrl,
+                                       maps_fifo_pending_send_t *pending)
+{
+    fifo_push_req_t req = {
+        .target_hartid = send->dst_hartid,
+        .producer_idx  = send->producer_idx,
+        .src_base_addr = local_subslice_addr((const tile_plan_t *)plan, &send->src, slot),
+        .src           = &send->copy_src,
+        .desc          = &send->copy_dst,
+        .tag           = maps_fifo_tag(send->transition_id, slot),
+        .elem_bytes    = send->src.elem_bytes,
+    };
+
+    uint32_t start_cycle = maps_read_cycle();
+    int rc = fifo_push_async_start(idma_ctrl, &req, &pending->push);
+    (void)eu_ctrl;
+    if (rc != FIFO_ASYNC_STARTED)
+        return rc;
+
+    maps_trace_event((const tile_plan_t *)plan, token, slot, "fifo-send",
+                     send->transition_id);
+    pending->next = 0;
+    pending->token = token;
+    pending->slot = slot;
+    pending->transition_id = send->transition_id;
+    pending->start_cycle = start_cycle;
+    return FIFO_ASYNC_STARTED;
+}
+
+static inline void maps_fifo_finish_send(const fifo_tile_plan_t *plan,
+                                         eu_controller_t *eu_ctrl,
+                                         maps_fifo_pending_send_t *pending)
+{
+    if (!pending->push.active)
+        return;
+    if (fifo_push_async_finish(eu_ctrl, &pending->push) != 0)
+        maps_trap();
+    maps_trace_event((const tile_plan_t *)plan, pending->token, pending->slot,
+                     "fifo-sent", pending->transition_id);
+    maps_trace_duration((const tile_plan_t *)plan, pending->token, pending->slot,
+                        "send", pending->transition_id,
+                        maps_read_cycle() - pending->start_cycle);
+}
+
+static inline void maps_fifo_publish_completed_send(
+    const fifo_tile_plan_t *plan, maps_fifo_pending_send_t *pending)
+{
+    if (!fifo_push_async_publish_completed(&pending->push))
+        return;
+    maps_trace_event((const tile_plan_t *)plan, pending->token, pending->slot,
+                     "fifo-sent", pending->transition_id);
+    maps_trace_duration((const tile_plan_t *)plan, pending->token, pending->slot,
+                        "send", pending->transition_id,
+                        maps_read_cycle() - pending->start_cycle);
+}
+
+static inline void maps_fifo_reap_completed_sends(
+    const fifo_tile_plan_t *plan, maps_fifo_token_state_t *states)
+{
+    for (uint32_t slot = 0u; slot < plan->num_token_slots; ++slot) {
+        maps_fifo_pending_send_t **link = &states[slot].sends;
+        while (*link != 0) {
+            maps_fifo_pending_send_t *pending = *link;
+            if (!fifo_push_async_is_done(&pending->push)) {
+                link = &pending->next;
+                continue;
+            }
+            maps_fifo_publish_completed_send(plan, pending);
+            *link = pending->next;
+            pending->next = 0;
+            --states[slot].num_sends;
+        }
+    }
+}
+
+static inline void maps_fifo_finish_slot_sends(
+    const fifo_tile_plan_t *plan, eu_controller_t *eu_ctrl,
+    maps_fifo_token_state_t *state)
+{
+    while (state->sends != 0) {
+        maps_fifo_pending_send_t *pending = state->sends;
+        state->sends = pending->next;
+        pending->next = 0;
+        --state->num_sends;
+        maps_fifo_finish_send(plan, eu_ctrl, pending);
+    }
+}
+
+static inline void maps_fifo_finish_all_sends(
+    const fifo_tile_plan_t *plan, eu_controller_t *eu_ctrl,
+    maps_fifo_token_state_t *states)
+{
+    for (uint32_t slot = 0u; slot < plan->num_token_slots; ++slot)
+        maps_fifo_finish_slot_sends(plan, eu_ctrl, &states[slot]);
+}
+
+static inline uint32_t maps_fifo_finish_one_send(
+    const fifo_tile_plan_t *plan, eu_controller_t *eu_ctrl,
+    maps_fifo_token_state_t *states)
+{
+    for (uint32_t slot = 0u; slot < plan->num_token_slots; ++slot) {
+        if (states[slot].sends == 0)
+            continue;
+        maps_fifo_pending_send_t *pending = states[slot].sends;
+        states[slot].sends = pending->next;
+        pending->next = 0;
+        --states[slot].num_sends;
+        maps_fifo_finish_send(plan, eu_ctrl, pending);
+        return 1u;
+    }
+    return 0u;
+}
+
+static inline void maps_fifo_finish_subring_sends(
+    const fifo_tile_plan_t *plan, eu_controller_t *eu_ctrl,
+    maps_fifo_token_state_t *states, uint32_t target_hartid,
+    uint32_t producer_idx)
+{
+    for (uint32_t slot = 0u; slot < plan->num_token_slots; ++slot) {
+        maps_fifo_pending_send_t **link = &states[slot].sends;
+        while (*link != 0) {
+            maps_fifo_pending_send_t *pending = *link;
+            if (pending->push.target_hartid != target_hartid ||
+                pending->push.producer_idx != producer_idx) {
+                link = &pending->next;
+                continue;
+            }
+            *link = pending->next;
+            pending->next = 0;
+            --states[slot].num_sends;
+            maps_fifo_finish_send(plan, eu_ctrl, pending);
+        }
+    }
+}
+
+static inline maps_fifo_pending_send_t *maps_fifo_alloc_pending_send(
+    maps_fifo_pending_send_t pending[MAPS_FIFO_MAX_PENDING_SENDS])
+{
+    for (uint32_t index = 0u; index < MAPS_FIFO_MAX_PENDING_SENDS; ++index)
+        if (!pending[index].push.active && pending[index].next == 0)
+            return &pending[index];
+    return 0;
+}
+
 /* MAPS receives are dependency-addressed, so inspect the requested producer's
  * sub-ring directly instead of accepting an unrelated ready message from the
  * FIFO's fair round-robin scan. */
@@ -204,7 +371,8 @@ static inline void maps_fifo_wait_recv(const fifo_tile_plan_t *plan,
                                        uint32_t token,
                                        uint32_t slot,
                                        idma_controller_t *idma_ctrl,
-                                       eu_controller_t *eu_ctrl)
+                                       eu_controller_t *eu_ctrl,
+                                       maps_fifo_token_state_t *states)
 {
     fifo_msg_t msg;
     uint32_t expected_tag = maps_fifo_tag(recv->transition_id, slot);
@@ -212,9 +380,15 @@ static inline void maps_fifo_wait_recv(const fifo_tile_plan_t *plan,
     maps_trace_event((const tile_plan_t *)plan, token, slot, "fifo-wait",
                      recv->transition_id);
 
+    if (states != 0)
+        maps_fifo_reap_completed_sends(plan, states);
     for (;;) {
         if (!maps_fifo_peek_from(plan, recv->producer_idx, &msg)) {
-            __asm__ volatile("" ::: "memory");
+            /* Keep completed outgoing transfers moving while this tile waits
+             * for an input.  Blocking on every outstanding send here defeats
+             * the overlap provided by asynchronous FIFO pushes. */
+            if (states != 0)
+                maps_fifo_reap_completed_sends(plan, states);
             continue;
         }
 
@@ -261,7 +435,7 @@ static inline void maps_fifo_run_tile_token(const fifo_tile_plan_t *plan, uint32
     for (uint32_t i = 0; i < plan->num_recvs; ++i) {
         uint32_t step_start = maps_read_cycle();
         maps_fifo_wait_recv(
-            plan, &plan->recvs[i], token, slot, idma_ctrl, eu_ctrl);
+            plan, &plan->recvs[i], token, slot, idma_ctrl, eu_ctrl, 0);
         maps_trace_duration((const tile_plan_t *)plan, token, slot, "recv",
                             plan->recvs[i].transition_id,
                             maps_read_cycle() - step_start);
@@ -305,15 +479,128 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
     maps_fifo_experiment_trace_t *trace = maps_fifo_experiment_trace();
 #endif
 
+    if (plan->num_token_slots == 0u)
+        maps_trap();
+
+    /* Only the per-slot list heads scale with the execution plan.  Transfer
+     * records are bounded by the hardware's 16-entry descriptor queue. */
+    maps_fifo_token_state_t states[plan->num_token_slots];
+    maps_fifo_pending_send_t pending[MAPS_FIFO_MAX_PENDING_SENDS] = {0};
+    for (uint32_t slot = 0u; slot < plan->num_token_slots; ++slot) {
+        states[slot].sends = 0;
+        states[slot].num_sends = 0u;
+    }
+
     for (uint32_t token = 0; token < num_tokens; ++token) {
+        uint32_t slot = maps_token_slot((const tile_plan_t *)plan, token);
 #ifdef MAPS_EXPERIMENT_TRACE
         trace->starts[plan->hartid][token] = maps_read_cycle();
 #endif
-        maps_fifo_run_tile_token(plan, token, idma_ctrl, eu_ctrl);
+
+        /* Token N reuses token N-B's backing storage.  Every DMA still reading
+         * that slot must be complete and published before the first overwrite. */
+        maps_fifo_finish_slot_sends(plan, eu_ctrl, &states[slot]);
+
+        for (uint32_t i = 0; i < plan->num_l2_reads; ++i) {
+            uint32_t step_start = maps_read_cycle();
+            issue_l2_read_token((const tile_plan_t *)plan, &plan->l2_reads[i], token, slot,
+                                idma_ctrl, eu_ctrl);
+            maps_trace_duration((const tile_plan_t *)plan, token, slot, "l2-read", i,
+                                maps_read_cycle() - step_start);
+        }
+
+        maps_fifo_reap_completed_sends(plan, states);
+        for (uint32_t i = 0; i < plan->num_recvs; ++i) {
+            uint32_t step_start = maps_read_cycle();
+            maps_fifo_wait_recv(plan, &plan->recvs[i], token, slot,
+                                idma_ctrl, eu_ctrl, states);
+            maps_trace_duration((const tile_plan_t *)plan, token, slot, "recv",
+                                plan->recvs[i].transition_id,
+                                maps_read_cycle() - step_start);
+        }
+        maps_fifo_reap_completed_sends(plan, states);
+        for (uint32_t i = 0; i < plan->num_ops; ++i) {
+            uint32_t step_start = maps_read_cycle();
+            if (maps_execute_operation((const tile_plan_t *)plan, &plan->ops[i], slot,
+                                       plan->operation_runtime) != 0)
+                maps_trap();
+            maps_trace_duration((const tile_plan_t *)plan, token, slot, "op", i,
+                                maps_read_cycle() - step_start);
+        }
+        maps_fifo_reap_completed_sends(plan, states);
+        for (uint32_t i = 0; i < plan->num_l2_writes; ++i) {
+            uint32_t step_start = maps_read_cycle();
+            issue_l2_write_token((const tile_plan_t *)plan, &plan->l2_writes[i], token, slot,
+                                 idma_ctrl, eu_ctrl);
+            maps_trace_duration((const tile_plan_t *)plan, token, slot, "l2-write", i,
+                                maps_read_cycle() - step_start);
+        }
+
+        maps_fifo_reap_completed_sends(plan, states);
+        for (uint32_t i = 0; i < plan->num_sends; ++i) {
+            const fifo_send_desc_t *send = &plan->sends[i];
+
+            /* tail does not advance until publication, so a second reservation
+             * on the same producer sub-ring must wait for the first. */
+            maps_fifo_finish_subring_sends(
+                plan, eu_ctrl, states, send->dst_hartid, send->producer_idx);
+
+            for (;;) {
+                maps_fifo_reap_completed_sends(plan, states);
+                maps_fifo_pending_send_t *record =
+                    maps_fifo_alloc_pending_send(pending);
+                if (record == 0) {
+                    if (!maps_fifo_finish_one_send(plan, eu_ctrl, states))
+                        maps_trap();
+                    continue;
+                }
+
+                int rc = maps_fifo_start_send(
+                    plan, send, token, slot, idma_ctrl, eu_ctrl, record);
+                if (rc == FIFO_ASYNC_STARTED) {
+                    maps_fifo_pending_send_t **tail = &states[slot].sends;
+                    while (*tail != 0)
+                        tail = &(*tail)->next;
+                    record->next = 0;
+                    *tail = record;
+                    ++states[slot].num_sends;
+                    break;
+                }
+                if (rc == FIFO_ASYNC_UNSUPPORTED) {
+                    /* The generalized asynchronous mover accepts only layouts
+                     * representable by one descriptor.  Drain first, then use
+                     * the established blocking rank-N mover. */
+                    maps_fifo_finish_all_sends(plan, eu_ctrl, states);
+                    uint32_t step_start = maps_read_cycle();
+                    maps_fifo_issue_send(
+                        plan, send, token, slot, idma_ctrl, eu_ctrl);
+                    maps_trace_duration((const tile_plan_t *)plan, token, slot,
+                                        "send", send->transition_id,
+                                        maps_read_cycle() - step_start);
+                    break;
+                }
+                if (rc == FIFO_ASYNC_IDMA_FULL) {
+                    maps_fifo_reap_completed_sends(plan, states);
+                    if (!maps_fifo_finish_one_send(plan, eu_ctrl, states))
+                        maps_trap();
+                    continue;
+                }
+                if (rc == FIFO_ASYNC_FIFO_FULL) {
+                    maps_fifo_finish_all_sends(plan, eu_ctrl, states);
+                    while (fifo_producer_is_full(
+                               send->dst_hartid, send->producer_idx))
+                        __asm__ volatile("" ::: "memory");
+                    continue;
+                }
+                maps_trap();
+            }
+        }
+        maps_fifo_reap_completed_sends(plan, states);
 #ifdef MAPS_EXPERIMENT_TRACE
         trace->ends[plan->hartid][token] = maps_read_cycle();
 #endif
     }
+    maps_fifo_finish_all_sends(plan, eu_ctrl, states);
 
     maps_trace_duration((const tile_plan_t *)plan, 0u, 0u, "run", num_tokens,
                         maps_read_cycle() - run_start);
@@ -335,7 +622,10 @@ static inline void maps_fifo_flush_experiment_trace(const fifo_tile_plan_t *plan
     for (uint32_t event = 0u; event < count; ++event) {
         const maps_experiment_duration_event_t *entry =
             &durations->events[plan->hartid][event];
-        const char *phase = entry->phase == 0u ? "op" : entry->phase == 1u ? "send" : "recv";
+        static const char *const phase_names[] = {
+            "op", "send", "recv", "l2-read", "l2-write", "token", "run"
+        };
+        const char *phase = entry->phase < 7u ? phase_names[entry->phase] : "unknown";
         printf("maps t%u tok %u slot %u %s %u start %u end %u cycles %u\n", plan->hartid,
                entry->token, entry->slot, phase, entry->index, entry->start_cycle,
                entry->end_cycle, entry->cycles);

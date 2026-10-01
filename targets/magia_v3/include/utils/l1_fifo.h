@@ -59,7 +59,7 @@
 
 #include "magia_tile_utils.h"
 #include "addr_map/tile_addr_map.h"
-#include "idma.h"
+#include "maps_idma.h"
 
 typedef struct {
     uint32_t num_producers; /**< Number of per-producer sub-rings (P). */
@@ -115,6 +115,26 @@ typedef struct {
     uint32_t tag;                  /**< Caller-defined message tag. */
     uint32_t elem_bytes;           /**< Element size in bytes. */
 } fifo_push_req_t;
+
+/** State of one submitted FIFO push whose payload is not published yet. */
+typedef struct {
+    uint32_t target_hartid;
+    uint32_t producer_idx;
+    const tensor_sub_slice_t *desc;
+    uint32_t tag;
+    uint32_t elem_bytes;
+    idma_ticket_t ticket;
+    uint8_t direction;
+    uint8_t active;
+} fifo_pending_push_t;
+
+typedef enum {
+    FIFO_ASYNC_STARTED = 0,
+    FIFO_ASYNC_FIFO_FULL = 1,
+    FIFO_ASYNC_IDMA_FULL = 2,
+    FIFO_ASYNC_INVALID = -1,
+    FIFO_ASYNC_UNSUPPORTED = -2,
+} fifo_async_start_result_t;
 
 #define FIFO_HEADER_SIZE     (sizeof(fifo_header_t))
 #define FIFO_RING_STATE_SIZE (sizeof(fifo_ring_state_t))
@@ -350,6 +370,19 @@ static inline void *fifo_reserve(uint32_t target_hartid, uint32_t producer_idx)
     return fifo_slot_data(fifo_slot_at(hdr, producer_idx, rs->tail));
 }
 
+/** Try to reserve the current tail slot without blocking. */
+static inline uint32_t fifo_try_reserve(uint32_t target_hartid,
+                                        uint32_t producer_idx,
+                                        void **payload)
+{
+    fifo_header_t *hdr = fifo_get_header(target_hartid);
+    fifo_ring_state_t *rs = fifo_ring_state(hdr, producer_idx);
+    if ((rs->tail - rs->head) >= hdr->num_slots)
+        return 0u;
+    *payload = fifo_slot_data(fifo_slot_at(hdr, producer_idx, rs->tail));
+    return 1u;
+}
+
 /**
  * Publish the reserved tail slot of producer `producer_idx`: store the descriptor
  * and metadata, fence, then advance that sub-ring's tail so the consumer sees a
@@ -411,6 +444,86 @@ static inline int fifo_push(idma_controller_t *idma_ctrl,
         return rc;
 
     fifo_commit(req->target_hartid, req->producer_idx, req->desc, req->tag, req->elem_bytes);
+    return 0;
+}
+
+/**
+ * Start an asynchronous rank-N to packed FIFO push.
+ *
+ * The destination slot remains invisible to the consumer until
+ * fifo_push_async_finish observes completion and publishes it.
+ * Only one uncommitted push may be active per producer sub-ring because the
+ * ring tail advances at publication time.
+ */
+static inline int fifo_push_async_start(idma_controller_t *idma_ctrl,
+                                        const fifo_push_req_t *req,
+                                        fifo_pending_push_t *pending)
+{
+    if (pending != 0)
+        pending->active = 0u;
+    if (idma_ctrl == 0 || req == 0 || pending == 0 || req->src == 0 ||
+        req->desc == 0 || req->elem_bytes == 0u ||
+        req->src->rank > MAPS_IDMA_MAX_RANK ||
+        req->desc->rank > MAPS_IDMA_MAX_RANK ||
+        req->src->num_elems == 0u ||
+        req->src->num_elems != req->desc->num_elems)
+        return -1;
+
+    void *payload = 0;
+    if (!fifo_try_reserve(req->target_hartid, req->producer_idx, &payload))
+        return FIFO_ASYNC_FIFO_FULL;
+    uint32_t destination = (uint32_t)payload;
+
+    /* dir=1: OBI (local L1) -> AXI (remote tile L1 slot payload). */
+    const uint8_t direction = 1u;
+    idma_ticket_t ticket = maps_idma_submit_to_packed(
+        idma_ctrl, direction, destination, req->src_base_addr,
+        req->src, req->elem_bytes);
+    if (ticket == MAPS_IDMA_UNSUPPORTED_TICKET)
+        return FIFO_ASYNC_UNSUPPORTED;
+    if (ticket == 0u)
+        return FIFO_ASYNC_IDMA_FULL;
+
+    pending->target_hartid = req->target_hartid;
+    pending->producer_idx = req->producer_idx;
+    pending->desc = req->desc;
+    pending->tag = req->tag;
+    pending->elem_bytes = req->elem_bytes;
+    pending->ticket = ticket;
+    pending->direction = direction;
+    pending->active = 1u;
+    return FIFO_ASYNC_STARTED;
+}
+
+/** Return non-zero when the pending push's DMA transfer has completed. */
+static inline uint32_t fifo_push_async_is_done(const fifo_pending_push_t *pending)
+{
+    return pending != 0 && pending->active != 0u &&
+        idma_ticket_is_done(pending->direction, pending->ticket);
+}
+
+/** Publish a completed asynchronous push without blocking. */
+static inline uint32_t fifo_push_async_publish_completed(fifo_pending_push_t *pending)
+{
+    if (!fifo_push_async_is_done(pending))
+        return 0u;
+    fifo_commit(pending->target_hartid, pending->producer_idx, pending->desc,
+                pending->tag, pending->elem_bytes);
+    pending->active = 0u;
+    return 1u;
+}
+
+/** Wait for a submitted push, then publish its FIFO slot to the consumer. */
+static inline int fifo_push_async_finish(eu_controller_t *eu_ctrl,
+                                         fifo_pending_push_t *pending)
+{
+    if (eu_ctrl == 0 || pending == 0 || pending->active == 0u)
+        return -1;
+
+    maps_idma_wait_ticket(eu_ctrl, pending->direction, pending->ticket);
+    fifo_commit(pending->target_hartid, pending->producer_idx, pending->desc,
+                pending->tag, pending->elem_bytes);
+    pending->active = 0u;
     return 0;
 }
 
