@@ -468,4 +468,4 @@ else
 	python3 deployment/generate_with_spatz.py -t $(test) -vv
 endif
 	$(MAKE) build test=$(subst /,_,$(test)) compiler=GCC_MULTILIB pulp_cores=0
-	$(MAKE) run test=$(subst /,_,$(test)) platform=$(platform) compiler=GCC_MULTILIB GVRUN_COMMON_ARGS="--work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin"
+	$(MAKE) run test=$(subst /,_,$(test)) platform=$(platform) compiler=GCC_MULTILIB
