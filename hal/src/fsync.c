@@ -8,8 +8,6 @@
 #include <stdint.h>
 #include "fsync.h"
 
-
-
 /*-----------------------------------------------------------------*/
 /* Fsync weak stubs (can be overridden by platform implementations) */
 /*-----------------------------------------------------------------*/
@@ -30,14 +28,9 @@ __attribute__((weak)) int fsync_sync_level(fsync_controller_t *ctrl, uint32_t le
 }*/
 
 /*
-__attribute__((weak)) int fsync_getgroup_level(fsync_controller_t *ctrl, uint32_t level, uint32_t id, uint8_t dir){
-    (void) ctrl;
-    (void) level;
-    (void) id;
-    (void) dir;
-    return 1;
+__attribute__((weak)) int fsync_getgroup_level(fsync_controller_t *ctrl, uint32_t level, uint32_t
+id, uint8_t dir){ (void) ctrl; (void) level; (void) id; (void) dir; return 1;
 }*/
-
 
 /*
 __attribute__((weak)) int fsync_sync_row(fsync_controller_t *ctrl){
@@ -59,33 +52,7 @@ __attribute__((weak)) int fsync_sync_diag(fsync_controller_t *ctrl){
 }*/
 
 /*
-__attribute__((weak)) int fsync_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid){
-    (void) ctrl;
-    (void) ids;
-    (void) n_tiles;
-    (void) dir;
-    (void) bid;
-    return 1;
+__attribute__((weak)) int fsync_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles,
+uint8_t dir, uint8_t bid){ (void) ctrl; (void) ids; (void) n_tiles; (void) dir; (void) bid; return
+1;
 }*/
-
-/*----------------------------------------*/
-/* Export the controller API for the Fsync */
-/*----------------------------------------*/
-__attribute__((weak)) fsync_controller_api_t fsync_api = {
-    .init = fsync_init,
-    .sync_level = fsync_sync_level,
-    .getgroup_level = fsync_getgroup_level,
-    .sync_col = fsync_sync_col,
-    .sync_row = fsync_sync_row,
-    .sync_diag = fsync_sync_diag,
-    .sync = fsync_sync,
-    .sync_left = fsync_sync_left,
-    .sync_right = fsync_sync_right,
-    .sync_up = fsync_sync_up,
-    .sync_down = fsync_sync_down,
-    .sync_global = fsync_sync_global,
-    .hnbr = fsync_hnbr,
-    .vnbr = fsync_vnbr,
-    .hring = fsync_hring,
-    .vring = fsync_vring,
-};

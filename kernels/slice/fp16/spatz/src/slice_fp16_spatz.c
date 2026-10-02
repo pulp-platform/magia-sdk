@@ -75,8 +75,6 @@ static int alloc_l1(void **params,
 static int init_input_params(void *params, const float16 *data)
 {
     volatile slice_fp16_spatz_params_t *slice_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t start_outer;
     uint32_t len_outer;
     uint32_t slice_dim;
@@ -96,27 +94,25 @@ static int init_input_params(void *params, const float16 *data)
     global_offset = start_outer * slice_dim * inner_dim;
     x_bytes       = len_outer * slice_dim * inner_dim * sizeof(float16);
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* Load this tile's contiguous [len_outer, slice_dim, inner] block; the Spatz
        task extracts the slice and fully writes shard_Y (so no zeroing needed). */
-    idma_memcpy_1d(
-        &idma_ctrl, 0, (uint32_t)(data + global_offset), (uint32_t)slice_params->shard_X, x_bytes);
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(0, (uint32_t)(data + global_offset), (uint32_t)slice_params->shard_X, x_bytes);
+    eu_idma_wait_a2o(WFE);
 
     return 0;
 }
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
     spatz_run_task_with_params(SLICE_FP16_SPATZ_TASK, params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -134,8 +130,6 @@ exit:
 static int store_result(void *params, float16 *sliced)
 {
     volatile slice_fp16_spatz_params_t *slice_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t start_outer;
     uint32_t len_outer;
     uint32_t out_stride;
@@ -153,16 +147,12 @@ static int store_result(void *params, float16 *sliced)
     global_offset = start_outer * out_stride;
     y_bytes       = len_outer * out_stride * sizeof(float16);
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's output rows [start_outer, start_outer+len_outer) are contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
-                   (uint32_t)(sliced + global_offset),
-                   (uint32_t)slice_params->shard_Y,
-                   y_bytes);
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    idma_memcpy_1d(1, (uint32_t)(sliced + global_offset), (uint32_t)slice_params->shard_Y, y_bytes);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

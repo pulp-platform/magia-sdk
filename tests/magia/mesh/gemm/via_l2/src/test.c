@@ -93,54 +93,26 @@ int main(void)
     uint32_t y_id         = GET_Y_ID(hartid);
     uint32_t l1_tile_base = get_l1_base(hartid);
 
-    // Init iDMA
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
-    idma_init(&idma_ctrl);
+    idma_init();
 
-    // Init RedMulE
-    redmule_config_t redmule_cfg      = {.hartid = hartid};
-    redmule_controller_t redmule_ctrl = {
-        .base = NULL,
-        .cfg  = &redmule_cfg,
-        .api  = &redmule_api,
-    };
-    redmule_init(&redmule_ctrl);
+    redmule_init();
 
-    // Init FractalSync
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
 // Init the Event Unit controller
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-
-    eu_init(&eu_ctrl);
+    eu_init();
     eu_clear_events(0xFFFFFFFF);
-    eu_fsync_init(&eu_ctrl, 0);
-    eu_idma_init(&eu_ctrl, 0);
-    eu_redmule_init(&eu_ctrl, 0);
+    eu_fsync_init(0);
+    eu_idma_init(0);
+    eu_redmule_init(0);
 #endif
 
     // Global barrier: ensure all tiles have completed startup (including BSS zeroing
     // in crt0.S) before any tile begins writing results to L2 output buffers.
     // Without this, slow tiles still zeroing BSS can overwrite Phase 1 results.
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WAIT_MODE);
 
     /**
      * Phase 1: GEMM1 and GEMM2 in parallel (row-parallel within each group)
@@ -159,35 +131,24 @@ int main(void)
             uint32_t obi_r1 = obi_m2 + (DIM_B * DIM_C * 2);
 
             // Load slice of M1 [num_rows x B] from L2
-            idma_memcpy_1d(&idma_ctrl,
-                           0,
-                           (uint32_t)m1_inp + start_row * DIM_B * 2,
-                           obi_m1,
-                           num_rows * DIM_B * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_1d(
+                0, (uint32_t)m1_inp + start_row * DIM_B * 2, obi_m1, num_rows * DIM_B * 2);
+            eu_idma_wait_a2o(WAIT_MODE);
 
             // Load full M2 [BxC] from L2
-            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m2_inp, obi_m2, DIM_B * DIM_C * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_1d(0, (uint32_t)m2_inp, obi_m2, DIM_B * DIM_C * 2);
+            eu_idma_wait_a2o(WAIT_MODE);
 
             // Zero accumulator and compute: R1_slice = M1_slice @ M2
             mem_set_zero(obi_r1, num_rows * DIM_C);
-            redmule_gemm(&redmule_ctrl,
-                         obi_m1,
-                         obi_m2,
-                         obi_r1,
-                         (uint16_t)num_rows,
-                         (uint16_t)DIM_B,
-                         (uint16_t)DIM_C);
-            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            redmule_gemm(
+                obi_m1, obi_m2, obi_r1, (uint16_t)num_rows, (uint16_t)DIM_B, (uint16_t)DIM_C);
+            eu_redmule_wait(WAIT_MODE);
 
             // Write R1 slice back to L2 at correct offset
-            idma_memcpy_1d(&idma_ctrl,
-                           1,
-                           (uint32_t)r1_out + start_row * DIM_C * 2,
-                           obi_r1,
-                           num_rows * DIM_C * 2);
-            eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_1d(
+                1, (uint32_t)r1_out + start_row * DIM_C * 2, obi_r1, num_rows * DIM_C * 2);
+            eu_idma_wait_o2a(WAIT_MODE);
         }
     }
 
@@ -203,41 +164,30 @@ int main(void)
             uint32_t obi_r2 = obi_m4 + (DIM_D * DIM_E * 2);
 
             // Load slice of M3 [num_rows x D] from L2
-            idma_memcpy_1d(&idma_ctrl,
-                           0,
-                           (uint32_t)m3_inp + start_row * DIM_D * 2,
-                           obi_m3,
-                           num_rows * DIM_D * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_1d(
+                0, (uint32_t)m3_inp + start_row * DIM_D * 2, obi_m3, num_rows * DIM_D * 2);
+            eu_idma_wait_a2o(WAIT_MODE);
 
             // Load full M4 [DxE] from L2
-            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m4_inp, obi_m4, DIM_D * DIM_E * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_1d(0, (uint32_t)m4_inp, obi_m4, DIM_D * DIM_E * 2);
+            eu_idma_wait_a2o(WAIT_MODE);
 
             // Zero accumulator and compute: R2_slice = M3_slice @ M4
             mem_set_zero(obi_r2, num_rows * DIM_E);
-            redmule_gemm(&redmule_ctrl,
-                         obi_m3,
-                         obi_m4,
-                         obi_r2,
-                         (uint16_t)num_rows,
-                         (uint16_t)DIM_D,
-                         (uint16_t)DIM_E);
-            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            redmule_gemm(
+                obi_m3, obi_m4, obi_r2, (uint16_t)num_rows, (uint16_t)DIM_D, (uint16_t)DIM_E);
+            eu_redmule_wait(WAIT_MODE);
 
             // Write R2 slice back to L2 at correct offset
-            idma_memcpy_1d(&idma_ctrl,
-                           1,
-                           (uint32_t)r2_out + start_row * DIM_E * 2,
-                           obi_r2,
-                           num_rows * DIM_E * 2);
-            eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_1d(
+                1, (uint32_t)r2_out + start_row * DIM_E * 2, obi_r2, num_rows * DIM_E * 2);
+            eu_idma_wait_o2a(WAIT_MODE);
         }
     }
 
     // Global barrier: wait for Phase 1 to complete
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WAIT_MODE);
 
     /**
      * Phase 2: GEMM3 (row-parallel)
@@ -255,41 +205,30 @@ int main(void)
             uint32_t obi_r3 = obi_r2 + (DIM_C * DIM_E * 2);
 
             // Load slice of R1 [num_rows x C] from L2
-            idma_memcpy_1d(&idma_ctrl,
-                           0,
-                           (uint32_t)r1_out + start_row * DIM_C * 2,
-                           obi_r1,
-                           num_rows * DIM_C * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_1d(
+                0, (uint32_t)r1_out + start_row * DIM_C * 2, obi_r1, num_rows * DIM_C * 2);
+            eu_idma_wait_a2o(WAIT_MODE);
 
             // Load full R2 [CxE] from L2
-            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)r2_out, obi_r2, DIM_C * DIM_E * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_1d(0, (uint32_t)r2_out, obi_r2, DIM_C * DIM_E * 2);
+            eu_idma_wait_a2o(WAIT_MODE);
 
             // Zero accumulator and compute: R3_slice = R1_slice @ R2
             mem_set_zero(obi_r3, num_rows * DIM_E);
-            redmule_gemm(&redmule_ctrl,
-                         obi_r1,
-                         obi_r2,
-                         obi_r3,
-                         (uint16_t)num_rows,
-                         (uint16_t)DIM_C,
-                         (uint16_t)DIM_E);
-            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            redmule_gemm(
+                obi_r1, obi_r2, obi_r3, (uint16_t)num_rows, (uint16_t)DIM_C, (uint16_t)DIM_E);
+            eu_redmule_wait(WAIT_MODE);
 
             // Write R3 slice back to L2 at correct offset
-            idma_memcpy_1d(&idma_ctrl,
-                           1,
-                           (uint32_t)r3_out + start_row * DIM_E * 2,
-                           obi_r3,
-                           num_rows * DIM_E * 2);
-            eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_1d(
+                1, (uint32_t)r3_out + start_row * DIM_E * 2, obi_r3, num_rows * DIM_E * 2);
+            eu_idma_wait_o2a(WAIT_MODE);
         }
     }
 
     // Global barrier: wait for Phase 2 to complete
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WAIT_MODE);
 
     /**
      * Phase 3: GEMM4 (row-parallel)
@@ -307,41 +246,29 @@ int main(void)
             uint32_t obi_o  = obi_m5 + (DIM_E * DIM_F * 2);
 
             // Load slice of R3 [num_rows x E] from L2
-            idma_memcpy_1d(&idma_ctrl,
-                           0,
-                           (uint32_t)r3_out + start_row * DIM_E * 2,
-                           obi_r3,
-                           num_rows * DIM_E * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_1d(
+                0, (uint32_t)r3_out + start_row * DIM_E * 2, obi_r3, num_rows * DIM_E * 2);
+            eu_idma_wait_a2o(WAIT_MODE);
 
             // Load full M5 [ExF] from L2
-            idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m5_inp, obi_m5, DIM_E * DIM_F * 2);
-            eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_1d(0, (uint32_t)m5_inp, obi_m5, DIM_E * DIM_F * 2);
+            eu_idma_wait_a2o(WAIT_MODE);
 
             // Zero accumulator and compute: O_slice = R3_slice @ M5
             mem_set_zero(obi_o, num_rows * DIM_F);
-            redmule_gemm(&redmule_ctrl,
-                         obi_r3,
-                         obi_m5,
-                         obi_o,
-                         (uint16_t)num_rows,
-                         (uint16_t)DIM_E,
-                         (uint16_t)DIM_F);
-            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            redmule_gemm(
+                obi_r3, obi_m5, obi_o, (uint16_t)num_rows, (uint16_t)DIM_E, (uint16_t)DIM_F);
+            eu_redmule_wait(WAIT_MODE);
 
             // Write O slice back to L2 at correct offset
-            idma_memcpy_1d(&idma_ctrl,
-                           1,
-                           (uint32_t)o_out + start_row * DIM_F * 2,
-                           obi_o,
-                           num_rows * DIM_F * 2);
-            eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+            idma_memcpy_1d(1, (uint32_t)o_out + start_row * DIM_F * 2, obi_o, num_rows * DIM_F * 2);
+            eu_idma_wait_o2a(WAIT_MODE);
         }
     }
 
     // Global barrier: wait for Phase 3 to complete
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WAIT_MODE);
 
     /**
      * Validation: Tile 0 checks O against golden

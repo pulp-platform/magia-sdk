@@ -388,11 +388,6 @@ static void wait_evt(uint32_t mask, post_ctx_t *pc)
  * ========================================================================== */
 
 typedef struct {
-    idma_controller_t *idma;
-    redmule_controller_t *rm;
-    fsync_controller_t *fs;
-    eu_controller_t *eu;
-
     uint32_t hartid;
     uint32_t x_id;
     uint32_t y_id;
@@ -413,8 +408,7 @@ static void gemm_load_x(gemm_ctx_t *g)
 {
     uint32_t t0 = perf_get_cycles();
 
-    idma_memcpy_2d(g->idma,
-                   0,
+    idma_memcpy_2d(0,
                    g->x_l2 + (g->row_l2 * NN_N + g->x_id * NN_TW) * 2,
                    g->l1 + NN_L1_OFF_X,
                    NN_TW * 2,
@@ -438,8 +432,7 @@ static void gemm_round(gemm_ctx_t *g, uint32_t r, post_ctx_t *pc)
 
         /* W slice for this timeslot: W[x*TW .. +TW][i*TS .. +TS] */
         t0 = perf_get_cycles();
-        idma_memcpy_2d(g->idma,
-                       0,
+        idma_memcpy_2d(0,
                        g->w_l2 + ((g->x_id * NN_TW) * NN_K + i * NN_TS) * 2,
                        a_w,
                        NN_TS * 2,
@@ -451,8 +444,7 @@ static void gemm_round(gemm_ctx_t *g, uint32_t r, post_ctx_t *pc)
         /* Inbound Z accumulator */
         if (g->x_id == 0) {
             t0 = perf_get_cycles();
-            idma_memcpy_2d(g->idma,
-                           0,
+            idma_memcpy_2d(0,
                            g->y_l2 + (g->row_l2 * NN_K + i * NN_TS) * 2,
                            a_z_cur,
                            NN_TS * 2,
@@ -469,8 +461,7 @@ static void gemm_round(gemm_ctx_t *g, uint32_t r, post_ctx_t *pc)
             /* Straight L1-to-L1 pull of the neighbour's buffer: same shape, so
              * source stride == row length and the transfer is contiguous. */
             t0 = perf_get_cycles();
-            idma_memcpy_2d(g->idma,
-                           0,
+            idma_memcpy_2d(0,
                            get_l1_base(g->hartid - 1) + ((i & 1) ? NN_L1_OFF_Z1 : NN_L1_OFF_Z0),
                            a_z_cur,
                            NN_TS * 2,
@@ -483,15 +474,14 @@ static void gemm_round(gemm_ctx_t *g, uint32_t r, post_ctx_t *pc)
         /* Z += X * W. The longest single wait in the timeslot, and therefore the
          * main window in which the post track gets to advance. */
         t0 = perf_get_cycles();
-        redmule_gemm(g->rm, a_x, a_w, a_z_cur, (uint16_t)NN_TH, (uint16_t)NN_TW, (uint16_t)NN_TS);
+        redmule_gemm(a_x, a_w, a_z_cur, (uint16_t)NN_TH, (uint16_t)NN_TW, (uint16_t)NN_TS);
         wait_evt(EU_REDMULE_DONE_MASK, pc);
         g->cyc_gemm += perf_get_cycles() - t0;
 
         /* Outbound Z accumulator */
         if (g->x_id == MESH_X_TILES - 1) {
             t0 = perf_get_cycles();
-            idma_memcpy_2d(g->idma,
-                           1,
+            idma_memcpy_2d(1,
                            g->y_l2 + (g->row_l2 * NN_K + i * NN_TS) * 2,
                            a_z_cur,
                            NN_TS * 2,
@@ -501,7 +491,7 @@ static void gemm_round(gemm_ctx_t *g, uint32_t r, post_ctx_t *pc)
             g->cyc_dma += perf_get_cycles() - t0;
         } else {
             t0 = perf_get_cycles();
-            fsync_sync_right(g->fs);
+            fsync_sync_right();
             wait_evt(EU_FSYNC_DONE_MASK, NULL);
             g->cyc_sync += perf_get_cycles() - t0;
         }

@@ -117,7 +117,7 @@ static int reinit_data(void *params, int stage)
     return 0;
 }
 
-static int run_spatz_task(eu_controller_t *eu_ctrl, int init)
+static int run_spatz_task(int init)
 {
     int ret;
 
@@ -127,7 +127,7 @@ static int run_spatz_task(eu_controller_t *eu_ctrl, int init)
     //     spatz_clk_en();
     spatz_run_task_with_params(FFT_FS_TASK, FFT_PARAMS_BASE);
 
-    eu_spatz_wait(eu_ctrl, WFE);
+    eu_spatz_wait(WFE);
 
     ret = spatz_get_exit_code();
 
@@ -152,14 +152,8 @@ static bool run_test()
 
     params = (volatile fft_fs_params_t *)FFT_PARAMS_BASE;
 
-    eu_config_t eu_cfg;
-    eu_controller_t eu_ctrl;
-
-    eu_cfg.hartid = get_hartid();
-    eu_ctrl.base = NULL, eu_ctrl.cfg = &eu_cfg, eu_ctrl.api = &eu_api,
-
-    eu_init(&eu_ctrl);
-    eu_spatz_init(&eu_ctrl, 0);
+    eu_init();
+    eu_spatz_init(0);
 
     ret = init_data((void *)params);
     if (ret != 0) {
@@ -169,7 +163,7 @@ static bool run_test()
 
     for (int i = 0; i < LOG2_LEN; i++) {
         printf("Complex mul number %d\n", i);
-        ret = run_spatz_task(&eu_ctrl, i);
+        ret = run_spatz_task(i);
         if (ret != 0) {
             printf("[CV32 (%d)] Spatz task FAILED with error: %d", HID, ret);
             return ret;
@@ -209,27 +203,15 @@ static bool run_test()
 
 int main(void)
 {
-    int ret                       = 0;
-    fsync_config_t fsync_cfg      = {.hartid = HID};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
+    int ret = 0;
 
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
-    eu_config_t eu_cfg      = {.hartid = HID};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_fsync_init(&eu_ctrl, 0);
+    eu_init();
+    eu_fsync_init(0);
 
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WFE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WFE);
 
     if (HID == 0) {
         printf("\n############################### FFT_FS TEST on %d Tiles "

@@ -40,14 +40,3 @@
 uint32_t y, uint16_t m, uint16_t n, uint16_t k){ (void) ctrl; (void) x; (void) w; (void) y; (void)
 m; (void) n; (void) k; return 1;
 }*/
-
-/*-------------------------------------------*/
-/* Export the controller API for the Redmule */
-/*-------------------------------------------*/
-__attribute__((weak)) redmule_controller_api_t redmule_api = {
-    .init = redmule_init,
-    /*     .wait = redmule_wait, */
-    .acquire     = redmule_acquire,
-    .gemm        = redmule_gemm,
-    .running_job = redmule_running_job,
-};
