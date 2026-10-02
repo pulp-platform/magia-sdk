@@ -84,8 +84,6 @@ static int init_input_params(void *params,
                              uint32_t pad_w)
 {
     volatile maxpool2d_fp16_spatz_params_t *maxpool_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t in_hw_len;
     uint32_t c_start;
     uint32_t c_len;
@@ -96,17 +94,16 @@ static int init_input_params(void *params,
     c_len          = maxpool_params->c_len;
 
     if (c_len > 0) {
-        idma_ctrl_init(&idma_ctrl);
-        eu_ctrl_init(&eu_ctrl);
+        idma_ctrl_init();
+        eu_ctrl_init();
 
         /* This tile's channels [c_start, c_start+c_len) are contiguous in L2. The Spatz task
            writes every output (one max per window), so shard_Y is not zeroed here. */
-        idma_memcpy_1d(&idma_ctrl,
-                       0,
+        idma_memcpy_1d(0,
                        (uint32_t)(X + c_start * in_hw_len),
                        (uint32_t)maxpool_params->shard_X,
                        c_len * in_hw_len * sizeof(float16));
-        eu_idma_wait_a2o(&eu_ctrl, WFE);
+        eu_idma_wait_a2o(WFE);
     }
 
     maxpool_params->kernel_h = kernel_h;
@@ -121,13 +118,12 @@ static int init_input_params(void *params,
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
     spatz_run_task_with_params(MAXPOOL2D_FP16_SPATZ_TASK, (uint32_t)params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -145,8 +141,6 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile maxpool2d_fp16_spatz_params_t *maxpool_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t out_hw_len;
     uint32_t c_start;
     uint32_t c_len;
@@ -159,16 +153,15 @@ static int store_result(void *params, float16 *Y)
     if (c_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's output channels [c_start, c_start+c_len) are contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
+    idma_memcpy_1d(1,
                    (uint32_t)(Y + c_start * out_hw_len),
                    (uint32_t)maxpool_params->shard_Y,
                    c_len * out_hw_len * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

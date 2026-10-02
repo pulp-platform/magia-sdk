@@ -44,24 +44,11 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_fsync_init(&eu_ctrl, 0);
+    eu_init();
+    eu_fsync_init(0);
 #endif
 
     uint32_t l1_tile_base = get_l1_base(hartid);
@@ -79,14 +66,14 @@ int main(void)
     if (x_id == y_id) {
         // wait_nop(100 * hartid);
         mmio8(l1_tile_base) = (uint8_t)123;
-        fsync_sync_diag(&fsync_ctrl);
+        fsync_sync_diag();
 #if STALLING == 0
-        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        eu_fsync_wait(WAIT_MODE);
 #endif
         flag = check_values((uint8_t)123);
-        fsync_sync_diag(&fsync_ctrl);
+        fsync_sync_diag();
 #if STALLING == 0
-        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        eu_fsync_wait(WAIT_MODE);
 #endif
         if (!flag) {
             printf("No errors detected in diagonal!\n");

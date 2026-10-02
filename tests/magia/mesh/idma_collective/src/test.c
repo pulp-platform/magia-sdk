@@ -36,35 +36,15 @@ int main(void)
     uint32_t sender_x = GET_X_ID(SOURCE_HART_ID);
     uint32_t sender_y = GET_Y_ID(SOURCE_HART_ID);
 
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
+    idma_init();
 
-    idma_init(&idma_ctrl);
-
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
+    eu_init();
     eu_clear_events(0xFFFFFFFF);
-    eu_fsync_init(&eu_ctrl, 0);
-    eu_idma_init(&eu_ctrl, 0);
+    eu_fsync_init(0);
+    eu_idma_init(0);
 #endif
 
     // Reciever flag: if set to 1, it means that this tile has to recieve something in the specific
@@ -84,9 +64,9 @@ int main(void)
      */
     if (hartid == SOURCE_HART_ID) {
         printf("iDMA moving data from L2 to L1...\n");
-        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)x_inp, src_addr, BUF_SIZE);
+        idma_memcpy_1d(0, (uint32_t)x_inp, src_addr, BUF_SIZE);
 #if STALLING == 0
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_a2o(WAIT_MODE);
 #endif
     }
 
@@ -100,21 +80,21 @@ int main(void)
     else
         reciever_flag = 0;
 
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     if (hartid == SOURCE_HART_ID) {
-        idma_collective_1d(&idma_ctrl, dst_addr, src_addr, BUF_SIZE, ROW_MASK, MULTICAST);
+        idma_collective_1d(dst_addr, src_addr, BUF_SIZE, ROW_MASK, MULTICAST);
 #if STALLING == 0
-        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_o2a(WAIT_MODE);
 #endif
     }
 
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     if (hartid != SOURCE_HART_ID) {
@@ -141,21 +121,21 @@ int main(void)
     else
         reciever_flag = 0;
 
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     if (hartid == SOURCE_HART_ID) {
-        idma_collective_1d(&idma_ctrl, dst_addr, src_addr, BUF_SIZE, COLUMN_MASK, MULTICAST);
+        idma_collective_1d(dst_addr, src_addr, BUF_SIZE, COLUMN_MASK, MULTICAST);
 #if STALLING == 0
-        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_o2a(WAIT_MODE);
 #endif
     }
 
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     if (hartid != SOURCE_HART_ID) {
@@ -181,21 +161,21 @@ int main(void)
 
     reciever_flag = 1;
 
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     if (hartid == SOURCE_HART_ID) {
-        idma_collective_1d(&idma_ctrl, dst_addr, src_addr, BUF_SIZE, MESH_MASK, MULTICAST);
+        idma_collective_1d(dst_addr, src_addr, BUF_SIZE, MESH_MASK, MULTICAST);
 #if STALLING == 0
-        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_o2a(WAIT_MODE);
 #endif
     }
 
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     if (hartid != SOURCE_HART_ID) {

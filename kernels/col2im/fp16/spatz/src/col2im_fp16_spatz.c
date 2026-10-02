@@ -92,8 +92,6 @@ static int allocate_l1(void **params,
 static int init_input_params(void *params, const float16 *input)
 {
     volatile col2im_fp16_spatz_params_t *col2im_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uintptr_t shard_X;
     uintptr_t shard_Y;
     uint32_t image_h;
@@ -126,20 +124,19 @@ static int init_input_params(void *params, const float16 *input)
 
     bbl = block_h * block_w * l_len;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* Column buffer: for each batch this tile's channels [c_start, c_start+c_len) are a
        contiguous run of c_len*bbl elements. Gather them into the packed L1 shard with a 2D
        transfer -- one run per batch, source stride spanning the full channel count. */
-    idma_memcpy_2d(&idma_ctrl,
-                   0,
+    idma_memcpy_2d(0,
                    (uint32_t)(input + c_start * bbl),
                    (uint32_t)shard_X,
                    c_len * bbl * sizeof(float16),
                    tot_c * bbl * sizeof(float16),
                    batch);
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    eu_idma_wait_a2o(WFE);
 
     /* col2im scatters with accumulation, so the output shard must start zeroed. */
     for (uint32_t i = 0; i < (batch * c_len * image_h * image_w); i++) {
@@ -151,14 +148,13 @@ static int init_input_params(void *params, const float16 *input)
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
 
     spatz_run_task_with_params(COL2IM_FP16_SPATZ_TASK, params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -176,8 +172,6 @@ exit:
 static int store_result(void *params, float16 *output)
 {
     volatile col2im_fp16_spatz_params_t *col2im_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uintptr_t shard_Y;
     uint32_t image_h;
     uint32_t image_w;
@@ -202,20 +196,19 @@ static int store_result(void *params, float16 *output)
 
     ihw = image_h * image_w;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* For each batch this tile's output channels [c_start, c_start+c_len) are a contiguous
        run of c_len*ihw elements in L2. Scatter the packed L1 shard back with a 2D transfer
        -- one run per batch, dest stride spanning the full channel count. */
-    idma_memcpy_2d(&idma_ctrl,
-                   1,
+    idma_memcpy_2d(1,
                    (uint32_t)(output + c_start * ihw),
                    (uint32_t)shard_Y,
                    c_len * ihw * sizeof(float16),
                    tot_c * ihw * sizeof(float16),
                    batch);
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

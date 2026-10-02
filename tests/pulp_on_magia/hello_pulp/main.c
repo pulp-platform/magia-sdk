@@ -5,22 +5,15 @@
 
 int main(void)
 {
-    eu_config_t eu_cfg;
-    eu_controller_t eu_ctrl;
     int errors = 0;
 
     printf("[CV32] Hello PULP Test\n");
 
-    eu_cfg.hartid = get_hartid();
-    eu_ctrl.base  = NULL;
-    eu_ctrl.cfg   = &eu_cfg;
-    eu_ctrl.api   = &eu_api;
-
     printf("[CV32] Initializing Event Unit\n");
-    eu_init(&eu_ctrl);
+    eu_init();
 
     printf("[CV32] Initializing Pulp Event Unit\n");
-    eu_pulp_init(&eu_ctrl, 0);
+    eu_pulp_init(0);
 
     uint32_t pulp_core_mask = 0x01; /* one-hot bitmask: which PULP cores to run the task on */
     printf("[CV32] Initializing PULP cluster (binary @ 0x%08x)\n", PULP_BINARY_START);
@@ -30,7 +23,7 @@ int main(void)
     pulp_run_task(HELLO_PULP_TASK, pulp_core_mask);
     // pulp_run_task_with_params(HELLO_PULP_TASK, NULL, pulp_core_mask);
 
-    eu_pulp_wait(&eu_ctrl, WFE);
+    eu_pulp_wait(WFE);
 
     printf("[CV32] PULP cluster done\n");
     return errors;

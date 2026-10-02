@@ -24,24 +24,11 @@ int main(void)
 {
     uint32_t hartid = get_hartid();
 
-    // Init DMA
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
-    idma_init(&idma_ctrl);
+    idma_init();
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_idma_init(&eu_ctrl, 0);
+    eu_init();
+    eu_idma_init(0);
 #endif
 
     l1_alloc_init();
@@ -51,13 +38,13 @@ int main(void)
     // printf("[HARTID %d] Pointer A is 0X%x Pointer B is 0X%x\n", hartid, pointer_A, pointer_B);
 
     // IDMA Transfer
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)l2_vect, pointer_A, (uint32_t)BUF_SIZE);
+    idma_memcpy_1d(0, (uint32_t)l2_vect, pointer_A, (uint32_t)BUF_SIZE);
 #if STALLING == 0
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    eu_idma_wait_a2o(WAIT_MODE);
 #endif
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)l2_vect, pointer_B, (uint32_t)BUF_SIZE);
+    idma_memcpy_1d(0, (uint32_t)l2_vect, pointer_B, (uint32_t)BUF_SIZE);
 #if STALLING == 0
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
     uint32_t n_errors = 0;

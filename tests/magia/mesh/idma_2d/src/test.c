@@ -26,40 +26,19 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
+    idma_init();
 
-    idma_init(&idma_ctrl);
-
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
     uint32_t y_id         = GET_Y_ID(hartid);
     uint32_t x_id         = GET_X_ID(hartid);
     uint32_t l1_tile_base = get_l1_base(hartid);
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-
-    eu_init(&eu_ctrl);
+    eu_init();
     eu_clear_events(0xFFFFFFFF);
-    eu_fsync_init(&eu_ctrl, 0);
-    eu_idma_init(&eu_ctrl, 0);
+    eu_fsync_init(0);
+    eu_idma_init(0);
 #endif
 
     /**
@@ -106,26 +85,26 @@ int main(void)
         (uint32_t)y_inp + (y_id * K_SIZE * tile_h_max * 2) + (tile_w_max * x_id * 2);
 
     // printf("Copying data from L2\n");
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_z, obi_addr, len, std, reps);
+    idma_memcpy_2d(0, axi_addr_z, obi_addr, len, std, reps);
 #if STALLING == 0
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
     // printf("Copying data to L2\n");
     /**
      * 3. Use IDMA to write the L1 data in the input vector in L2.
      */
-    idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr, len, std, reps);
+    idma_memcpy_2d(1, axi_addr_y, obi_addr, len, std, reps);
 #if STALLING == 0
-    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+    eu_idma_wait_o2a(WAIT_MODE);
 #endif
 
     /**
      * 4. Wait that all the tiles have finished
      */
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     /**

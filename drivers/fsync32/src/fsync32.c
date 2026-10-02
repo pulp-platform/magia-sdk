@@ -20,7 +20,7 @@
 #include "utils/printf.h"
 #include "utils/magia_utils.h"
 
-int fsync32_init(fsync_controller_t *ctrl)
+int fsync32_init()
 {
     irq_en(1 << IRQ_FSYNC_DONE);
     return 0;
@@ -37,7 +37,7 @@ int fsync32_init(fsync_controller_t *ctrl)
  * @param level Tree level over which synchronize.
  * @param dir Direction of the tree, 0 = Horizontal 1 = Vertical
  */
-int fsync32_sync_level(fsync_controller_t *ctrl, uint32_t level, uint8_t dir)
+int fsync32_sync_level(uint32_t level, uint8_t dir)
 {
     if (MESH_2_POWER == 0)
         return 0;
@@ -62,7 +62,7 @@ int fsync32_sync_level(fsync_controller_t *ctrl, uint32_t level, uint8_t dir)
  * @param id Tile ID we want to know the synch group of.
  * @param dir Synchronization tree direction 0 = Horizontal 1 = Vertical
  */
-int fsync32_getgroup_level(fsync_controller_t *ctrl, uint32_t level, uint32_t id, uint8_t dir)
+int fsync32_getgroup_level(uint32_t level, uint32_t id, uint8_t dir)
 {
     if (dir == 0)
         return ((GET_X_ID(id) >> ((level + 2) / 2)) +
@@ -85,7 +85,7 @@ int fsync32_getgroup_level(fsync_controller_t *ctrl, uint32_t level, uint32_t id
  * Since each architecture rows/columns are a power of 2 (up to 32), I'm shifting 2 bits for each
  * power difference. It just works - Todd howard
  */
-int fsync32_sync_row(fsync_controller_t *ctrl)
+int fsync32_sync_row()
 {
     if (MESH_Y_TILES == 1)
         return 0;
@@ -99,7 +99,7 @@ int fsync32_sync_row(fsync_controller_t *ctrl)
 /**
  * Synchronize the tile with the others of the same mesh column.
  */
-int fsync32_sync_col(fsync_controller_t *ctrl)
+int fsync32_sync_col()
 {
     if (MESH_X_TILES == 1)
         return 0;
@@ -113,7 +113,7 @@ int fsync32_sync_col(fsync_controller_t *ctrl)
 /**
  * Synchronize the tile with the others of the diagonal.
  */
-int fsync32_sync_diag(fsync_controller_t *ctrl)
+int fsync32_sync_diag()
 {
     if (MESH_2_POWER == 0)
         return 0;
@@ -135,7 +135,7 @@ int fsync32_sync_diag(fsync_controller_t *ctrl)
  * @param dir Fractalsync tree direction (0=horizontal, 1=vertical)
  * @param bid Barrier ID for synchronization
  */
-int fsync32_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid)
+int fsync32_sync(uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid)
 {
     if (MESH_2_POWER == 0)
         return 0;
@@ -150,15 +150,13 @@ int fsync32_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8
             x_diff          = x_diff * x_diff;
             y_diff          = y_diff * y_diff;
             if (x_diff == 0 && y_diff == 1) {
-                if (fsync32_getgroup_level(ctrl, 0, hartid, 1) ==
-                    fsync32_getgroup_level(ctrl, 0, ids[i], 1))
+                if (fsync32_getgroup_level(0, hartid, 1) == fsync32_getgroup_level(0, ids[i], 1))
                     fsync(1, 0b1);
                 else
                     fsync(3, 0b1);
                 return 0;
             } else if (x_diff == 1 && y_diff == 0) {
-                if (fsync32_getgroup_level(ctrl, 0, hartid, 0) ==
-                    fsync32_getgroup_level(ctrl, 0, ids[i], 0))
+                if (fsync32_getgroup_level(0, hartid, 0) == fsync32_getgroup_level(0, ids[i], 0))
                     fsync(0, 0b1);
                 else
                     fsync(2, 0b1);
@@ -170,8 +168,7 @@ int fsync32_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8
         if (hartid == ids[i])
             continue;
         for (uint8_t j = 0; j < MAX_SYNC_LVL; j++) {
-            if (fsync32_getgroup_level(ctrl, j, hartid, dir) ==
-                fsync32_getgroup_level(ctrl, j, ids[i], dir)) {
+            if (fsync32_getgroup_level(j, hartid, dir) == fsync32_getgroup_level(j, ids[i], dir)) {
                 aggregate = aggregate | ((uint32_t)(1 << j));
                 break;
             }
@@ -187,15 +184,14 @@ int fsync32_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8
 /**
  * Synchronizes with the tile on the left.
  */
-int fsync32_sync_left(fsync_controller_t *ctrl)
+int fsync32_sync_left()
 {
     if (MESH_2_POWER == 0)
         return 0;
     uint32_t hartid = get_hartid();
     if (GET_X_ID(hartid) == 0)
         return 1;
-    if (fsync32_getgroup_level(ctrl, 0, hartid, 0) ==
-        fsync32_getgroup_level(ctrl, 0, (hartid - 1), 0))
+    if (fsync32_getgroup_level(0, hartid, 0) == fsync32_getgroup_level(0, (hartid - 1), 0))
         fsync(0, 0b1);
     else
         fsync(2, 0b1);
@@ -205,15 +201,14 @@ int fsync32_sync_left(fsync_controller_t *ctrl)
 /**
  * Synchronizes with the tile on the right.
  */
-int fsync32_sync_right(fsync_controller_t *ctrl)
+int fsync32_sync_right()
 {
     if (MESH_2_POWER == 0)
         return 0;
     uint32_t hartid = get_hartid();
     if (GET_X_ID(hartid) == MESH_X_TILES - 1)
         return 1;
-    if (fsync32_getgroup_level(ctrl, 0, hartid, 0) ==
-        fsync32_getgroup_level(ctrl, 0, (hartid + 1), 0))
+    if (fsync32_getgroup_level(0, hartid, 0) == fsync32_getgroup_level(0, (hartid + 1), 0))
         fsync(0, 0b1);
     else
         fsync(2, 0b1);
@@ -223,15 +218,15 @@ int fsync32_sync_right(fsync_controller_t *ctrl)
 /**
  * Synchronizes with the tile above.
  */
-int fsync32_sync_up(fsync_controller_t *ctrl)
+int fsync32_sync_up()
 {
     if (MESH_2_POWER == 0)
         return 0;
     uint32_t hartid = get_hartid();
     if (GET_Y_ID(hartid) == 0)
         return 1;
-    if (fsync32_getgroup_level(ctrl, 0, hartid, 1) ==
-        fsync32_getgroup_level(ctrl, 0, (hartid - MESH_X_TILES), 1))
+    if (fsync32_getgroup_level(0, hartid, 1) ==
+        fsync32_getgroup_level(0, (hartid - MESH_X_TILES), 1))
         fsync(1, 0b1);
     else
         fsync(3, 0b1);
@@ -241,15 +236,15 @@ int fsync32_sync_up(fsync_controller_t *ctrl)
 /**
  * Synchronizes with the tile below.
  */
-int fsync32_sync_down(fsync_controller_t *ctrl)
+int fsync32_sync_down()
 {
     if (MESH_2_POWER == 0)
         return 0;
     uint32_t hartid = get_hartid();
     if (GET_Y_ID(hartid) == MESH_Y_TILES - 1)
         return 1;
-    if (fsync32_getgroup_level(ctrl, 0, hartid, 1) ==
-        fsync32_getgroup_level(ctrl, 0, (hartid + MESH_X_TILES), 1))
+    if (fsync32_getgroup_level(0, hartid, 1) ==
+        fsync32_getgroup_level(0, (hartid + MESH_X_TILES), 1))
         fsync(1, 0b1);
     else
         fsync(3, 0b1);
@@ -259,7 +254,7 @@ int fsync32_sync_down(fsync_controller_t *ctrl)
 /**
  * Synchronizes the entire mesh.
  */
-int fsync32_sync_global(fsync_controller_t *ctrl)
+int fsync32_sync_global()
 {
     if (MAX_SYNC_LVL == 0)
         return 0;
@@ -268,17 +263,17 @@ int fsync32_sync_global(fsync_controller_t *ctrl)
     return 0;
 }
 
-void fsync32_hnbr(fsync_controller_t *ctrl)
+void fsync32_hnbr()
 {
     fsync(_FS_HNBR_ID, _FS_HNBR_AGGR);
 }
 
-void fsync32_vnbr(fsync_controller_t *ctrl)
+void fsync32_vnbr()
 {
     fsync(_FS_VNBR_ID, _FS_VNBR_AGGR);
 }
 
-void fsync32_hring(fsync_controller_t *ctrl)
+void fsync32_hring()
 {
     if (MESH_2_POWER == 0)
         return;
@@ -293,7 +288,7 @@ void fsync32_hring(fsync_controller_t *ctrl)
     }
 }
 
-void fsync32_vring(fsync_controller_t *ctrl)
+void fsync32_vring()
 {
     if (MESH_2_POWER == 0)
         return;
@@ -308,55 +303,27 @@ void fsync32_vring(fsync_controller_t *ctrl)
     }
 }
 
-extern int fsync_init(fsync_controller_t *ctrl)
-    __attribute__((alias("fsync32_init"), used, visibility("default")));
-extern int fsync_sync_level(fsync_controller_t *ctrl, uint32_t level, uint8_t dir)
+extern int fsync_init() __attribute__((alias("fsync32_init"), used, visibility("default")));
+extern int fsync_sync_level(uint32_t level, uint8_t dir)
     __attribute__((alias("fsync32_sync_level"), used, visibility("default")));
-extern int fsync_getgroup_level(fsync_controller_t *ctrl, uint32_t level, uint32_t id, uint8_t dir)
+extern int fsync_getgroup_level(uint32_t level, uint32_t id, uint8_t dir)
     __attribute__((alias("fsync32_getgroup_level"), used, visibility("default")));
-extern int fsync_sync_row(fsync_controller_t *ctrl)
-    __attribute__((alias("fsync32_sync_row"), used, visibility("default")));
-extern int fsync_sync_col(fsync_controller_t *ctrl)
-    __attribute__((alias("fsync32_sync_col"), used, visibility("default")));
-extern int fsync_sync_diag(fsync_controller_t *ctrl)
+extern int fsync_sync_row() __attribute__((alias("fsync32_sync_row"), used, visibility("default")));
+extern int fsync_sync_col() __attribute__((alias("fsync32_sync_col"), used, visibility("default")));
+extern int fsync_sync_diag()
     __attribute__((alias("fsync32_sync_diag"), used, visibility("default")));
-extern int
-fsync_sync(fsync_controller_t *ctrl, uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid)
+extern int fsync_sync(uint32_t *ids, uint8_t n_tiles, uint8_t dir, uint8_t bid)
     __attribute__((alias("fsync32_sync"), used, visibility("default")));
-extern int fsync_sync_left(fsync_controller_t *ctrl)
+extern int fsync_sync_left()
     __attribute__((alias("fsync32_sync_left"), used, visibility("default")));
-extern int fsync_sync_right(fsync_controller_t *ctrl)
+extern int fsync_sync_right()
     __attribute__((alias("fsync32_sync_right"), used, visibility("default")));
-extern int fsync_sync_up(fsync_controller_t *ctrl)
-    __attribute__((alias("fsync32_sync_up"), used, visibility("default")));
-extern int fsync_sync_down(fsync_controller_t *ctrl)
+extern int fsync_sync_up() __attribute__((alias("fsync32_sync_up"), used, visibility("default")));
+extern int fsync_sync_down()
     __attribute__((alias("fsync32_sync_down"), used, visibility("default")));
-extern int fsync_sync_global(fsync_controller_t *ctrl)
+extern int fsync_sync_global()
     __attribute__((alias("fsync32_sync_global"), used, visibility("default")));
-extern void fsync_hnbr(fsync_controller_t *ctrl)
-    __attribute__((alias("fsync32_hnbr"), used, visibility("default")));
-extern void fsync_vnbr(fsync_controller_t *ctrl)
-    __attribute__((alias("fsync32_vnbr"), used, visibility("default")));
-extern void fsync_hring(fsync_controller_t *ctrl)
-    __attribute__((alias("fsync32_hring"), used, visibility("default")));
-extern void fsync_vring(fsync_controller_t *ctrl)
-    __attribute__((alias("fsync32_vring"), used, visibility("default")));
-
-/* Export the FSYNC-specific controller API */
-fsync_controller_api_t fsync_api = {
-    .init           = fsync32_init,
-    .sync_level     = fsync32_sync_level,
-    .getgroup_level = fsync32_getgroup_level,
-    .sync_col       = fsync32_sync_col,
-    .sync_row       = fsync32_sync_row,
-    .sync_diag      = fsync32_sync_diag,
-    .sync           = fsync32_sync,
-    .sync_left      = fsync32_sync_left,
-    .sync_right     = fsync32_sync_right,
-    .sync_up        = fsync32_sync_up,
-    .sync_down      = fsync32_sync_down,
-    .hnbr           = fsync32_hnbr,
-    .vnbr           = fsync32_vnbr,
-    .hring          = fsync32_hring,
-    .vring          = fsync32_vring,
-};
+extern void fsync_hnbr() __attribute__((alias("fsync32_hnbr"), used, visibility("default")));
+extern void fsync_vnbr() __attribute__((alias("fsync32_vnbr"), used, visibility("default")));
+extern void fsync_hring() __attribute__((alias("fsync32_hring"), used, visibility("default")));
+extern void fsync_vring() __attribute__((alias("fsync32_vring"), used, visibility("default")));

@@ -21,9 +21,7 @@
  * issue - a software-emulated depth-1 job queue. See MG_IDMA_HW_QUEUE_DEPTH in
  * mg_idma.c.
  */
-extern void mg_idma_memcpy_1d(idma_controller_t *idma,
-                              eu_controller_t *eu,
-                              eu_wait_mode_t mode,
+extern void mg_idma_memcpy_1d(eu_wait_mode_t mode,
                               uint8_t dir,
                               uint32_t axi_addr,
                               uint32_t obi_addr,
@@ -39,9 +37,7 @@ extern void mg_idma_memcpy_1d(idma_controller_t *idma,
  * `eu` completion pulses) until a previously issued same-direction transfer has
  * drained before it can issue - a software-emulated depth-1 job queue.
  */
-extern void mg_idma_memcpy_2d(idma_controller_t *idma,
-                              eu_controller_t *eu,
-                              eu_wait_mode_t mode,
+extern void mg_idma_memcpy_2d(eu_wait_mode_t mode,
                               uint8_t dir,
                               uint32_t axi_addr,
                               uint32_t obi_addr,
@@ -73,7 +69,7 @@ extern uint8_t mg_idma_completed[2];
  * folds into its call sites under -O/-flto.
  */
 static inline __ALWAYS_INLINE_ void
-mg_idma_wait(eu_controller_t *eu, uint8_t dir, eu_wait_mode_t mode, mg_event_t *event)
+mg_idma_wait(uint8_t dir, eu_wait_mode_t mode, mg_event_t *event)
 {
     uint8_t idx    = dir ? 1 : 0;
     uint8_t target = (uint8_t)(event->id + 1);
@@ -85,9 +81,9 @@ mg_idma_wait(eu_controller_t *eu, uint8_t dir, eu_wait_mode_t mode, mg_event_t *
         // dnot yet the right one: spin back into the hardware wait.
         uint32_t done;
         if (dir) {
-            done = eu32_idma_wait_o2a(eu, mode);
+            done = eu32_idma_wait_o2a(mode);
         } else {
-            done = eu32_idma_wait_a2o(eu, mode);
+            done = eu32_idma_wait_a2o(mode);
         }
         if (done) {
             // update the completion counter whenever a pulse was seen: it

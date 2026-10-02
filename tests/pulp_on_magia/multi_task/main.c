@@ -32,18 +32,11 @@ setup_pulp_params(uintptr_t in_a, uintptr_t in_b, uintptr_t out, uint32_t len, u
 int main(void)
 {
     int errors = 0;
-    eu_config_t eu_cfg;
-    eu_controller_t eu_ctrl;
 
     printf("[CV32] ===== Multi-task PULP-only test =====\n");
 
-    eu_cfg.hartid = get_hartid();
-    eu_ctrl.base  = NULL;
-    eu_ctrl.cfg   = &eu_cfg;
-    eu_ctrl.api   = &eu_api;
-
-    eu_init(&eu_ctrl);
-    eu_pulp_init(&eu_ctrl, 0);
+    eu_init();
+    eu_pulp_init(0);
 
     printf("[CV32] Init PULP cluster\n");
     pulp_init(PULP_BINARY_START);
@@ -61,7 +54,7 @@ int main(void)
 
         printf("[CV32] PULP task 1: vec_sum (cores 0+1)\n");
         pulp_run_task_with_params(VEC_SUM_PULP_TASK, PULP_PARAMS_ADDR, 0x03);
-        eu_pulp_wait(&eu_ctrl, WFE);
+        eu_pulp_wait(WFE);
 
         int32_t sum = out[0] + out[1];
         if (sum != 36) {
@@ -89,7 +82,7 @@ int main(void)
 
         printf("[CV32] PULP task 2: vec_dot (cores 2+3)\n");
         pulp_run_task_with_params(VEC_DOT_PULP_TASK, PULP_PARAMS_ADDR, 0x0C);
-        eu_pulp_wait(&eu_ctrl, WFE);
+        eu_pulp_wait(WFE);
 
         int32_t dot = out[0] + out[1];
         if (dot != 36) {
@@ -114,7 +107,7 @@ int main(void)
 
         printf("[CV32] PULP task 3: vec_scale (cores 4+5, scale=3)\n");
         pulp_run_task_with_params(VEC_SCALE_PULP_TASK, PULP_PARAMS_ADDR, 0x30);
-        eu_pulp_wait(&eu_ctrl, WFE);
+        eu_pulp_wait(WFE);
 
         if (out[0] != 3 || out[7] != 24) {
             printf("[CV32] SCALE FAIL: out[0]=%d (exp 3), out[7]=%d (exp 24)\n",
@@ -140,7 +133,7 @@ int main(void)
 
         printf("[CV32] PULP task 4: vec_absmax (cores 6+7)\n");
         pulp_run_task_with_params(VEC_ABSMAX_PULP_TASK, PULP_PARAMS_ADDR, 0xC0);
-        eu_pulp_wait(&eu_ctrl, WFE);
+        eu_pulp_wait(WFE);
 
         int32_t absmax = out[0] > out[1] ? out[0] : out[1];
         if (absmax != 7) {

@@ -48,47 +48,19 @@ int main(void)
     uint32_t hartid       = get_hartid();
     uint32_t l1_tile_base = get_l1_base(hartid);
 
-    /* Init iDMA */
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
-    idma_init(&idma_ctrl);
+    idma_init();
 
-    /* Init RedMulE */
-    redmule_config_t redmule_cfg      = {.hartid = hartid};
-    redmule_controller_t redmule_ctrl = {
-        .base = NULL,
-        .cfg  = &redmule_cfg,
-        .api  = &redmule_api,
-    };
-    redmule_init(&redmule_ctrl);
+    redmule_init();
 
-    /* Init FractalSync */
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
 /* Init Event Unit */
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-
-    eu_init(&eu_ctrl);
+    eu_init();
     eu_clear_events(0xFFFFFFFF);
-    eu_fsync_init(&eu_ctrl, 0);
-    eu_idma_init(&eu_ctrl, 0);
-    eu_redmule_init(&eu_ctrl, 0);
+    eu_fsync_init(0);
+    eu_idma_init(0);
+    eu_redmule_init(0);
 #endif
 
     int gemm1_idx = get_local_idx(hartid, gemm1_tiles, GEMM1_N_TILES);
@@ -96,53 +68,53 @@ int main(void)
     // int gemm3_idx = get_local_idx(hartid, gemm3_tiles, GEMM3_N_TILES);
     // int gemm4_idx = get_local_idx(hartid, gemm4_tiles, GEMM4_N_TILES);
 
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WAIT_MODE);
 
     /* Barrier: synchronize all tiles after GEMM1 before sandbox transfers */
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WAIT_MODE);
 
     uint32_t m2_size = (uint32_t)(DIM_B * DIM_C * 2);
 
     /* Xfer A: L2 → tile 12 L1 */
     if (hartid == 12) {
-        idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)m2_inp, get_l1_base(12), m2_size);
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        idma_memcpy_1d(0, (uint32_t)m2_inp, get_l1_base(12), m2_size);
+        eu_idma_wait_a2o(WAIT_MODE);
     }
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WAIT_MODE);
 
     /* Xfer C: tile 12 L1 → tile 13 L1, pushed by tile 12 */
     if (hartid == 12) {
-        idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(13), get_l1_base(12), m2_size);
-        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        idma_memcpy_1d(1, get_l1_base(13), get_l1_base(12), m2_size);
+        eu_idma_wait_o2a(WAIT_MODE);
     }
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WAIT_MODE);
 
     /* Xfer E: tile 12 L1 → tile 13 L1, work split in half:
      *   tile 12 pushes first half  (dir=1, src=tile12 L1,        dst=tile13 L1)
      *   tile 13 pulls second half  (dir=0, src=tile12 L1 + half, dst=tile13 L1 + half) */
     uint32_t half = m2_size / 2;
     if (hartid == 12) {
-        idma_memcpy_1d(&idma_ctrl, 1, get_l1_base(13), get_l1_base(12), half);
-        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        idma_memcpy_1d(1, get_l1_base(13), get_l1_base(12), half);
+        eu_idma_wait_o2a(WAIT_MODE);
     }
     if (hartid == 13) {
-        idma_memcpy_1d(&idma_ctrl, 0, get_l1_base(12) + half, get_l1_base(13) + half, half);
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        idma_memcpy_1d(0, get_l1_base(12) + half, get_l1_base(13) + half, half);
+        eu_idma_wait_a2o(WAIT_MODE);
     }
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WAIT_MODE);
 
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WAIT_MODE);
 
     /* ~~~~~~~~~~~~~~~~~~~~ Validation ~~~~~~~~~~~~~~~~~~~~ */
     // Final barrier
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WAIT_MODE);
 
     // Tile 0 checks R1 against golden
     uint32_t errors = 0;

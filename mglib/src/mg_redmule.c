@@ -27,9 +27,7 @@
 // path observe a single completion counter.
 uint8_t mg_redmule_completed __attribute__((section(".tile_bss")));
 
-void mg_redmule_gemm(redmule_controller_t *ctrl,
-                     eu_controller_t *eu,
-                     eu_wait_mode_t mode,
+void mg_redmule_gemm(eu_wait_mode_t mode,
                      uint32_t x,
                      uint32_t w,
                      uint32_t y,
@@ -40,20 +38,18 @@ void mg_redmule_gemm(redmule_controller_t *ctrl,
                      mg_event_callback_t callback)
 {
     int32_t id;
-    while ((id = redmule_acquire(ctrl)) < 0) {
+    while ((id = redmule_acquire()) < 0) {
         // Hardware queue (depth 2) is full: drain one completion pulse to
         // free a slot before retrying the acquire.
-        if (eu32_redmule_wait(eu, mode)) {
+        if (eu32_redmule_wait(mode)) {
             mg_redmule_completed++;
         }
     }
     mg_event_init(event, id, callback);
-    redmule_gemm(ctrl, x, w, y, m, n, k);
+    redmule_gemm(x, w, y, m, n, k);
 }
 
-void mg_redmule_gemm_enqueue(redmule_controller_t *ctrl,
-                             eu_controller_t *eu,
-                             eu_wait_mode_t mode,
+void mg_redmule_gemm_enqueue(eu_wait_mode_t mode,
                              uint32_t x,
                              uint32_t w,
                              uint32_t y,
@@ -64,30 +60,30 @@ void mg_redmule_gemm_enqueue(redmule_controller_t *ctrl,
                              mg_event_callback_t callback)
 {
     int32_t id;
-    while ((id = redmule_acquire(ctrl)) < 0) {
+    while ((id = redmule_acquire()) < 0) {
         // Hardware queue (depth 2) is full: drain one completion pulse to
         // free a slot before retrying the acquire.
-        if (eu32_redmule_wait(eu, mode)) {
+        if (eu32_redmule_wait(mode)) {
             mg_redmule_completed++;
         }
     }
     mg_event_init(event, id, callback);
-    redmule16_gemm_enqueue(ctrl, x, w, y, m, n, k);
+    redmule16_gemm_enqueue(x, w, y, m, n, k);
 }
 
-void mg_redmule_gemm_commit_start(redmule_controller_t *ctrl)
+void mg_redmule_gemm_commit_start()
 {
-    redmule16_gemm_commit_start(ctrl);
+    redmule16_gemm_commit_start();
 }
 
-void mg_redmule_gemm_commit(redmule_controller_t *ctrl)
+void mg_redmule_gemm_commit()
 {
-    redmule16_gemm_commit(ctrl);
+    redmule16_gemm_commit();
 }
 
-void mg_redmule_gemm_start(redmule_controller_t *ctrl)
+void mg_redmule_gemm_start()
 {
-    redmule16_gemm_start(ctrl);
+    redmule16_gemm_start();
 }
 
 // mg_redmule_wait() is defined as a static inline in mg_redmule.h so it folds
