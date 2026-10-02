@@ -27,6 +27,7 @@ static int alloc_l1(void **params,
                     int has_bias)
 {
     volatile conv2dgemm_fp16_spatz_params_t *conv_params;
+    uintptr_t shard_X;
     uintptr_t shard_A;
     uintptr_t shard_B;
     uintptr_t shard_C;
@@ -39,6 +40,7 @@ static int alloc_l1(void **params,
     size_t c_out;
     size_t K;
     size_t K_g;
+    size_t hw_in;
     size_t hw_out;
     size_t shard;
     size_t left;
@@ -53,6 +55,7 @@ static int alloc_l1(void **params,
     c_out     = output_shape[1];
     K         = c_in * kernel_h * kernel_w;
     K_g       = K / group;
+    hw_in     = input_shape[2] * input_shape[3];
     hw_out    = output_shape[2] * output_shape[3];
 
     /* Shard the output channels across the tiles (GEMM M dimension). */
@@ -67,15 +70,27 @@ static int alloc_l1(void **params,
     if (!conv_params)
         return ENOMEM;
 
+    /* The whole input (X) is brought to L1, so im2col reads it locally instead of from L2. */
+    shard_X = l1_alloc(n_batches * c_in * hw_in * sizeof(float16));
+    if (!shard_X)
+        return ENOMEM;
+
     /* Weights (A) and bias (C) are shared across batches; the im2col matrix (B) and
        the output (Y) are batched so the Spatz task can sweep all batches in one offload. */
     shard_A = l1_alloc(oc_len * K_g * sizeof(float16));
     if (!shard_A)
         return ENOMEM;
 
-    shard_B = l1_alloc(n_batches * K * hw_out * sizeof(float16));
-    if (!shard_B)
-        return ENOMEM;
+    /* A 1x1 convolution with unit stride and no padding has im2col(X) == X, byte for byte:
+       B is the input itself, so it gets no buffer and im2col has nothing to do. */
+    if (kernel_h == 1 && kernel_w == 1 && stride_h == 1 && stride_w == 1 && pad_h == 0 &&
+        pad_w == 0) {
+        shard_B = shard_X;
+    } else {
+        shard_B = l1_alloc(n_batches * K * hw_out * sizeof(float16));
+        if (!shard_B)
+            return ENOMEM;
+    }
 
     shard_C = l1_alloc(oc_len * hw_out * sizeof(float16));
     if (!shard_C)
@@ -93,6 +108,7 @@ static int alloc_l1(void **params,
     if (!beta)
         return ENOMEM;
 
+    conv_params->shard_X   = shard_X;
     conv_params->shard_A   = shard_A;
     conv_params->shard_B   = shard_B;
     conv_params->shard_C   = shard_C;
@@ -124,7 +140,7 @@ static int alloc_l1(void **params,
     return 0;
 }
 
-static int init_input_params(void *params, const float16 *W, const float16 *B)
+static int init_input_params(void *params, const float16 *X, const float16 *W, const float16 *B)
 {
     volatile conv2dgemm_fp16_spatz_params_t *conv_params;
     idma_controller_t idma_ctrl;
@@ -133,12 +149,14 @@ static int init_input_params(void *params, const float16 *W, const float16 *B)
     uint32_t K_g;
     uint32_t M;
     uint32_t N;
+    uint32_t total_in;
 
     conv_params = (volatile conv2dgemm_fp16_spatz_params_t *)params;
     K_g         = conv_params->K / conv_params->group; /* compact weights per output channel */
     oc_start    = conv_params->oc_start;
     M           = conv_params->M;
     N           = conv_params->N;
+    total_in = conv_params->n_batches * conv_params->c_in * conv_params->h_in * conv_params->w_in;
 
     idma_ctrl_init(&idma_ctrl);
     eu_ctrl_init(&eu_ctrl);
@@ -146,6 +164,12 @@ static int init_input_params(void *params, const float16 *W, const float16 *B)
     /* GEMM does Y = alpha * A @ B + beta * C; beta gates the bias term. */
     mmio_fp16(conv_params->alpha) = (float16)1.0f;
     mmio_fp16(conv_params->beta)  = conv_params->has_bias ? (float16)1.0f : (float16)0.0f;
+
+    /* Every tile builds the whole im2col matrix, so it needs the whole input: contiguous in
+       L2 -> a straight 1D transfer, after which im2col reads L1 only. */
+    idma_memcpy_1d(
+        &idma_ctrl, 0, (uint32_t)X, (uint32_t)conv_params->shard_X, total_in * sizeof(float16));
+    eu_idma_wait_a2o(&eu_ctrl, WFE);
 
     if (M > 0) {
         /* Weights A = [M, K_g] are each output channel's compact weights, contiguous in W
@@ -172,14 +196,18 @@ static int init_input_params(void *params, const float16 *W, const float16 *B)
     return 0;
 }
 
-static void im2col(void *params, const float16 *X)
+static void im2col(void *params)
 {
     volatile conv2dgemm_fp16_spatz_params_t *conv_params;
+    uintptr_t shard_X;
     uintptr_t shard_B;
     uint32_t n_batches, c_in, h_in, w_in, h_out, w_out, kernel_h, kernel_w, stride_h, stride_w,
         pad_h, pad_w;
+    uint32_t c_out, group, M, oc_start;
+    uint32_t c_in_g, c_out_g, ic_start, ic_end;
 
     conv_params = (volatile conv2dgemm_fp16_spatz_params_t *)params;
+    shard_X     = conv_params->shard_X;
     shard_B     = conv_params->shard_B;
     n_batches   = conv_params->n_batches;
     c_in        = conv_params->c_in;
@@ -193,6 +221,25 @@ static void im2col(void *params, const float16 *X)
     stride_w    = conv_params->stride_w;
     pad_h       = conv_params->pad_h;
     pad_w       = conv_params->pad_w;
+    c_out       = conv_params->c_out;
+    group       = conv_params->group;
+    M           = conv_params->M;
+    oc_start    = conv_params->oc_start;
+
+    /* 1x1 with unit stride and no padding: B already is X (see alloc_l1). */
+    if (shard_B == shard_X)
+        return;
+
+    /* Build only the rows of B this tile's GEMM reads, those of its output channels' groups:
+       a standard convolution (group == 1) reads them all, a depthwise one only M of the C_in
+       channels, and a tile with no output channels reads none. */
+    if (M == 0)
+        return;
+
+    c_in_g   = c_in / group;
+    c_out_g  = c_out / group;
+    ic_start = (oc_start / c_out_g) * c_in_g;
+    ic_end   = ((oc_start + M - 1) / c_out_g + 1) * c_in_g;
 
     uint32_t hw_out = h_out * w_out;
     uint32_t in_chw = c_in * h_in * w_in;
@@ -201,25 +248,44 @@ static void im2col(void *params, const float16 *X)
     (0 if padded), with k = (ic*K_h + ki)*K_w + kj and n = oh*W_out + ow. Each batch's
     [K, N] slice is laid out contiguously so the Spatz task sweeps them in one offload. */
     for (uint32_t b = 0; b < n_batches; b++) {
-        const float16 *X_b = X + (uintptr_t)b * in_chw;
-        uintptr_t B_b =
-            shard_B + (uintptr_t)b * (c_in * kernel_h * kernel_w) * hw_out * sizeof(float16);
+        const float16 *X_b = (const float16 *)shard_X + (uintptr_t)b * in_chw;
+        float16 *B_b = (float16 *)shard_B + (uintptr_t)b * (c_in * kernel_h * kernel_w) * hw_out;
 
-        for (uint32_t ic = 0; ic < c_in; ic++) {
+        for (uint32_t ic = ic_start; ic < ic_end; ic++) {
             const float16 *x_c = X_b + (uintptr_t)ic * h_in * w_in;
             for (uint32_t ki = 0; ki < kernel_h; ki++) {
                 for (uint32_t kj = 0; kj < kernel_w; kj++) {
                     uint32_t k = (ic * kernel_h + ki) * kernel_w + kj;
+
+                    /* Output columns whose input column iw = ow*stride - pad + kj lands inside the
+                       image: [ow_start, ow_end). They depend on kj only, so the bounds checks
+                       leave the per-element loop. */
+                    int iw_off   = (int)kj - (int)pad_w;
+                    int last     = (int)w_in - 1 - iw_off;
+                    int ow_start = iw_off < 0 ? (-iw_off + (int)stride_w - 1) / (int)stride_w : 0;
+                    int ow_end   = last < 0 ? 0 : last / (int)stride_w + 1;
+                    if (ow_end > (int)w_out)
+                        ow_end = (int)w_out;
+                    if (ow_start > ow_end)
+                        ow_start = ow_end;
+
                     for (uint32_t oh = 0; oh < h_out; oh++) {
-                        int ih = (int)(oh * stride_h) - (int)pad_h + (int)ki;
-                        for (uint32_t ow = 0; ow < w_out; ow++) {
-                            int iw     = (int)(ow * stride_w) - (int)pad_w + (int)kj;
-                            uint32_t n = oh * w_out + ow;
-                            float16 v  = (float16)0.0f;
-                            if (ih >= 0 && ih < (int)h_in && iw >= 0 && iw < (int)w_in)
-                                v = x_c[(uint32_t)ih * w_in + (uint32_t)iw];
-                            mmio_fp16(B_b + (k * hw_out + n) * sizeof(float16)) = v;
+                        int ih         = (int)(oh * stride_h) - (int)pad_h + (int)ki;
+                        float16 *B_row = B_b + k * hw_out + oh * w_out;
+
+                        if (ih < 0 || ih >= (int)h_in) {
+                            for (uint32_t ow = 0; ow < w_out; ow++)
+                                B_row[ow] = (float16)0.0f;
+                            continue;
                         }
+
+                        const float16 *x_row = x_c + (uint32_t)ih * w_in;
+                        for (int ow = 0; ow < ow_start; ow++)
+                            B_row[ow] = (float16)0.0f;
+                        for (int ow = ow_start; ow < ow_end; ow++)
+                            B_row[ow] = x_row[ow * (int)stride_w + iw_off];
+                        for (int ow = ow_end; ow < (int)w_out; ow++)
+                            B_row[ow] = (float16)0.0f;
                     }
                 }
             }
@@ -324,7 +390,7 @@ void MAGIA_conv2dgemm_fp16_spatz(const float16 *X,
         return;
     }
 
-    ret = init_input_params((void *)params, W, B);
+    ret = init_input_params((void *)params, X, W, B);
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
                HID,
@@ -333,7 +399,7 @@ void MAGIA_conv2dgemm_fp16_spatz(const float16 *X,
         return;
     }
 
-    im2col((void *)params, X);
+    im2col((void *)params);
 
     ret = offload_spatz_task((void *)params);
     if (ret != 0) {

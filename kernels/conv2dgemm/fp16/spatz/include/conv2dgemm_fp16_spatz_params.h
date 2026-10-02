@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 typedef struct {
+    uintptr_t shard_X; /* Input tensor        [N, C_in, H_in, W_in]       */
     uintptr_t shard_A; /* Weight slice        [M, K]                      */
     uintptr_t shard_B; /* im2col matrix       [K, N]                      */
     uintptr_t shard_C; /* Bias broadcast      [M, N]                      */
