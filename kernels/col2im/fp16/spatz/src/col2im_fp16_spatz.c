@@ -6,6 +6,7 @@
 #include "tile.h"
 
 #include "kernel_idma_utils.h"
+#include "kernels_profiling_utils.h"
 
 #include "col2im_fp16_spatz.h"
 #include "col2im_fp16_spatz_params.h"
@@ -239,26 +240,28 @@ void MAGIA_col2im_fp16_spatz(const float16 *input,
     int ret;
     volatile col2im_fp16_spatz_params_t *params;
 
-    ret = allocate_l1(&params,
-                      batch,
-                      channels,
-                      image_h,
-                      image_w,
-                      block_h,
-                      block_w,
-                      pad_h,
-                      pad_w,
-                      stride_h,
-                      stride_w,
-                      dilation_h,
-                      dilation_w,
-                      l_len);
+    PROF_PHASE(prof_cyc_alloc,
+               ret,
+               allocate_l1(&params,
+                           batch,
+                           channels,
+                           image_h,
+                           image_w,
+                           block_h,
+                           block_w,
+                           pad_h,
+                           pad_w,
+                           stride_h,
+                           stride_w,
+                           dilation_h,
+                           dilation_w,
+                           l_len));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = init_input_params(params, input);
+    PROF_PHASE(prof_cyc_data_in, ret, init_input_params(params, input));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
                HID,
@@ -267,7 +270,7 @@ void MAGIA_col2im_fp16_spatz(const float16 *input,
         return;
     }
 
-    ret = offload_spatz_task((void *)params);
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task((void *)params));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
                HID,
@@ -276,7 +279,7 @@ void MAGIA_col2im_fp16_spatz(const float16 *input,
         return;
     }
 
-    ret = store_result((void *)params, output);
+    PROF_PHASE(prof_cyc_data_out, ret, store_result((void *)params, output));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }

@@ -6,6 +6,7 @@
 #include "tile.h"
 
 #include "kernel_idma_utils.h"
+#include "kernels_profiling_utils.h"
 
 #include "hardsigmoid_fp16_spatz.h"
 #include "hardsigmoid_fp16_spatz_params.h"
@@ -160,13 +161,13 @@ void MAGIA_hardsigmoid_fp16_spatz(
     int ret;
     volatile hardsigmoid_fp16_spatz_params_t *params;
 
-    ret = alloc_l1((void **)&params, size, alpha, beta);
+    PROF_PHASE(prof_cyc_alloc, ret, alloc_l1((void **)&params, size, alpha, beta));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = init_input_params((void *)params, X);
+    PROF_PHASE(prof_cyc_data_in, ret, init_input_params((void *)params, X));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
                HID,
@@ -175,7 +176,7 @@ void MAGIA_hardsigmoid_fp16_spatz(
         return;
     }
 
-    ret = offload_spatz_task((void *)params);
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task((void *)params));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
                HID,
@@ -184,7 +185,7 @@ void MAGIA_hardsigmoid_fp16_spatz(
         return;
     }
 
-    ret = store_result((void *)params, Y);
+    PROF_PHASE(prof_cyc_data_out, ret, store_result((void *)params, Y));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }

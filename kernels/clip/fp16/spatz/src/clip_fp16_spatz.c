@@ -6,6 +6,7 @@
 #include "tile.h"
 
 #include "kernel_idma_utils.h"
+#include "kernels_profiling_utils.h"
 
 #include "clip_fp16_spatz.h"
 #include "clip_fp16_spatz_params.h"
@@ -160,13 +161,13 @@ void MAGIA_clip_fp16_spatz(
     int ret;
     volatile clip_fp16_spatz_params_t *params;
 
-    ret = alloc_l1(&params, size);
+    PROF_PHASE(prof_cyc_alloc, ret, alloc_l1(&params, size));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = init_input_params(params, input, min, max);
+    PROF_PHASE(prof_cyc_data_in, ret, init_input_params(params, input, min, max));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
                HID,
@@ -175,7 +176,7 @@ void MAGIA_clip_fp16_spatz(
         return;
     }
 
-    ret = offload_spatz_task(params);
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task(params));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
                HID,
@@ -184,7 +185,7 @@ void MAGIA_clip_fp16_spatz(
         return;
     }
 
-    ret = store_result(params, output);
+    PROF_PHASE(prof_cyc_data_out, ret, store_result(params, output));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }

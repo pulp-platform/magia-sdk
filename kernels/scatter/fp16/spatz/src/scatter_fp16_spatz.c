@@ -6,6 +6,7 @@
 #include "tile.h"
 
 #include "kernel_idma_utils.h"
+#include "kernels_profiling_utils.h"
 
 #include "scatter_fp16_spatz.h"
 #include "scatter_fp16_spatz_params.h"
@@ -220,13 +221,15 @@ void MAGIA_scatter_fp16_spatz(const float16 *data,
     int ret;
     void *params;
 
-    ret = allocate_l1(&params, outer_size, inner_size, axis, data_axis_dim, indices_axis_dim);
+    PROF_PHASE(prof_cyc_alloc,
+               ret,
+               allocate_l1(&params, outer_size, inner_size, axis, data_axis_dim, indices_axis_dim));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = init_input_params(params, data, indices, updates);
+    PROF_PHASE(prof_cyc_data_in, ret, init_input_params(params, data, indices, updates));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
                HID,
@@ -235,7 +238,7 @@ void MAGIA_scatter_fp16_spatz(const float16 *data,
         return;
     }
 
-    ret = offload_spatz_task(params);
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task(params));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
                HID,
@@ -244,7 +247,7 @@ void MAGIA_scatter_fp16_spatz(const float16 *data,
         return;
     }
 
-    ret = store_result(params, output);
+    PROF_PHASE(prof_cyc_data_out, ret, store_result(params, output));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }

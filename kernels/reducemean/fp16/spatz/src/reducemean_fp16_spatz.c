@@ -6,6 +6,7 @@
 #include "tile.h"
 
 #include "kernel_idma_utils.h"
+#include "kernels_profiling_utils.h"
 
 #include "reducemean_fp16_spatz.h"
 #include "reducemean_fp16_spatz_params.h"
@@ -138,13 +139,13 @@ void MAGIA_reducemean_fp16_spatz(
     int ret;
     volatile reducemean_fp16_spatz_params_t *params;
 
-    ret = alloc_l1(&params, outer_dim, reduce_dim, inner_dim);
+    PROF_PHASE(prof_cyc_alloc, ret, alloc_l1(&params, outer_dim, reduce_dim, inner_dim));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = init_input_params(params, X);
+    PROF_PHASE(prof_cyc_data_in, ret, init_input_params(params, X));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
                HID,
@@ -153,7 +154,7 @@ void MAGIA_reducemean_fp16_spatz(
         return;
     }
 
-    ret = offload_spatz_task(params);
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task(params));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
                HID,
@@ -162,7 +163,7 @@ void MAGIA_reducemean_fp16_spatz(
         return;
     }
 
-    ret = store_result(params, Y);
+    PROF_PHASE(prof_cyc_data_out, ret, store_result(params, Y));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }

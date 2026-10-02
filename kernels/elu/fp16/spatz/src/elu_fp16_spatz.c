@@ -6,6 +6,7 @@
 #include "tile.h"
 
 #include "kernel_idma_utils.h"
+#include "kernels_profiling_utils.h"
 
 #include "elu_fp16_spatz.h"
 #include "elu_fp16_spatz_params.h"
@@ -149,19 +150,19 @@ void MAGIA_elu_fp16_spatz(const float16 *X, float16 *Y, uint32_t size, float16 a
     int ret;
     volatile elu_fp16_spatz_params_t *params;
 
-    ret = allocate_l1(&params, size);
+    PROF_PHASE(prof_cyc_alloc, ret, allocate_l1(&params, size));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = init_input_params(params, X, alpha);
+    PROF_PHASE(prof_cyc_data_in, ret, init_input_params(params, X, alpha));
     if (ret != 0) {
         printf("[CV32 (%d) Params initialization failed with error: %d\n]", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = offload_spatz_task(params);
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task(params));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
                HID,
@@ -170,7 +171,7 @@ void MAGIA_elu_fp16_spatz(const float16 *X, float16 *Y, uint32_t size, float16 a
         return;
     }
 
-    ret = store_result(params, Y);
+    PROF_PHASE(prof_cyc_data_out, ret, store_result(params, Y));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }
