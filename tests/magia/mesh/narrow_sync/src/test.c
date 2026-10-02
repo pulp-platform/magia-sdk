@@ -28,24 +28,12 @@ int main(void)
     uint32_t receiver_x = GET_X_ID(DESTINATION_HART_ID);
     uint32_t receiver_y = GET_Y_ID(DESTINATION_HART_ID);
 
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
+    eu_init();
     eu_clear_events(0xFFFFFFFF);
-    eu_fsync_init(&eu_ctrl, 0);
+    eu_fsync_init(0);
 #endif
 
     /**
@@ -62,9 +50,9 @@ int main(void)
     if (hartid == DESTINATION_HART_ID)
         mmio32(floo_sync_addr) = 0;
 
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     if (sender)
@@ -74,9 +62,9 @@ int main(void)
             ;
     }
 
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     /**
@@ -90,9 +78,9 @@ int main(void)
     if (hartid == DESTINATION_HART_ID)
         mmio32(floo_sync_addr) = 0;
 
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     if (sender)
@@ -102,9 +90,9 @@ int main(void)
             ;
     }
 
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     /**
@@ -118,9 +106,9 @@ int main(void)
     if (hartid == DESTINATION_HART_ID)
         mmio32(floo_sync_addr) = 0;
 
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     if (sender)
@@ -130,9 +118,9 @@ int main(void)
             ;
     }
 
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     return 0;

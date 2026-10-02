@@ -27,42 +27,15 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
-
-    redmule_config_t redmule_cfg      = {.hartid = hartid};
-    redmule_controller_t redmule_ctrl = {
-        .base = NULL,
-        .cfg  = &redmule_cfg,
-        .api  = &redmule_api,
-    };
-
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-
-    fsync_init(&fsync_ctrl);
-    idma_init(&idma_ctrl);
-    redmule_init(&redmule_ctrl);
+    fsync_init();
+    idma_init();
+    redmule_init();
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_fsync_init(&eu_ctrl, 0);
-    eu_redmule_init(&eu_ctrl, 0);
-    eu_idma_init(&eu_ctrl, 0);
+    eu_init();
+    eu_fsync_init(0);
+    eu_redmule_init(0);
+    eu_idma_init(0);
 #endif
 
     uint32_t y_id         = GET_Y_ID(hartid);
@@ -142,24 +115,24 @@ int main(void)
     /**
      * 3. Load variables and then compute matmul
      */
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x, len_x, std_x, reps_x);
+    idma_memcpy_2d(0, axi_addr_x, obi_addr_x, len_x, std_x, reps_x);
 #if STALLING == 0
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w, obi_addr_w, len_w, std_w, reps_w);
+    idma_memcpy_2d(0, axi_addr_w, obi_addr_w, len_w, std_w, reps_w);
 #if STALLING == 0
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
+    idma_memcpy_2d(0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
 #if STALLING == 0
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
-    redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y, tile_h, tile_w, t_size);
+    redmule_gemm(obi_addr_x, obi_addr_w, obi_addr_y, tile_h, tile_w, t_size);
 #if STALLING == 0
-    eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+    eu_redmule_wait(WAIT_MODE);
 #endif
 
     /**
@@ -171,9 +144,9 @@ int main(void)
      * 5. Check results with the neighbor on the right.
      */
     uint32_t errors = 0;
-    fsync_sync_row(&fsync_ctrl);
+    fsync_sync_row();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     uint16_t computed, expected, diff = 0;

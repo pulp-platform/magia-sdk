@@ -27,33 +27,13 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
-
-    redmule_config_t redmule_cfg      = {.hartid = hartid};
-    redmule_controller_t redmule_ctrl = {
-        .base = NULL,
-        .cfg  = &redmule_cfg,
-        .api  = &redmule_api,
-    };
-
-    idma_init(&idma_ctrl);
-    redmule_init(&redmule_ctrl);
+    idma_init();
+    redmule_init();
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_redmule_init(&eu_ctrl, 0);
-    eu_idma_init(&eu_ctrl, 0);
+    eu_init();
+    eu_redmule_init(0);
+    eu_idma_init(0);
 #endif
 
     uint32_t y_id         = GET_Y_ID(hartid);
@@ -148,22 +128,22 @@ int main(void)
          * Load the static output tile
          * And then the t0 weight and input tiles
          */
-        idma_memcpy_2d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
+        idma_memcpy_2d(0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
 #if STALLING == 0
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
         // printf("Recieved this data: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile
         // uint16_t*)(obi_addr_y + 2));
 
-        idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x_0, len_x, std_x, reps_x);
+        idma_memcpy_2d(0, axi_addr_x, obi_addr_x_0, len_x, std_x, reps_x);
 #if STALLING == 0
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
-        idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w, obi_addr_w_0, len_w, std_w, reps_w);
+        idma_memcpy_2d(0, axi_addr_w, obi_addr_w_0, len_w, std_w, reps_w);
 #if STALLING == 0
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
         /**
@@ -195,48 +175,40 @@ int main(void)
              * Call redmule while loading the weight of the next timeslot.
              */
             if (i < (timeslots - 1)) {
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
-                               axi_addr_x + (t_size * (i + 1) * 2),
-                               input_pt_next,
-                               len_x,
-                               std_x,
-                               reps_x);
+                idma_memcpy_2d(
+                    0, axi_addr_x + (t_size * (i + 1) * 2), input_pt_next, len_x, std_x, reps_x);
 #if STALLING == 0
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
+                idma_memcpy_2d(0,
                                axi_addr_w + (t_size * K_SIZE * (i + 1) * 2),
                                weight_pt_next,
                                len_w,
                                std_w,
                                reps_w);
-                redmule_gemm(&redmule_ctrl,
-                             input_pt,
+                redmule_gemm(input_pt,
                              weight_pt,
                              obi_addr_y,
                              (uint16_t)tile_h,
                              (uint16_t)t_size,
                              (uint16_t)tile_w);
 #if STALLING == 0
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
-                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                eu_idma_wait_a2o(WAIT_MODE);
+                eu_redmule_wait(WAIT_MODE);
 #endif
 
                 // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile
                 // uint16_t*)(obi_addr_y + 2));
             } else {
-                redmule_gemm(&redmule_ctrl,
-                             input_pt,
+                redmule_gemm(input_pt,
                              weight_pt,
                              obi_addr_y,
                              (uint16_t)tile_h,
                              (uint16_t)t_size,
                              (uint16_t)tile_w);
 #if STALLING == 0
-                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                eu_redmule_wait(WAIT_MODE);
 #endif
                 // printf("Redmule output: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile
                 // uint16_t*)(obi_addr_y + 2));
@@ -246,9 +218,9 @@ int main(void)
         /**
          * 5. Store the output data-tile back to L2
          */
-        idma_memcpy_2d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
+        idma_memcpy_2d(1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y);
 #if STALLING == 0
-        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_o2a(WAIT_MODE);
 #endif
     }
 

@@ -91,8 +91,6 @@ static int init_input_params(void *params,
                              const float16 *updates)
 {
     volatile scatter_fp16_spatz_params_t *scatter_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uintptr_t shard_indices;
 
     uint32_t elems_per_tile;
@@ -125,24 +123,22 @@ static int init_input_params(void *params,
     for (uint32_t i = 0; i < elems_indices_per_tile; i++)
         mmio32(shard_indices + i * sizeof(uint32_t)) = (int32_t)indices[global_offset_indices + i];
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* data and updates are plain fp16 copies of contiguous L2 blocks. shard_output is not
        zeroed here: the Spatz task's step 1 copies shard_data over it in full. */
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
+    idma_memcpy_1d(0,
                    (uint32_t)(input + global_offset_data),
                    (uint32_t)scatter_params->shard_data,
                    elems_per_tile * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    eu_idma_wait_a2o(WFE);
     if (elems_indices_per_tile) {
-        idma_memcpy_1d(&idma_ctrl,
-                       0,
+        idma_memcpy_1d(0,
                        (uint32_t)(updates + global_offset_indices),
                        (uint32_t)scatter_params->shard_updates,
                        elems_indices_per_tile * sizeof(float16));
-        eu_idma_wait_a2o(&eu_ctrl, WFE);
+        eu_idma_wait_a2o(WFE);
     }
 
     return 0;
@@ -150,13 +146,12 @@ static int init_input_params(void *params,
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
     spatz_run_task_with_params(SCATTER_FP16_SPATZ_TASK, params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -174,8 +169,6 @@ exit:
 static int store_result(void *params, float16 *output)
 {
     volatile scatter_fp16_spatz_params_t *scatter_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t elems_per_tile;
     uint32_t global_offset;
     uint32_t iter_start;
@@ -193,16 +186,15 @@ static int store_result(void *params, float16 *output)
 
     global_offset = iter_start * data_axis_dim * inner_size;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's output slice is contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
+    idma_memcpy_1d(1,
                    (uint32_t)(output + global_offset),
                    (uint32_t)scatter_params->shard_output,
                    elems_per_tile * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

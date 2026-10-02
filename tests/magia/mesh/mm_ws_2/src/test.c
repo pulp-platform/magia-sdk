@@ -28,42 +28,15 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
-
-    redmule_config_t redmule_cfg      = {.hartid = hartid};
-    redmule_controller_t redmule_ctrl = {
-        .base = NULL,
-        .cfg  = &redmule_cfg,
-        .api  = &redmule_api,
-    };
-
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-
-    fsync_init(&fsync_ctrl);
-    idma_init(&idma_ctrl);
-    redmule_init(&redmule_ctrl);
+    fsync_init();
+    idma_init();
+    redmule_init();
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_redmule_init(&eu_ctrl, 0);
-    eu_idma_init(&eu_ctrl, 0);
-    eu_fsync_init(&eu_ctrl, 0);
+    eu_init();
+    eu_redmule_init(0);
+    eu_idma_init(0);
+    eu_fsync_init(0);
 #endif
 
     uint32_t y_id         = GET_Y_ID(hartid);
@@ -155,20 +128,20 @@ int main(void)
     for (uint8_t z = 0; z < N_ITERATIONS; z++) {
         // TIMESLOT t = -1
         // Initial static weight load
-        idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w, obi_addr_w, len_w, std_w, reps_w);
+        idma_memcpy_2d(0, axi_addr_w, obi_addr_w, len_w, std_w, reps_w);
 #if STALLING == 0
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
         // First input load
-        idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x_0, len_x, std_x, reps_x);
+        idma_memcpy_2d(0, axi_addr_x, obi_addr_x_0, len_x, std_x, reps_x);
 #if STALLING == 0
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
-        fsync_sync_global(&fsync_ctrl);
+        fsync_sync_global();
 #if STALLING == 0
-        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        eu_fsync_wait(WAIT_MODE);
 #endif
 
         /**
@@ -180,9 +153,9 @@ int main(void)
              * 3a. Skip the timeslot if outside the range
              */
             if (t < t_start || t > t_end) {
-                fsync_sync_global(&fsync_ctrl);
+                fsync_sync_global();
 #if STALLING == 0
-                eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+                eu_fsync_wait(WAIT_MODE);
 #endif
                 continue;
             }
@@ -218,15 +191,10 @@ int main(void)
              * 3c. Load L2 output of current timeslot (if upmost tile)
              */
             if (y_id == 0 && t < (t_end)) {
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
-                               axi_addr_y + (pt * t_size * K_SIZE * 2),
-                               output_pt,
-                               len_y,
-                               std_y,
-                               reps_y);
+                idma_memcpy_2d(
+                    0, axi_addr_y + (pt * t_size * K_SIZE * 2), output_pt, len_y, std_y, reps_y);
 #if STALLING == 0
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                eu_idma_wait_a2o(WAIT_MODE);
 #endif
                 // printf("Received this data: %x, %x\n", *(volatile uint16_t*)(output_pt),
                 // *(volatile uint16_t*)(output_pt + 2));
@@ -248,8 +216,7 @@ int main(void)
              *      - Set REDMULE to execute current timeslot output
              */
             if (pt < timeslots - 1)
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
+                idma_memcpy_2d(0,
                                axi_addr_x + (t_size * (pt + 1) * N_SIZE * 2),
                                input_pt_next,
                                len_x,
@@ -257,8 +224,7 @@ int main(void)
                                reps_x);
             if (pt > 0) {
                 if (y_id == (MESH_Y_TILES - 1)) {
-                    idma_memcpy_2d(&idma_ctrl,
-                                   1,
+                    idma_memcpy_2d(1,
                                    axi_addr_y + ((pt - 1) * t_size * K_SIZE * 2),
                                    output_pt_prev,
                                    len_y,
@@ -267,24 +233,21 @@ int main(void)
                 } else {
                     switch (pt % 3) {
                     case 0:
-                        idma_memcpy_1d(&idma_ctrl,
-                                       1,
+                        idma_memcpy_1d(1,
                                        get_l1_base(hartid + MESH_X_TILES) + (tile_h * tile_w * 2) +
                                            (tile_h * t_size * 6) + (tile_w * t_size * 4),
                                        output_pt_prev,
                                        tile_w * t_size * 2);
                         break;
                     case 1:
-                        idma_memcpy_1d(&idma_ctrl,
-                                       1,
+                        idma_memcpy_1d(1,
                                        get_l1_base(hartid + MESH_X_TILES) + (tile_h * tile_w * 2) +
                                            (tile_h * t_size * 6),
                                        output_pt_prev,
                                        tile_w * t_size * 2);
                         break;
                     case 2:
-                        idma_memcpy_1d(&idma_ctrl,
-                                       1,
+                        idma_memcpy_1d(1,
                                        get_l1_base(hartid + MESH_X_TILES) + (tile_h * tile_w * 2) +
                                            (tile_h * t_size * 6) + (tile_w * t_size * 2),
                                        output_pt_prev,
@@ -294,8 +257,7 @@ int main(void)
                 }
             }
             if (pt < timeslots)
-                redmule_gemm(&redmule_ctrl,
-                             input_pt,
+                redmule_gemm(input_pt,
                              obi_addr_w,
                              output_pt,
                              (uint16_t)t_size,
@@ -304,20 +266,20 @@ int main(void)
 
 #if STALLING == 0
             if (pt < timeslots - 1)
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                eu_idma_wait_a2o(WAIT_MODE);
             if (pt > 0)
-                eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                eu_idma_wait_o2a(WAIT_MODE);
             if (pt < timeslots)
-                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                eu_redmule_wait(WAIT_MODE);
 #endif
 
             /**
              * 3f. Sync before next timeslot
              */
             pt++;
-            fsync_sync_global(&fsync_ctrl);
+            fsync_sync_global();
 #if STALLING == 0
-            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+            eu_fsync_wait(WAIT_MODE);
 #endif
         }
     }
@@ -325,9 +287,9 @@ int main(void)
     /**
      * 5. Check results
      */
-    fsync_sync_col(&fsync_ctrl);
+    fsync_sync_col();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
     uint32_t errors = 0;
     if (y_id == MESH_Y_TILES - 1) {

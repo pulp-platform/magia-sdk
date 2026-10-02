@@ -76,8 +76,6 @@ static int alloc_l1(void **params,
 static int init_input_params(void *params, const float16 *data)
 {
     volatile gather_fp16_spatz_params_t *gather_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
 
     uint32_t in_batch_stride;
     uint32_t batch_start;
@@ -91,32 +89,30 @@ static int init_input_params(void *params, const float16 *data)
     if (batch_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's batches [batch_start, batch_start+batch_len) are a contiguous L2 block.
        The Spatz task fully writes shard_output (axis_length per batch), so it is not zeroed
        here. */
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
+    idma_memcpy_1d(0,
                    (uint32_t)(data + batch_start * in_batch_stride),
                    (uint32_t)gather_params->shard_input,
                    batch_len * in_batch_stride * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    eu_idma_wait_a2o(WFE);
 
     return 0;
 }
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
 
     spatz_run_task_with_params(GATHER_FP16_SPATZ_TASK, (uint32_t)params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -134,8 +130,6 @@ exit:
 static int store_result(void *params, float16 *gather_result)
 {
     volatile gather_fp16_spatz_params_t *gather_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t axis_length;
     uint32_t start;
     uint32_t len;
@@ -148,16 +142,15 @@ static int store_result(void *params, float16 *gather_result)
     if (len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's output batches [batch_start, batch_start+batch_len) are contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
+    idma_memcpy_1d(1,
                    (uint32_t)(gather_result + start * axis_length),
                    (uint32_t)gather_params->shard_output,
                    len * axis_length * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

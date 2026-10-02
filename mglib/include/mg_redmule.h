@@ -22,9 +22,7 @@
  * through `eu`/`mode`, exactly like mg_redmule_wait() does - until a slot
  * frees and a fresh id can be acquired.
  */
-extern void mg_redmule_gemm(redmule_controller_t *ctrl,
-                            eu_controller_t *eu,
-                            eu_wait_mode_t mode,
+extern void mg_redmule_gemm(eu_wait_mode_t mode,
                             uint32_t x,
                             uint32_t w,
                             uint32_t y,
@@ -33,9 +31,7 @@ extern void mg_redmule_gemm(redmule_controller_t *ctrl,
                             uint16_t k,
                             mg_event_t *event,
                             mg_event_callback_t callback);
-extern void mg_redmule_gemm_enqueue(redmule_controller_t *ctrl,
-                                    eu_controller_t *eu,
-                                    eu_wait_mode_t mode,
+extern void mg_redmule_gemm_enqueue(eu_wait_mode_t mode,
                                     uint32_t x,
                                     uint32_t w,
                                     uint32_t y,
@@ -44,9 +40,9 @@ extern void mg_redmule_gemm_enqueue(redmule_controller_t *ctrl,
                                     uint16_t k,
                                     mg_event_t *event,
                                     mg_event_callback_t callback);
-extern void mg_redmule_gemm_commit_start(redmule_controller_t *ctrl);
-extern void mg_redmule_gemm_start(redmule_controller_t *ctrl);
-extern void mg_redmule_gemm_commit(redmule_controller_t *ctrl);
+extern void mg_redmule_gemm_commit_start();
+extern void mg_redmule_gemm_start();
+extern void mg_redmule_gemm_commit();
 
 /**
  * Completion counter. Defined in mg_redmule.c and advanced from both the
@@ -69,13 +65,12 @@ extern uint8_t mg_redmule_completed;
  * Defined here as a static inline (rather than out-of-line in mg_redmule.c) so
  * it folds into its call sites under -O/-flto.
  */
-static inline __ALWAYS_INLINE_ void
-mg_redmule_wait(eu_controller_t *eu, eu_wait_mode_t mode, mg_event_t *event)
+static inline __ALWAYS_INLINE_ void mg_redmule_wait(eu_wait_mode_t mode, mg_event_t *event)
 {
     uint8_t target = (uint8_t)(event->id + 1);
 
     while (!mg_seq_ge(mg_redmule_completed, target)) {
-        if (eu32_redmule_wait(eu, mode)) {
+        if (eu32_redmule_wait(mode)) {
             uint32_t job_id = (uint32_t)HWPE_READ(REDMULE_REG_OFFS + REDMULE_RUNNING_JOB);
             mg_redmule_completed =
                 (mg_redmule_completed + 1) > job_id ? (mg_redmule_completed + 1) : job_id;

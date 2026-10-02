@@ -92,8 +92,6 @@ static int init_input_params(void *params,
                              const float16 epsilon)
 {
     volatile instancenorm_fp16_spatz_params_t *instancenorm_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t num_channels;
     uint32_t inst_start;
     uint32_t inst_len;
@@ -107,47 +105,39 @@ static int init_input_params(void *params,
 
     mmio_fp16(instancenorm_params->eps) = epsilon;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* Per-channel gamma/beta (full num_channels, contiguous) are needed by every tile. */
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
-                   (uint32_t)scale,
-                   (uint32_t)instancenorm_params->gamma,
-                   num_channels * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
-                   (uint32_t)B,
-                   (uint32_t)instancenorm_params->beta,
-                   num_channels * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(
+        0, (uint32_t)scale, (uint32_t)instancenorm_params->gamma, num_channels * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
+    idma_memcpy_1d(
+        0, (uint32_t)B, (uint32_t)instancenorm_params->beta, num_channels * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
 
     if (inst_len == 0)
         return 0;
 
     /* This tile's instances [inst_start, inst_end) are contiguous in L2. The Spatz task fully
        writes shard_output, so it is not zeroed here. */
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
+    idma_memcpy_1d(0,
                    (uint32_t)(input + inst_start * hw_len),
                    (uint32_t)instancenorm_params->shard_input,
                    inst_len * hw_len * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    eu_idma_wait_a2o(WFE);
 
     return 0;
 }
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
     spatz_run_task_with_params(INSTANCENORM_FP16_SPATZ_TASK, (uint32_t)params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -165,8 +155,6 @@ exit:
 static int store_result(void *params, float16 *output)
 {
     volatile instancenorm_fp16_spatz_params_t *instancenorm_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t inst_start;
     uint32_t inst_len;
     uint32_t hw_len;
@@ -179,16 +167,15 @@ static int store_result(void *params, float16 *output)
     if (inst_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's output instances [inst_start, inst_end) are contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
+    idma_memcpy_1d(1,
                    (uint32_t)(output + inst_start * hw_len),
                    (uint32_t)instancenorm_params->shard_output,
                    inst_len * hw_len * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

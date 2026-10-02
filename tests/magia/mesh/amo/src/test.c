@@ -24,28 +24,15 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
     uint32_t y_id         = GET_Y_ID(hartid);
     uint32_t x_id         = GET_X_ID(hartid);
     uint32_t l1_tile_base = get_l1_base(hartid);
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_fsync_init(&eu_ctrl, 0);
+    eu_init();
+    eu_fsync_init(0);
 #endif
 
     /**
@@ -54,9 +41,9 @@ int main(void)
     mmio32(l1_tile_base) = (uint32_t)INITIAL_VALUE;
 
     // Synch all the tiles
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     /**
@@ -71,9 +58,9 @@ int main(void)
     }
 
     // Synch all the tiles
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     /**

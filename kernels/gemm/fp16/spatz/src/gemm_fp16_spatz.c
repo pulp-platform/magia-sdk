@@ -134,8 +134,6 @@ static int init_input_params(void *params,
                              uint32_t Y_shape[2])
 {
     volatile gemm_fp16_spatz_params_t *gemm_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t s_start;
     uint32_t s_len;
     uint32_t M;
@@ -149,8 +147,8 @@ static int init_input_params(void *params,
     N           = gemm_params->N;
     K           = gemm_params->K;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     if (s_len > 0) {
         if (gemm_params->shard_dim == 0) {
@@ -159,77 +157,66 @@ static int init_input_params(void *params,
                each of the K rows contributes s_len elements spaced M apart: a strided 2D transfer
                packed contiguously into shard_A ([K, s_len]). */
             if (!gemm_params->transA)
-                idma_memcpy_1d(&idma_ctrl,
-                               0,
+                idma_memcpy_1d(0,
                                (uint32_t)(A + s_start * K),
                                (uint32_t)gemm_params->shard_A,
                                s_len * K * sizeof(float16));
             else
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
+                idma_memcpy_2d(0,
                                (uint32_t)(A + s_start),
                                (uint32_t)gemm_params->shard_A,
                                s_len * sizeof(float16),
                                A_shape[1] * sizeof(float16),
                                A_shape[0]);
-            eu_idma_wait_a2o(&eu_ctrl, WFE);
+            eu_idma_wait_a2o(WFE);
 
             /* B: full matrix, contiguous. */
-            idma_memcpy_1d(&idma_ctrl,
-                           0,
+            idma_memcpy_1d(0,
                            (uint32_t)B,
                            (uint32_t)gemm_params->shard_B,
                            B_shape[0] * B_shape[1] * sizeof(float16));
-            eu_idma_wait_a2o(&eu_ctrl, WFE);
+            eu_idma_wait_a2o(WFE);
 
             /* C: this tile's rows [s_start, s_start+s_len) of [M, N] are contiguous. The Spatz
                task overwrites the whole output shard, so shard_Y is not zeroed here. */
-            idma_memcpy_1d(&idma_ctrl,
-                           0,
+            idma_memcpy_1d(0,
                            (uint32_t)(C + s_start * N),
                            (uint32_t)gemm_params->shard_C,
                            s_len * N * sizeof(float16));
-            eu_idma_wait_a2o(&eu_ctrl, WFE);
+            eu_idma_wait_a2o(WFE);
         } else {
             /* Sharded over N: A is loaded whole; B and C get this tile's output columns
                [s_start, s_start+s_len). A is a plain contiguous copy in whichever layout it has. */
-            idma_memcpy_1d(&idma_ctrl,
-                           0,
-                           (uint32_t)A,
-                           (uint32_t)gemm_params->shard_A,
-                           M * K * sizeof(float16));
-            eu_idma_wait_a2o(&eu_ctrl, WFE);
+            idma_memcpy_1d(0, (uint32_t)A, (uint32_t)gemm_params->shard_A, M * K * sizeof(float16));
+            eu_idma_wait_a2o(WFE);
 
             /* B: transB == 0 -> B is [K, N], the column slice is s_len elements per row spaced N
                apart -> strided 2D packed into shard_B ([K, s_len]). transB == 1 -> B is [N, K],
                those columns are physical rows [s_start, s_start+s_len), contiguous -> 1D into
                shard_B ([s_len, K]). */
             if (!gemm_params->transB)
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
+                idma_memcpy_2d(0,
                                (uint32_t)(B + s_start),
                                (uint32_t)gemm_params->shard_B,
                                s_len * sizeof(float16),
                                N * sizeof(float16),
                                K);
             else
-                idma_memcpy_1d(&idma_ctrl,
-                               0,
+                idma_memcpy_1d(0,
                                (uint32_t)(B + s_start * K),
                                (uint32_t)gemm_params->shard_B,
                                s_len * K * sizeof(float16));
-            eu_idma_wait_a2o(&eu_ctrl, WFE);
+            eu_idma_wait_a2o(WFE);
 
             /* C: this tile's output columns [s_start, s_start+s_len) of [M, N] are s_len elements
                per row spaced N apart -> strided 2D packed into shard_C ([M, s_len]). */
-            idma_memcpy_2d(&idma_ctrl,
-                           0,
+            idma_memcpy_2d(0,
                            (uint32_t)(C + s_start),
                            (uint32_t)gemm_params->shard_C,
                            s_len * sizeof(float16),
                            N * sizeof(float16),
                            M);
-            eu_idma_wait_a2o(&eu_ctrl, WFE);
+            eu_idma_wait_a2o(WFE);
         }
     }
 
@@ -241,13 +228,12 @@ static int init_input_params(void *params,
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
     spatz_run_task_with_params(GEMM_FP16_SPATZ_TASK, (uint32_t)params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -265,8 +251,6 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile gemm_fp16_spatz_params_t *gemm_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t s_start;
     uint32_t s_len;
     uint32_t M;
@@ -281,28 +265,26 @@ static int store_result(void *params, float16 *Y)
     if (s_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     if (gemm_params->shard_dim == 0) {
         /* This tile's output rows [s_start, s_start+s_len) of [M, N] are contiguous in L2. */
-        idma_memcpy_1d(&idma_ctrl,
-                       1,
+        idma_memcpy_1d(1,
                        (uint32_t)(Y + s_start * N),
                        (uint32_t)gemm_params->shard_Y,
                        s_len * N * sizeof(float16));
     } else {
         /* This tile's output columns [s_start, s_start+s_len) of [M, N] are s_len elements per row
            spaced N apart: a strided 2D transfer from the packed shard_Y ([M, s_len]). */
-        idma_memcpy_2d(&idma_ctrl,
-                       1,
+        idma_memcpy_2d(1,
                        (uint32_t)(Y + s_start),
                        (uint32_t)gemm_params->shard_Y,
                        s_len * sizeof(float16),
                        N * sizeof(float16),
                        M);
     }
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }
