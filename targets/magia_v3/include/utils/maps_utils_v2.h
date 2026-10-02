@@ -8,6 +8,11 @@
  * L2 descriptor types are reused verbatim; only the point-to-point transport
  * descriptors and tile plan are versioned here.  Keeping the common fields in
  * the same order as their v1 counterparts keeps generator changes mechanical.
+ *
+ * Receives whose packed payload already matches a whole, dense destination
+ * slice are consumed in place (MAPS_FIFO_INPLACE_RECV, default on): the slice
+ * is aliased to the FIFO slot for the token's operations and the slot is
+ * released afterwards, instead of being unpacked into planned storage.
  */
 
 #include "utils/maps_utils.h"
@@ -140,15 +145,20 @@ static inline void maps_fifo_init(const fifo_tile_plan_t *plan)
                   plan->fifo.num_slots, plan->fifo.slot_data_size);
 }
 
-/* Copy a packed FIFO payload to a potentially strided MAPS destination. */
-static inline void maps_fifo_unpack(const fifo_msg_t *msg, const subslice_desc_t *dst,
-                                    uint32_t dst_addr, idma_controller_t *idma_ctrl,
-                                    eu_controller_t *eu_ctrl)
+static inline void maps_fifo_check_msg(const fifo_msg_t *msg, const subslice_desc_t *dst)
 {
     if (msg->desc.rank != dst->rank || msg->elem_bytes != dst->elem_bytes ||
         msg->desc.num_elems != maps_shape_elems(dst->rank, dst->shape)) {
         maps_trap();
     }
+}
+
+/* Copy a packed FIFO payload to a potentially strided MAPS destination. */
+static inline void maps_fifo_unpack(const fifo_msg_t *msg, const subslice_desc_t *dst,
+                                    uint32_t dst_addr, idma_controller_t *idma_ctrl,
+                                    eu_controller_t *eu_ctrl)
+{
+    maps_fifo_check_msg(msg, dst);
 
     tensor_sub_slice_t packed;
     fifo_packed_slice(&msg->desc, msg->elem_bytes, &packed);
@@ -366,13 +376,109 @@ static inline uint32_t maps_fifo_peek_from(const fifo_tile_plan_t *plan,
     return 1u;
 }
 
-static inline void maps_fifo_wait_recv(const fifo_tile_plan_t *plan,
-                                       const fifo_recv_desc_t *recv,
-                                       uint32_t token,
-                                       uint32_t slot,
-                                       idma_controller_t *idma_ctrl,
-                                       eu_controller_t *eu_ctrl,
-                                       maps_fifo_token_state_t *states)
+#if MAPS_FIFO_INPLACE_RECV
+static inline uint32_t maps_fifo_op_uses_slice(const op_desc_t *op, uint32_t slice_id)
+{
+    for (uint32_t i = 0; i < op->num_inputs; ++i)
+        if (op->inputs[i].slice_id == slice_id)
+            return 1u;
+    for (uint32_t i = 0; i < op->num_outputs; ++i)
+        if (op->outputs[i].slice_id == slice_id)
+            return 1u;
+    return 0u;
+}
+
+/* A receive may be consumed straight from its FIFO slot when its packed
+ * payload is byte-identical to the destination slice and only the token's
+ * operations read the slice.  The slot is then released right after the
+ * operations, before any transfer that could block on backpressure. */
+static inline uint32_t maps_fifo_recv_inplace_ok(const fifo_tile_plan_t *plan,
+                                                 uint32_t recv_idx)
+{
+    const fifo_recv_desc_t *recv = &plan->recvs[recv_idx];
+    const subslice_desc_t *dst = &recv->dst;
+    const slice_desc_t *slice = get_slice((const tile_plan_t *)plan, dst->slice_id);
+
+    if (slice == NULL || slice->global_kind == GLOBAL_INITIALIZER)
+        return 0u;
+    if (dst->rank != slice->rank || dst->rank == 0u ||
+        dst->elem_bytes != slice->elem_bytes)
+        return 0u;
+
+    /* The receive must cover the whole slice, which must be densely packed. */
+    uint32_t packed_stride = dst->elem_bytes;
+    for (uint32_t d = dst->rank; d-- > 0u;) {
+        if (dst->offset[d] != 0u || dst->shape[d] != slice->shape[d] ||
+            dst->strides_bytes[d] != slice->strides_bytes[d] ||
+            slice->strides_bytes[d] != packed_stride)
+            return 0u;
+        packed_stride *= dst->shape[d];
+    }
+
+    /* A second writer would need the planned storage; a second receive on
+     * the same sub-ring would be hidden behind the held head slot. */
+    for (uint32_t i = 0; i < plan->num_recvs; ++i) {
+        if (i == recv_idx)
+            continue;
+        if (plan->recvs[i].dst.slice_id == dst->slice_id ||
+            plan->recvs[i].producer_idx == recv->producer_idx)
+            return 0u;
+    }
+    for (uint32_t i = 0; i < plan->num_l2_reads; ++i)
+        if (plan->l2_reads[i].dst.slice_id == dst->slice_id)
+            return 0u;
+
+    /* Transfers out of the slice run after the release (and asynchronous
+     * sends outlive the token); collective peers address this tile's slices
+     * from the plan rather than through the alias. */
+    for (uint32_t i = 0; i < plan->num_sends; ++i)
+        if (plan->sends[i].src.slice_id == dst->slice_id)
+            return 0u;
+    for (uint32_t i = 0; i < plan->num_l2_writes; ++i)
+        if (plan->l2_writes[i].src.slice_id == dst->slice_id)
+            return 0u;
+    for (uint32_t i = 0; i < plan->num_ops; ++i) {
+        const op_desc_t *op = &plan->ops[i];
+        if ((op->kind == OP_ALL_REDUCE_MAX || op->kind == OP_ALL_REDUCE_SUM ||
+             op->collective.num_participants != 0u) &&
+            maps_fifo_op_uses_slice(op, dst->slice_id))
+            return 0u;
+    }
+    return 1u;
+}
+
+static inline void maps_fifo_plan_inplace(const fifo_tile_plan_t *plan, uint8_t *inplace)
+{
+    uint32_t num_inplace = 0u;
+
+    for (uint32_t i = 0; i < plan->num_recvs; ++i) {
+        inplace[i] = num_inplace < MAPS_MAX_SLICE_ALIASES &&
+                     maps_fifo_recv_inplace_ok(plan, i);
+        num_inplace += inplace[i];
+    }
+}
+
+/* Return the FIFO slots held by in-place receives once the token no longer
+ * reads them, and restore the planned slice addresses. */
+static inline void maps_fifo_release_inplace(const fifo_tile_plan_t *plan,
+                                             const uint32_t *held, uint32_t num_held)
+{
+    for (uint32_t i = 0; i < num_held; ++i)
+        fifo_release(plan->hartid, held[i]);
+    maps_slice_alias_clear(plan->hartid);
+}
+#endif
+
+/* Returns 1 when the payload was left in its FIFO slot (in-place receive); the
+ * caller must then release recv->producer_idx with maps_fifo_release_inplace. */
+static inline uint32_t maps_fifo_wait_recv(const fifo_tile_plan_t *plan,
+                                           const fifo_recv_desc_t *recv,
+                                           uint32_t token,
+                                           uint32_t slot,
+                                           uint32_t inplace,
+                                           idma_controller_t *idma_ctrl,
+                                           eu_controller_t *eu_ctrl,
+                                           maps_fifo_token_state_t *states)
 {
     fifo_msg_t msg;
     uint32_t expected_tag = maps_fifo_tag(recv->transition_id, slot);
@@ -398,6 +504,20 @@ static inline void maps_fifo_wait_recv(const fifo_tile_plan_t *plan,
             maps_trap();
         }
 
+#if MAPS_FIFO_INPLACE_RECV
+        /* Spatz vector accesses must stay 4-byte aligned; FIFO payloads are
+         * by construction, so the unpack fallback should never trigger. */
+        if (inplace && (msg.data_ptr & 3u) == 0u) {
+            maps_fifo_check_msg(&msg, &recv->dst);
+            maps_slice_alias_push(plan->hartid, recv->dst.slice_id, slot, msg.data_ptr);
+            maps_trace_event((const tile_plan_t *)plan, token, slot, "fifo-recv-inplace",
+                             recv->transition_id);
+            return 1u;
+        }
+#else
+        (void)inplace;
+#endif
+
         maps_fifo_unpack(
             &msg, &recv->dst,
             local_subslice_addr((const tile_plan_t *)plan, &recv->dst, slot),
@@ -405,7 +525,7 @@ static inline void maps_fifo_wait_recv(const fifo_tile_plan_t *plan,
         fifo_release(plan->hartid, msg.src);
         maps_trace_event((const tile_plan_t *)plan, token, slot, "fifo-recv",
                          recv->transition_id);
-        return;
+        return 0u;
     }
 }
 
@@ -432,10 +552,22 @@ static inline void maps_fifo_run_tile_token(const fifo_tile_plan_t *plan, uint32
         maps_trace_duration((const tile_plan_t *)plan, token, slot, "l2-read", i,
                             maps_read_cycle() - step_start);
     }
+#if MAPS_FIFO_INPLACE_RECV
+    uint8_t inplace[plan->num_recvs + 1u];
+    uint32_t held[MAPS_MAX_SLICE_ALIASES];
+    uint32_t num_held = 0u;
+    maps_fifo_plan_inplace(plan, inplace);
+#endif
     for (uint32_t i = 0; i < plan->num_recvs; ++i) {
         uint32_t step_start = maps_read_cycle();
+#if MAPS_FIFO_INPLACE_RECV
+        if (maps_fifo_wait_recv(plan, &plan->recvs[i], token, slot, inplace[i],
+                                idma_ctrl, eu_ctrl, 0))
+            held[num_held++] = plan->recvs[i].producer_idx;
+#else
         maps_fifo_wait_recv(
-            plan, &plan->recvs[i], token, slot, idma_ctrl, eu_ctrl, 0);
+            plan, &plan->recvs[i], token, slot, 0u, idma_ctrl, eu_ctrl, 0);
+#endif
         maps_trace_duration((const tile_plan_t *)plan, token, slot, "recv",
                             plan->recvs[i].transition_id,
                             maps_read_cycle() - step_start);
@@ -448,6 +580,9 @@ static inline void maps_fifo_run_tile_token(const fifo_tile_plan_t *plan, uint32
         maps_trace_duration((const tile_plan_t *)plan, token, slot, "op", i,
                             maps_read_cycle() - step_start);
     }
+#if MAPS_FIFO_INPLACE_RECV
+    maps_fifo_release_inplace(plan, held, num_held);
+#endif
     for (uint32_t i = 0; i < plan->num_sends; ++i) {
         uint32_t step_start = maps_read_cycle();
         maps_fifo_issue_send(plan, &plan->sends[i], token, slot, idma_ctrl, eu_ctrl);
@@ -486,6 +621,11 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
      * records are bounded by the hardware's 16-entry descriptor queue. */
     maps_fifo_token_state_t states[plan->num_token_slots];
     maps_fifo_pending_send_t pending[MAPS_FIFO_MAX_PENDING_SENDS] = {0};
+#if MAPS_FIFO_INPLACE_RECV
+    uint8_t inplace[plan->num_recvs + 1u];
+    uint32_t held[MAPS_MAX_SLICE_ALIASES];
+    maps_fifo_plan_inplace(plan, inplace);
+#endif
     for (uint32_t slot = 0u; slot < plan->num_token_slots; ++slot) {
         states[slot].sends = 0;
         states[slot].num_sends = 0u;
@@ -510,10 +650,19 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
         }
 
         maps_fifo_reap_completed_sends(plan, states);
+#if MAPS_FIFO_INPLACE_RECV
+        uint32_t num_held = 0u;
+#endif
         for (uint32_t i = 0; i < plan->num_recvs; ++i) {
             uint32_t step_start = maps_read_cycle();
-            maps_fifo_wait_recv(plan, &plan->recvs[i], token, slot,
+#if MAPS_FIFO_INPLACE_RECV
+            if (maps_fifo_wait_recv(plan, &plan->recvs[i], token, slot, inplace[i],
+                                    idma_ctrl, eu_ctrl, states))
+                held[num_held++] = plan->recvs[i].producer_idx;
+#else
+            maps_fifo_wait_recv(plan, &plan->recvs[i], token, slot, 0u,
                                 idma_ctrl, eu_ctrl, states);
+#endif
             maps_trace_duration((const tile_plan_t *)plan, token, slot, "recv",
                                 plan->recvs[i].transition_id,
                                 maps_read_cycle() - step_start);
@@ -527,6 +676,9 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
             maps_trace_duration((const tile_plan_t *)plan, token, slot, "op", i,
                                 maps_read_cycle() - step_start);
         }
+#if MAPS_FIFO_INPLACE_RECV
+        maps_fifo_release_inplace(plan, held, num_held);
+#endif
         maps_fifo_reap_completed_sends(plan, states);
         for (uint32_t i = 0; i < plan->num_l2_writes; ++i) {
             uint32_t step_start = maps_read_cycle();

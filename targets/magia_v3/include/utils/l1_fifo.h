@@ -574,7 +574,9 @@ static inline void fifo_push_cpu(uint32_t target_hartid,
  * The returned data_ptr points into the sub-ring's head slot and stays valid
  * until fifo_release(hartid, out->src) — so peek/verify/release is race-free even
  * while the producer keeps pushing (backpressure prevents the producer from
- * reusing the head slot before it is released).
+ * reusing the head slot before it is released). A consumer may therefore also
+ * compute on the payload in place and release only afterwards, as the MAPS FIFO
+ * transport does for dense whole-slice receives.
  */
 static inline uint32_t fifo_peek(uint32_t hartid, fifo_msg_t *out)
 {
