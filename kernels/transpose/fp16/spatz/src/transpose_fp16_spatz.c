@@ -6,6 +6,7 @@
 #include "tile.h"
 
 #include "kernel_idma_utils.h"
+#include "kernels_profiling_utils.h"
 
 #include "transpose_fp16_spatz.h"
 #include "transpose_fp16_spatz_params.h"
@@ -213,14 +214,23 @@ void MAGIA_transpose_fp16_spatz(const float16 *input,
     uint32_t shard_in_elems;
     uint32_t shard_out_elems;
 
-    ret = alloc_l1(
-        (void **)&params, in_shape, out_shape, rank, iterations, &shard_in_elems, &shard_out_elems);
+    PROF_PHASE(prof_cyc_alloc,
+               ret,
+               alloc_l1((void **)&params,
+                        in_shape,
+                        out_shape,
+                        rank,
+                        iterations,
+                        &shard_in_elems,
+                        &shard_out_elems));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = init_input_params((void *)params, input, perm, shard_in_elems, shard_out_elems);
+    PROF_PHASE(prof_cyc_data_in,
+               ret,
+               init_input_params((void *)params, input, perm, shard_in_elems, shard_out_elems));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
                HID,
@@ -229,7 +239,7 @@ void MAGIA_transpose_fp16_spatz(const float16 *input,
         return;
     }
 
-    ret = offload_spatz_task((void *)params);
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task((void *)params));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
                HID,
@@ -238,7 +248,7 @@ void MAGIA_transpose_fp16_spatz(const float16 *input,
         return;
     }
 
-    ret = store_result((void *)params, output, shard_out_elems);
+    PROF_PHASE(prof_cyc_data_out, ret, store_result((void *)params, output, shard_out_elems));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }

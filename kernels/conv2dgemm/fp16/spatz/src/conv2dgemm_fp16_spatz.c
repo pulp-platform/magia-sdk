@@ -6,6 +6,7 @@
 #include "tile.h"
 
 #include "kernel_idma_utils.h"
+#include "kernels_profiling_utils.h"
 
 #include "conv2dgemm_fp16_spatz.h"
 #include "conv2dgemm_fp16_spatz_params.h"
@@ -367,23 +368,25 @@ void MAGIA_conv2dgemm_fp16_spatz(const float16 *X,
     int ret;
     volatile conv2dgemm_fp16_spatz_params_t *params;
 
-    ret = alloc_l1((void **)&params,
-                   input_shape,
-                   output_shape,
-                   kernel_h,
-                   kernel_w,
-                   stride_h,
-                   stride_w,
-                   pad_h,
-                   pad_w,
-                   group,
-                   has_bias);
+    PROF_PHASE(prof_cyc_alloc,
+               ret,
+               alloc_l1((void **)&params,
+                        input_shape,
+                        output_shape,
+                        kernel_h,
+                        kernel_w,
+                        stride_h,
+                        stride_w,
+                        pad_h,
+                        pad_w,
+                        group,
+                        has_bias));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = init_input_params((void *)params, X, W, B);
+    PROF_PHASE(prof_cyc_data_in, ret, init_input_params((void *)params, X, W, B));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
                HID,
@@ -392,9 +395,9 @@ void MAGIA_conv2dgemm_fp16_spatz(const float16 *X,
         return;
     }
 
-    im2col((void *)params);
+    PROF_PHASE_VOID(prof_cyc_prep, im2col((void *)params));
 
-    ret = offload_spatz_task((void *)params);
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task((void *)params));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
                HID,
@@ -403,7 +406,7 @@ void MAGIA_conv2dgemm_fp16_spatz(const float16 *X,
         return;
     }
 
-    ret = store_result((void *)params, Y);
+    PROF_PHASE(prof_cyc_data_out, ret, store_result((void *)params, Y));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }
