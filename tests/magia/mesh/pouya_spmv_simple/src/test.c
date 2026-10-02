@@ -15,7 +15,7 @@ Copyright (c) 2024, Pouya Shirindhahrakfard, It is free to use, but please cite 
 #include "tile.h"
 #include "test.h"
 
-#define NUM_CORES 2
+#define NUM_CORES 64
 
 int main(void){
 
@@ -24,7 +24,7 @@ int main(void){
 
     uint32_t hartid = get_hartid();
 
-    // Only use first 2 cores
+    // Only use first 64 cores
     if(hartid >= NUM_CORES){
         return 0;
     }
