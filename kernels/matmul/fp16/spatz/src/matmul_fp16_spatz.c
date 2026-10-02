@@ -70,8 +70,6 @@ static int init_input_params(
     void *params, const float16 *A, const float16 *B, uint32_t a_batched, uint32_t b_batched)
 {
     volatile matmul_fp16_spatz_params_t *matmul_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t batch_start;
     uint32_t batch_len;
     uint32_t a_elems;
@@ -86,58 +84,53 @@ static int init_input_params(
     if (batch_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* batched == 1: this tile's batches are a contiguous L2 block -> a 1D transfer.
        batched == 0 (shared/broadcast weight): replicate the single 2D matrix into every
        batch slot with a 2D transfer whose source stride is 0. The Spatz task overwrites
        the whole output shard, so shard_Y is not zeroed here. */
     if (a_batched)
-        idma_memcpy_1d(&idma_ctrl,
-                       0,
+        idma_memcpy_1d(0,
                        (uint32_t)(A + batch_start * a_elems),
                        (uint32_t)matmul_params->shard_A,
                        batch_len * a_elems * sizeof(float16));
     else
-        idma_memcpy_2d(&idma_ctrl,
-                       0,
+        idma_memcpy_2d(0,
                        (uint32_t)A,
                        (uint32_t)matmul_params->shard_A,
                        a_elems * sizeof(float16),
                        0,
                        batch_len);
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    eu_idma_wait_a2o(WFE);
 
     if (b_batched)
-        idma_memcpy_1d(&idma_ctrl,
-                       0,
+        idma_memcpy_1d(0,
                        (uint32_t)(B + batch_start * b_elems),
                        (uint32_t)matmul_params->shard_B,
                        batch_len * b_elems * sizeof(float16));
     else
-        idma_memcpy_2d(&idma_ctrl,
-                       0,
+        idma_memcpy_2d(0,
                        (uint32_t)B,
                        (uint32_t)matmul_params->shard_B,
                        b_elems * sizeof(float16),
                        0,
                        batch_len);
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    eu_idma_wait_a2o(WFE);
 
     return 0;
 }
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
 
     spatz_run_task_with_params(MATMUL_FP16_SPATZ_TASK, (uint32_t)params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -155,8 +148,6 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile matmul_fp16_spatz_params_t *matmul_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t batch_start;
     uint32_t batch_len;
     uint32_t y_elems;
@@ -169,16 +160,15 @@ static int store_result(void *params, float16 *Y)
     if (batch_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* Y is always batched: this tile's batches are a contiguous L2 block -> a 1D transfer. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
+    idma_memcpy_1d(1,
                    (uint32_t)(Y + batch_start * y_elems),
                    (uint32_t)matmul_params->shard_Y,
                    batch_len * y_elems * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

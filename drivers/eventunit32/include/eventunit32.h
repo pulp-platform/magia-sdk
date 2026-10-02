@@ -18,8 +18,7 @@
  * @param mode Wait mode (polling, WFE, etc.)
  * @return Non-zero if RedMulE completed, 0 if timeout/error
  */
-static inline __attribute__((always_inline)) uint32_t eu32_redmule_wait(eu_controller_t *ctrl,
-                                                                        eu_wait_mode_t mode)
+static inline __attribute__((always_inline)) uint32_t eu32_redmule_wait(eu_wait_mode_t mode)
 {
     uint32_t retval = eu_wait_events(EU_REDMULE_DONE_MASK, mode, 1000000);
 #if PROFILE_CMP == 1
@@ -33,8 +32,7 @@ static inline __attribute__((always_inline)) uint32_t eu32_redmule_wait(eu_contr
  * @param mode Wait mode (polling, WFE, etc.)
  * @return Non-zero if any iDMA completed, 0 if timeout/error
  */
-static inline __attribute__((always_inline)) uint32_t eu32_idma_wait(eu_controller_t *ctrl,
-                                                                     eu_wait_mode_t mode)
+static inline __attribute__((always_inline)) uint32_t eu32_idma_wait(eu_wait_mode_t mode)
 {
     return eu_wait_events(EU_IDMA_ALL_DONE_MASK, mode, 1000000); // 1M cycle timeout
 }
@@ -44,8 +42,7 @@ static inline __attribute__((always_inline)) uint32_t eu32_idma_wait(eu_controll
  * @param mode Wait mode (polling, WFE, etc.)
  * @return Non-zero if L2->L1 completed, 0 if timeout/error
  */
-static inline __attribute__((always_inline)) uint32_t eu32_idma_wait_a2o(eu_controller_t *ctrl,
-                                                                         eu_wait_mode_t mode)
+static inline __attribute__((always_inline)) uint32_t eu32_idma_wait_a2o(eu_wait_mode_t mode)
 {
     uint32_t retval = eu_wait_events(EU_IDMA_A2O_DONE_MASK, mode, 1000000);
 #if PROFILE_CMI == 1
@@ -59,8 +56,7 @@ static inline __attribute__((always_inline)) uint32_t eu32_idma_wait_a2o(eu_cont
  * @param mode Wait mode (polling, WFE, etc.)
  * @return Non-zero if L1->L2 completed, 0 if timeout/error
  */
-static inline __attribute__((always_inline)) uint32_t eu32_idma_wait_o2a(eu_controller_t *ctrl,
-                                                                         eu_wait_mode_t mode)
+static inline __attribute__((always_inline)) uint32_t eu32_idma_wait_o2a(eu_wait_mode_t mode)
 {
     uint32_t retval = eu_wait_events(EU_IDMA_O2A_DONE_MASK, mode, 1000000);
 #if PROFILE_CMO == 1

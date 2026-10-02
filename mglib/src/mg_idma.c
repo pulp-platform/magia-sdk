@@ -33,18 +33,15 @@ uint8_t mg_idma_completed[2] __attribute__((section(".tile_bss")));
 // HW/model gains real job queueing.
 #define MG_IDMA_HW_QUEUE_DEPTH 1
 
-static inline __ALWAYS_INLINE_ void mg_idma_issue(eu_controller_t *eu,
-                                                  eu_wait_mode_t mode,
-                                                  uint8_t dir,
-                                                  mg_event_t *event,
-                                                  mg_event_callback_t callback)
+static inline __ALWAYS_INLINE_ void
+mg_idma_issue(eu_wait_mode_t mode, uint8_t dir, mg_event_t *event, mg_event_callback_t callback)
 {
     // WORKAROUND: backpressure - block until this direction has a free slot in
     // the (software-emulated) HW job queue before issuing. Draining a
     // completion pulse here shares mg_idma_completed[idx] with mg_idma_wait();
     // that is safe because same-direction transfers retire strictly FIFO.
     while ((uint8_t)(mg_idma_issued[dir] - mg_idma_completed[dir]) >= MG_IDMA_HW_QUEUE_DEPTH) {
-        uint32_t done = dir ? eu32_idma_wait_o2a(eu, mode) : eu32_idma_wait_a2o(eu, mode);
+        uint32_t done = dir ? eu32_idma_wait_o2a(mode) : eu32_idma_wait_a2o(mode);
         if (done) {
             mg_idma_completed[dir]++;
         }
@@ -53,9 +50,7 @@ static inline __ALWAYS_INLINE_ void mg_idma_issue(eu_controller_t *eu,
     mg_idma_issued[dir]++;
 }
 
-void mg_idma_memcpy_1d(idma_controller_t *idma,
-                       eu_controller_t *eu,
-                       eu_wait_mode_t mode,
+void mg_idma_memcpy_1d(eu_wait_mode_t mode,
                        uint8_t dir,
                        uint32_t axi_addr,
                        uint32_t obi_addr,
@@ -65,14 +60,12 @@ void mg_idma_memcpy_1d(idma_controller_t *idma,
 {
     // May block until a prior same-direction transfer drains (see
     // mg_idma_issue() and the MG_IDMA_HW_QUEUE_DEPTH workaround).
-    mg_idma_issue(eu, mode, dir, event, callback);
+    mg_idma_issue(mode, dir, event, callback);
     // Triggers the transfer.
-    idma_memcpy_1d(idma, dir, axi_addr, obi_addr, len);
+    idma_memcpy_1d(dir, axi_addr, obi_addr, len);
 }
 
-void mg_idma_memcpy_2d(idma_controller_t *idma,
-                       eu_controller_t *eu,
-                       eu_wait_mode_t mode,
+void mg_idma_memcpy_2d(eu_wait_mode_t mode,
                        uint8_t dir,
                        uint32_t axi_addr,
                        uint32_t obi_addr,
@@ -84,8 +77,8 @@ void mg_idma_memcpy_2d(idma_controller_t *idma,
 {
     // May block until a prior same-direction transfer drains (see
     // mg_idma_issue() and the MG_IDMA_HW_QUEUE_DEPTH workaround).
-    mg_idma_issue(eu, mode, dir, event, callback);
-    idma_memcpy_2d(idma, dir, axi_addr, obi_addr, len, std, reps);
+    mg_idma_issue(mode, dir, event, callback);
+    idma_memcpy_2d(dir, axi_addr, obi_addr, len, std, reps);
 }
 
 // mg_idma_wait() is defined as a static inline in mg_idma.h so it folds into

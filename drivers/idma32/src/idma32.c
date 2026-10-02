@@ -19,7 +19,7 @@
 // #include "utils/tinyprintf.h"
 #include "utils/printf.h"
 
-int idma32_init(idma_controller_t *ctrl)
+int idma32_init()
 {
     uint32_t index = (1 << IRQ_A2O_DONE) | (1 << IRQ_O2A_DONE);
     irq_en(index);
@@ -38,8 +38,7 @@ int idma32_init(idma_controller_t *ctrl)
  * @param obi_addr OBI/L1 memory address of first element.
  * @param len Byte length of memory block to transfer.
  */
-int idma32_memcpy_1d(
-    idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
+int idma32_memcpy_1d(uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
 {
 #if IDMA_MM == 0
     if (dir) { // OBI to AXI (L1 to L2)
@@ -82,13 +81,8 @@ int idma32_memcpy_1d(
  * the next memory block.
  * @param reps Number of repetitions.
  */
-int idma32_memcpy_2d(idma_controller_t *ctrl,
-                     uint8_t dir,
-                     uint32_t axi_addr,
-                     uint32_t obi_addr,
-                     uint32_t len,
-                     uint32_t std,
-                     uint32_t reps)
+int idma32_memcpy_2d(
+    uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps)
 {
 // printf("IDMA Transfer! Direction: %d\n", dir);
 #if IDMA_MM == 0
@@ -123,24 +117,9 @@ int idma32_memcpy_2d(idma_controller_t *ctrl,
     return 0;
 }
 
-extern int idma_init(idma_controller_t *ctrl)
-    __attribute__((alias("idma32_init"), used, visibility("default")));
-extern int idma_memcpy_1d(
-    idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
+extern int idma_init() __attribute__((alias("idma32_init"), used, visibility("default")));
+extern int idma_memcpy_1d(uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
     __attribute__((alias("idma32_memcpy_1d"), used, visibility("default")));
-extern int idma_memcpy_2d(idma_controller_t *ctrl,
-                          uint8_t dir,
-                          uint32_t axi_addr,
-                          uint32_t obi_addr,
-                          uint32_t len,
-                          uint32_t std,
-                          uint32_t reps)
+extern int idma_memcpy_2d(
+    uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps)
     __attribute__((alias("idma32_memcpy_2d"), used, visibility("default")));
-
-/* Export the IDMA-specific controller API */
-idma_controller_api_t idma_api = {
-    .init = idma32_init,
-    /*     .wait = idma32_wait, */
-    .memcpy_1d = idma32_memcpy_1d,
-    .memcpy_2d = idma32_memcpy_2d,
-};

@@ -55,26 +55,12 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
 #if STALLING == 0
-    eu_init(&eu_ctrl);
+    eu_init();
     eu_clear_events(0xFFFFFFFF);
-    eu_fsync_init(&eu_ctrl, 0);
+    eu_fsync_init(0);
 #endif
 
     uint32_t l1_tile_base = get_l1_base(hartid);
@@ -94,14 +80,14 @@ int main(void)
         wait_nop(1000);
     }
     mmio8(l1_tile_base) = y_id;
-    fsync_sync_row(&fsync_ctrl);
+    fsync_sync_row();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
     flag = check_values(y_id, hartid);
-    fsync_sync_row(&fsync_ctrl);
+    fsync_sync_row();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
     if (!flag) {
         printf("No errors detected in row synch!\n");
@@ -124,14 +110,14 @@ int main(void)
     //  }
     uint8_t val         = x_id + (uint8_t)MESH_X_TILES;
     mmio8(l1_tile_base) = val;
-    fsync_sync_col(&fsync_ctrl);
+    fsync_sync_col();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
     flag = check_values(val, hartid);
-    fsync_sync_col(&fsync_ctrl);
+    fsync_sync_col();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
     if (!flag) {
         printf("No errors detected in column synch!\n");
