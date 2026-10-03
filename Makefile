@@ -140,7 +140,7 @@ GVSOC2PERFETTO_INCLUDE ?= (?x) \
   | magia-noc\.ni_\d+_\d+\.(narrow_req|wide_req)$$ \
   | L2-mem\.(req_addr|req_size|req_is_write)$$
 
-.PHONY: gvsoc build format run_profiling gvsoc2perfetto
+.PHONY: gvsoc build format run_profiling gvsoc2perfetto clean rtl-clean set_mesh
 
 # Build the Rust VCD->Perfetto converter (cargo tracks its own incremental state).
 gvsoc2perfetto: $(GVSOC2PERFETTO_BIN)
@@ -219,6 +219,7 @@ endif
 	$(OBJDUMP) -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
 
+.PHONY: run
 run: set_mesh $(GVSOC_WORK_DIR)
 	@echo 'Magia is available at https://github.com/pulp-platform/MAGIA.git'
 	@echo 'please run "source setup_env.sh" in the magia folder before running this script'
@@ -233,7 +234,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|verilator|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVRUN) --target=$(GVRUN_TARGET) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
+	$(GVRUN) --target=$(GVRUN_TARGET) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS) --trace=tile-$(t)-cv32-core/insn
 else ifeq ($(platform), rtl)
 	$(MAKE) rtl_stimuli test=$(test)
 	cd $(BUILD_DIR_ABS)													&& \
@@ -295,6 +296,7 @@ endif
 		--include '$(GVSOC2PERFETTO_INCLUDE)'
 	rm -f -- $(GVSOC2PERFETTO_VCD)
 
+.PHONY: debug_profiling
 debug_profiling: $(GVSOC_WORK_DIR) $(GVSOC2PERFETTO_BIN)
 ifndef test
 	$(error Proper formatting is: make debug_profiling test=<test_name>)
