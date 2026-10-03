@@ -183,7 +183,7 @@ magia_tiles_1_CV32E40X:
 .build:
   extends: [.base, .export_path]
   script:
-    - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler} CMAKE=${CMAKE} control_core=${control_core}
+    - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler} control_core=${control_core} pulp_cores=${pulp_cores}
   artifacts:
     paths: [ "build", "targets/${target_platform}/include/addr_map/tile_addr_map.h" ]
 
@@ -194,7 +194,6 @@ build_test_magia_tiles_4_spatz_CV32E40P:
     tiles: 4
     target_platform: magia
     compiler: GCC_MULTILIB
-    CMAKE: cmake-3.28.3
     spatz: 1
     pulp_cores: 0
     control_core: CV32E40P
@@ -208,7 +207,6 @@ build_test_magia_tiles_1_spatz_CV32E40P:
     tiles: 1
     target_platform: magia
     compiler: GCC_MULTILIB
-    CMAKE: cmake-3.28.3
     spatz: 1
     pulp_cores: 0
     control_core: CV32E40P
@@ -222,7 +220,6 @@ build_test_magia_tiles_4_cluster_CV32E40P:
     tiles: 4
     target_platform: magia
     compiler: GCC_MULTILIB
-    CMAKE: cmake-3.28.3
     spatz: 0
     pulp_cores: 8
     control_core: CV32E40P
@@ -236,7 +233,6 @@ build_test_magia_tiles_1_cluster_CV32E40P:
     tiles: 1
     target_platform: magia
     compiler: GCC_MULTILIB
-    CMAKE: cmake-3.28.3
     spatz: 0
     pulp_cores: 8
     control_core: CV32E40P
@@ -250,7 +246,6 @@ build_test_magia_tiles_4_spatz+cluster_CV32E40P:
     tiles: 4
     target_platform: magia
     compiler: GCC_MULTILIB
-    CMAKE: cmake-3.28.3
     spatz: 1
     pulp_cores: 8
     control_core: CV32E40P
@@ -264,7 +259,6 @@ build_test_magia_tiles_1_spatz+cluster_CV32E40P:
     tiles: 1
     target_platform: magia
     compiler: GCC_MULTILIB
-    CMAKE: cmake-3.28.3
     spatz: 1
     pulp_cores: 8
     control_core: CV32E40P
@@ -278,7 +272,6 @@ build_test_magia_tiles_4_spatz_CV32E40X:
     tiles: 4
     target_platform: magia
     compiler: GCC_MULTILIB
-    CMAKE: cmake-3.28.3
     spatz: 1
     pulp_cores: 0
     control_core: CV32E40X
@@ -292,7 +285,6 @@ build_test_magia_tiles_1_spatz_CV32E40X:
     tiles: 1
     target_platform: magia
     compiler: GCC_MULTILIB
-    CMAKE: cmake-3.28.3
     spatz: 1
     pulp_cores: 0
     control_core: CV32E40X
@@ -306,7 +298,6 @@ build_test_magia_tiles_4_cluster_CV32E40X:
     tiles: 4
     target_platform: magia
     compiler: GCC_MULTILIB
-    CMAKE: cmake-3.28.3
     spatz: 0
     pulp_cores: 8
     control_core: CV32E40X
@@ -320,7 +311,6 @@ build_test_magia_tiles_1_cluster_CV32E40X:
     tiles: 1
     target_platform: magia
     compiler: GCC_MULTILIB
-    CMAKE: cmake-3.28.3
     spatz: 0
     pulp_cores: 8
     control_core: CV32E40X
@@ -334,7 +324,6 @@ build_test_magia_tiles_4_spatz+cluster_CV32E40X:
     tiles: 4
     target_platform: magia
     compiler: GCC_MULTILIB
-    CMAKE: cmake-3.28.3
     spatz: 1
     pulp_cores: 8
     control_core: CV32E40X
@@ -348,7 +337,6 @@ build_test_magia_tiles_1_spatz+cluster_CV32E40X:
     tiles: 1
     target_platform: magia
     compiler: GCC_MULTILIB
-    CMAKE: cmake-3.28.3
     spatz: 1
     pulp_cores: 8
     control_core: CV32E40X
