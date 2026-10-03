@@ -127,8 +127,6 @@ static int alloc_l1(void **params,
 static int init_input_params(void *params, const float16 *W, const float16 *B)
 {
     volatile conv2dgemm_fp16_spatz_params_t *conv_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t oc_start;
     uint32_t K_g;
     uint32_t M;
@@ -140,8 +138,8 @@ static int init_input_params(void *params, const float16 *W, const float16 *B)
     M           = conv_params->M;
     N           = conv_params->N;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* GEMM does Y = alpha * A @ B + beta * C; beta gates the bias term. */
     mmio_fp16(conv_params->alpha) = (float16)1.0f;
@@ -151,12 +149,11 @@ static int init_input_params(void *params, const float16 *W, const float16 *B)
         /* Weights A = [M, K_g] are each output channel's compact weights, contiguous in W
            (which is [C_out, K_g]); this tile's rows W[oc_start : oc_start+M] are a plain 1D DMA.
            The grouped GEMM applies each row to its own group block of B (see the Spatz task). */
-        idma_memcpy_1d(&idma_ctrl,
-                       0,
+        idma_memcpy_1d(0,
                        (uint32_t)(W + oc_start * K_g),
                        (uint32_t)conv_params->shard_A,
                        M * K_g * sizeof(float16));
-        eu_idma_wait_a2o(&eu_ctrl, WFE);
+        eu_idma_wait_a2o(WFE);
 
         /* Bias: broadcast the per-output-channel value over the N columns of C (a
            broadcast, not a plain copy -> scalar). */
@@ -229,14 +226,13 @@ static void im2col(void *params, const float16 *X)
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
 
     spatz_run_task_with_params(CONV2DGEMM_FP16_SPATZ_TASK, (uint32_t)params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -254,8 +250,6 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile conv2dgemm_fp16_spatz_params_t *conv_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t n_batches;
     uint32_t c_out;
     uint32_t M;
@@ -272,20 +266,19 @@ static int store_result(void *params, float16 *Y)
     if (M == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* shard_Y is [n_batches, M, N] contiguous in L1; each batch's M*N block goes to
        Y[b, oc_start:oc_start+M, :] which is contiguous within a batch but c_out*N apart
        across batches -> one 2D transfer (reps = n_batches). */
-    idma_memcpy_2d(&idma_ctrl,
-                   1,
+    idma_memcpy_2d(1,
                    (uint32_t)(Y + oc_start * N),
                    (uint32_t)conv_params->shard_Y,
                    M * N * sizeof(float16),
                    c_out * N * sizeof(float16),
                    n_batches);
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

@@ -72,8 +72,6 @@ static int alloc_l1(void **params, uint32_t size)
 static int init_input_params(void *params, const float16 *input, float16 minimum, float16 maximum)
 {
     volatile clip_fp16_spatz_params_t *clip_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t start;
     uint32_t len;
 
@@ -87,30 +85,26 @@ static int init_input_params(void *params, const float16 *input, float16 minimum
     if (len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's slice [start, start+len) is contiguous in L2. The Spatz task writes every
        output (Y = clip(X, min, max)), so shard_output is not zeroed here. */
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
-                   (uint32_t)(input + start),
-                   (uint32_t)clip_params->shard_input,
-                   len * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(
+        0, (uint32_t)(input + start), (uint32_t)clip_params->shard_input, len * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
 
     return 0;
 }
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
     spatz_run_task_with_params(CLIP_FP16_SPATZ_TASK, params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -128,8 +122,6 @@ exit:
 static int store_result(void *params, float16 *dst)
 {
     volatile clip_fp16_spatz_params_t *clip_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t start;
     uint32_t len;
 
@@ -140,16 +132,13 @@ static int store_result(void *params, float16 *dst)
     if (len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's output slice [start, start+len) is contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
-                   (uint32_t)(dst + start),
-                   (uint32_t)clip_params->shard_output,
-                   len * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    idma_memcpy_1d(
+        1, (uint32_t)(dst + start), (uint32_t)clip_params->shard_output, len * sizeof(float16));
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

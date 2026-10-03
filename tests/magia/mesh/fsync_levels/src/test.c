@@ -76,24 +76,11 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_fsync_init(&eu_ctrl, 0);
+    eu_init();
+    eu_fsync_init(0);
 #endif
 
     uint32_t l1_tile_base = get_l1_base(hartid);
@@ -110,7 +97,7 @@ int main(void)
         /**
          * 1_a. Get the group ID for the current synch level.
          */
-        groupid = (uint8_t)fsync_getgroup_level(&fsync_ctrl, (uint32_t)i, hartid, dir);
+        groupid = (uint8_t)fsync_getgroup_level((uint32_t)i, hartid, dir);
 
         /**
          * 1_b. Write value.
@@ -120,9 +107,9 @@ int main(void)
         /**
          * 1_c. Synchronize on the current horizzontal level.
          */
-        fsync_sync_level(&fsync_ctrl, (uint32_t)i, dir);
+        fsync_sync_level((uint32_t)i, dir);
 #if STALLING == 0
-        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        eu_fsync_wait(WAIT_MODE);
 #endif
 
         /**
@@ -134,9 +121,9 @@ int main(void)
         /**
          * 1_e. Synchronize again before next cycle write.
          */
-        fsync_sync_level(&fsync_ctrl, (uint32_t)i, dir);
+        fsync_sync_level((uint32_t)i, dir);
 #if STALLING == 0
-        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        eu_fsync_wait(WAIT_MODE);
 #endif
     }
 

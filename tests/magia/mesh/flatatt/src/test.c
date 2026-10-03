@@ -33,30 +33,9 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
-
-    redmule_config_t redmule_cfg      = {.hartid = hartid};
-    redmule_controller_t redmule_ctrl = {
-        .base = NULL,
-        .cfg  = &redmule_cfg,
-        .api  = &redmule_api,
-    };
-
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-
-    fsync_init(&fsync_ctrl);
-    idma_init(&idma_ctrl);
-    redmule_init(&redmule_ctrl);
+    fsync_init();
+    idma_init();
+    redmule_init();
 
     uint32_t y_id         = GET_Y_ID(hartid);
     uint32_t x_id         = GET_X_ID(hartid);
@@ -188,16 +167,10 @@ int main(void)
                 /**
                  * 3ba. IDMA to load the input and weight data-tile for current timeslot
                  */
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
-                               (axi_addr_q + (t_size * k * 2)),
-                               obi_addr_q,
-                               len_q,
-                               std_q,
-                               reps_q);
+                idma_memcpy_2d(
+                    0, (axi_addr_q + (t_size * k * 2)), obi_addr_q, len_q, std_q, reps_q);
                 idma_wait();
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
+                idma_memcpy_2d(0,
                                (axi_addr_k + (j * B_SIZE * 2) + (t_size * S_SIZE * i * 2)),
                                obi_addr_k,
                                len_k,
@@ -209,8 +182,7 @@ int main(void)
                  * 3bb. Evoke the RED MULE
                  * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
                  */
-                redmule_gemm(&redmule_ctrl,
-                             obi_addr_q,
+                redmule_gemm(obi_addr_q,
                              obi_addr_k,
                              obi_addr_s,
                              (uint16_t)tile_h,
@@ -227,17 +199,17 @@ int main(void)
              */
             rowmax(obi_addr_s, max_buffer, tile_h, tile_w);
             if (x_id != 0) {
-                fsync_sync_left(&fsync_ctrl);
+                fsync_sync_left();
                 if (j % 2)
                     max_compare(max_buffer, get_l1_base(hartid - 1) + (tile_h * 2), tile_h);
                 else
                     max_compare(max_buffer, get_l1_base(hartid - 1), tile_h);
             }
             if (x_id != (MESH_X_TILES - 1))
-                fsync_sync_right(&fsync_ctrl);
+                fsync_sync_right();
             else if (j > 0)
                 max_compare(max_buffer, prev_max_buffer, tile_h);
-            fsync_sync_row(&fsync_ctrl);
+            fsync_sync_row();
             if (x_id != (MESH_X_TILES - 1)) {
                 if (j % 2)
                     max_compare(max_buffer,
@@ -246,7 +218,7 @@ int main(void)
                 else
                     max_compare(max_buffer, get_l1_base(GET_ID(y_id, (MESH_X_TILES - 1))), tile_h);
             }
-            fsync_sync_row(&fsync_ctrl);
+            fsync_sync_row();
 
             /**
              * 3d. Element wise substraction for each row with their maximum
@@ -265,31 +237,29 @@ int main(void)
              */
             rowsum(obi_addr_s, sum_buffer, tile_h, tile_w);
             if (x_id != 0) {
-                fsync_sync_left(&fsync_ctrl);
+                fsync_sync_left();
                 if (j % 2)
                     vect_sum(sum_buffer, get_l1_base(hartid - 1) + (tile_h * 6), tile_h);
                 else
                     vect_sum(sum_buffer, get_l1_base(hartid - 1) + (tile_h * 4), tile_h);
             }
             if (x_id != (MESH_X_TILES - 1))
-                fsync_sync_right(&fsync_ctrl);
-            fsync_sync_row(&fsync_ctrl);
+                fsync_sync_right();
+            fsync_sync_row();
             if (x_id != (MESH_X_TILES - 1)) {
                 if (j % 2)
-                    idma_memcpy_1d(&idma_ctrl,
-                                   0,
+                    idma_memcpy_1d(0,
                                    get_l1_base(GET_ID(y_id, (MESH_X_TILES - 1))) + (tile_h * 6),
                                    sum_buffer,
                                    tile_h * 2);
                 else
-                    idma_memcpy_1d(&idma_ctrl,
-                                   0,
+                    idma_memcpy_1d(0,
                                    get_l1_base(GET_ID(y_id, (MESH_X_TILES - 1))) + (tile_h * 4),
                                    sum_buffer,
                                    tile_h * 2);
                 idma_wait();
             }
-            fsync_sync_row(&fsync_ctrl);
+            fsync_sync_row();
 
             /**
              * 3g. Add retroactive contribution of previous blocks
@@ -333,8 +303,7 @@ int main(void)
                 /**
                  * 3ha. Load V data-tile required for the j-th block column and k-th timestep
                  */
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
+                idma_memcpy_2d(0,
                                axi_addr_v + (j * B_SIZE * D_SIZE * 2) + (k * t_size * 2),
                                obi_addr_v,
                                len_v,
@@ -346,8 +315,7 @@ int main(void)
                  * 3hb. Evoke REDMULE
                  * https://www.youtube.com/watch?v=xDbIDKel-O4
                  */
-                redmule_gemm(&redmule_ctrl,
-                             obi_addr_s,
+                redmule_gemm(obi_addr_s,
                              obi_addr_v,
                              obi_addr_sb,
                              (uint16_t)tile_h,
@@ -358,8 +326,7 @@ int main(void)
                 /**
                  * 3hc. Strided store of the current timestep buffer in the output
                  */
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
+                idma_memcpy_2d(0,
                                obi_addr_sb,
                                output_buffer + (k * t_size * 2),
                                t_size * 2,
@@ -384,7 +351,7 @@ int main(void)
          * 5. Propagate and sum all the output buffers in a systolic way
          */
         if (x_id != 0) {
-            fsync_sync_left(&fsync_ctrl);
+            fsync_sync_left();
             if (T % 2)
                 vect_sum(output_buffer, get_l1_base(hartid - 1) + (8 * tile_h), tile_h * D_SIZE);
             else
@@ -393,12 +360,12 @@ int main(void)
                          tile_h * D_SIZE);
         }
         if (x_id != (MESH_X_TILES - 1))
-            fsync_sync_right(&fsync_ctrl);
+            fsync_sync_right();
         else {
-            idma_memcpy_2d(&idma_ctrl, 1, o_out, output_buffer, D_SIZE, D_SIZE, tile_h);
+            idma_memcpy_2d(1, o_out, output_buffer, D_SIZE, D_SIZE, tile_h);
             idma_wait();
         }
-        fsync_sync_row(&fsync_ctrl);
+        fsync_sync_row();
     }
 
     return 0;

@@ -23,23 +23,10 @@ static int init_data(void *params)
     uint32_t len;
     uint32_t end;
 
-    idma_config_t idma_cfg      = {.hartid = get_hartid()};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
-    idma_init(&idma_ctrl);
+    idma_init();
 
-    eu_config_t eu_cfg      = {.hartid = get_hartid()};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-
-    eu_init(&eu_ctrl);
-    eu_idma_init(&eu_ctrl, 0);
+    eu_init();
+    eu_idma_init(0);
 
     ceil_params = (volatile onnx_ceil_params_t *)params;
 
@@ -49,10 +36,10 @@ static int init_data(void *params)
     end   = start + chunk + (HID < left ? 1 : 0);
     len   = end - start;
 
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)(X + start), CHUNK_X_BASE, (len * 2));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
-    idma_memcpy_1d(&idma_ctrl, 0, (uint32_t)(G + start), CHUNK_G_BASE, (len * 2));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(0, (uint32_t)(X + start), CHUNK_X_BASE, (len * 2));
+    eu_idma_wait_a2o(WFE);
+    idma_memcpy_1d(0, (uint32_t)(G + start), CHUNK_G_BASE, (len * 2));
+    eu_idma_wait_a2o(WFE);
 
     ceil_params->chunk_X = CHUNK_X_BASE;
     ceil_params->chunk_Y = CHUNK_Y_BASE;
@@ -67,19 +54,14 @@ static int init_data(void *params)
 static int run_spatz_task()
 {
     int ret;
-    eu_config_t eu_cfg;
-    eu_controller_t eu_ctrl;
 
-    eu_cfg.hartid = get_hartid();
-    eu_ctrl.base = NULL, eu_ctrl.cfg = &eu_cfg, eu_ctrl.api = &eu_api,
-
-    eu_init(&eu_ctrl);
-    eu_spatz_init(&eu_ctrl, 0);
+    eu_init();
+    eu_spatz_init(0);
 
     spatz_init(SPATZ_BINARY_START);
     spatz_run_task_with_params(ONNX_CEIL_TASK, ONNX_CEIL_PARAMS_BASE);
 
-    eu_spatz_wait(&eu_ctrl, WFE);
+    eu_spatz_wait(WFE);
 
     ret = spatz_get_exit_code();
 

@@ -55,19 +55,14 @@ static int init_data(void *params)
 static int run_spatz_task()
 {
     int ret;
-    eu_config_t eu_cfg;
-    eu_controller_t eu_ctrl;
 
-    eu_cfg.hartid = get_hartid();
-    eu_ctrl.base = NULL, eu_ctrl.cfg = &eu_cfg, eu_ctrl.api = &eu_api,
-
-    eu_init(&eu_ctrl);
-    eu_spatz_init(&eu_ctrl, 0);
+    eu_init();
+    eu_spatz_init(0);
 
     spatz_init(SPATZ_BINARY_START);
     spatz_run_task_with_params(ONNX_HARDSWISH_TASK, ONNX_HARDSWISH_PARAMS_BASE);
 
-    eu_spatz_wait(&eu_ctrl, WFE);
+    eu_spatz_wait(WFE);
 
     ret = spatz_get_exit_code();
 

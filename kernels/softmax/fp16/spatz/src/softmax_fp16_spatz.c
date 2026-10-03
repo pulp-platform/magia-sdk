@@ -65,8 +65,6 @@ static int alloc_l1(void **params, uint32_t outer_dim, uint32_t reduce_dim, uint
 static int init_input_params(void *params, const float16 *input)
 {
     volatile softmax_fp16_spatz_params_t *softmax_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t outer_start;
     uint32_t outer_len;
     uint32_t block;
@@ -79,30 +77,28 @@ static int init_input_params(void *params, const float16 *input)
     if (outer_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's outer slices [outer_start, outer_start+outer_len) are contiguous in L2. The
        Spatz task writes every output element, so shard_output is not zeroed here. */
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
+    idma_memcpy_1d(0,
                    (uint32_t)(input + outer_start * block),
                    (uint32_t)softmax_params->shard_input,
                    outer_len * block * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    eu_idma_wait_a2o(WFE);
 
     return 0;
 }
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
     spatz_run_task_with_params(SOFTMAX_FP16_SPATZ_TASK, (uint32_t)params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -120,8 +116,6 @@ exit:
 static int store_result(void *params, float16 *output)
 {
     volatile softmax_fp16_spatz_params_t *softmax_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t outer_start;
     uint32_t outer_len;
     uint32_t block;
@@ -134,16 +128,15 @@ static int store_result(void *params, float16 *output)
     if (outer_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's output slices [outer_start, outer_start+outer_len) are contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
+    idma_memcpy_1d(1,
                    (uint32_t)(output + outer_start * block),
                    (uint32_t)softmax_params->shard_output,
                    outer_len * block * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

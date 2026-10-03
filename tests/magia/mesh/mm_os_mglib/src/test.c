@@ -30,32 +30,12 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
+    idma_init();
+    redmule_init();
 
-    redmule_config_t redmule_cfg      = {.hartid = hartid};
-    redmule_controller_t redmule_ctrl = {
-        .base = NULL,
-        .cfg  = &redmule_cfg,
-        .api  = &redmule_api,
-    };
-
-    idma_init(&idma_ctrl);
-    redmule_init(&redmule_ctrl);
-
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_redmule_init(&eu_ctrl, 0);
-    eu_idma_init(&eu_ctrl, 0);
+    eu_init();
+    eu_redmule_init(0);
+    eu_idma_init(0);
 
     uint32_t y_id         = GET_Y_ID(hartid);
     uint32_t x_id         = GET_X_ID(hartid);
@@ -153,53 +133,24 @@ int main(void)
          * Load the static output tile
          * And then the t0 weight and input tiles
          */
-        mg_idma_memcpy_2d(&idma_ctrl,
-                          &eu_ctrl,
-                          WAIT_MODE,
-                          0,
-                          axi_addr_y,
-                          obi_addr_y,
-                          len_y,
-                          std_y,
-                          reps_y,
-                          &idma_evt_y,
-                          NULL);
+        mg_idma_memcpy_2d(
+            WAIT_MODE, 0, axi_addr_y, obi_addr_y, len_y, std_y, reps_y, &idma_evt_y, NULL);
 
         // printf("Recieved this data: %x, %x\n", *(volatile uint16_t*)(obi_addr_y), *(volatile
         // uint16_t*)(obi_addr_y + 2));
 
-        mg_idma_memcpy_2d(&idma_ctrl,
-                          &eu_ctrl,
-                          WAIT_MODE,
-                          0,
-                          axi_addr_x,
-                          obi_addr_x_0,
-                          len_x,
-                          std_x,
-                          reps_x,
-                          &idma_evt_x,
-                          NULL);
+        mg_idma_memcpy_2d(
+            WAIT_MODE, 0, axi_addr_x, obi_addr_x_0, len_x, std_x, reps_x, &idma_evt_x, NULL);
 
-        mg_idma_memcpy_2d(&idma_ctrl,
-                          &eu_ctrl,
-                          WAIT_MODE,
-                          0,
-                          axi_addr_w,
-                          obi_addr_w_0,
-                          len_w,
-                          std_w,
-                          reps_w,
-                          &idma_evt_w,
-                          NULL);
+        mg_idma_memcpy_2d(
+            WAIT_MODE, 0, axi_addr_w, obi_addr_w_0, len_w, std_w, reps_w, &idma_evt_w, NULL);
 
-        mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_x);
-        mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_w);
-        mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_y);
+        mg_idma_wait(0, WAIT_MODE, &idma_evt_x);
+        mg_idma_wait(0, WAIT_MODE, &idma_evt_w);
+        mg_idma_wait(0, WAIT_MODE, &idma_evt_y);
 
         // enqueue first redmule job, without triggering
-        mg_redmule_gemm_enqueue(&redmule_ctrl,
-                                &eu_ctrl,
-                                WAIT_MODE,
+        mg_redmule_gemm_enqueue(WAIT_MODE,
                                 obi_addr_x_0,
                                 obi_addr_w_0,
                                 obi_addr_y,
@@ -212,7 +163,7 @@ int main(void)
         // commit it to the hardware queue (its inputs are already loaded above);
         // this unlocks the controller for the next enqueue and lets the i=0 start
         // actually launch it.
-        mg_redmule_gemm_commit(&redmule_ctrl);
+        mg_redmule_gemm_commit();
 
         /**
          * 4. Cycle over the timeslots.
@@ -248,12 +199,10 @@ int main(void)
              */
             if (i < (timeslots - 1)) {
                 // trigger current timeslot job if not already started
-                mg_redmule_gemm_start(&redmule_ctrl);
+                mg_redmule_gemm_start();
 
                 // DMA copy-in for next timeslot
-                mg_idma_memcpy_2d(&idma_ctrl,
-                                  &eu_ctrl,
-                                  WAIT_MODE,
+                mg_idma_memcpy_2d(WAIT_MODE,
                                   0,
                                   axi_addr_x + (t_size * (i + 1) * 2),
                                   input_pt_next,
@@ -266,9 +215,7 @@ int main(void)
                 // enqueue next timeslot job
                 // it is convenient to do this here because mg_idma_memcpy_2d currently has a
                 // depth=1 queue!
-                mg_redmule_gemm_enqueue(&redmule_ctrl,
-                                        &eu_ctrl,
-                                        WAIT_MODE,
+                mg_redmule_gemm_enqueue(WAIT_MODE,
                                         input_pt_next,
                                         weight_pt_next,
                                         obi_addr_y,
@@ -279,9 +226,7 @@ int main(void)
                                         NULL);
 
                 // DMA copy-in for next timeslot
-                mg_idma_memcpy_2d(&idma_ctrl,
-                                  &eu_ctrl,
-                                  WAIT_MODE,
+                mg_idma_memcpy_2d(WAIT_MODE,
                                   0,
                                   axi_addr_w + (t_size * K_SIZE * (i + 1) * 2),
                                   weight_pt_next,
@@ -292,36 +237,27 @@ int main(void)
                                   NULL);
 
                 // wait for the next timeslot's inputs before commiting its job
-                mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_x);
-                mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_w);
+                mg_idma_wait(0, WAIT_MODE, &idma_evt_x);
+                mg_idma_wait(0, WAIT_MODE, &idma_evt_w);
 
                 // commit & start next timeslot job to hardware queue
-                mg_redmule_gemm_commit_start(&redmule_ctrl);
+                mg_redmule_gemm_commit_start();
 
                 // wait for current timeslot redmule
-                mg_redmule_wait(&eu_ctrl, WAIT_MODE, redmule_evt_curr);
+                mg_redmule_wait(WAIT_MODE, redmule_evt_curr);
 
             } else {
-                // mg_redmule_gemm_start(&redmule_ctrl);
-                mg_redmule_wait(&eu_ctrl, WAIT_MODE, redmule_evt_curr);
+                // mg_redmule_gemm_start();
+                mg_redmule_wait(WAIT_MODE, redmule_evt_curr);
             }
         }
 
         /**
          * 5. Store the output data-tile back to L2
          */
-        mg_idma_memcpy_2d(&idma_ctrl,
-                          &eu_ctrl,
-                          WAIT_MODE,
-                          1,
-                          axi_addr_y,
-                          obi_addr_y,
-                          len_y,
-                          std_y,
-                          reps_y,
-                          &idma_evt_y,
-                          NULL);
-        mg_idma_wait(&eu_ctrl, 1, WAIT_MODE, &idma_evt_y);
+        mg_idma_memcpy_2d(
+            WAIT_MODE, 1, axi_addr_y, obi_addr_y, len_y, std_y, reps_y, &idma_evt_y, NULL);
+        mg_idma_wait(1, WAIT_MODE, &idma_evt_y);
     }
 
     /**

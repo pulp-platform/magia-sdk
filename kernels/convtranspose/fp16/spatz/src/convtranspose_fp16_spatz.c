@@ -94,8 +94,6 @@ static int init_input_params(void *params, const float16 *X, const float16 *W)
 {
     volatile convtranspose_fp16_spatz_params_t *conv_params =
         (volatile convtranspose_fp16_spatz_params_t *)params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
 
     uint32_t total_in =
         conv_params->n_batches * conv_params->c_in * conv_params->h_in * conv_params->w_in;
@@ -103,16 +101,14 @@ static int init_input_params(void *params, const float16 *X, const float16 *W)
         conv_params->c_in * conv_params->c_out_g * conv_params->kernel_h * conv_params->kernel_w;
     uint32_t total_out = conv_params->iter_len * conv_params->h_out * conv_params->w_out;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* Every tile needs the full input and full weights, both contiguous in L2 -> 1D transfers. */
-    idma_memcpy_1d(
-        &idma_ctrl, 0, (uint32_t)X, (uint32_t)conv_params->shard_X, total_in * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
-    idma_memcpy_1d(
-        &idma_ctrl, 0, (uint32_t)W, (uint32_t)conv_params->shard_W, total_w * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(0, (uint32_t)X, (uint32_t)conv_params->shard_X, total_in * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
+    idma_memcpy_1d(0, (uint32_t)W, (uint32_t)conv_params->shard_W, total_w * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
 
     /* ConvTranspose scatters with accumulation (the task reads-modifies-writes dst), so the
        output shard must start zeroed. */
@@ -124,13 +120,12 @@ static int init_input_params(void *params, const float16 *X, const float16 *W)
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
     spatz_run_task_with_params(CONVTRANSPOSE_FP16_SPATZ_TASK, params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -149,8 +144,6 @@ static int store_result(void *params, float16 *Y)
 {
     volatile convtranspose_fp16_spatz_params_t *conv_params =
         (volatile convtranspose_fp16_spatz_params_t *)params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t out_hw_len = conv_params->h_out * conv_params->w_out;
     uint32_t iter_start = conv_params->iter_start;
     uint32_t iter_len   = conv_params->iter_len;
@@ -158,16 +151,15 @@ static int store_result(void *params, float16 *Y)
     if (iter_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's output planes [iter_start, iter_start+iter_len) are contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
+    idma_memcpy_1d(1,
                    (uint32_t)(Y + iter_start * out_hw_len),
                    (uint32_t)conv_params->shard_Y,
                    iter_len * out_hw_len * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }
