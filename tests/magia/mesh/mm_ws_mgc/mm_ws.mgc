@@ -1,0 +1,78 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Weight-static GEMM (Z = X @ W + Y) on the MAGIA mesh, as a systolic pipeline.
+# Same algorithm as tests/magia/mesh/mm_ws_mglib; mm_ws_explicit.mgc is the
+# hand-scheduled version. Compile with
+#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mesh/mm_ws_mgc/mm_ws.mgc -o tests/magia/mesh/mm_ws_mgc/src/test.c
+
+from mgc import *
+
+M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # from include/test.h
+X = l2("x_inp", (M, N), fp16)
+W = l2("w_inp", (N, K), fp16)
+Y = l2("y_inp", (M, K), fp16)  # bias in, result out
+Z = l2("z_out", (M, K), fp16)  # golden
+
+N_ITERATIONS = define(1)
+WAIT_MODE = define(WFE)
+
+
+@test("test_mm_ws_mgc", authors=["Francesco Conti <f.conti@unibo.it>"])
+def main():
+    """
+    This test aims to verify the functionality of MAGIA as a systolic array for matrix
+    multiplications, following the weight-static mechanism. Each tile keeps a block of W in
+    L1; blocks of output rows flow down the mesh columns, accumulating x @ w at each tile.
+    """
+    for y_id, x_id in tiles():
+        """
+        1. Static weight data-tile: N is split over the mesh rows, K over the mesh columns.
+        """
+        tile_h = y_id.split(N)
+        tile_w = x_id.split(K)
+
+        """
+        1a. The M dimension is processed in timeslots. Row y_id of the mesh starts 2 time
+        steps after the row above it (a block takes one step to compute, one to travel down).
+        """
+        timeslots: u8 = 4
+        t_size: u8 = M // timeslots
+        t_start: u8 = y_id * 2
+        total_timeslots: u8 = (MESH_Y_TILES - 1) * 2 + timeslots + 1
+
+        """
+        2. L1 buffers: the static weights, and multi-buffers for the input and output blocks.
+        """
+        w = L1.alloc(W[tile_h, tile_w])
+        x = L1.multi_buffer(X[0:t_size, tile_h], depth=2)
+        y = L1.multi_buffer(Y[0:t_size, tile_w], depth=3)
+
+        """
+        TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+        """
+        for z in range(N_ITERATIONS):
+            dma.load(w, W[tile_h, tile_w]).wait()
+
+            """
+            3. Systolic pipeline over the output blocks: load the input block (and, on the top
+            row, the bias block), accumulate, then pass the block to the tile below (the bottom
+            row stores it to L2). A global barrier closes every time step.
+            """
+            for pt in pipeline(timeslots, skew=t_start, steps=total_timeslots, sync=GLOBAL):
+                if y_id == 0:
+                    dma.load(y[pt], Y[pt * t_size:(pt + 1) * t_size, tile_w])
+                dma.load(x[pt], X[pt * t_size:(pt + 1) * t_size, tile_h])
+                redmule.gemm(x[pt], w, y[pt])
+                if y_id == MESH_Y_TILES - 1:
+                    dma.store(Y[pt * t_size:(pt + 1) * t_size, tile_w], y[pt])
+                else:
+                    dma.store(y.on(1, 0)[pt], y[pt])
+
+        """
+        4. Check results
+        """
+        sync(COL)
+        if y_id == MESH_Y_TILES - 1:
+            check(Y[:, tile_w], Z[:, tile_w], tol=0x11)

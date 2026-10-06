@@ -1,0 +1,130 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Weight-static GEMM (Z = X @ W + Y) on the MAGIA mesh, explicit schedule: a
+# statement-by-statement mgc rendering of tests/magia/mesh/mm_ws_mglib (itself
+# the mglib port of mm_ws_2). See mm_ws.mgc for the pipelined version.
+
+from mgc import *
+
+M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # from include/test.h
+X = l2("x_inp", (M, N), fp16)
+W = l2("w_inp", (N, K), fp16)
+Y = l2("y_inp", (M, K), fp16)  # bias in, result out
+Z = l2("z_out", (M, K), fp16)  # golden
+
+N_ITERATIONS = define(1)
+WAIT_MODE = define(WFE)
+
+
+@test("test_mm_ws_mgc", authors=["Francesco Conti <f.conti@unibo.it>"])
+def main():
+    """
+    This test aims to verify the functionality of MAGIA as a systolic array for matrix
+    multiplications, following the weight-static mechanism (explicit mgc schedule).
+    """
+    for y_id, x_id in tiles():
+        """
+        1. Calculate the static input data-tile dimensions.
+        """
+        tile_h = y_id.split(N)
+        tile_w = x_id.split(K)
+
+        """
+        1a. Set the t_size, how many timeslots we want to divide the temporal dimension into.
+        t_start is the first timeslot in which it is possible to elaborate the output.
+        t_end is the last timeslot.
+        """
+        timeslots: u8 = 4
+        t_size: u8 = M // timeslots
+        t_start: u8 = y_id * 2
+        t_end: u8 = t_start + timeslots
+        total_timeslots: u8 = (MESH_Y_TILES - 1) * 2 + timeslots + 1
+
+        """
+        2. Static weight data-tile.
+        """
+        w = L1.alloc(W[tile_h, tile_w])
+
+        """
+        2a. Input data-tile multi-buffer.
+        """
+        x = L1.multi_buffer(X[0:t_size, tile_h], depth=3)
+
+        """
+        2b. Output data-tile multi-buffer (written by the tile above, or loaded from L2 on the
+        top row).
+        """
+        y = L1.multi_buffer(Y[0:t_size, tile_w], depth=3)
+
+        pt: u8 = 0
+
+        """
+        TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+        """
+        for z in range(N_ITERATIONS):
+            # TIMESLOT t = -1
+            # Initial static weight load
+            dma.load(w, W[tile_h, tile_w]).wait()
+
+            # First input load
+            dma.load(x[0], X[0:t_size, tile_h]).wait()
+
+            sync(GLOBAL)
+
+            """
+            3. Cycle over the timeslots.
+            """
+            for t in range(total_timeslots):
+                """
+                3a. Skip the timeslot if outside the range
+                """
+                if t < t_start or t > t_end:
+                    sync(GLOBAL)
+                    continue
+
+                """
+                3b. Select correct buffer for current, previous and next timeslot
+                """
+                rotate(pt)
+
+                """
+                3c. Load L2 output of current timeslot (if upmost tile)
+                """
+                if y_id == 0 and t < t_end:
+                    dma.load(y[pt], Y[pt * t_size:(pt + 1) * t_size, tile_w]).wait()
+
+                """
+                3d. Load the next input, push the previous output down (or to L2), compute
+                the current output.
+                """
+                if pt < timeslots - 1:
+                    ex = dma.load(x[pt + 1], X[(pt + 1) * t_size:(pt + 2) * t_size, tile_h])
+                if pt > 0:
+                    if y_id == MESH_Y_TILES - 1:
+                        eo = dma.store(Y[(pt - 1) * t_size:pt * t_size, tile_w], y[pt - 1])
+                    else:
+                        eo = dma.store(y.on(1, 0)[pt - 1], y[pt - 1])
+                if pt < timeslots:
+                    job = redmule.gemm(x[pt], w, y[pt])
+
+                if pt < timeslots - 1:
+                    ex.wait()
+                if pt > 0:
+                    eo.wait()
+                if pt < timeslots:
+                    job.wait()
+
+                """
+                3f. Sync before next timeslot
+                """
+                pt = pt + 1
+                sync(GLOBAL)
+
+        """
+        5. Check results
+        """
+        sync(COL)
+        if y_id == MESH_Y_TILES - 1:
+            check(Y[:, tile_w], Z[:, tile_w], tol=0x11)

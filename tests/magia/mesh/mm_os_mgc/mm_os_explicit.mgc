@@ -1,0 +1,121 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Same test as mm_os.mgc, written with the explicit (low-level) schedule instead
+# of pipeline(): multi-buffer slots, event rotation and the RedMulE enqueue / commit /
+# start / commit_start / wait split are spelled out by hand. It compiles to the
+# exact same C as mm_os.mgc (compare with `mgcc.py mm_os.mgc --print-ir-after=pipeline`).
+
+from mgc import *
+
+M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # from include/test.h
+X = l2("x_inp", (M, N), fp16)
+W = l2("w_inp", (N, K), fp16)
+Y = l2("y_inp", (M, K), fp16)  # bias in, result out
+Z = l2("z_out", (M, K), fp16)  # golden
+
+N_ITERATIONS = define(1)
+N_TIMESLOTS = define(8)
+WAIT_MODE = define(WFE)
+
+
+@test("test_mm_os_mgc", authors=["Francesco Conti <f.conti@unibo.it>"])
+def main():
+    """
+    This test aims to verify the functionality of MAGIA as a systolic array for matrix
+    multiplications, following the output-static mechanism. It is the mgc version of the
+    mm_os_mglib test: transfers/jobs are issued through the mglib layer (mg_idma /
+    mg_redmule / mg_event).
+    """
+    for y_id, x_id in tiles():
+        """
+        1. Calculate the static output data-tile dimensions.
+        If M and K are perfect multiples of the number of mesh-tiles in their respective axis,
+        tile_h and tile_w will be the same for each mesh-tile.
+        Otherwise, these dimensions will be smaller for the mesh-tiles closer to the right and lower
+        border of the mesh.
+        """
+        tile_h = y_id.split(M)
+        tile_w = x_id.split(K)
+
+        """
+        1a. Set the t_size, how many timeslots we want to divide the temporal dimension into.
+        The final L1 memory requirement will be:
+        Input data-tile: (tile_h x t_size) * data_dim
+        Weight data-tile: (t_size x tile_w) * data_dim
+        Output data-tile: ((tile_h x tile_w) * data_dim)
+        """
+        timeslots: u8 = N_TIMESLOTS
+        t_size: u8 = N // timeslots
+
+        """
+        2. Static output data-tile, resident in L1 for the whole test.
+        """
+        y = L1.alloc(Y[tile_h, tile_w])
+
+        """
+        2a. Input data-tile multi-buffer (double buffered over the timeslots).
+        """
+        x = L1.multi_buffer(X[tile_h, 0:t_size], depth=2)
+
+        """
+        2b. Weight data-tile multi-buffer (double buffered over the timeslots).
+        """
+        w = L1.multi_buffer(W[0:t_size, tile_w], depth=2)
+        redmule_evt = redmule.events(2)
+
+        """
+        TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+        """
+        for z in range(N_ITERATIONS):
+            """
+            3. Load the static output tile, then run the timeslots as a software pipeline:
+            the operands of timeslot i+1 are prefetched while RedMulE computes timeslot i.
+            """
+            ey = dma.load(y, Y[tile_h, tile_w])
+            ex = dma.load(x[0], X[tile_h, 0:t_size])
+            ew = dma.load(w[0], W[0:t_size, tile_w])
+            ex.wait()
+            ew.wait()
+            ey.wait()
+            # enqueue the first job and commit it: its inputs are already in L1
+            redmule.enqueue(x[0], w[0], y, event=redmule_evt[0])
+            redmule.commit()
+
+            """
+            4. Cycle over the timeslots.
+            For each timeslot, the mesh-tile will:
+            a - Load the weight and input data-tile for the next timeslot (if there is one)
+            b - Multiply and add
+            Synchronization is not required.
+            We parallelize the IDMA with Redmule.
+            """
+            for i in range(timeslots):
+                if i < timeslots - 1:
+                    # launch the current job (committed in the previous iteration)
+                    redmule.start()
+                    # prefetch the operands of the next iteration
+                    ex = dma.load(x[i + 1], X[tile_h, (i + 1) * t_size:(i + 2) * t_size])
+                    # program the next job while the DMA prefetches its operands
+                    redmule.enqueue(x[i + 1], w[i + 1], y, event=redmule_evt[i + 1])
+                    ew = dma.load(w[i + 1], W[(i + 1) * t_size:(i + 2) * t_size, tile_w])
+                    # commit & start the next job once its operands have landed
+                    ex.wait()
+                    ew.wait()
+                    redmule.commit_start()
+                    # wait for the current job
+                    redmule_evt[i].wait()
+                else:
+                    # last iteration: nothing to prefetch
+                    redmule_evt[i].wait()
+
+            """
+            5. Store the output data-tile back to L2
+            """
+            dma.store(Y[tile_h, tile_w], y).wait()
+
+        """
+        6. Check results
+        """
+        check(Y[tile_h, tile_w], Z[tile_h, tile_w], tol=0x11)

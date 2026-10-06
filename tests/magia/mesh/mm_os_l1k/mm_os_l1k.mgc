@@ -1,0 +1,50 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Output-static GEMM with a software L1 kernel in the pipeline: every input block
+# is loaded raw, transformed on the CV32 control core (here: a plain copy, so the
+# golden result is unchanged) and then consumed by RedMulE. Compile with
+#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mesh/mm_os_l1k/mm_os_l1k.mgc -o tests/magia/mesh/mm_os_l1k/src/test.c
+
+from mgc import *
+
+M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # from include/test.h
+X = l2("x_inp", (M, N), fp16)
+W = l2("w_inp", (N, K), fp16)
+Y = l2("y_inp", (M, K), fp16)  # bias in, result out
+Z = l2("z_out", (M, K), fp16)  # golden
+
+N_TIMESLOTS = define(8)
+WAIT_MODE = define(WFE)
+
+# Implemented in src/kernels.c; runs synchronously on the tile's CV32 core.
+copy = l1_kernel("l1_copy_fp16", operands=("dst:out", "src:in"), params=("src.size",), executor=CORE)
+
+
+@test("test_mm_os_l1k", authors=["Francesco Conti <f.conti@unibo.it>"])
+def main():
+    """
+    Output-static GEMM on MAGIA with a software L1 kernel on the input path:
+    X block --iDMA--> x_raw --CV32 kernel--> x --RedMulE--> y (+= x @ w).
+    """
+    for y_id, x_id in tiles():
+        tile_h = y_id.split(M)
+        tile_w = x_id.split(K)
+        timeslots: u8 = N_TIMESLOTS
+        t_size: u8 = N // timeslots
+
+        y = L1.alloc(Y[tile_h, tile_w])
+        x_raw = L1.multi_buffer(X[tile_h, 0:t_size], depth=2)
+        x = L1.multi_buffer(X[tile_h, 0:t_size], depth=2)
+        w = L1.multi_buffer(W[0:t_size, tile_w], depth=3)
+
+        dma.load(y, Y[tile_h, tile_w]).wait()
+        for i in pipeline(timeslots):
+            dma.load(x_raw[i], X[tile_h, i * t_size:(i + 1) * t_size])
+            dma.load(w[i], W[i * t_size:(i + 1) * t_size, tile_w])
+            copy(x[i], x_raw[i])
+            redmule.gemm(x[i], w[i], y)
+        dma.store(Y[tile_h, tile_w], y).wait()
+
+        check(Y[tile_h, tile_w], Z[tile_h, tile_w], tol=0x11)
