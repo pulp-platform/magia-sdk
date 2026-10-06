@@ -8,6 +8,9 @@ rotation, event storage, the RedMulE enqueue/commit/start sequence and neighbour
 `.mgc` files are parsed with Python's `ast` module and never executed. The compiler is built on
 [xDSL](https://xdsl.dev).
 
+mgc was developed using Claude Opus 5.5 for coding, debugging, and (partially) documentation under
+human guidance.
+
 ## Setup and usage
 
 ```sh
