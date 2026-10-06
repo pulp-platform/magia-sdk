@@ -35,7 +35,7 @@ class L1Layout(ModulePass):
     """Assigns an L1 address to every buffer slot and resolves neighbour bases.
 
     Example: buffers `w` (1 slot, 4 KiB) and `x` (2 slots, 2 KiB each) get
-    `l1_tile_base`, `obi_addr_w + 4096`, `obi_addr_x_0 + 2048`. Sets `addrs` on
+    `l1_tile_base`, `l1_addr_w + 4096`, `l1_addr_x_0 + 2048`. Sets `addrs` on
     each `mg.alloc` and `base` (e.g. `l1_base_s`, the tile below) on each `mg.remote`.
     """
     name = 'l1-layout'
@@ -53,7 +53,7 @@ class L1Layout(ModulePass):
             depth = a.depth.data
             addrs = []
             for k in range(depth):
-                slot = f'obi_addr_{a.sym.data}' if depth == 1 else f'obi_addr_{a.sym.data}_{k}'
+                slot = f'l1_addr_{a.sym.data}' if depth == 1 else f'l1_addr_{a.sym.data}_{k}'
                 addrs.append(Raw('(l1_tile_base)') if prev is None else
                              Raw(f'{prev[0]} + ({prev[1].c()})'))
                 prev = (slot, nbytes)

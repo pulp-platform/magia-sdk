@@ -5,7 +5,7 @@
 # Francesco Conti <f.conti@unibo.it>
 """multi-buffer: slot indices -> addresses and pointer rotation.
 
-* constant index `x[1]`          -> the slot's static address `obi_addr_x_1`
+* constant index `x[1]`          -> the slot's static address `l1_addr_x_1`
 * relative index `x[v + k]`      -> a rotating pointer (`x_pt`, `x_pt_next`,
   `x_pt_prev`, ...) selected once per value of `v` by an `mg.select`
   (`if (v % 2)` / `switch (v % N)`).
@@ -45,10 +45,10 @@ def ptr_name(kind, name, k):
 
 
 def static_name(kind, name, depth, c):
-    """C name for a constant slot `c` (wrapped modulo `depth`): `obi_addr_x_1`
+    """C name for a constant slot `c` (wrapped modulo `depth`): `l1_addr_x_1`
     for buffers, `&ev_1` for events."""
     if kind == 'buf':
-        return f'obi_addr_{name}' if depth == 1 else f'obi_addr_{name}_{c % depth}'
+        return f'l1_addr_{name}' if depth == 1 else f'l1_addr_{name}_{c % depth}'
     return f'&{name}_{c % depth}'
 
 
@@ -56,7 +56,7 @@ def static_name(kind, name, depth, c):
 class MultiBuffer(ModulePass):
     """Resolves slot indices of multi-buffers and event arrays.
 
-    `x[1]` becomes the fixed address `obi_addr_x_1`. `x[pt]` and `x[pt + 1]`
+    `x[1]` becomes the fixed address `l1_addr_x_1`. `x[pt]` and `x[pt + 1]`
     become the pointers `x_pt` / `x_pt_next`, which an inserted `mg.select`
     (`if (pt % 2) {...} else {...}` or `switch (pt % N)`) points at the right
     slot each iteration. Indices that are not `var + constant` with |constant| <

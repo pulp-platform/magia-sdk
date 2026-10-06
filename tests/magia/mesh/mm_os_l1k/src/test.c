@@ -83,33 +83,33 @@ int main(void)
     if (tile_h < 1 || tile_w < 1) {
         return 0;
     }
-    uint8_t timeslots   = N_TIMESLOTS;
-    uint8_t t_size      = N_SIZE / timeslots;
-    uint32_t len_y      = tile_w * 2;
-    uint32_t std_y      = K_SIZE * 2;
-    uint32_t reps_y     = (uint32_t)tile_h;
-    uint32_t obi_addr_y = (l1_tile_base);
-    uint32_t axi_addr_y =
+    uint8_t timeslots  = N_TIMESLOTS;
+    uint8_t t_size     = N_SIZE / timeslots;
+    uint32_t len_y     = tile_w * 2;
+    uint32_t std_y     = K_SIZE * 2;
+    uint32_t reps_y    = (uint32_t)tile_h;
+    uint32_t l1_addr_y = (l1_tile_base);
+    uint32_t l2_addr_y =
         (uint32_t)y_inp + (tile_h_max * y_id * K_SIZE * 2) + (tile_w_max * x_id * 2);
-    uint32_t len_x_raw        = t_size * 2;
-    uint32_t std_x_raw        = N_SIZE * 2;
-    uint32_t reps_x_raw       = (uint32_t)tile_h;
-    uint32_t obi_addr_x_raw_0 = obi_addr_y + (tile_h * tile_w * 2);
-    uint32_t obi_addr_x_raw_1 = obi_addr_x_raw_0 + (tile_h * t_size * 2);
-    uint32_t axi_addr_x_raw   = (uint32_t)x_inp + (tile_h_max * y_id * N_SIZE * 2);
-    uint32_t len_x            = t_size * 2;
-    uint32_t std_x            = N_SIZE * 2;
-    uint32_t reps_x           = (uint32_t)tile_h;
-    uint32_t obi_addr_x_0     = obi_addr_x_raw_1 + (tile_h * t_size * 2);
-    uint32_t obi_addr_x_1     = obi_addr_x_0 + (tile_h * t_size * 2);
-    uint32_t axi_addr_x       = (uint32_t)x_inp + (tile_h_max * y_id * N_SIZE * 2);
-    uint32_t len_w            = tile_w * 2;
-    uint32_t std_w            = K_SIZE * 2;
-    uint32_t reps_w           = (uint32_t)t_size;
-    uint32_t obi_addr_w_0     = obi_addr_x_1 + (tile_h * t_size * 2);
-    uint32_t obi_addr_w_1     = obi_addr_w_0 + (t_size * tile_w * 2);
-    uint32_t obi_addr_w_2     = obi_addr_w_1 + (t_size * tile_w * 2);
-    uint32_t axi_addr_w       = (uint32_t)w_inp + (tile_w_max * x_id * 2);
+    uint32_t len_x_raw       = t_size * 2;
+    uint32_t std_x_raw       = N_SIZE * 2;
+    uint32_t reps_x_raw      = (uint32_t)tile_h;
+    uint32_t l1_addr_x_raw_0 = l1_addr_y + (tile_h * tile_w * 2);
+    uint32_t l1_addr_x_raw_1 = l1_addr_x_raw_0 + (tile_h * t_size * 2);
+    uint32_t l2_addr_x_raw   = (uint32_t)x_inp + (tile_h_max * y_id * N_SIZE * 2);
+    uint32_t len_x           = t_size * 2;
+    uint32_t std_x           = N_SIZE * 2;
+    uint32_t reps_x          = (uint32_t)tile_h;
+    uint32_t l1_addr_x_0     = l1_addr_x_raw_1 + (tile_h * t_size * 2);
+    uint32_t l1_addr_x_1     = l1_addr_x_0 + (tile_h * t_size * 2);
+    uint32_t l2_addr_x       = (uint32_t)x_inp + (tile_h_max * y_id * N_SIZE * 2);
+    uint32_t len_w           = tile_w * 2;
+    uint32_t std_w           = K_SIZE * 2;
+    uint32_t reps_w          = (uint32_t)t_size;
+    uint32_t l1_addr_w_0     = l1_addr_x_1 + (tile_h * t_size * 2);
+    uint32_t l1_addr_w_1     = l1_addr_w_0 + (t_size * tile_w * 2);
+    uint32_t l1_addr_w_2     = l1_addr_w_1 + (t_size * tile_w * 2);
+    uint32_t l2_addr_w       = (uint32_t)w_inp + (tile_w_max * x_id * 2);
 
     volatile uint32_t x_raw_pt;
     volatile uint32_t x_pt;
@@ -126,8 +126,8 @@ int main(void)
                       &eu_ctrl,
                       WAIT_MODE,
                       0,
-                      axi_addr_y,
-                      obi_addr_y,
+                      l2_addr_y,
+                      l1_addr_y,
                       len_y,
                       std_y,
                       reps_y,
@@ -139,8 +139,8 @@ int main(void)
                       &eu_ctrl,
                       WAIT_MODE,
                       0,
-                      axi_addr_x_raw,
-                      obi_addr_x_raw_0,
+                      l2_addr_x_raw,
+                      l1_addr_x_raw_0,
                       len_x_raw,
                       std_x_raw,
                       reps_x_raw,
@@ -151,8 +151,8 @@ int main(void)
                       &eu_ctrl,
                       WAIT_MODE,
                       0,
-                      axi_addr_w,
-                      obi_addr_w_0,
+                      l2_addr_w,
+                      l1_addr_w_0,
                       len_w,
                       std_w,
                       reps_w,
@@ -163,32 +163,32 @@ int main(void)
 
     for (int i = 0; i < timeslots + 1; i++) {
         if (i % 2) {
-            x_raw_pt      = obi_addr_x_raw_1;
-            x_raw_pt_next = obi_addr_x_raw_0;
-            x_pt          = obi_addr_x_1;
-            x_pt_prev     = obi_addr_x_0;
+            x_raw_pt      = l1_addr_x_raw_1;
+            x_raw_pt_next = l1_addr_x_raw_0;
+            x_pt          = l1_addr_x_1;
+            x_pt_prev     = l1_addr_x_0;
         } else {
-            x_raw_pt      = obi_addr_x_raw_0;
-            x_raw_pt_next = obi_addr_x_raw_1;
-            x_pt          = obi_addr_x_0;
-            x_pt_prev     = obi_addr_x_1;
+            x_raw_pt      = l1_addr_x_raw_0;
+            x_raw_pt_next = l1_addr_x_raw_1;
+            x_pt          = l1_addr_x_0;
+            x_pt_prev     = l1_addr_x_1;
         }
 
         switch (i % 3) {
         case 0:
-            w_pt      = obi_addr_w_0;
-            w_pt_prev = obi_addr_w_2;
-            w_pt_next = obi_addr_w_1;
+            w_pt      = l1_addr_w_0;
+            w_pt_prev = l1_addr_w_2;
+            w_pt_next = l1_addr_w_1;
             break;
         case 1:
-            w_pt      = obi_addr_w_1;
-            w_pt_prev = obi_addr_w_0;
-            w_pt_next = obi_addr_w_2;
+            w_pt      = l1_addr_w_1;
+            w_pt_prev = l1_addr_w_0;
+            w_pt_next = l1_addr_w_2;
             break;
         case 2:
-            w_pt      = obi_addr_w_2;
-            w_pt_prev = obi_addr_w_1;
-            w_pt_next = obi_addr_w_0;
+            w_pt      = l1_addr_w_2;
+            w_pt_prev = l1_addr_w_1;
+            w_pt_next = l1_addr_w_0;
             break;
         }
 
@@ -197,7 +197,7 @@ int main(void)
                               &eu_ctrl,
                               WAIT_MODE,
                               0,
-                              axi_addr_x_raw + ((i + 1) * t_size * 2),
+                              l2_addr_x_raw + ((i + 1) * t_size * 2),
                               x_raw_pt_next,
                               len_x_raw,
                               std_x_raw,
@@ -209,7 +209,7 @@ int main(void)
                               &eu_ctrl,
                               WAIT_MODE,
                               0,
-                              axi_addr_w + ((i + 1) * t_size * K_SIZE * 2),
+                              l2_addr_w + ((i + 1) * t_size * K_SIZE * 2),
                               w_pt_next,
                               len_w,
                               std_w,
@@ -224,7 +224,7 @@ int main(void)
                             WAIT_MODE,
                             x_pt_prev,
                             w_pt_prev,
-                            obi_addr_y,
+                            l1_addr_y,
                             (uint16_t)tile_h,
                             (uint16_t)t_size,
                             (uint16_t)tile_w,
@@ -250,8 +250,8 @@ int main(void)
                       &eu_ctrl,
                       WAIT_MODE,
                       1,
-                      axi_addr_y,
-                      obi_addr_y,
+                      l2_addr_y,
+                      l1_addr_y,
                       len_y,
                       std_y,
                       reps_y,

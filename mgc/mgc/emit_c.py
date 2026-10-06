@@ -7,7 +7,7 @@
 
 The emitter makes no decisions: every address, event, parameter and layout was
 resolved by the passes. Each buffer's fixed transfer descriptor
-(`len_/std_/reps_/obi_addr_/axi_addr_`) is printed once after its allocation
+(`len_/std_/reps_/l1_addr_/l2_addr_`) is printed once after its allocation
 and referred to by name in the transfers (a naming convention for
 readability, not a transformation).
 """
@@ -231,7 +231,7 @@ class Emitter:
 
     def alloc(self, op):
         """Print a buffer's constant transfer descriptor once: `len_x`, `std_x`,
-        `reps_x` (geometry), `obi_addr_x[_k]` (L1 slot addresses), `axi_addr_x` (L2 base)."""
+        `reps_x` (geometry), `l1_addr_x[_k]` (L1 slot addresses), `l2_addr_x` (L2 base)."""
         w = self.w
         n = op.sym.data
         x: ir.Xfer = op.xfer.data
@@ -242,9 +242,9 @@ class Emitter:
             w.line(f'uint32_t reps{sfx}_{n} = (uint32_t){_paren(reps)};')
         depth = op.depth.data
         for k, a in enumerate(op.addrs.data):
-            slot = f'obi_addr_{n}' if depth == 1 else f'obi_addr_{n}_{k}'
+            slot = f'l1_addr_{n}' if depth == 1 else f'l1_addr_{n}_{k}'
             w.line(f'uint32_t {slot} = {a.data.c()};')
-        w.line(f'uint32_t axi_addr_{n} = {op.axi.data.c()};')
+        w.line(f'uint32_t l2_addr_{n} = {op.axi.data.c()};')
 
     def dma(self, op):
         """Print an iDMA call, e.g.
@@ -313,7 +313,7 @@ class Emitter:
                 for k in e.offsets:
                     s = (c + k) % depth
                     if e.kind == 'buf':
-                        w.line(f'{ptr_name("buf", e.name, k)} = obi_addr_{e.name}_{s};')
+                        w.line(f'{ptr_name("buf", e.name, k)} = l1_addr_{e.name}_{s};')
                     else:
                         w.line(f'{ptr_name("evt", e.name, k)} = &{e.name}_{s};')
 

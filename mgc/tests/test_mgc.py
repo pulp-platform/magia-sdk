@@ -80,8 +80,8 @@ class Equivalence(unittest.TestCase):
     def test_os_schedule_order(self):
         c = _c(OS, 'mm_os.mgc')
         loop = c[c.index('if (i < (timeslots - 1))'):]
-        order = [k for k in ('mg_redmule_gemm_start', 'axi_addr_x +', 'mg_redmule_gemm_enqueue',
-                             'axi_addr_w +', '&idma_evt_x);', '&idma_evt_w);',
+        order = [k for k in ('mg_redmule_gemm_start', 'l2_addr_x +', 'mg_redmule_gemm_enqueue',
+                             'l2_addr_w +', '&idma_evt_x);', '&idma_evt_w);',
                              'mg_redmule_gemm_commit_start', 'redmule_evt_curr);')]
         self.assertEqual(order, sorted(order, key=loop.index))
         # the hand-written shape: the current-job wait is in both branches
@@ -111,9 +111,9 @@ class Systolic(unittest.TestCase):
         self.assertIn('uint32_t l1_base_s = get_l1_base(hartid + MESH_X_TILES);', c)
         self.assertIn('l1_base_s + (y_pt_prev - l1_tile_base),', c)
         # every tile must lay out L1 identically: worst-case (max) tile sizes
-        self.assertIn('obi_addr_x_0 = obi_addr_w + (tile_h_max * tile_w_max * 2);', c)
+        self.assertIn('l1_addr_x_0 = l1_addr_w + (tile_h_max * tile_w_max * 2);', c)
         # ...whereas without neighbour access the actual sizes are used (as in mm_os)
-        self.assertIn('obi_addr_x_0 = obi_addr_y + (tile_h * tile_w * 2);', _c(OS, 'mm_os.mgc'))
+        self.assertIn('l1_addr_x_0 = l1_addr_y + (tile_h * tile_w * 2);', _c(OS, 'mm_os.mgc'))
 
     def test_is_east_and_row_barrier(self):
         c = _c(IS, 'mm_is.mgc')

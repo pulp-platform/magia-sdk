@@ -247,7 +247,7 @@ IR conventions:
 | `multi-buffer` | slot indices → static addresses or rotating pointers with an `if`/`switch` selection |
 | `l1-layout` | identical L1 layout on all tiles; uses `*_max` tile sizes when buffers are accessed remotely; neighbour L1 bases |
 | `event-alloc` | event variable names; dataflow check of issue/wait |
-| `emit-c` | prints C; each buffer's `len_/std_/reps_/obi_addr_/axi_addr_` is declared once and referenced by name |
+| `emit-c` | prints C; each buffer's `len_/std_/reps_/l1_addr_/l2_addr_` is declared once and referenced by name |
 
 Extending:
 

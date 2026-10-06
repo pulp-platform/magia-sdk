@@ -86,8 +86,8 @@ class LegalizeDma(ModulePass):
     """Gives every `mg.alloc` and `mg.dma` its transfer geometry and L2 address.
 
     Example: `x = L1.alloc(X[0:8, 0:16])` gets a 2-D `xfer` and base address
-    `axi_addr_x`; a later `dma.load(x, X[8:16, 0:16])` is checked to have the same
-    geometry and gets address `axi_addr_x + (8 * N * 2)`. A load with a different
+    `l2_addr_x`; a later `dma.load(x, X[8:16, 0:16])` is checked to have the same
+    geometry and gets address `l2_addr_x + (8 * N * 2)`. A load with a different
     geometry or shape than the buffer's declaration is an `MgcError`.
     """
     name = 'legalize-dma'
@@ -123,7 +123,7 @@ class LegalizeDma(ModulePass):
         if not same_xfer(g, a.xfer.data):
             raise MgcError(op, f'transfer geometry differs from the one `{a.sym.data}` was declared with')
         if view.tensor == decl.tensor:
-            axi = Sym(f'axi_addr_{a.sym.data}')
+            axi = Sym(f'l2_addr_{a.sym.data}')
             for d, (s0, s1) in enumerate(zip(decl.starts, view.starts)):
                 diff = sub(s1, s0, fold=False)
                 if is_zero(diff):
