@@ -97,7 +97,7 @@ class Systolic(unittest.TestCase):
 
     def test_ws_stages_and_guards(self):
         c = _c(WS, 'mm_ws.mgc')
-        self.assertIn('int32_t pt = t - t_start;', c)
+        self.assertIn('int pt = t - t_start;', c)
         self.assertIn('if (pt >= 0 && pt <= timeslots) {', c)
         for g in ('if (pt < (timeslots - 1)) {', 'if (pt > 0) {', 'if (pt < timeslots) {'):
             self.assertIn(g, c)

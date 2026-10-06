@@ -143,7 +143,7 @@ int main(void)
     /**
      * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
      */
-    for (uint8_t z = 0; z < N_ITERATIONS; z++) {
+    for (int z = 0; z < N_ITERATIONS; z++) {
         /**
          * 3. Load the static output tile, then run the timeslots as a software pipeline:
          * the operands of timeslot i+1 are prefetched while RedMulE computes timeslot i.
@@ -209,7 +209,7 @@ int main(void)
          * Synchronization is not required.
          * We parallelize the IDMA with Redmule.
          */
-        for (uint8_t i = 0; i < timeslots; i++) {
+        for (int i = 0; i < timeslots; i++) {
             if (i % 2) {
                 x_pt             = obi_addr_x_1;
                 x_pt_next        = obi_addr_x_0;

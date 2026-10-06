@@ -14,8 +14,12 @@ OBJDUMP=$4
 
 GUARD_NAME=$(echo "${TEST_NAME}_TASK_BIN" | tr 'a-z' 'A-Z')
 
+# In-place sed that works with both GNU sed and BSD/macOS sed (whose -i needs an
+# explicit, possibly empty, backup suffix). Same detection as SED_INPLACE in the Makefile.
+if sed --version >/dev/null 2>&1; then SED_INPLACE=(sed -i); else SED_INPLACE=(sed -i ''); fi
+
 # Remove existing #endif from header
-sed -i "/#endif.*__${GUARD_NAME}_H__/d" "${TASK_HEADER}"
+"${SED_INPLACE[@]}" "/#endif.*__${GUARD_NAME}_H__/d" "${TASK_HEADER}"
 
 # Add _pulp_binary_start — defined by the CV32 linker (link.ld)
 echo "" >> "${TASK_HEADER}"

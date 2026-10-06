@@ -141,7 +141,7 @@ int main(void)
     /**
      * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
      */
-    for (uint8_t z = 0; z < N_ITERATIONS; z++) {
+    for (int z = 0; z < N_ITERATIONS; z++) {
         mg_idma_memcpy_2d(&idma_ctrl,
                           &eu_ctrl,
                           WAIT_MODE,
@@ -193,8 +193,8 @@ int main(void)
         fsync_sync_row(&fsync_ctrl);
         eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 
-        for (uint8_t t = 0; t < total_timeslots; t++) {
-            int32_t pt = t - t_start;
+        for (int t = 0; t < total_timeslots; t++) {
+            int pt = t - t_start;
 
             if (pt >= 0 && pt <= timeslots) {
                 if (pt % 2) {

@@ -1,6 +1,6 @@
 # mgc
 
-mgc ("magic") is a Python-syntax language for MAGIA mesh tests. `mgcc.py` compiles a `.mgc`
+mgc ("magic") is a Python-syntax domain-specific language for MAGIA mesh tests. `mgcc.py` compiles a `.mgc`
 file to a C test that uses mglib (`mg_idma_*`, `mg_redmule_*`, `mg_event_*`) and fsync.
 
 The compiler handles tile partitioning, L1 layout, DMA address/stride arithmetic, multi-buffer
@@ -88,32 +88,34 @@ for y_id, x_id in tiles():
 
 | Statement | Meaning |
 |---|---|
-| `A, B = sizes("A_SIZE", "B_SIZE")` | sizes `#define`d in the header (checked) |
-| `X = l2("x_inp", (A, B), fp16)` | row-major L2 tensor; the array must exist in the header |
-| `NAME = define(value)` | emits `#define NAME value` (`WAIT_MODE` defaults to `WFE`) |
-| `k = l1_kernel("c_fn", operands=("dst:out", "src:in"), params=("src.size",), executor=CORE)` | software kernel on L1 data |
-| `@test("name", authors=[...])` + `def main():` | the test; the docstring of `main` becomes the C header comment |
+| `A, B = sizes("A_SIZE", "B_SIZE")` | Imports dimensions that **already exist** as `#define`s in the test header (`--header`, e.g. `include/test.h`). Each Python name (`A`, `B`) stands for the C macro whose name is given as a string; the generated C uses the macro by name and nothing is emitted. The compiler errors if a macro is missing from the header. Use it for anything the header's data depends on: tensor and tile dimensions, shared with the L2 arrays and the golden data. |
+| `X = l2("x_inp", (A, B), fp16)` | Declares a tensor in L2 memory, row-major, with the given shape (built from `sizes` names or constants) and element type (`fp16`, `u8`, ...). `"x_inp"` is the name of the C array holding its data, which must exist in the header; the compiler errors otherwise. `X` is how the program refers to it. |
+| `NAME = define(value)` | Creates a **new** preprocessor constant owned by the `.mgc` file: the generated C gets `#define NAME value`, and `NAME` can be used in expressions (e.g. loop bounds). Unlike `sizes`, the value is not in the header, so the header and its golden-data generator cannot see it. Use it for schedule tunables such as `N_ITERATIONS` or `N_TIMESLOTS`. `WAIT_MODE` (`WFE` or `POLLING`) selects how the test waits for completion and defaults to `WFE` if not defined. |
+| `k = l1_kernel("c_fn", operands=("dst:out", "src:in"), params=("src.size",), executor=CORE)` | Declares a software kernel: a C function `c_fn`, written by you in the test (e.g. `src/kernels.c`), that runs on the tile's core and works on data in L1. `operands` lists the L1 buffers it takes, each with a role (`in`, `out`, `inout`) that the compiler uses to order operations. `params` are extra integer arguments computed from operand shapes (`src.size`, `src.bytes`, `src.shape[i]`). `executor` says who runs it (`CORE` is the only one at present). Calling `k(...)` in `main` invokes the function. |
+| `@test("name", authors=[...])` + `def main():` | Marks `main` as the test being compiled: `name` is the test name and `authors` are listed in the generated file header. The docstring of `main` becomes the descriptive comment at the top of the generated C. `main` is the only function allowed in the file. |
 
 ### Loops
 
-`main` contains exactly one `for y_id, x_id in tiles():`. Its body runs on every tile (SPMD).
-`y_id` and `x_id` can be used in expressions and conditions.
+In `mgc`, "loops" encapsulate a diversity of meanings and can be either *spatial* or *temporal*.
+All `mgc` programs include a **spatial tile loop**, which encapsulates tile-level parallelism.
+The `main` contains exactly one such loop in the form `for y_id, x_id in tiles():`.
+The body of the tile loop runs equally in each tile, in a variant of the SPMD (Single Program, Multiple Data Stream) paradigm.
+`y_id` and `x_id` are the tile IDs, which can be used in expressions and conditions.
 
 | Loop | Kind | Emitted |
 |---|---|---|
 | `for y_id, x_id in tiles():` | spatial | tile coordinates from `hartid`, `l1_tile_base` |
-| `for v in range(n)`, `range(a, b)` | time | `for` loop; counter type from the bound (`uint8_t` if it fits) |
-| `for v in pipeline(n, ...)` | time | software pipeline (see below) |
-| `for c in cores():` | intra-tile | reserved, compile error |
+| `for v in pipeline(n, ...)` | temporal | software pipeline (see below) |
+| `for v in range(n)`, `range(a, b)` | temporal | regular `for` loop |
+| `for c in cores():` | spatial | reserved for future usage with the PULP cluster in each tile, compile error (for now) |
 
-Other statements: assignment, `if`/`elif`/`else`, `continue`, `pass`. Docstrings become `/** */`
-comments; standalone `#` lines and `comment("...")` become `//` comments.
+### Scalars, tile splits and other statements
 
-### Scalars and tile splits
-
+- Besides the loops above, the body of `main` accepts assignment, `if`/`elif`/`else`, `continue`
+  and `pass`.
 - `name: u8 = expr` declares a variable of type `u8`, `u16`, `u32` or `i32`. Values known at
   compile time are range-checked. An unannotated first assignment declares a `uint32_t`; later
-  assignments (`pt = pt + 1`, `pt += 1`) update it. `//` is C integer division.
+  assignments (`pt = pt + 1`, `pt += 1`) update it. `//` is treated as integer division.
 - `h = y_id.split(E)` splits extent `E` over the mesh rows (`x_id.split` over columns) in blocks
   of `h_max = ceil(E / MESH_Y_TILES)`. Edge tiles are clipped, and tiles with an empty block
   return 0. `h` can index a tensor dimension (start `h_max * y_id`, size `h`). `h.start` and
@@ -127,8 +129,8 @@ tile split, or an integer expression (which removes the dimension).
 | Expression | Meaning |
 |---|---|
 | `b = L1.alloc(view)` | dense L1 buffer with the view's shape; the view also fixes the transfer geometry |
-| `b = L1.multi_buffer(view, depth=N)` | N slots; `b[c]` for a constant slot, `b[v + k]` with \|k\| < N for a rotating one |
-| `b.on(dy, dx)[k]` | slot `k` of `b` on the tile at `(y_id + dy, x_id + dx)`; only as a `dma.store` destination |
+| `b = L1.multi_buffer(view, depth=N)` | `N` L1 buffers (*slots*, `N` ≥ 2 and constant), each shaped like `view`, used for double/triple buffering: e.g. load the next tile into one slot while an accelerator reads the current one. `b` itself is not an operand; it must be indexed to pick a slot. `b[c]` with a constant `c` (e.g. `b[0]`) is always the same, fixed slot. `b[v + k]`, where `v` is a loop variable and `k` a constant offset with \|k\| < N, is a *rotating* slot: the slot used changes with `v` (it is slot `(v + k) % N`), so `b[i]` and `b[i + 1]` mean "current" and "next" in iteration `i`. |
+| `b.on(dy, dx)[k]` | The copy of buffer `b` that lives in the L1 of a **neighbour tile**, i.e. the tile at `(y_id + dy, x_id + dx)`; `dy` and `dx` must be constants (e.g. `b.on(0, 1)` is the tile to the right, `b.on(1, 0)` the one below). Every tile allocates `b` at the same L1 offset, so the neighbour's copy is found at the neighbour's L1 base plus the local offset. `[k]` picks a slot as for a local multi-buffer (omit it if `b` has a single slot). It can only be used as the destination of `dma.store`, to push a local buffer to a neighbour: `dma.store(b.on(0, 1)[k], b[k])` copies local slot `k` of `b` into the same slot of `b` on the tile to the right. Source and destination must be the same buffer and the same slot. |
 
 ### Transfers and events
 
@@ -144,7 +146,7 @@ most `max_rank`-dimensional (currently 2: `mg_idma_memcpy_1d/2d`), with unit ste
 L1 side. L1→L1 within a tile and L2→L2 are rejected.
 
 Each L1 buffer has one event per direction (`idma_evt_<buf>_in/_out`). The two are merged into
-`idma_evt_<buf>` when they are never pending at the same time. These are compile errors:
+`idma_evt_<buf>` when they are never pending at the same time. The following are compile errors:
 issuing a transfer while the previous one on the same event is certainly still pending, and
 waiting on an event that was never issued.
 
@@ -204,6 +206,11 @@ depends on it:
 
 - 2-stage pipelines use `if (next) {...; wait} else {wait}`;
 - deeper pipelines use one guard per stage.
+
+### Comments
+
+Docstrings become `/** */` comments; standalone `#` lines and `comment("...")` become `//`
+comments in the generated C.
 
 ## Compiler
 

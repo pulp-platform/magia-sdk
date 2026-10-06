@@ -16,8 +16,12 @@ OBJDUMP=$4
 # Match the C-identifier sanitization done by bin2header.py (e.g. 'tiny-vit' -> 'TINY_VIT')
 GUARD_NAME=$(echo "${TEST_NAME}_TASK_BIN" | tr 'a-z' 'A-Z' | tr '-' '_')
 
+# In-place sed that works with both GNU sed and BSD/macOS sed (whose -i needs an
+# explicit, possibly empty, backup suffix). Same detection as SED_INPLACE in the Makefile.
+if sed --version >/dev/null 2>&1; then SED_INPLACE=(sed -i); else SED_INPLACE=(sed -i ''); fi
+
 # Remove existing #endif from header
-sed -i "/#endif.*__${GUARD_NAME}_H__/d" "${TASK_HEADER}"
+"${SED_INPLACE[@]}" "/#endif.*__${GUARD_NAME}_H__/d" "${TASK_HEADER}"
 
 # Add binary start address
 echo "" >> "${TASK_HEADER}"

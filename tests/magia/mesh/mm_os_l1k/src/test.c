@@ -161,7 +161,7 @@ int main(void)
     mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_x_raw);
     mg_idma_wait(&eu_ctrl, 0, WAIT_MODE, &idma_evt_w);
 
-    for (uint8_t i = 0; i < timeslots + 1; i++) {
+    for (int i = 0; i < timeslots + 1; i++) {
         if (i % 2) {
             x_raw_pt      = obi_addr_x_raw_1;
             x_raw_pt_next = obi_addr_x_raw_0;

@@ -255,7 +255,7 @@ class Pipeline(ModulePass):
                 early = jobs[0]
 
         skew = p.skew.data if p.skew is not None else None
-        step = Sym(var, None, 'int32_t' if skew is not None else self._ctype(n, S))
+        step = Sym(var, None, 'int')
         out = []
         if early is not None:
             out += self.prologue_early(p, items, early, var, module, docs)
@@ -276,17 +276,15 @@ class Pipeline(ModulePass):
         else:
             t = p.time.data if p.time is not None else 't'
             steps = p.steps.data
-            tctype = 'uint8_t' if (steps.value() is not None and steps.value() <= 0xFF) or \
-                (isinstance(steps, Sym) and steps.ctype == 'uint8_t') else 'uint32_t'
             last = add(n, Const(S - 3)) if S >= 3 else sub(n, Const(1))
             active = Logic('&&', [Cmp('>=', step, Const(0)), Cmp('<=', step, last)])
-            loop_body = [ir.ScalarOp.create(attributes={'sym': StringAttr(var), 'ctype': StringAttr('int32_t'),
+            loop_body = [ir.ScalarOp.create(attributes={'sym': StringAttr(var), 'ctype': StringAttr('int'),
                                                         'value': ir.E(sub(Sym(t), skew)), 'decl': IntAttr(1)}),
                          if_(active, body)]
             if p.sync is not None:
                 loop_body.append(self.sync(p))
             out.append(ir.ForOp.create(attributes={'var': StringAttr(t), 'lo': ir.E(Const(0)),
-                                                   'hi': ir.E(steps), 'ctype': StringAttr(tctype)},
+                                                   'hi': ir.E(steps), 'ctype': StringAttr('int')},
                                        regions=[_region(loop_body)]))
         for o in out:
             for x in o.walk():
@@ -295,12 +293,6 @@ class Pipeline(ModulePass):
         Rewriter.insert_op(out, InsertPoint.before(p))
         p.detach()
         p.erase()
-
-    @staticmethod
-    def _ctype(n, S):
-        hv = n.value()
-        small = (hv is not None and hv + S <= 0xFF) or (isinstance(n, Sym) and n.ctype == 'uint8_t')
-        return 'uint8_t' if small else 'uint32_t'
 
     @staticmethod
     def sync(p):

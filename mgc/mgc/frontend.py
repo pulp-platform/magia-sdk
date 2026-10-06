@@ -710,9 +710,7 @@ class Frontend:
             if len(args) not in (1, 2):
                 raise MgcError(s, 'range(n) or range(a, b)')
             lo, hi = (Const(0), self.expr(args[0])) if len(args) == 1 else (self.expr(args[0]), self.expr(args[1]))
-            hv = hi.value()
-            small = (hv is not None and hv <= 0xFF) or (isinstance(hi, Sym) and hi.ctype == 'uint8_t')
-            ctype = 'uint8_t' if small else 'uint32_t'
+            ctype = 'int'
 
             def enter():
                 self.env[var] = Sym(var, None, ctype)
@@ -740,7 +738,7 @@ class Frontend:
                 raise MgcError(s, 'pipeline(): `skew=` needs `steps=` (total time steps of the mesh)')
 
             def enter():
-                self.env[var] = Sym(var, None, 'int32_t' if 'skew' in attrs else 'uint8_t')
+                self.env[var] = Sym(var, None, 'int')
 
             op = ir.PipelineOp.create(attributes=attrs, regions=[self.region(s.body, enter=enter)])
         self.add(op, s)
