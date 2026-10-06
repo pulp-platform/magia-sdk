@@ -30,6 +30,7 @@ WAIT_MODE = 'WAIT_MODE'
 
 
 class Writer:
+    """Accumulates output lines with the current indentation (4 spaces per level)."""
     COLS = 100
 
     def __init__(self):
@@ -37,9 +38,12 @@ class Writer:
         self.ind = 1
 
     def line(self, s=''):
+        """Append one line at the current indentation (empty string = empty line)."""
         self.lines.append(('    ' * self.ind + s) if s else '')
 
     def blank(self):
+        """Append an empty line, unless it would sit at block start or between a
+        comment and the statement it describes."""
         last = self.lines[-1].strip() if self.lines else ''
         # no blank line at block start or between a comment and what it describes
         if last and not last.endswith('{') and not last.startswith('//') and last != '*/' \
@@ -47,6 +51,7 @@ class Writer:
             self.lines.append('')
 
     def block_comment(self, text):
+        """Emit a `/** ... */` comment from a (docstring) text."""
         self.blank()
         self.line('/**')
         for l in inspect.cleandoc(text).splitlines():
@@ -54,6 +59,8 @@ class Writer:
         self.line(' */')
 
     def call(self, fn, args):
+        """Emit `fn(args...);`, on one line if it fits `COLS`, else one argument
+        per line aligned under the first."""
         one = f'{fn}({", ".join(args)});'
         if len('    ' * self.ind + one) <= self.COLS:
             self.line(one)
@@ -66,6 +73,7 @@ class Writer:
 
 
 def _paren(e: Expr) -> str:
+    """C text of `e`, parenthesized unless it is an atom: `a + b` -> `(a + b)`, `a` -> `a`."""
     return e.c() if e.prec() == 3 else f'({e.c()})'
 
 
@@ -73,8 +81,18 @@ DECLARATIVE = (ir.SplitOp, ir.AllocOp, ir.EventsOp)
 
 
 class Emitter:
+    """Prints a fully lowered IR module as a C test function body.
+
+    Mostly a 1:1 printer: each op becomes the statement(s) it describes, e.g.
+    `mg.dma` -> `mg_idma_memcpy_2d(...)`, `mg.hwpe` -> `mg_redmule_gemm(...)`,
+    `mg.wait` -> `mg_idma_wait(...)`, `mg.if` -> `if (...) {...}`. It then
+    adds the file header, includes and the declarations (rotating pointers,
+    events, neighbour bases) that the passes made necessary. Use `emit()`.
+    """
 
     def __init__(self, module: ModuleOp, filename: str):
+        """`module`: IR after all passes; `filename`: .mgc name, quoted in the
+        generated header. Only one `check()` per test is supported."""
         self.m = module
         self.filename = filename
         self.ts = tensors(module)
@@ -95,6 +113,7 @@ class Emitter:
 
     # -- statements -----------------------------------------------------------
     def block(self, ops):
+        """Print a list of ops in order (consecutive tile splits are printed together)."""
         ops = list(ops)
         k = 0
         while k < len(ops):
@@ -112,6 +131,7 @@ class Emitter:
             k += 1
 
     def op(self, op):
+        """Print one op, dispatching on its type (internal error if a high-level op survived)."""
         w = self.w
         if isinstance(op, ir.CommentOp):
             if op.style.data == 'block':
@@ -160,6 +180,7 @@ class Emitter:
             raise MgcError(op, f'internal: {op.name} was not lowered')
 
     def if_(self, op, chained=False):
+        """Print an `if`, folding `else { if ... }` into `else if`."""
         w = self.w
         if not chained:
             w.line(f'if ({op.cond.data.c()}) {{')
@@ -179,6 +200,9 @@ class Emitter:
         w.line('}')
 
     def splits(self, ops):
+        """Print tile-split computations. For `h = y_id.split(N)`:
+        `h_max = (N + MESH_Y_TILES - 1) / MESH_Y_TILES`, `h` = block size clipped
+        at the edge, and `return 0` for tiles whose block is empty."""
         w = self.w
         mesh = {'y': 'MESH_Y_TILES', 'x': 'MESH_X_TILES'}
         axes = {'y': self.tiles.y.data, 'x': self.tiles.x.data}
@@ -203,6 +227,8 @@ class Emitter:
         w.line('}')
 
     def alloc(self, op):
+        """Print a buffer's constant transfer descriptor once: `len_x`, `std_x`,
+        `reps_x` (geometry), `obi_addr_x[_k]` (L1 slot addresses), `axi_addr_x` (L2 base)."""
         w = self.w
         n = op.sym.data
         x: ir.Xfer = op.xfer.data
@@ -218,6 +244,9 @@ class Emitter:
         w.line(f'uint32_t axi_addr_{n} = {op.axi.data.c()};')
 
     def dma(self, op):
+        """Print an iDMA call, e.g.
+        `mg_idma_memcpy_2d(&idma_ctrl, &eu_ctrl, WAIT_MODE, 0, axi, obi, len_x, std_x, reps_x, &evt, NULL);`
+        For neighbour stores the L2 side is the neighbour's L1 address."""
         a = alloc_of(op.local)
         n = a.sym.data
         x: ir.Xfer = op.xfer.data
@@ -239,6 +268,8 @@ class Emitter:
         self.w.call(devices.IDMA.functions[x.rank], args)
 
     def hwpe(self, op):
+        """Print one accelerator protocol step: `mg_redmule_gemm_commit(ctrl);` or
+        a job call with buffer addresses, `(uint16_t)` shape parameters and event."""
         dev = devices.HWPES[op.acc.data]
         act = op.action.data
         fn = dev.fn[act].format(job=op.job.data)
@@ -253,12 +284,14 @@ class Emitter:
         self.w.call(fn, args)
 
     def call(self, op):
+        """Print a software kernel call: `c_fn(addr..., param...);`."""
         k = self.kdefs[op.kernel.data]
         args = [a.data for a in op.addrs.data] + [p.data.c() for p in op.params.data]
         self.w.blank()
         self.w.call(k.cname.data, args)
 
     def wait(self, op):
+        """Print the wait matching the event: `mg_idma_wait(...)` or `mg_redmule_wait(...)`."""
         e = op.event.data
         if e.kind == 'dma':
             self.w.line(f'mg_idma_wait(&eu_ctrl, {e.dir}, {WAIT_MODE}, {e.cname});')
@@ -267,6 +300,8 @@ class Emitter:
             self.w.line(f'{devices.HWPES[acc].fn["wait"]}(&eu_ctrl, {WAIT_MODE}, {e.cname});')
 
     def select(self, op):
+        """Print the multi-buffer slot selection: assigns each rotating pointer
+        (`x_pt`, `x_pt_next`) inside `if (v % 2)` / `switch (v % N)`."""
         w = self.w
         var, depth = op.var.data, op.depth.data
 
@@ -301,6 +336,7 @@ class Emitter:
         w.line('}')
 
     def check(self, op):
+        """Print the golden-data comparison loop, counting mismatches above `tol` into `errors`."""
         w = self.w
         a, b = op.a.data, op.b.data
         ta, tb = self.ts[a.tensor], self.ts[b.tensor]
@@ -340,6 +376,8 @@ class Emitter:
 
     # -- declarations ------------------------------------------------------
     def declarations(self):
+        """Lines declared after the buffer set-up: rotating-pointer variables,
+        `mg_event_t` storage and neighbour L1 bases (`get_l1_base(hartid + ...)`)."""
         d = ['']
         ind = '    '
         sel = [o for o in self.m.walk() if isinstance(o, ir.SelectOp)]
@@ -394,6 +432,8 @@ class Emitter:
 
     # -- program -----------------------------------------------------------
     def emit(self) -> str:
+        """Print the body of the tile program and return the complete C file text.
+        The test returns `errors` if there is a `check()`, else 0."""
         ops = list(self.tiles.body.block.ops)
         cut = 0
         for k, op in enumerate(ops):
@@ -408,6 +448,7 @@ class Emitter:
         return self.render()
 
     def render(self):
+        """Wrap the printed body in the file header, includes and function signature."""
         authors = [a.data for a in self.test.authors.data]
         out = ['// Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.',
                '// Licensed under the Apache License, Version 2.0, see LICENSE for details.',
@@ -542,4 +583,8 @@ uint32_t l1_tile_base = get_l1_base(hartid);
 
 
 def emit(module, filename) -> str:
+    """Final stage: lowered IR module -> C source text (before clang-format).
+
+    `filename` is the `.mgc` path, mentioned in the "Generated by mgc" header.
+    """
     return Emitter(module, filename).emit()

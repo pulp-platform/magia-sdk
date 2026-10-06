@@ -13,6 +13,7 @@ sub-modules: frontend, ir, passes, emit_c, driver.)
 
 
 def _stub(*_a, **_k):
+    """Placeholder for every DSL construct: calling it outside the compiler is an error."""
     raise RuntimeError('mgc programs are compiled with mgcc.py, not executed')
 
 
@@ -30,6 +31,7 @@ tiles = pipeline = cores = check = comment = sync = rotate = _stub
 
 
 class _Ns:
+    """Namespace stub (`L1`, `dma`, `redmule`): any attribute is a placeholder function."""
 
     def __getattr__(self, _):
         return _stub

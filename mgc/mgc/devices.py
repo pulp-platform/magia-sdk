@@ -22,6 +22,14 @@ from typing import Dict, Tuple
 
 @dataclass(frozen=True)
 class IdmaCaps:
+    """What one iDMA transfer can do, as exposed by mglib.
+
+    `legalize-dma` uses it to decide whether a tensor view maps to a transfer.
+    With the default `IDMA` below (rank 2, dense L1), a 2-D tile of a larger
+    matrix is one `mg_idma_memcpy_2d` (rows x contiguous), a full-width block of
+    rows collapses to one `mg_idma_memcpy_1d`, and anything needing a third
+    dimension is rejected.
+    """
     max_rank: int  # dimensions of one transfer (1 = contiguous, 2 = rows x contiguous, ...)
     l1_strided: bool  # can the L1 (OBI) side be strided? (mglib: no)
     functions: Dict[int, str]  # rank -> mglib function
@@ -37,6 +45,14 @@ IDMA = IdmaCaps(max_rank=2, l1_strided=False,
 
 @dataclass(frozen=True)
 class HwpeJob:
+    """One kind of job an accelerator can run, e.g. RedMulE `gemm` (`y += x @ w`).
+
+    `operands`: L1 buffers it takes, as `(name, role, rank)`, e.g.
+    `('x', 'in', 2)` is a read-only 2-D buffer. `params`: scalar arguments of the
+    mglib call as `(C type, expression)` over operand shapes, e.g.
+    `('uint16_t', 'x.shape[0]')`. `constraints`: pairs of shape expressions that
+    must be equal, e.g. `('x.shape[1]', 'w.shape[0]')` (inner GEMM dimension).
+    """
     operands: Tuple[Tuple[str, str, int], ...]  # (name, role in|out|inout, rank)
     params: Tuple[Tuple[str, str], ...]  # (C type, expression over operand shapes)
     constraints: Tuple[Tuple[str, str], ...]  # pairs of shape expressions that must be equal
@@ -44,6 +60,16 @@ class HwpeJob:
 
 @dataclass(frozen=True)
 class Hwpe:
+    """Description of a memory-mapped accelerator (HWPE) on the tile.
+
+    `name` is the name used in `.mgc` (`redmule.gemm(...)`), `ctrl` the C
+    controller variable passed to mglib, `queue_depth` how many jobs the hardware
+    can hold at once (2 for RedMulE: one running, one queued), `jobs` the
+    supported jobs by name, and `fn` the mglib function used for each protocol
+    step (`enqueue`, `oneshot`, `commit`, `start`, `commit_start`, `wait`),
+    where `{job}` expands to the job name (`mg_redmule_{job}_enqueue` ->
+    `mg_redmule_gemm_enqueue`).
+    """
     name: str
     ctrl: str  # controller variable in the test
     queue_depth: int  # hardware job queue

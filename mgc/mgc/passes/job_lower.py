@@ -32,6 +32,13 @@ from .common import eval_shape_expr, kernels, operand_shapes, shape, alloc_of, t
 
 
 def hwpe_params(op, acc, job, ts):
+    """Check a HWPE job call against its descriptor and compute its scalar arguments.
+
+    For `redmule.gemm(x, w, y)` with x: (M, K), w: (K, N), y: (M, N) it checks the
+    operand count/rank and that the shapes agree, and returns the expressions
+    `[M, K, N]` passed to `mg_redmule_gemm`. Raises `MgcError` on mismatch.
+    `ts` is `tensors(module)`.
+    """
     spec = devices.HWPES[acc].jobs[job]
     names = [n for n, _, _ in spec.operands]
     if len(op.bufs) != len(names):
@@ -50,6 +57,10 @@ def hwpe_params(op, acc, job, ts):
 
 @dataclass(frozen=True)
 class JobLower(ModulePass):
+    """Turns every high-level `mg.job` into a concrete op:
+    `redmule.gemm(x, w, y)` -> `mg.hwpe` one-shot with params `[M, K, N]`;
+    `scale(dst, src)` -> `mg.call` with params from the kernel's `params=`.
+    """
     name = 'job-lower'
 
     def apply(self, ctx, module):

@@ -29,6 +29,19 @@ from .common import alloc_of, tensors
 
 
 def geometry(node, view: ir.View, t, caps=None) -> ir.Xfer:
+    """Describe a tensor view as an iDMA transfer (`ir.Xfer`).
+
+    `view` is the slice of L2 tensor `t`; `node` is used for error locations;
+    `caps` defaults to `devices.IDMA`. Dimensions of size 1 are dropped and a
+    dimension is folded into its inner neighbour when the inner one is a full row.
+
+    Examples for fp16 `X` of shape (M, N):
+    - `X[0:8, :]` (full rows)   -> 1-D: `8*N*2` contiguous bytes;
+    - `X[0:8, 0:16]` (a block)  -> 2-D: `32` bytes repeated 8 times, L2 stride `N*2`;
+    - `X[3, 0:16]`              -> 1-D: 32 bytes.
+    Raises `MgcError` if the innermost dimension is strided or more dimensions
+    than `caps.max_rank` remain.
+    """
     caps = caps or devices.IDMA  # looked up at call time: the table is the extension point
     dims = [[s, t.stride(d)] for d, (s, k) in enumerate(zip(view.sizes, view.kept))
             if k and const_of(s) != 1]
@@ -53,11 +66,14 @@ def geometry(node, view: ir.View, t, caps=None) -> ir.Xfer:
 
 
 def same_xfer(a: ir.Xfer, b: ir.Xfer) -> bool:
+    """True if two transfers have identical rank, length, repetitions and strides."""
     return (a.rank == b.rank and equal(a.len, b.len)
             and all(equal(r1, r2) and equal(s1, s2) for (r1, s1), (r2, s2) in zip(a.outer, b.outer)))
 
 
 def base_addr(view: ir.View, t) -> BinOp:
+    """L2 byte address of the first element of `view`, as a C expression:
+    `(uint32_t)x_inp + (row_start * N * 2) + (col_start * 2)`."""
     e = Raw(f'(uint32_t){t.cname}')
     for d, s in enumerate(view.starts):
         if not is_zero(s):
@@ -67,6 +83,13 @@ def base_addr(view: ir.View, t) -> BinOp:
 
 @dataclass(frozen=True)
 class LegalizeDma(ModulePass):
+    """Gives every `mg.alloc` and `mg.dma` its transfer geometry and L2 address.
+
+    Example: `x = L1.alloc(X[0:8, 0:16])` gets a 2-D `xfer` and base address
+    `axi_addr_x`; a later `dma.load(x, X[8:16, 0:16])` is checked to have the same
+    geometry and gets address `axi_addr_x + (8 * N * 2)`. A load with a different
+    geometry or shape than the buffer's declaration is an `MgcError`.
+    """
     name = 'legalize-dma'
 
     def apply(self, ctx, module):
@@ -81,6 +104,9 @@ class LegalizeDma(ModulePass):
                 self.dma(op, ts)
 
     def dma(self, op, ts):
+        """Check and annotate one `mg.dma`: neighbour stores are dense copies of
+        the whole buffer; L2 transfers must match the buffer's declared shape and
+        geometry, and get the L2 address as base plus per-dimension offset."""
         a = alloc_of(op.local)
         decl = a.view.data
         if op.remote is not None:

@@ -35,6 +35,9 @@ ORDER = [0, -1, 1, -2, 2, -3, 3]
 
 
 def ptr_name(kind, name, k):
+    """C name of the rotating pointer for offset `k` from the loop variable.
+    Buffers: `x_pt` (k=0), `x_pt_next` (+1), `x_pt_prev` (-1), `x_pt_next2`;
+    events: `ev_curr`, `ev_next`, `ev_prev`."""
     if kind == 'buf':
         base = f'{name}_pt'
         return base if k == 0 else base + ('_next' if k > 0 else '_prev') + (str(abs(k)) if abs(k) > 1 else '')
@@ -42,6 +45,8 @@ def ptr_name(kind, name, k):
 
 
 def static_name(kind, name, depth, c):
+    """C name for a constant slot `c` (wrapped modulo `depth`): `obi_addr_x_1`
+    for buffers, `&ev_1` for events."""
     if kind == 'buf':
         return f'obi_addr_{name}' if depth == 1 else f'obi_addr_{name}_{c % depth}'
     return f'&{name}_{c % depth}'
@@ -49,6 +54,14 @@ def static_name(kind, name, depth, c):
 
 @dataclass(frozen=True)
 class MultiBuffer(ModulePass):
+    """Resolves slot indices of multi-buffers and event arrays.
+
+    `x[1]` becomes the fixed address `obi_addr_x_1`. `x[pt]` and `x[pt + 1]`
+    become the pointers `x_pt` / `x_pt_next`, which an inserted `mg.select`
+    (`if (pt % 2) {...} else {...}` or `switch (pt % N)`) points at the right
+    slot each iteration. Indices that are not `var + constant` with |constant| <
+    depth are errors, as is `rotate(v)` with nothing indexed by `v`.
+    """
     name = 'multi-buffer'
 
     def apply(self, ctx, module):

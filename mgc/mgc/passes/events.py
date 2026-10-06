@@ -45,14 +45,24 @@ def _merge(a, b):
 
 
 class _Analysis:
+    """Dataflow walk over the region tree tracking, per event storage, whether
+    it is `none`, `pending` (issued, not waited) or `maybe`.
+
+    Raises on re-issue of a pending event and on waiting a never-issued one;
+    also records in `overlap` the buffers whose in/out DMA events can be pending
+    simultaneously (they then need separate storage).
+    """
 
     def __init__(self, evarrays):
+        """`evarrays`: event-array name -> depth (needed to wrap constant indices)."""
         self.evarrays = evarrays
         self.overlap = set()
         self.loops = []  # loop variables, innermost last
         self.cont = []  # states at `continue`, per loop
 
     def key(self, e: ir.EvtRef, op):
+        """Canonical identity of the storage `e` names (array slots are
+        normalised to constant or loop-variable-relative indices)."""
         if e.kind == 'array':
             idx = e.index
             c = const_of(idx)
@@ -64,12 +74,14 @@ class _Analysis:
         return (e.kind, e.name, e.dir)
 
     def note(self, st):
+        """Record buffers whose load and store events are pending at once."""
         bufs = {k[1] for k, v in st.items() if k[0] == 'dma' and v != N}
         for b in bufs:
             if st.get(('dma', b, 0), N) != N and st.get(('dma', b, 1), N) != N:
                 self.overlap.add(b)
 
     def issue(self, op, st, e):
+        """Mark `e` pending in `st`; error if it already certainly is."""
         k = self.key(e, op)
         if st.get(k, N) == P:
             what = f'`{e.name}`' + (' (out)' if e.dir == 1 else '') if e.kind == 'dma' else f'`{e.name}`'
@@ -78,6 +90,9 @@ class _Analysis:
         self.note(st)
 
     def run(self, ops, st):
+        """Walk `ops` from state `st`; returns the state afterwards (None if the
+        block always ends in `continue`). `if` branches are merged, loops are
+        walked twice to catch events left pending across iterations."""
         for op in ops:
             if isinstance(op, ir.DmaOp):
                 self.issue(op, st, op.event.data)
@@ -127,6 +142,8 @@ class _Analysis:
 
     @staticmethod
     def rotate(st, var):
+        """Re-express event-array slots after one loop iteration: slot `v + k`
+        becomes `v + k - 1` relative to the next value of `v`."""
         out = {}
         for k, v in st.items():
             if k[0] == 'arr' and k[2] == var and isinstance(k[3], int):
@@ -138,6 +155,12 @@ class _Analysis:
 
 @dataclass(frozen=True)
 class EventAlloc(ModulePass):
+    """Checks event usage and assigns each event its C storage.
+
+    Example: DMA loads and stores of buffer `y` never overlapping share
+    `&idma_evt_y`; if they can be in flight together they get `&idma_evt_y_in`
+    and `&idma_evt_y_out`. Redmule jobs use `&redmule_evt`.
+    """
     name = 'event-alloc'
 
     def apply(self, ctx, module):

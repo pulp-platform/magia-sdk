@@ -32,6 +32,12 @@ DIRS = {(1, 0): 's', (-1, 0): 'n', (0, 1): 'e', (0, -1): 'w'}
 
 @dataclass(frozen=True)
 class L1Layout(ModulePass):
+    """Assigns an L1 address to every buffer slot and resolves neighbour bases.
+
+    Example: buffers `w` (1 slot, 4 KiB) and `x` (2 slots, 2 KiB each) get
+    `l1_tile_base`, `obi_addr_w + 4096`, `obi_addr_x_0 + 2048`. Sets `addrs` on
+    each `mg.alloc` and `base` (e.g. `l1_base_s`, the tile below) on each `mg.remote`.
+    """
     name = 'l1-layout'
 
     def apply(self, ctx, module):

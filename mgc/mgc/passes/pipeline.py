@@ -56,14 +56,17 @@ EVENT_ARRAY = '{acc}_evt'
 
 
 def comment(text, style='line'):
+    """New `mg.comment` op (a `//` comment in the C output)."""
     return ir.CommentOp.create(attributes={'text': StringAttr(text), 'style': StringAttr(style)})
 
 
 def wait(ev: ir.EvtRef):
+    """New `mg.wait` op on event `ev`."""
     return ir.WaitOp.create(attributes={'event': ir.EvtAttr(ev)})
 
 
 def hwpe(acc, job, action, bufs=(), slots=(), event=None):
+    """New `mg.hwpe` op: one protocol step (`enqueue`, `commit`, `start`, ...) of `acc.job`."""
     attrs = {'acc': StringAttr(acc), 'job': StringAttr(job), 'action': StringAttr(action),
              'slots': ir.exprs(slots)}
     if event is not None:
@@ -72,6 +75,7 @@ def hwpe(acc, job, action, bufs=(), slots=(), event=None):
 
 
 def if_(cond, then, els=()):
+    """New `mg.if` op with the given `then` / optional `else` op lists."""
     return ir.IfOp.create(attributes={'cond': ir.E(cond)},
                           regions=[_region(then), _region(els)])
 
@@ -87,6 +91,8 @@ def _region(ops):
 
 
 def _subst_attr(a, m):
+    """Apply symbol substitution `m` inside an attribute (expressions, views,
+    event indices, arrays of those)."""
     if isinstance(a, ir.ExprAttr):
         return ir.ExprAttr(a.data.subst(m))
     if isinstance(a, ir.ViewAttr):
@@ -102,7 +108,11 @@ def _subst_attr(a, m):
 
 
 def instantiate(op, var, value: Expr):
-    """Clone `op` for iteration `var = value`."""
+    """Clone `op` for iteration `var = value`.
+
+    E.g. cloning `dma.load(x[pt], X[pt*8:(pt+1)*8, :])` with `value = step + 1`
+    yields the load for the next iteration: `x[step + 1]`, rows `(step+1)*8 ...`.
+    """
     c = op.clone()
     m = {var: value}
     for o in c.walk():
@@ -119,6 +129,9 @@ def instantiate(op, var, value: Expr):
 
 @dataclass(eq=False)
 class Item:
+    """One schedulable element of a pipeline body (a DMA, a job, or an `if`
+    wrapping those), with the buffer slots it reads/writes, the events it
+    signals and the `stage` assigned to it."""
     op: object  # DmaOp | JobOp | IfOp (predicated)
     reads: set = field(default_factory=set)
     writes: set = field(default_factory=set)
@@ -154,6 +167,8 @@ def _accesses(op, var, kdefs):
 
 
 def _roles(job, kdefs):
+    """Operand roles (`in`/`out`/`inout`) of a job, from the accelerator
+    descriptor or the L1-kernel declaration."""
     k = job.kernel.data
     if '.' in k:
         acc, j = k.split('.')
@@ -162,6 +177,8 @@ def _roles(job, kdefs):
 
 
 def _item(op, var, kdefs) -> Item:
+    """Analyse one pipeline-body op into an `Item`; rejects anything that is not
+    a transfer, a job or an `if` independent of the iteration variable."""
     if isinstance(op, (ir.DmaOp, ir.JobOp)):
         r, w = _accesses(op, var, kdefs)
         ev = [] if op.event is None else [(op.event.data, True)]
@@ -198,6 +215,16 @@ def _item(op, var, kdefs) -> Item:
 
 @dataclass(frozen=True)
 class Pipeline(ModulePass):
+    """Expands `for i in pipeline(n)` into an explicit software pipeline.
+
+    Example, output-static GEMM body (`dma.load(x[i], ...)`, `redmule.gemm(x[i], w, y)`):
+    the load is stage 0 and the gemm stage 1, so the result is a prologue that
+    loads iteration 0, then a loop where step `s` computes iteration `s` while
+    loading iteration `s + 1`, with waits placed after the issues. See the
+    module docstring for the stage/guard rules and the early-enqueue variant.
+    Errors: empty body, no dependency between items (nothing to pipeline),
+    multi-buffer too shallow for the stages it spans, more than one pipeline.
+    """
     name = 'pipeline'
 
     def apply(self, ctx, module):
@@ -208,6 +235,7 @@ class Pipeline(ModulePass):
             self.expand(module, p)
 
     def expand(self, module, p):
+        """Replace the `mg.pipeline` op `p` with prologue + loop (steps 1-3 of the module docstring)."""
         var = p.var.data
         n = p.n.data
         kdefs = kernels(module)
@@ -296,10 +324,12 @@ class Pipeline(ModulePass):
 
     @staticmethod
     def sync(p):
+        """Barrier op for the pipeline's `sync=` scope."""
         return ir.SyncOp.create(attributes={'scope': StringAttr(p.sync.data)})
 
     @staticmethod
     def is_sync(it: Item) -> bool:
+        """True if the item runs a synchronous software kernel (occupies the core)."""
         ops = [it.op] if not isinstance(it.op, ir.IfOp) else \
             [o for r in (it.op.then, it.op.else_) for o in r.block.ops]
         return any(isinstance(o, ir.JobOp) and '.' not in o.kernel.data for o in ops)
@@ -321,6 +351,8 @@ class Pipeline(ModulePass):
     # -- outer pending events (issued before the pipeline, not yet waited) ---
     @staticmethod
     def outer_pending(p):
+        """DMA events issued before the pipeline and not yet waited (e.g. a weight
+        load right before the loop); the prologue must wait them if needed."""
         pending = []
         for op in p.parent_block().ops:
             if op is p:
@@ -342,6 +374,8 @@ class Pipeline(ModulePass):
 
     # -- HWPE early-enqueue protocol (2 stages) -------------------------------
     def prologue_early(self, p, items, early, var, module, docs):
+        """Early-enqueue prologue: load iteration 0, wait for its operands, then
+        enqueue and commit the first job."""
         j = early.op
         acc, job = j.kernel.data.split('.')
         evname = EVENT_ARRAY.format(acc=acc)
@@ -368,6 +402,8 @@ class Pipeline(ModulePass):
         return out + docs
 
     def step_early(self, items, early, var, step, n):
+        """Early-enqueue loop step: start the committed job, prefetch and enqueue
+        the next one, commit_start it when its data landed, wait the current job."""
         j = early.op
         acc, job = j.kernel.data.split('.')
         evname = EVENT_ARRAY.format(acc=acc)
@@ -397,6 +433,7 @@ class Pipeline(ModulePass):
 
     @staticmethod
     def declare_events(module, name, acc):
+        """Insert the 2-entry event array `<acc>_evt` used by the early-enqueue protocol."""
         t = tiles(module)
         if any(isinstance(o, ir.EventsOp) and o.sym.data == name for o in t.body.block.ops):
             raise MgcError(None, f'`{name}` is used by pipeline(): rename your events() array')
@@ -412,6 +449,7 @@ class Pipeline(ModulePass):
 
     # -- generic (in-step jobs) --------------------------------------------------
     def prologue_generic(self, p, items, var):
+        """Prologue of the general schedule: stage-0 items of iteration 0 and their waits."""
         loads = [it for it in items if it.stage == 0]
         out = [instantiate(it.op, var, Const(0)) for it in loads]
         for it in loads:
@@ -427,6 +465,9 @@ class Pipeline(ModulePass):
         return out
 
     def step_generic(self, items, var, step, n, S):
+        """Loop step of the general schedule: issue all stages' items for their
+        iterations (transfers, jobs, core calls), then wait in the same order,
+        each under its stage guard."""
         def inst(it):
             return instantiate(it.op, var, add(step, Const(1 - it.stage)))
 

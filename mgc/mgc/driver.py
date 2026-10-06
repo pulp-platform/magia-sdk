@@ -21,6 +21,7 @@ PASS_NAMES = ['frontend'] + [p.name for p in PASSES]
 
 
 def print_ir(module) -> str:
+    """Return the textual form of the IR module (what `--print-ir-after` shows)."""
     buf = io.StringIO()
     Printer(stream=buf).print_op(module)
     return buf.getvalue() + '\n'
@@ -28,7 +29,19 @@ def print_ir(module) -> str:
 
 def compile_module(src, filename, header=None, until=None, dump=None):
     """Run the front-end and the passes (up to and including `until`).
-    `dump(name, text)` is called with the IR after each stage."""
+    `dump(name, text)` is called with the IR after each stage.
+
+    Parameters: `src` is the .mgc text, `filename` is used in error messages,
+    `header` is the test header path (optional), `until` is a stage name from
+    `PASS_NAMES` at which to stop (default: run everything), `dump` an optional
+    callback receiving `(stage_name, ir_text)`.
+
+    Returns the IR module after the last executed stage. The module is verified
+    after each stage. Raises `MgcError` for invalid programs.
+
+    Example: `compile_module(src, 'a.mgc', until='pipeline')` returns the IR
+    with the software pipelines already expanded into explicit guarded steps.
+    """
     ctx = Context()
     ctx.load_dialect(MG)
     module = parse(src, filename, header)
@@ -48,4 +61,9 @@ def compile_module(src, filename, header=None, until=None, dump=None):
 
 
 def compile_source(src, filename, header=None) -> str:
+    """Full compilation: `.mgc` text in, C source text out (unformatted).
+
+    Same arguments as `compile_module`. This is what the tests use; `mgcc.py`
+    additionally runs clang-format on the result.
+    """
     return emit(compile_module(src, filename, header), filename)

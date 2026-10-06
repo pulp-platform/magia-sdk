@@ -7,6 +7,30 @@
 
 The front-end only resolves names and builds IR. Legality (DMA geometry,
 shapes, event use) is checked by the passes, which report source lines.
+
+Typical use (see `parse()`)::
+
+    module = parse(open('mm_os.mgc').read(), 'mm_os.mgc', header='include/test.h')
+
+Input (abridged `.mgc`)::
+
+    M, N = sizes("M_SIZE", "N_SIZE")
+    X = l2("x_inp", (M, N), fp16)
+
+    @test("demo")
+    def main():
+        for y_id, x_id in tiles():
+            x = L1.alloc(X[0:8, 0:8])
+            dma.load(x, X[0:8, 0:8]).wait()
+
+Output: an xDSL `ModuleOp` holding one `mg.tensor` per `l2()`, one `mg.define`
+per `define()`, one `mg.kernel` per `l1_kernel()`, and a `mg.test` whose body
+is a `mg.tiles` op containing the per-tile code (`mg.alloc`, `mg.dma`, ...).
+
+How it works: module-level declarations and `main` are walked once; every Python
+name is bound in `Frontend.env` to a compile-time value (`Sym`/`Expr` for
+integers, `Tensor`, `Axis`, `Split`, `Buf`, `Kernel`, ...) and statements are
+turned into IR ops.
 """
 
 from __future__ import annotations
@@ -28,7 +52,9 @@ from . import ir
 from .errors import MgcError
 from .expr import BinOp, Cmp, Const, Expr, Logic, Not, Sym, const_of, product, sub
 
+# Tensor element types: name -> (C type used in the generated code, size in bytes).
 DTYPES = {'fp16': ('uint16_t', 2)}
+# Scalar variable types (`x: u8 = ...`): name -> (C type, largest value it can hold).
 CTYPES = {'u8': ('uint8_t', 0xFF), 'u16': ('uint16_t', 0xFFFF), 'u32': ('uint32_t', 0xFFFFFFFF),
           'i32': ('int32_t', 0x7FFFFFFF)}
 ROLES = ('in', 'out', 'inout')
@@ -40,6 +66,12 @@ ROLES = ('in', 'out', 'inout')
 
 @dataclass(eq=False)
 class Tensor:
+    """A tensor in L2 declared with `X = l2("x_inp", (M, N), fp16)`.
+
+    `pyname` is the Python name (`X`), `cname` the C array holding the data
+    (`x_inp`), `shape` the row-major dimensions as symbolic expressions
+    (`[M, N]`) and `dtype` the element type (`fp16`).
+    """
     pyname: str
     cname: str
     shape: List[Expr]
@@ -47,43 +79,70 @@ class Tensor:
 
     @property
     def esize(self):
+        """Element size in bytes (2 for fp16)."""
         return DTYPES[self.dtype][1]
 
     @property
     def ctype(self):
+        """C type of one element (`uint16_t` for fp16)."""
         return DTYPES[self.dtype][0]
 
     def stride(self, d) -> Expr:
+        """Distance in elements between consecutive indices of dimension `d`.
+
+        For shape `(M, N)`: `stride(0) == N`, `stride(1) == 1`.
+        """
         return product(*self.shape[d + 1:])
 
 
 @dataclass(eq=False)
 class Axis:
+    """A mesh coordinate bound by `for y_id, x_id in tiles():`.
+
+    `var` is the run-time tile index (e.g. `y_id`), `axis` is `'y'` (mesh rows)
+    or `'x'` (mesh columns). Its `.split(E)` method creates a `Split`.
+    """
     var: Sym
     axis: str  # 'y' | 'x'
 
 
 @dataclass(eq=False)
 class Split:
+    """The share of an extent that one tile owns, from `h = y_id.split(E)`.
+
+    The extent `E` is cut in blocks of `h_max = ceil(E / MESH_Y_TILES)`; tile
+    `y_id` owns `[h_max * y_id, h_max * y_id + h.size)`, with edge tiles clipped
+    (e.g. E=10 on 4 rows: sizes 3, 3, 3, 1). `.start` and `.size` give the
+    block origin and length; using `h` directly as a tensor index selects the
+    whole block.
+    """
     name: str
     axis: Axis
     extent: Expr
 
     @property
     def max(self):
+        """Nominal block size `h_max` (same on all tiles, ignoring clipping)."""
         return Sym(self.name + '_max')
 
     @property
     def start(self):
+        """First index owned by this tile: `h_max * y_id`."""
         return BinOp('*', self.max, self.axis.var)
 
     @property
     def size(self):
+        """Number of indices owned by this tile (0 if the block is empty)."""
         return Sym(self.name, None, 'int32_t')
 
 
 @dataclass(eq=False)
 class Buf:
+    """An L1 buffer from `L1.alloc(view)` (depth 1) or `L1.multi_buffer(view, depth=N)`.
+
+    `value` is the SSA value of the `mg.alloc` op, `view` the L2 view that fixed
+    its shape and `depth` the number of slots.
+    """
     name: str
     value: object  # SSA value of the mg.alloc
     view: ir.View
@@ -92,6 +151,7 @@ class Buf:
 
 @dataclass(eq=False)
 class Remote:
+    """`buf.on(dy, dx)`: the copy of `buf` in the L1 of tile `(y_id+dy, x_id+dx)`."""
     buf: Buf
     dy: Expr
     dx: Expr
@@ -99,12 +159,20 @@ class Remote:
 
 @dataclass(eq=False)
 class Slot:
+    """One slot of a multi-buffer, `buf[index]` (`buf` may also be a `Remote`).
+
+    `index` is a constant (`y[0]`) or a rotating index (`y[pt + 1]`).
+    """
     buf: object  # Buf | Remote
     index: Expr
 
 
 @dataclass(eq=False)
 class EvArray:
+    """An array of `depth` accelerator events from `ev = redmule.events(n)`.
+
+    `kind` is the accelerator name (`redmule`).
+    """
     name: str
     depth: int
     kind: str
@@ -112,6 +180,12 @@ class EvArray:
 
 @dataclass(eq=False)
 class Kernel:
+    """A software kernel from `k = l1_kernel("c_fn", operands=("dst:out", ...), ...)`.
+
+    `sym` is the Python name, `cname` the C function, `operands` the list of
+    `(name, role)` with role in `in`/`out`/`inout`, `params` the extra integer
+    arguments (`"src.size"`) and `executor` who runs it (`CORE`).
+    """
     sym: str
     cname: str
     operands: List[tuple]  # (name, role)
@@ -123,6 +197,15 @@ class Kernel:
 
 
 def parse_header(path):
+    """Read the test header (e.g. `include/test.h`) that accompanies a `.mgc` file.
+
+    Returns `(defs, text)`: `defs` maps every simple numeric `#define NAME 123`
+    (or `(123)`) to its integer value, `text` is the raw file content (used to
+    check that L2 array names exist). Missing/None path -> `({}, '')`, which
+    disables the header checks.
+
+    Example: a header with `#define M_SIZE 96` gives `defs == {'M_SIZE': 96}`.
+    """
     defs, text = {}, ''
     if path and os.path.exists(path):
         with open(path) as f:
@@ -133,6 +216,10 @@ def parse_header(path):
 
 
 def _comments(src):
+    """Map line number -> text of every standalone `# comment` line in `src`.
+
+    Trailing comments (after code) are ignored. `"  # hi"` on line 4 gives `{4: 'hi'}`.
+    """
     out = {}
     for tok in tokenize.generate_tokens(io.StringIO(src).readline):
         if tok.type == tokenize.COMMENT and tok.line.strip().startswith('#'):
@@ -161,8 +248,22 @@ def _call_parts(node):
 
 
 class Frontend:
+    """Translates one `.mgc` source into an `mg` IR module.
+
+    Walks the Python AST and builds IR ops block by block. Keeps:
+
+    - `env`: every Python name seen so far -> its compile-time value
+      (`Sym`, `Tensor`, `Axis`, `Split`, `Buf`, `Kernel`, `EvArray`, event refs);
+    - `hdefs`/`htext`: macros and text of the test header, used for checks;
+    - `comments`/`cursor`: standalone `#` comments, re-emitted as IR comment
+      ops in source order.
+
+    Use `parse()` rather than instantiating this directly; `run()` does the work.
+    """
 
     def __init__(self, src, filename, header=None):
+        """`src`: .mgc text; `filename`: used in error messages; `header`: path of
+        the test header (optional; enables `sizes()`/`l2()` checks)."""
         MgcError.filename = filename
         self.filename = filename
         self.tree = ast.parse(src, filename)
@@ -179,12 +280,18 @@ class Frontend:
 
     # -- building ------------------------------------------------------------
     def add(self, op, node=None):
+        """Append `op` to the block being built, tagging it with the source line of `node`."""
         if node is not None and hasattr(node, 'lineno'):
             op.lineno = node.lineno
         self.blocks[-1].add_op(op)
         return op
 
     def region(self, stmts, top=False, enter=None):
+        """Translate `stmts` into a new IR region (the body of a loop or `if` branch).
+
+        `top`: the statements are the top of the `tiles()` body (tile splits are
+        only allowed there). `enter`: callback run first, to bind the loop variable.
+        """
         blk = Block()
         self.blocks.append(blk)
         if enter:
@@ -195,6 +302,16 @@ class Frontend:
 
     # -- module level --------------------------------------------------------
     def run(self) -> ModuleOp:
+        """Compile the whole file; returns the `ModuleOp`.
+
+        Module level accepts imports, a docstring, declarations (`sizes`, `l2`,
+        `define`, `l1_kernel`) and a single `@test(...)`-decorated `main` whose
+        body is exactly one `for y_id, x_id in tiles():` loop, optionally
+        preceded by a docstring (stored as the test's `doc`).
+
+        Result: `[mg.tensor/mg.define/mg.kernel ..., mg.test{ mg.tiles{ ... } }]`.
+        Raises `MgcError` (with the source line) on anything unsupported.
+        """
         main = None
         for s in self.tree.body:
             if isinstance(s, (ast.Import, ast.ImportFrom)) or _is_doc(s):
@@ -244,6 +361,13 @@ class Frontend:
         return ModuleOp(self.module_ops + [test])
 
     def module_assign(self, s):
+        """Handle one module-level assignment. Supported forms:
+
+        - `M, N = sizes("M_SIZE", "N_SIZE")`: bind names to header macros;
+        - `X = l2("x_inp", (M, N), fp16)`: declare an L2 tensor (emits `mg.tensor`);
+        - `ITERS = define(4)`: new `#define` owned by the .mgc (emits `mg.define`);
+        - `k = l1_kernel(...)`: see `l1_kernel()`.
+        """
         _, fn = _call_parts(s.value)
         tgt = s.targets[0]
         if fn == 'sizes':
@@ -282,6 +406,16 @@ class Frontend:
             raise MgcError(s, 'module level only accepts sizes(), l2(), define() and l1_kernel()')
 
     def l1_kernel(self, s, sym):
+        """Declare a software kernel, e.g.
+
+            scale = l1_kernel("scale_fp16", operands=("dst:out", "src:in"),
+                              params=("src.size",), executor=CORE)
+
+        Later `scale(d, s)` in the tile loop becomes the C call
+        `scale_fp16(addr_d, addr_s, size_of_s)`. Operands are L1 buffers with a
+        role (used to order operations); params are integer arguments derived
+        from operand shapes. Emits a `mg.kernel` op and binds `sym` to a `Kernel`.
+        """
         args = s.value.args
         if len(args) != 1:
             raise MgcError(s, 'l1_kernel("c_function", operands=("name:role", ...), params=(...), executor=CORE)')
@@ -310,6 +444,18 @@ class Frontend:
 
     # -- expressions ---------------------------------------------------------
     def ev(self, n):
+        """Evaluate expression node `n` at compile time. The result depends on `n`:
+
+        - integer expression -> `Expr` (`y_id * 2 + 1`, `M // 4`, `MESH_X_TILES`);
+        - bare name -> whatever it is bound to (`Tensor`, `Buf`, `Split`, ...);
+          tile axes (`y_id`) evaluate to their run-time variable;
+        - `h.start` / `h.size` -> `Expr` for a tile split;
+        - `b.on(dy, dx)` -> `Remote`; `b[i]` -> `Slot`; `ev[i]` -> event ref;
+        - `X[a:b, h]` -> `ir.View` (see `view()`);
+        - comparisons / `and` / `or` / `not` -> condition `Expr`.
+
+        Use `expr()` when an integer is required.
+        """
         if isinstance(n, ast.Constant) and isinstance(n.value, int) and not isinstance(n.value, bool):
             return Const(n.value)
         if isinstance(n, ast.Name):
@@ -362,12 +508,15 @@ class Frontend:
         raise MgcError(n, f'unsupported expression `{ast.unparse(n)}`')
 
     def expr(self, n) -> Expr:
+        """Like `ev()`, but the result must be an integer `Expr` (else `MgcError`)."""
         v = self.ev(n)
         if not isinstance(v, Expr):
             raise MgcError(n, f'`{ast.unparse(n)}` is not an integer expression')
         return v
 
     def cond(self, n) -> Expr:
+        """Evaluate a condition (`if` test): comparisons, chains (`0 <= a < b`),
+        `and`/`or`/`not`. Falls back to `expr()` for plain integers."""
         if isinstance(n, ast.Compare):
             ops = {ast.Lt: '<', ast.LtE: '<=', ast.Gt: '>', ast.GtE: '>=', ast.Eq: '==', ast.NotEq: '!='}
             terms, left = [], n.left
@@ -384,6 +533,16 @@ class Frontend:
         return self.expr(n)
 
     def view(self, n, t: Tensor, idx):
+        """Build the `ir.View` for `T[idx...]` on an L2 tensor.
+
+        Per dimension the index is a unit-step slice `a:b` (or `:`), a tile
+        split (selects the tile's block), or an integer (selects one row and
+        drops the dimension). Missing trailing indices mean `:`.
+
+        For `X` of shape (M, N): `X[2:6, h]` -> starts `[2, h.start]`, sizes
+        `[4, h.size]`, both dims kept; `X[3, :]` -> starts `[3, 0]`, sizes
+        `[1, N]`, first dim dropped (view shape `[N]`).
+        """
         if len(idx) > len(t.shape):
             raise MgcError(n, f'too many indices for {t.pyname} ({len(t.shape)}-D)')
         starts, sizes, kept = [], [], []
@@ -413,6 +572,8 @@ class Frontend:
 
     # -- statements ----------------------------------------------------------
     def flush_comments(self, s):
+        """Emit IR comment ops for standalone `#` lines found between the last
+        processed statement and `s`, so they reappear in the generated C."""
         if not hasattr(s, 'lineno'):
             return
         for ln in sorted(self.comments):
@@ -422,6 +583,8 @@ class Frontend:
         self.cursor = max(self.cursor, s.lineno)
 
     def block(self, stmts, top=False):
+        """Translate a list of statements into the current block.
+        `top` allows tile splits (only legal at the top of the `tiles()` body)."""
         for s in stmts:
             if self._is_split(s) and not top:
                 raise MgcError(s, 'tile splits must be at the top of the tiles() body')
@@ -432,6 +595,14 @@ class Frontend:
         return isinstance(s, ast.Assign) and _call_parts(s.value)[1] == 'split'
 
     def stmt(self, s):
+        """Translate one statement inside the tile loop.
+
+        Dispatches on the kind: docstring/`comment()` -> comment op;
+        `x: u8 = e` / `x = e` / `x += e` -> scalar (`scalar()`); other
+        assignments -> `assign()`; bare calls (`dma.load(...)`, `sync(ROW)`,
+        `check(...)`) -> `action()`; `for` -> `loop()`; `if` -> `mg.if`;
+        `continue`; `pass`. Anything else is an `MgcError`.
+        """
         self.flush_comments(s)
         if _is_doc(s):
             self.add(ir.CommentOp.create(attributes={'text': StringAttr(inspect.cleandoc(s.value.value)),
@@ -461,6 +632,14 @@ class Frontend:
         self.cursor = max(self.cursor, getattr(s, 'end_lineno', 0) or 0)
 
     def scalar(self, s, tgt, value, ann):
+        """Integer variable assignment.
+
+        `t_size: u8 = M // 4` declares a new variable (C type from `ann`,
+        range-checked when the value is a compile-time constant);
+        `n = e` declares a `uint32_t` the first time and updates it later;
+        `n += 1` is rewritten to `n = n + 1`. Emits `mg.scalar` (`decl` = 1 for
+        a declaration, 0 for an update).
+        """
         name = _name(tgt)
         if name is None:
             raise MgcError(s, 'assign to a single name')
@@ -485,6 +664,15 @@ class Frontend:
         self.env[name] = Sym(name, e.value(), ctype)
 
     def assign(self, s):
+        """Plain `name = <call or expr>` inside the tile loop. The right side picks the meaning:
+
+        - `y_id.split(E)` -> tile split (`mg.split`);
+        - `L1.alloc(view)` / `L1.multi_buffer(view, depth=N)` -> L1 buffer (`alloc()`);
+        - `redmule.events(n)` -> event array (`mg.events`);
+        - `dma.load/store(...)`, `redmule.gemm(...)`, `kernel(...)` -> the name is
+          bound to the returned event, so `e.wait()` works later;
+        - anything else -> integer scalar (`scalar()`).
+        """
         if len(s.targets) != 1:
             raise MgcError(s, 'chained assignment is not supported')
         tgt = s.targets[0]
@@ -517,6 +705,12 @@ class Frontend:
             self.scalar(s, tgt, s.value, None)
 
     def alloc(self, s, name, kind):
+        """`b = L1.alloc(X[r, c])` or `b = L1.multi_buffer(X[r, c], depth=3)`.
+
+        The view argument only provides the buffer's shape (and transfer
+        geometry); no data moves. Emits `mg.alloc` and binds `name` to a `Buf`
+        with `depth` slots (1 for `alloc`, >= 2 for `multi_buffer`).
+        """
         args = s.value.args
         view = self.ev(args[0]) if args else None
         if not isinstance(view, ir.View):
@@ -552,6 +746,13 @@ class Frontend:
         raise MgcError(n, 'expected an L1 buffer or multi-buffer slot')
 
     def action(self, c, s):
+        """Translate a call statement; returns an event reference (or None).
+
+        Handled calls: `e.wait()` / `dma.load(...).wait()`, `dma.load/store`,
+        accelerator calls (`redmule.gemm`, `.enqueue`, `.commit`, ...), kernel
+        calls, `check(a, b, tol=...)`, `sync(SCOPE)`, `rotate(var)`.
+        The returned event lets callers chain `.wait()` or store it in a name.
+        """
         obj, fn = _call_parts(c)
         if fn is None:
             raise MgcError(c, 'expected a call')
@@ -586,6 +787,16 @@ class Frontend:
         raise MgcError(c, f'unknown operation `{ast.unparse(c.func)}`')
 
     def dma(self, c, fn, s):
+        """`dma.load(dst_slot, l2_view)` / `dma.store(dst, src_slot)`.
+
+        - `dma.load(x[0], X[0:8, :])`: L2 -> L1;
+        - `dma.store(Y[0:8, :], y[0])`: L1 -> L2;
+        - `dma.store(y.on(1, 0)[0], y[0])`: L1 -> same slot of the same buffer
+          on the tile below (neighbour store).
+
+        Emits `mg.dma` and returns the DMA event of that buffer/direction, to
+        be waited with `.wait()`. Geometry is checked later by `legalize-dma`.
+        """
         if len(c.args) != 2 or c.keywords:
             raise MgcError(c, f'dma.{fn}(dst, src)')
         dst, src = c.args
@@ -625,6 +836,8 @@ class Frontend:
         return ir.EvtRef('dma', buf.name, dir=d)
 
     def _job_operands(self, c, s):
+        """Split the positional args of a job call into parallel lists:
+        buffer SSA values and slot-index expressions (`x[pt]` -> `x`, `pt`)."""
         bufs, slots = [], []
         for a in c.args:
             b, i = self.operand(a)
@@ -633,6 +846,8 @@ class Frontend:
         return bufs, slots
 
     def _event_kw(self, c, acc):
+        """Event on which an accelerator job completes: the `event=ev[k]` argument
+        if given, else the accelerator's default event."""
         kw = {k.arg: k.value for k in c.keywords}
         if 'after' in kw:
             raise MgcError(c, '`after=` is no longer needed: dependencies are inferred from the buffers')
@@ -646,6 +861,13 @@ class Frontend:
         return ev or ir.EvtRef('hwpe', acc)
 
     def hwpe(self, c, acc, fn, s):
+        """Accelerator calls on `acc` (e.g. `redmule`):
+
+        - `redmule.gemm(x, w, y)` (a job named in `devices.HWPES`): one-shot job,
+          computes `y += x @ w`; returns its event;
+        - `redmule.enqueue(x, w, y, event=ev[k])`: program a job without starting it;
+        - `redmule.commit()` / `.start()` / `.commit_start()`: explicit queue control.
+        """
         dev = devices.HWPES[acc]
         if fn in ('commit', 'start', 'commit_start'):
             job = next(iter(dev.jobs))
@@ -669,6 +891,8 @@ class Frontend:
         raise MgcError(c, f'unknown {acc} operation `{fn}`')
 
     def kernel_call(self, c, k: Kernel, s):
+        """Call of an `l1_kernel`, e.g. `scale(dst[0], src[0])`: positional L1
+        operands in the declared order. Emits a synchronous `mg.job`."""
         if c.keywords:
             raise MgcError(c, f'{k.sym}() takes its L1 operands positionally')
         if len(c.args) != len(k.operands):
@@ -679,6 +903,9 @@ class Frontend:
         return None
 
     def check(self, c, s):
+        """`check(Y[:, tw], Z[:, tw], tol=0x11)`: compare a computed 2-D L2 region
+        against golden data, element by element, with absolute tolerance `tol`
+        (default 0). The generated test returns the number of mismatches."""
         if len(c.args) != 2:
             raise MgcError(c, 'check(result_view, golden_view, tol=...)')
         a, b = self.ev(c.args[0]), self.ev(c.args[1])
@@ -696,6 +923,17 @@ class Frontend:
 
     # -- loops ---------------------------------------------------------------
     def loop(self, s):
+        """Time loops inside the tile loop.
+
+        - `for i in range(n)` / `range(a, b)` -> plain loop (`mg.for`);
+        - `for pt in pipeline(n, skew=S, steps=T, sync=SCOPE)` -> software
+          pipeline over `n` iterations (`mg.pipeline`); `skew` and `steps` must
+          be given together (this tile starts `S` steps late out of `T` total),
+          `sync` adds a barrier per step, `time` is a label.
+
+        The loop variable is only in scope inside the body. `tiles()` and
+        `cores()` are rejected here.
+        """
         _, fn = _call_parts(s.iter)
         if fn == 'tiles':
             raise MgcError(s, 'tiles() (level 1, spatial) must be the outermost loop of main')
@@ -749,4 +987,14 @@ class Frontend:
 
 
 def parse(src, filename, header=None) -> ModuleOp:
+    """Entry point of the front-end: `.mgc` source text -> `mg` IR module.
+
+    `src`: contents of the `.mgc` file; `filename`: shown in error messages;
+    `header`: optional path of the test header (e.g. `include/test.h`) used to
+    check `sizes()` macros and `l2()` array names.
+
+    >>> module = parse(open('mm_os.mgc').read(), 'mm_os.mgc', 'include/test.h')
+
+    Raises `MgcError` on invalid input.
+    """
     return Frontend(src, filename, header).run()

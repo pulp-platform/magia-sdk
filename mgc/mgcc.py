@@ -29,6 +29,8 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def find_clang_format():
+    """Path of an executable `clang-format` (from `PATH`, else the repo's
+    `llvm/install/bin`), or None if not found (output is then left unformatted)."""
     for p in (shutil.which('clang-format'), os.path.join(REPO, 'llvm', 'install', 'bin', 'clang-format')):
         if p and os.access(p, os.X_OK):
             return p
@@ -36,6 +38,13 @@ def find_clang_format():
 
 
 def main():
+    """Command-line entry point: compile `source.mgc` to a C test.
+
+    Reads the `.mgc` file, compiles it (see `mgc.driver`), formats it with
+    clang-format when available and writes it to `-o FILE` or stdout. With
+    `--print-ir-after=STAGE` it prints the IR at that stage and stops instead.
+    Returns the process exit code: 0 on success, 1 after printing a compile error.
+    """
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('source', help='.mgc file')
     ap.add_argument('-o', '--output', help='output C file (default: stdout)')

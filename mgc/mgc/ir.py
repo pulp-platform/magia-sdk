@@ -102,6 +102,8 @@ class EvtRef:
 
 @dataclass(eq=False)
 class SelectEntry:
+    """One row of a multi-buffer selection table: for buffer or event `name`, the
+    address/storage `offsets` (one per slot) among which `mg.select` picks."""
     kind: str  # 'buf' | 'evt'
     name: str
     offsets: List[int]
@@ -113,6 +115,7 @@ class SelectEntry:
 
 
 class _PyData(Data[object]):
+    """Attribute holding an arbitrary Python object (printed only, never parsed back)."""
 
     @classmethod
     def parse_parameter(cls, parser):
@@ -124,6 +127,7 @@ class _PyData(Data[object]):
 
 @irdl_attr_definition
 class ExprAttr(_PyData):
+    """`#mg.expr`: a symbolic integer expression (`expr.Expr`), printed as C."""
     name = 'mg.expr'
 
     def print_parameter(self, printer):
@@ -132,21 +136,25 @@ class ExprAttr(_PyData):
 
 @irdl_attr_definition
 class ViewAttr(_PyData):
+    """`#mg.view`: an L2 tensor `View`, e.g. `W[tile_h_start:+tile_h, 0:+K]`."""
     name = 'mg.view'
 
 
 @irdl_attr_definition
 class XferAttr(_PyData):
+    """`#mg.xfer`: a legalized iDMA transfer (`Xfer`), e.g. `128B x [8 @ 256]`."""
     name = 'mg.xfer'
 
 
 @irdl_attr_definition
 class EvtAttr(_PyData):
+    """`#mg.evt`: reference to completion-event storage (`EvtRef`)."""
     name = 'mg.evt'
 
 
 @irdl_attr_definition
 class SelectAttr(_PyData):
+    """`#mg.select`: the list of `SelectEntry` of a `mg.select` op."""
     name = 'mg.select'
 
     def print_parameter(self, printer):
@@ -160,18 +168,22 @@ class BufType(ParametrizedAttribute, TypeAttribute):
 
 
 def E(e: Expr) -> ExprAttr:
+    """Wrap an `Expr` as an attribute."""
     return ExprAttr(e)
 
 
 def S(s: str) -> StringAttr:
+    """Wrap a Python string as a `StringAttr`."""
     return StringAttr(s)
 
 
 def exprs(xs) -> ArrayAttr:
+    """List of `Expr` -> array attribute (e.g. a tensor shape or slot indices)."""
     return ArrayAttr([ExprAttr(x) for x in xs])
 
 
 def strs(xs) -> ArrayAttr:
+    """List of strings -> array attribute (e.g. authors, `"name:role"` operands)."""
     return ArrayAttr([StringAttr(x) for x in xs])
 
 
@@ -181,6 +193,7 @@ def strs(xs) -> ArrayAttr:
 
 
 class _Region(IRDLOperation):
+    """Base of ops that own regions without needing a terminator."""
     traits = traits_def(NoTerminator())
 
 
@@ -199,6 +212,7 @@ class TensorOp(IRDLOperation):
 
 @irdl_op_definition
 class DefineOp(IRDLOperation):
+    """`#define sym text` owned by the .mgc file (from `define()`)."""
     name = 'mg.define'
     sym = attr_def(StringAttr)
     text = attr_def(StringAttr)
@@ -217,6 +231,7 @@ class KernelOp(IRDLOperation):
 
 @irdl_op_definition
 class TestOp(_Region):
+    """The whole test: its name, authors, docstring and the single `mg.tiles` body."""
     name = 'mg.test'
     test = attr_def(StringAttr)
     authors = attr_def(ArrayAttr)
@@ -238,6 +253,7 @@ class TilesOp(_Region):
 
 @irdl_op_definition
 class CommentOp(IRDLOperation):
+    """A comment to be reproduced in the C output (`block` = `/** */`, `line` = `//`)."""
     name = 'mg.comment'
     text = attr_def(StringAttr)
     style = attr_def(StringAttr)  # 'block' | 'line'
@@ -245,6 +261,8 @@ class CommentOp(IRDLOperation):
 
 @irdl_op_definition
 class SplitOp(IRDLOperation):
+    """Tile split of `extent` over mesh rows or columns (`h = y_id.split(E)`);
+    defines the per-tile `sym` (size) and `sym_max` (nominal block size)."""
     name = 'mg.split'
     sym = attr_def(StringAttr)
     axis = attr_def(StringAttr)  # 'y' | 'x'
@@ -253,6 +271,7 @@ class SplitOp(IRDLOperation):
 
 @irdl_op_definition
 class ScalarOp(IRDLOperation):
+    """Integer variable declaration (`decl`=1) or assignment (`decl`=0): `ctype sym = value;`."""
     name = 'mg.scalar'
     sym = attr_def(StringAttr)
     ctype = attr_def(StringAttr)
@@ -287,6 +306,7 @@ class RemoteOp(IRDLOperation):
 
 @irdl_op_definition
 class EventsOp(IRDLOperation):
+    """Array of `depth` accelerator events of the given `kind` (`redmule.events(n)`)."""
     name = 'mg.events'
     sym = attr_def(StringAttr)
     depth = attr_def(IntAttr)
@@ -295,6 +315,7 @@ class EventsOp(IRDLOperation):
 
 @irdl_op_definition
 class ForOp(_Region):
+    """Plain time loop `for (var = lo; var < hi; var++)` over `body`."""
     name = 'mg.for'
     var = attr_def(StringAttr)
     lo = attr_def(ExprAttr)
@@ -305,6 +326,7 @@ class ForOp(_Region):
 
 @irdl_op_definition
 class IfOp(_Region):
+    """`if (cond) then else else_`; `else_` may be empty."""
     name = 'mg.if'
     cond = attr_def(ExprAttr)
     then = region_def()
@@ -313,6 +335,7 @@ class IfOp(_Region):
 
 @irdl_op_definition
 class ContinueOp(IRDLOperation):
+    """`continue;` in the innermost loop."""
     name = 'mg.continue'
 
 
@@ -386,12 +409,14 @@ class CallOp(IRDLOperation):
 
 @irdl_op_definition
 class WaitOp(IRDLOperation):
+    """Block until the DMA transfer / accelerator job tied to `event` is done."""
     name = 'mg.wait'
     event = attr_def(EvtAttr)
 
 
 @irdl_op_definition
 class SyncOp(IRDLOperation):
+    """Barrier among tiles of `scope` (`GLOBAL`, `ROW` or `COL`)."""
     name = 'mg.sync'
     scope = attr_def(StringAttr)
 
@@ -407,6 +432,7 @@ class SelectOp(IRDLOperation):
 
 @irdl_op_definition
 class CheckOp(IRDLOperation):
+    """Compare L2 view `a` with golden view `b` element-wise, tolerance `tol`."""
     name = 'mg.check'
     a = attr_def(ViewAttr)
     b = attr_def(ViewAttr)

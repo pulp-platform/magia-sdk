@@ -22,6 +22,13 @@ _PREC = {'+': 1, '-': 1, '*': 2, '/': 2, '%': 2}
 
 
 class Expr:
+    """Base class of integer/boolean expression trees.
+
+    Python operators build trees: `Sym('N') * 2 + 1` is `N * 2 + 1`. Every node
+    can print itself as C (`c()`), report a static value when all leaves are
+    known (`value()`), list the symbols it uses (`syms()`), substitute symbols
+    (`subst()`) and reduce to a polynomial (`poly()`) for comparisons.
+    """
 
     # -- construction ------------------------------------------------------
     def __add__(self, o):
@@ -44,6 +51,8 @@ class Expr:
 
     # -- analysis ----------------------------------------------------------
     def poly(self) -> Poly:
+        """Normal form as a polynomial: `{('N',): 2, (): 1}` means `2*N + 1`.
+        Keys are sorted tuples of atoms, `()` is the constant term."""
         raise NotImplementedError
 
     def value(self) -> Optional[int]:
@@ -51,9 +60,11 @@ class Expr:
         raise NotImplementedError
 
     def c(self) -> str:
+        """The expression as C source text, e.g. `'y_id * 2 + 1'`."""
         raise NotImplementedError
 
     def prec(self) -> int:
+        """Operator precedence used to decide where parentheses are needed (3 = atom)."""
         return 3
 
     def syms(self) -> set:
@@ -69,6 +80,7 @@ class Expr:
 
 @dataclass(eq=False, repr=False)
 class Const(Expr):
+    """An integer literal: `Const(4).c() == '4'`."""
     v: int
 
     def poly(self):
@@ -142,6 +154,11 @@ class Paren(Expr):
 
 @dataclass(eq=False, repr=False)
 class BinOp(Expr):
+    """Binary arithmetic `a op b` with op in `+ - * / %` (`/` is integer division).
+
+    Prints with the minimum parentheses that keep C semantics:
+    `BinOp('*', a+b, c)` -> `(a + b) * c`.
+    """
     op: str
     a: Expr
     b: Expr
@@ -227,6 +244,7 @@ def _pmul(p: Poly, q: Poly) -> Poly:
 
 
 def lift(x) -> Expr:
+    """Turn a Python int into `Const`; pass an `Expr` through unchanged."""
     if isinstance(x, Expr):
         return x
     if isinstance(x, int):
@@ -235,18 +253,22 @@ def lift(x) -> Expr:
 
 
 def is_zero(e: Expr) -> bool:
+    """True if `e` is identically 0 as a polynomial (`N - N` is zero)."""
     return not e.poly()
 
 
 def is_one(e: Expr) -> bool:
+    """True if `e` is identically 1."""
     return e.poly() == {(): 1}
 
 
 def equal(a: Expr, b: Expr) -> bool:
+    """Mathematical equality: `N * 2 + 4` equals `4 + 2 * N`. Division/modulo
+    are opaque, so `N / 2` only equals the same textual `N / 2`."""
     return is_zero(sub(a, b, fold=False))
 
 
-def const_of(e: Expr) -> Optional[int]:
+def const_of(e: Expr) -> Optional[int]:  # e.g. `N - N + 3` -> 3, `N + 1` -> None
     """The integer value of `e` if its polynomial is a constant."""
     p = e.poly()
     if not p:
@@ -258,6 +280,8 @@ def const_of(e: Expr) -> Optional[int]:
 
 # Light folding only: keep the user's expression shape.
 def add(a: Expr, b: Expr) -> Expr:
+    """`a + b`, dropping zeros and folding trailing constants:
+    `(x + 1) + 2` -> `x + 3`; `x + (-2)` -> `x - 2`."""
     if is_zero(b) and const_of(b) == 0:
         return a
     if is_zero(a) and const_of(a) == 0:
@@ -273,6 +297,8 @@ def add(a: Expr, b: Expr) -> Expr:
 
 
 def sub(a: Expr, b: Expr, fold=True) -> Expr:
+    """`a - b`. With `fold=False` no simplification is done (used so that
+    `equal()` can compare polynomials)."""
     if fold and const_of(b) == 0:
         return a
     if fold and isinstance(a, Const) and isinstance(b, Const):
@@ -281,6 +307,7 @@ def sub(a: Expr, b: Expr, fold=True) -> Expr:
 
 
 def mul(a: Expr, b: Expr) -> Expr:
+    """`a * b`, simplifying multiplication by 0 and 1 and constant products."""
     if const_of(a) == 0 or const_of(b) == 0:
         return Const(0)
     if const_of(b) == 1:
@@ -293,6 +320,8 @@ def mul(a: Expr, b: Expr) -> Expr:
 
 
 def product(*xs: Expr) -> Expr:
+    """Product of any number of factors; `product()` is `Const(1)`.
+    Used for strides: `product(N, K)` -> `N * K`."""
     r: Expr = Const(1)
     for x in xs:
         r = mul(r, lift(x))
@@ -314,6 +343,7 @@ def _operand(e: Expr) -> str:
 
 @dataclass(eq=False, repr=False)
 class Cmp(Expr):
+    """Comparison `a op b` (`< <= > >= == !=`), printed as C, e.g. `y_id == 0`."""
     op: str
     a: Expr
     b: Expr
@@ -340,6 +370,7 @@ class Cmp(Expr):
 
 @dataclass(eq=False, repr=False)
 class Logic(Expr):
+    """`&&` / `||` of the conditions in `xs`: `Logic('&&', [a, b])` -> `a && b`."""
     op: str  # '&&' or '||'
     xs: list
 
@@ -377,6 +408,7 @@ class Logic(Expr):
 
 @dataclass(eq=False, repr=False)
 class Not(Expr):
+    """Logical negation: `Not(y_id == 0)` -> `!(y_id == 0)`."""
     a: Expr
 
     def poly(self):

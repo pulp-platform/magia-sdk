@@ -20,6 +20,7 @@ from ..frontend import DTYPES, Tensor
 
 
 def tensors(module: ModuleOp) -> Dict[str, Tensor]:
+    """All L2 tensors of the module by Python name, rebuilt from the `mg.tensor` ops."""
     out = {}
     for op in module.ops:
         if isinstance(op, ir.TensorOp):
@@ -29,10 +30,12 @@ def tensors(module: ModuleOp) -> Dict[str, Tensor]:
 
 
 def kernels(module: ModuleOp) -> Dict[str, ir.KernelOp]:
+    """All declared L1 software kernels (`mg.kernel`) by Python name."""
     return {op.sym.data: op for op in module.ops if isinstance(op, ir.KernelOp)}
 
 
 def tiles(module: ModuleOp) -> ir.TilesOp:
+    """The `mg.tiles` op holding the per-tile code."""
     for op in module.walk():
         if isinstance(op, ir.TilesOp):
             return op
@@ -40,10 +43,12 @@ def tiles(module: ModuleOp) -> ir.TilesOp:
 
 
 def allocs(module: ModuleOp) -> List[ir.AllocOp]:
+    """All `mg.alloc` ops (L1 buffers), in program order."""
     return [op for op in module.walk() if isinstance(op, ir.AllocOp)]
 
 
 def alloc_of(value) -> ir.AllocOp:
+    """The `mg.alloc` that defines an L1 buffer value (looking through `.on()` neighbour views)."""
     op = value.owner
     if isinstance(op, ir.RemoteOp):
         op = op.buf.owner
@@ -51,10 +56,12 @@ def alloc_of(value) -> ir.AllocOp:
 
 
 def esize(alloc: ir.AllocOp, ts) -> int:
+    """Element size in bytes of the buffer, taken from its source tensor (`ts` = `tensors()`)."""
     return DTYPES[ts[alloc.view.data.tensor].dtype][1]
 
 
 def shape(alloc: ir.AllocOp) -> List[Expr]:
+    """Shape of the buffer: the sizes of the dimensions its view keeps."""
     return alloc.view.data.shape
 
 
@@ -77,6 +84,7 @@ def child_in(block: Block, op: Operation) -> Operation:
 
 
 def new_block_region(ops) -> Region:
+    """A fresh single-block region containing `ops`."""
     return Region(Block(list(ops)))
 
 
@@ -84,6 +92,8 @@ def new_block_region(ops) -> Region:
 
 
 class _Shape:
+    """What parameter expressions may ask of an operand: `.shape[i]`, `.size`
+    (elements) and `.bytes`."""
 
     def __init__(self, shp, es):
         self.shape = shp
@@ -92,7 +102,13 @@ class _Shape:
 
 
 def eval_shape_expr(text: str, operands: Dict[str, '_Shape'], node=None) -> Expr:
-    """Evaluate e.g. "x.shape[0]" or "src.size // 2" over operand shapes."""
+    """Evaluate e.g. "x.shape[0]" or "src.size // 2" over operand shapes.
+
+    `operands` maps operand names to `_Shape`. For `x` of shape (M, K) and
+    fp16: `"x.shape[1]"` -> `K`, `"x.size"` -> `M * K`, `"x.bytes"` -> `M * K * 2`.
+    Only `+ - * //`, integers and those attributes are allowed (else `MgcError`
+    at `node`).
+    """
 
     def ev(n):
         if isinstance(n, ast.Expression):
@@ -127,6 +143,8 @@ def eval_shape_expr(text: str, operands: Dict[str, '_Shape'], node=None) -> Expr
 
 
 def operand_shapes(op, names, ts) -> Dict[str, _Shape]:
+    """Pair the buffers of a job op with the operand `names` from its descriptor,
+    giving `{'x': _Shape, ...}` for `eval_shape_expr`."""
     out = {}
     for n, v in zip(names, op.bufs):
         a = alloc_of(v)
@@ -135,7 +153,10 @@ def operand_shapes(op, names, ts) -> Dict[str, _Shape]:
 
 
 def max_sizes(e: Expr) -> Expr:
-    """Replace tile-split sizes (int32 `tile_h`) by their maximum (`tile_h_max`)."""
+    """Replace tile-split sizes (int32 `tile_h`) by their maximum (`tile_h_max`).
+
+    Makes sizes identical on every tile (edge tiles are clipped): `tile_h * K`
+    -> `tile_h_max * K`."""
     return e.subst({s: Sym(s + '_max') for s in _split_syms(e)})
 
 
