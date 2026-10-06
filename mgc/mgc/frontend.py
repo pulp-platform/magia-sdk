@@ -24,10 +24,10 @@ Input (abridged `.mgc`)::
             dma.load(x, X[0:8, 0:8]).wait()
 
 Output: an xDSL `ModuleOp` holding one `mg.tensor` per `l2()`, one `mg.define`
-per `define()`, one `mg.kernel` per `l1_kernel()`, and a `mg.test` whose body
+per `define()`, one `mg.kernel` per `l1_kernel()`, and a `mg.func` whose body
 is a `mg.tiles` op containing the per-tile code (`mg.alloc`, `mg.dma`, ...).
 
-How it works: module-level declarations and `main` are walked once; every Python
+How it works: module-level declarations and the function are walked once; every Python
 name is bound in `Frontend.env` to a compile-time value (`Sym`/`Expr` for
 integers, `Tensor`, `Axis`, `Split`, `Buf`, `Kernel`, ...) and statements are
 turned into IR ops.
@@ -305,11 +305,11 @@ class Frontend:
         """Compile the whole file; returns the `ModuleOp`.
 
         Module level accepts imports, a docstring, declarations (`sizes`, `l2`,
-        `define`, `l1_kernel`) and a single `@test(...)`-decorated `main` whose
+        `define`, `l1_kernel`) and a single function (`@test(...)` `main`, or `@top`) whose
         body is exactly one `for y_id, x_id in tiles():` loop, optionally
-        preceded by a docstring (stored as the test's `doc`).
+        preceded by a docstring (stored as the function's `doc`).
 
-        Result: `[mg.tensor/mg.define/mg.kernel ..., mg.test{ mg.tiles{ ... } }]`.
+        Result: `[mg.tensor/mg.define/mg.kernel ..., mg.func{ mg.tiles{ ... } }]`.
         Raises `MgcError` (with the source line) on anything unsupported.
         """
         main = None
@@ -317,8 +317,8 @@ class Frontend:
             if isinstance(s, (ast.Import, ast.ImportFrom)) or _is_doc(s):
                 continue
             if isinstance(s, ast.FunctionDef):
-                if s.name != 'main':
-                    raise MgcError(s, 'an mgc program defines exactly one function, `main`')
+                if main is not None:
+                    raise MgcError(s, 'an mgc program defines exactly one function (@test `main` or @top)')
                 main = s
                 continue
             if isinstance(s, ast.Assign):
@@ -326,21 +326,12 @@ class Frontend:
                 continue
             raise MgcError(s, 'unsupported statement at module level')
         if main is None:
-            raise MgcError(None, 'no `main` function')
-        name, authors = 'test', []
-        for d in main.decorator_list:
-            _, fn = _call_parts(d)
-            if fn != 'test':
-                raise MgcError(d, 'main must be decorated with @test(...)')
-            if d.args:
-                name = ast.literal_eval(d.args[0])
-            for kw in d.keywords:
-                if kw.arg == 'authors':
-                    authors = ast.literal_eval(kw.value)
+            raise MgcError(None, 'no @test `main` or @top function')
+        kind, name, authors = self.decorator(main)
         body = list(main.body)
         doc = body.pop(0).value.value if body and _is_doc(body[0]) else None
         if len(body) != 1 or not isinstance(body[0], ast.For) or _call_parts(body[0].iter)[1] != 'tiles':
-            raise MgcError(main, 'main must contain exactly one `for y_id, x_id in tiles():` loop '
+            raise MgcError(main, 'the function must contain exactly one `for y_id, x_id in tiles():` loop '
                            '(level 1, spatial): all per-tile code goes inside it')
         tl = body[0]
         tgt = tl.target
@@ -354,11 +345,41 @@ class Frontend:
         tiles = ir.TilesOp.create(attributes={'y': StringAttr(yv), 'x': StringAttr(xv)},
                                   regions=[self.region(tl.body, top=True)])
         self.blocks.pop()
-        attrs = {'test': StringAttr(name), 'authors': ir.strs(authors)}
+        attrs = {'kind': StringAttr(kind), 'fname': StringAttr(main.name if kind == 'top' else 'main'),
+                 'authors': ir.strs(authors)}
+        if kind == 'test':
+            attrs['test'] = StringAttr(name)
         if doc:
             attrs['doc'] = StringAttr(doc)
-        test = ir.TestOp.create(attributes=attrs, regions=[Region(Block([tiles]))])
-        return ModuleOp(self.module_ops + [test])
+        func = ir.FuncOp.create(attributes=attrs, regions=[Region(Block([tiles]))])
+        return ModuleOp(self.module_ops + [func])
+
+    @staticmethod
+    def decorator(fn):
+        """Classify the single function: returns `(kind, test_name, authors)`.
+
+        `@test("name", authors=[...])` on `main` -> kind `'test'`;
+        `@top` / `@top(authors=[...])` on any name -> kind `'top'` (a callable function,
+        no `main`, no test header).
+        """
+        if len(fn.decorator_list) != 1:
+            raise MgcError(fn, 'the function must have exactly one decorator: @test(...) on `main`, or @top')
+        d = fn.decorator_list[0]
+        dfn = _name(d) or _call_parts(d)[1]
+        args, kws = (d.args, d.keywords) if isinstance(d, ast.Call) else ([], [])
+        authors = []
+        for kw in kws:
+            if kw.arg == 'authors':
+                authors = ast.literal_eval(kw.value)
+        if dfn == 'test':
+            if fn.name != 'main':
+                raise MgcError(fn, 'a @test function must be named `main` (use @top for a callable function)')
+            return 'test', (ast.literal_eval(args[0]) if args else 'test'), authors
+        if dfn == 'top':
+            if args:
+                raise MgcError(d, '@top takes no positional arguments (only `authors=[...]`)')
+            return 'top', None, authors
+        raise MgcError(d, 'the function must be decorated with @test(...) or @top')
 
     def module_assign(self, s):
         """Handle one module-level assignment. Supported forms:

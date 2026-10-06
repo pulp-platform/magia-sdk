@@ -277,5 +277,42 @@ class Errors(unittest.TestCase):
                          'not #defined')
 
 
+class TopFunction(unittest.TestCase):
+    """`@top` emits a callable void function instead of a test `main`."""
+
+    TEST_DECO = '@test("test_mm_os_mgc", authors=["Francesco Conti <f.conti@unibo.it>"])\ndef main():'
+
+    def top(self, deco='@top', fname='my_gemm', drop_check=True):
+        src = _read(OS, 'mm_os.mgc').replace(self.TEST_DECO, f'{deco}\ndef {fname}():')
+        if drop_check:
+            src = '\n'.join(l for l in src.splitlines() if not l.strip().startswith('check('))
+        return src
+
+    def test_top_emits_function(self):
+        c = _c(OS, 'mm_os.mgc', self.top())
+        self.assertIn('void my_gemm(void)', c)
+        self.assertNotIn('int main', c)
+        self.assertNotIn('test.h', c)
+        self.assertNotIn('return 0', c)
+        self.assertNotIn('return errors', c)
+        self.assertIn('return;', c)  # tiles with no work exit early
+
+    def test_top_with_authors(self):
+        c = _c(OS, 'mm_os.mgc', self.top('@top(authors=["A B <a@b.c>"])'))
+        self.assertIn('// A B <a@b.c>', c)
+
+    def test_top_rejects_check(self):
+        with self.assertRaisesRegex(MgcError, 'only available in @test'):
+            _c(OS, 'mm_os.mgc', self.top(drop_check=False))
+
+    def test_test_must_be_main(self):
+        with self.assertRaisesRegex(MgcError, 'named `main`'):
+            _c(OS, 'mm_os.mgc', self.top('@test("x")'))
+
+    def test_undecorated_rejected(self):
+        with self.assertRaisesRegex(MgcError, 'exactly one decorator'):
+            _c(OS, 'mm_os.mgc', self.top('').replace('\n\ndef my_gemm', '\ndef my_gemm'))
+
+
 if __name__ == '__main__':
     unittest.main()

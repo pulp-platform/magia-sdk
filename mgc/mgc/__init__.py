@@ -18,7 +18,7 @@ def _stub(*_a, **_k):
 
 
 # module level
-sizes = l2 = define = test = l1_kernel = _stub
+sizes = l2 = define = test = top = l1_kernel = _stub
 fp16 = 'fp16'
 u8, u16, u32, i32 = 'u8', 'u16', 'u32', 'i32'
 WFE = 'WFE'
@@ -41,6 +41,6 @@ L1 = _Ns()  # L1.alloc(view), L1.multi_buffer(view, depth=N)
 dma = _Ns()  # dma.load(dst, src), dma.store(dst, src)
 redmule = _Ns()  # gemm / enqueue / commit / start / commit_start / events
 
-__all__ = ['sizes', 'l2', 'define', 'test', 'l1_kernel', 'fp16', 'u8', 'u16', 'u32', 'i32', 'WFE', 'POLLING',
+__all__ = ['sizes', 'l2', 'define', 'test', 'top', 'l1_kernel', 'fp16', 'u8', 'u16', 'u32', 'i32', 'WFE', 'POLLING',
            'CORE', 'GLOBAL', 'ROW', 'COL', 'tiles', 'pipeline', 'cores', 'check', 'comment', 'sync', 'rotate',
            'L1', 'dma', 'redmule']

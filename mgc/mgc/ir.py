@@ -230,10 +230,14 @@ class KernelOp(IRDLOperation):
 
 
 @irdl_op_definition
-class TestOp(_Region):
-    """The whole test: its name, authors, docstring and the single `mg.tiles` body."""
-    name = 'mg.test'
-    test = attr_def(StringAttr)
+class FuncOp(_Region):
+    """The generated C function: a standalone test (`kind` = 'test', emitted as `main`)
+    or a callable `@top` function (`kind` = 'top'), with its C name, authors,
+    docstring and the single `mg.tiles` body."""
+    name = 'mg.func'
+    kind = attr_def(StringAttr)  # 'test' | 'top'
+    fname = attr_def(StringAttr)  # C function name
+    test = opt_attr_def(StringAttr)  # test name (kind == 'test')
     authors = attr_def(ArrayAttr)
     doc = opt_attr_def(StringAttr)
     body = region_def()
@@ -440,7 +444,7 @@ class CheckOp(IRDLOperation):
 
 
 MG = Dialect('mg', [
-    TensorOp, DefineOp, KernelOp, TestOp, TilesOp, CommentOp, SplitOp, ScalarOp, AllocOp, RemoteOp,
+    TensorOp, DefineOp, KernelOp, FuncOp, TilesOp, CommentOp, SplitOp, ScalarOp, AllocOp, RemoteOp,
     EventsOp, ForOp, IfOp, ContinueOp, PipelineOp, DmaOp, JobOp, HwpeOp, CallOp, WaitOp, SyncOp,
     SelectOp, CheckOp
 ], [ExprAttr, ViewAttr, XferAttr, EvtAttr, SelectAttr, BufType])
