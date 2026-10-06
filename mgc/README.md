@@ -215,9 +215,75 @@ comments in the generated C.
 
 ## Compiler
 
+In `mgc`, the `.mgc` file is parsed into a typed IR (the `mg` dialect, built on xDSL) that keeps the *intent* of the program:
+tensors in L2, per-tile L1 buffers, views, DMA transfers, accelerator jobs, events and
+pipelines. A fixed sequence of passes then lowers that intent to low-level details,
+and the last stage prints C against mglib. Each pass can be inspected on its own with `--print-ir-after`.
+
 ```
 .mgc → frontend → legalize-dma → pipeline → job-lower → multi-buffer → l1-layout → event-alloc → emit-c → clang-format
 ```
+
+`mgc` also assists the MAGIA programmer by taking some decisions autonomously and rejecting some
+common mistakes. In particular:
+- it **decides** tile sizes and borders, L1 addresses (identical on all tiles), L2 offsets,
+  iDMA length/stride/repetition, 1-D vs 2-D transfer selection, buffer rotation, event variables,
+  HWPE job sequence, and the guarded stage schedule of `pipeline()`.
+- it **rejects** views that the iDMA cannot express, accelerator operands with the wrong shape,
+  pipelines deeper than their buffers, and events that are waited on without being issued
+  (or reused before the previous transfer/job on it was waited).
+
+### Tiny example
+
+One GEMM per tile, no pipelining (`Y += X @ W`, each tile owns an `M/Y × K/X` block of `Y`):
+
+```python
+from mgc import *
+
+M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")   # from include/test.h
+X = l2("x_inp", (M, N), fp16)
+W = l2("w_inp", (N, K), fp16)
+Y = l2("y_inp", (M, K), fp16)
+
+@test("test_tiny")
+def main():
+    for y_id, x_id in tiles():
+        tile_h = y_id.split(M)                    # rows owned by this tile
+        tile_w = x_id.split(K)                    # columns owned by this tile
+        x = L1.alloc(X[tile_h, :])
+        w = L1.alloc(W[:, tile_w])
+        y = L1.alloc(Y[tile_h, tile_w])
+        dma.load(x, X[tile_h, :])
+        dma.load(w, W[:, tile_w])
+        dma.load(y, Y[tile_h, tile_w]).wait()
+        redmule.gemm(x, w, y)
+        dma.store(Y[tile_h, tile_w], y).wait()
+```
+
+The 14 source lines become about 130 lines of C (excerpt):
+
+```c
+uint32_t len_w     = tile_w * 2;                 // one row of the W block, in bytes
+uint32_t std_w     = K_SIZE * 2;                 // row stride in L2
+uint32_t reps_w    = (uint32_t)N_SIZE;           // number of rows
+uint32_t l1_addr_w = l1_addr_x + (tile_h * N_SIZE * 2);   // L1 layout: x, then w, then y
+uint32_t l2_addr_w = (uint32_t)w_inp + (tile_w_max * x_id * 2);
+...
+mg_idma_memcpy_2d(&idma_ctrl, &eu_ctrl, WAIT_MODE, 0,
+                  l2_addr_w, l1_addr_w, len_w, std_w, reps_w, &idma_evt_w, NULL);
+...
+mg_redmule_gemm(&redmule_ctrl, &eu_ctrl, WAIT_MODE, l1_addr_x, l1_addr_w, l1_addr_y,
+                (uint16_t)tile_h, (uint16_t)N_SIZE, (uint16_t)tile_w, &redmule_evt, NULL);
+```
+
+The `W[:, tile_w]` column block is not contiguous in L2, so `legalize-dma` turns it into a 2-D
+transfer, while `X[tile_h, :]` is contiguous and stays 1-D. The GEMM dimensions come from the
+buffer shapes, and the `tile_h`/`tile_w` borders handle meshes that do not divide the problem.
+To see the intermediate steps, run `mgcc.py tiny.mgc --print-ir-after=frontend` (or any pass name).
+Larger schedules replace the straight-line body with `pipeline()` and multi-buffered
+buffers, as in the weight-static example above.
+
+### Source map
 
 | File | Content |
 |---|---|
@@ -291,10 +357,10 @@ Extending:
 
 ## Limitations
 
-- One `tiles()` loop and one `pipeline()` per test; `cores()` is not implemented.
-- RedMulE early enqueue is used only in 2-stage pipelines.
-- fp16 only; RedMulE GEMM is the only accelerator described.
-- L1 kernels run synchronously on the CV32 core.
+- One `tiles()` loop and one `pipeline()` per test; `cores()` left for future implementation to enable support for PULP cluster parallelism.
+- HWPE (RedMulE) early enqueue is used only in 2-stage pipelines.
+- fp16 only; RedMulE GEMM is the only HWPE accelerator described.
+- L1 kernels run only on the CV32 control core.
 - Comments inside a `pipeline()` body are dropped, except the leading docstring.
 - No L1 capacity check (tile sizes are run-time values).
 - The event check accepts code that is valid on at least one path, so it can miss errors that
