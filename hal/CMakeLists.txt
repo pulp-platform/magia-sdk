@@ -24,5 +24,6 @@ target_link_libraries(hal
     "redmule_lib"
     "fsync_lib"
     "eu_lib"
+    "collective_lib"
 )
 endif()
