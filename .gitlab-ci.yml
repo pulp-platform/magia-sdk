@@ -22,6 +22,7 @@ variables:
   GIT_CLONE_PATH: "$CI_BUILDS_DIR/$CI_CONCURRENT_ID/$CI_PIPELINE_ID/$CI_JOB_ID"
   GIT_STRATEGY: clone
   GIT_CLEAN_FLAGS: "-ffdx"
+  CCACHE_DISABLE: "1"
 
 .export_path:
   before_script:
@@ -183,7 +184,7 @@ magia_tiles_1_CV32E40X:
 .build:
   extends: [.base, .export_path]
   script:
-    - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler} control_core=${control_core} pulp_cores=${pulp_cores}
+    - make clean build tiles=${tiles} target_platform=${target_platform} compiler=${compiler} control_core=${control_core} pulp_cores=${pulp_cores} spatz=${spatz}
   artifacts:
     paths: [ "build", "targets/${target_platform}/include/addr_map/tile_addr_map.h" ]
 
