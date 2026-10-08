@@ -9,13 +9,13 @@
 #include "tile.h"
 #include "fsync.h"
 #include "eventunit.h"
-#include "collective.h"
 
 #define WAIT_MODE WFE
 
 /**
- * This test verifies the synchronization over the FlooNoC narrow channel through the collective driver (narrow_sync_mesh/row/column).
- * Every tile of the selected group (ROW, COLUMN, MESH) sends a 32-bit word to the destination tile, where the words are reduced.
+ * This test verifies the synchronization over the FlooNoC narrow channel through the collective
+ * driver (narrow_sync_mesh/row/column). Every tile of the selected group (ROW, COLUMN, MESH) sends
+ * a 32-bit word to the destination tile, where the words are reduced.
  */
 int main(void)
 {
@@ -25,6 +25,9 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
+    uint32_t receiver_x = GET_X_ID(DESTINATION_HART_ID);
+    uint32_t receiver_y = GET_Y_ID(DESTINATION_HART_ID);
+
     fsync_config_t fsync_cfg      = {.hartid = hartid};
     fsync_controller_t fsync_ctrl = {
         .base = NULL,
@@ -32,13 +35,6 @@ int main(void)
         .api  = &fsync_api,
     };
     fsync_init(&fsync_ctrl);
-
-    floo_collective_config_t coll_cfg = {.hartid = hartid};
-    floo_collective_t coll_ctrl       = {
-        .base = NULL,
-        .cfg  = &coll_cfg,
-        .api  = &floonoc_collective_api,
-    };
 
 #if STALLING == 0
     eu_config_t eu_cfg      = {.hartid = hartid};
@@ -56,64 +52,88 @@ int main(void)
      * 1. Word address in the destination tile's L1.
      */
     uint32_t floo_sync_addr = get_l1_base(DESTINATION_HART_ID) + MEM_OFFSET;
+    uint32_t sender         = 0;
 
-    const uint32_t comm_groups[NUM_COMM_GROUPS] = {MESH, ROW, COLUMN};
+    /**
+     * 2. MESH Narrow synch.
+     */
+    sender = 1;
 
-    for (uint32_t g = 0; g < NUM_COMM_GROUPS; g++) {
+    if (hartid == DESTINATION_HART_ID)
+        mmio32(floo_sync_addr) = 0;
 
-        uint32_t group = comm_groups[g];
-
-        /**
-         * Whether this tile is expected to send the word in the current group.
-         */
-        int sender = (group == MESH) ||
-                    (group == ROW    && GET_Y_ID(hartid) == GET_Y_ID(DESTINATION_HART_ID)) ||
-                    (group == COLUMN && GET_X_ID(hartid) == GET_X_ID(DESTINATION_HART_ID));
-
-        /**
-         * 2. The destination tile clears its word, then wait for all the tiles
-         * before starting the synchronization.
-         */
-        if (hartid == DESTINATION_HART_ID)
-            mmio32(floo_sync_addr) = 0;
-
-        fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global(&fsync_ctrl);
 #if STALLING == 0
-        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 #endif
 
-        if (sender) {
-            /**
-             * 3. The sender tiles send the word to be reduced at destination.
-             */
-            switch (group) {
-            case MESH:
-                narrow_sync_mesh(&coll_ctrl, FLOO_SYNC_WORD, floo_sync_addr);
-                break;
-            case ROW:
-                narrow_sync_row(&coll_ctrl, FLOO_SYNC_WORD, floo_sync_addr);
-                break;
-            case COLUMN:
-                narrow_sync_column(&coll_ctrl, FLOO_SYNC_WORD, floo_sync_addr);
-                break;
-            }
-        }
-
-        if (hartid == DESTINATION_HART_ID) {
-            /**
-             * 4. The destination tile waits for the reception of the word.
-             */
-            while (mmio32(floo_sync_addr) != FLOO_SYNC_WORD);
-        }
-
-        /**
-         * 5. Wait that the destination has got the word before the next group.
-         */
-        fsync_sync_global(&fsync_ctrl);
-#if STALLING == 0
-        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-#endif
+    if (sender)
+        floo_narrow_sync_mesh(FLOO_SYNC_WORD, floo_sync_addr);
+    if (hartid == DESTINATION_HART_ID) {
+        while (mmio32(floo_sync_addr) != FLOO_SYNC_WORD)
+            ;
     }
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    /**
+     * 3. ROW Narrow synch.
+     */
+    if (receiver_y == GET_Y_ID(hartid))
+        sender = 1;
+    else
+        sender = 0;
+
+    if (hartid == DESTINATION_HART_ID)
+        mmio32(floo_sync_addr) = 0;
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    if (sender)
+        floo_narrow_sync_row(FLOO_SYNC_WORD, floo_sync_addr);
+    if (hartid == DESTINATION_HART_ID) {
+        while (mmio32(floo_sync_addr) != FLOO_SYNC_WORD)
+            ;
+    }
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    /**
+     * 4. COLUMN Narrow synch.
+     */
+    if (receiver_x == GET_X_ID(hartid))
+        sender = 1;
+    else
+        sender = 0;
+
+    if (hartid == DESTINATION_HART_ID)
+        mmio32(floo_sync_addr) = 0;
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    if (sender)
+        floo_narrow_sync_column(FLOO_SYNC_WORD, floo_sync_addr);
+    if (hartid == DESTINATION_HART_ID) {
+        while (mmio32(floo_sync_addr) != FLOO_SYNC_WORD)
+            ;
+    }
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
 
     return 0;
 }

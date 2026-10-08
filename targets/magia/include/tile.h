@@ -24,6 +24,7 @@
 #include "utils/magia_pulp_utils.h"
 #include "utils/alloc.h"
 #include "utils/typedefs.h"
+#include "utils/collective_utils.h"
 
 #if CV32E40X == 1
 #include "utils/amo_utils.h"

@@ -10,17 +10,20 @@
 #include "idma.h"
 #include "fsync.h"
 #include "eventunit.h"
-#include "collective.h"
 
 #define WAIT_MODE WFE
 
-
+inline void clear_buffer(uint32_t buffy)
+{
+    for (uint32_t i = 0; i < N_ELEMS; i++)
+        mmio16(buffy + 2 * i) = 0;
+}
 
 /**
  * This test verifies the iDMA collective API (idma_collective_1d).
- * The source tile multicasts an L1 buffer to the whole mesh, to its row and to its column.
- * In every phase, each tile checks that it received the data only if it belongs to the
- * destination group, and that its buffer was left untouched otherwise.
+ * The source tile (ID defined in test's header file) multicasts an L1 buffer to the whole mesh, to
+ * its row and to its column. In every phase, each tile checks that it received the data only if it
+ * belongs to the destination group, and that its buffer was left untouched otherwise.
  */
 int main(void)
 {
@@ -29,6 +32,9 @@ int main(void)
      * also initialize the controllers for the idma and fsync.
      */
     uint32_t hartid = get_hartid();
+
+    uint32_t sender_x = GET_X_ID(SOURCE_HART_ID);
+    uint32_t sender_y = GET_Y_ID(SOURCE_HART_ID);
 
     idma_config_t idma_cfg      = {.hartid = hartid};
     idma_controller_t idma_ctrl = {
@@ -48,13 +54,6 @@ int main(void)
 
     fsync_init(&fsync_ctrl);
 
-    floo_collective_config_t coll_cfg = {.hartid = hartid};
-    floo_collective_t coll_ctrl       = {
-        .base = NULL,
-        .cfg  = &coll_cfg,
-        .api  = &floonoc_collective_api,
-    };
-
 #if STALLING == 0
     eu_config_t eu_cfg      = {.hartid = hartid};
     eu_controller_t eu_ctrl = {
@@ -67,6 +66,10 @@ int main(void)
     eu_fsync_init(&eu_ctrl, 0);
     eu_idma_init(&eu_ctrl, 0);
 #endif
+
+    // Reciever flag: if set to 1, it means that this tile has to recieve something in the specific
+    // test stage
+    int reciever_flag = 0;
 
     /**
      * 1. Buffer addresses in this tile's L1.
@@ -87,76 +90,131 @@ int main(void)
 #endif
     }
 
-    const uint32_t comm_groups[NUM_COMM_GROUPS] = {MESH, ROW, COLUMN};
+    /**
+     * 3. Test ROW wide broadcast
+     */
+    clear_buffer(dst_addr);
 
-    for (uint32_t g = 0; g < NUM_COMM_GROUPS; g++) {
+    if (GET_Y_ID(hartid) == sender_y)
+        reciever_flag = 1;
+    else
+        reciever_flag = 0;
 
-        uint32_t group = comm_groups[g];
-
-        /**
-         * Whether this tile is expected to receive the data in the current group.
-         */
-        int receiver = (group == MESH) ||
-                    (group == ROW    && GET_Y_ID(hartid) == GET_Y_ID(SOURCE_HART_ID)) ||
-                    (group == COLUMN && GET_X_ID(hartid) == GET_X_ID(SOURCE_HART_ID));
-
-
-        /**
-         * 3. Clear the destination buffer on every tile.
-         */
-        for (uint32_t i = 0; i < N_ELEMS; i++)
-            mmio16(dst_addr + 2 * i) = 0;
-        
-        
-        fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global(&fsync_ctrl);
 #if STALLING == 0
-        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 #endif
 
-        /**
-         * 4. The source tile sends its L1 buffer over the NoC.
-         */
-        if (hartid == SOURCE_HART_ID) {
-            idma_collective_1d(&idma_ctrl,
-                                dst_addr,
-                                src_addr,
-                                BUF_SIZE,
-                                gen_collective_mask(&coll_ctrl, group),
-                                MULTICAST);
+    if (hartid == SOURCE_HART_ID) {
+        idma_collective_1d(&idma_ctrl, dst_addr, src_addr, BUF_SIZE, ROW_MASK, MULTICAST);
 #if STALLING == 0
-            eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
 #endif
-        }
-
-        /**
-        * 5. Wait that all the tiles have finished before checking data
-        */
-        fsync_sync_global(&fsync_ctrl);
-#if STALLING == 0
-        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
-#endif
-
-        /**
-         * 6. Check results. If the tile is not a receiver we expect all zeros.
-         */
-        if (hartid != SOURCE_HART_ID) {
-            uint32_t group_errors = 0;
-            for (uint32_t i = 0; i < N_ELEMS; i++) {
-                uint16_t expected = receiver ? x_inp[i] : 0;
-                uint16_t detected = mmio16(dst_addr + 2 * i);
-                if (detected != expected) {
-                    printf("COMM_GROUP %d ERROR: dst[%d] = 0x%x, expected 0x%x\n",
-                           group,
-                           i,
-                           detected,
-                           expected);
-                    group_errors++;
-                }
-            }
-            n_errors += group_errors;
-        }
     }
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    if (hartid != SOURCE_HART_ID) {
+        uint32_t group_errors = 0;
+        for (uint32_t i = 0; i < N_ELEMS; i++) {
+            uint16_t expected = reciever_flag ? x_inp[i] : 0;
+            uint16_t detected = mmio16(dst_addr + 2 * i);
+            if (detected != expected) {
+                printf(
+                    "ROW MULTICAST ERROR: dst[%d] = 0x%x, expected 0x%x\n", i, detected, expected);
+                group_errors++;
+            }
+        }
+        n_errors += group_errors;
+    }
+
+    /**
+     * 4. Test COLUMN wide broadcast
+     */
+    clear_buffer(dst_addr);
+
+    if (GET_X_ID(hartid) == sender_x)
+        reciever_flag = 1;
+    else
+        reciever_flag = 0;
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    if (hartid == SOURCE_HART_ID) {
+        idma_collective_1d(&idma_ctrl, dst_addr, src_addr, BUF_SIZE, COLUMN_MASK, MULTICAST);
+#if STALLING == 0
+        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+#endif
+    }
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    if (hartid != SOURCE_HART_ID) {
+        uint32_t group_errors = 0;
+        for (uint32_t i = 0; i < N_ELEMS; i++) {
+            uint16_t expected = reciever_flag ? x_inp[i] : 0;
+            uint16_t detected = mmio16(dst_addr + 2 * i);
+            if (detected != expected) {
+                printf("COLUMN MULTICAST ERROR: dst[%d] = 0x%x, expected 0x%x\n",
+                       i,
+                       detected,
+                       expected);
+                group_errors++;
+            }
+        }
+        n_errors += group_errors;
+    }
+
+    /**
+     * 5. Test MESH wide broadcast
+     */
+    clear_buffer(dst_addr);
+
+    reciever_flag = 1;
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    if (hartid == SOURCE_HART_ID) {
+        idma_collective_1d(&idma_ctrl, dst_addr, src_addr, BUF_SIZE, MESH_MASK, MULTICAST);
+#if STALLING == 0
+        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+#endif
+    }
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    if (hartid != SOURCE_HART_ID) {
+        uint32_t group_errors = 0;
+        for (uint32_t i = 0; i < N_ELEMS; i++) {
+            uint16_t expected = reciever_flag ? x_inp[i] : 0;
+            uint16_t detected = mmio16(dst_addr + 2 * i);
+            if (detected != expected) {
+                printf("COLUMN MULTICAST ERROR: dst[%d] = 0x%x, expected 0x%x\n",
+                       i,
+                       detected,
+                       expected);
+                group_errors++;
+            }
+        }
+        n_errors += group_errors;
+    }
+
     printf("Finished test with %d errors\n", n_errors);
 
-    return 0;
+    return n_errors;
 }

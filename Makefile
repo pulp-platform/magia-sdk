@@ -367,6 +367,7 @@ ifneq (,$(filter $(build_mode), update synth profile))
 	export PATH=$$(pwd):$$PATH														&& \
 	python -m pip install --upgrade "setuptools<81"									&& \
 	make vsim-scripts > vsim-scripts.log mesh_dv=$(mesh_dv)	core=$(control_core)	&& \
+	make floonoc-patch || true											&& \
 	$(HW_BUILD_CMD)
 else
 	$(error unrecognized mode (acceptable build modes: update|profile|synth).)

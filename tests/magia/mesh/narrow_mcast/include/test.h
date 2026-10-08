@@ -9,10 +9,9 @@
 
 #include <stdint.h>
 
-#define MEM_OFFSET      (0x1000)
-#define BROADCAST_WORD  (0x12345678)
+#define MEM_OFFSET     (0x1000)
+#define BROADCAST_WORD (0x12345678)
 
-#define SOURCE_HART_ID  (3)
-
+#define SOURCE_HART_ID (3)
 
 #endif

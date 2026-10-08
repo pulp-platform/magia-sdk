@@ -9,13 +9,13 @@
 #include "tile.h"
 #include "fsync.h"
 #include "eventunit.h"
-#include "collective.h"
 
 #define WAIT_MODE WFE
 
 /**
- * This test verifies the multicast over the FlooNoC narrow channel through the collective driver (narrow_mcast_mesh/row/column).
- * The source tile multicasts a single 32-bit word to the selected group (ROW, COLUMN, MESH)
+ * This test verifies the multicast over the FlooNoC narrow channel through the collective driver
+ * (narrow_mcast_mesh/row/column). The source tile multicasts a single 32-bit word to the selected
+ * group (ROW, COLUMN, MESH)
  */
 int main(void)
 {
@@ -25,6 +25,9 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
+    uint32_t sender_x = GET_X_ID(SOURCE_HART_ID);
+    uint32_t sender_y = GET_Y_ID(SOURCE_HART_ID);
+
     fsync_config_t fsync_cfg      = {.hartid = hartid};
     fsync_controller_t fsync_ctrl = {
         .base = NULL,
@@ -33,13 +36,6 @@ int main(void)
     };
 
     fsync_init(&fsync_ctrl);
-
-    floo_collective_config_t coll_cfg = {.hartid = hartid};
-    floo_collective_t coll_ctrl       = {
-        .base = NULL,
-        .cfg  = &coll_cfg,
-        .api  = &floonoc_collective_api,
-    };
 
 #if STALLING == 0
     eu_config_t eu_cfg      = {.hartid = hartid};
@@ -53,77 +49,111 @@ int main(void)
     eu_fsync_init(&eu_ctrl, 0);
 #endif
 
-
     /**
      * 1. Word address in this tile's L1.
      */
     uint32_t floo_mcast_addr = get_l1_base(hartid) + MEM_OFFSET;
-    const uint32_t comm_groups[NUM_COMM_GROUPS] = {MESH, ROW, COLUMN};
-    uint32_t n_errors = 0;
+    uint32_t n_errors        = 0;
+    uint32_t receiver        = 0;
 
-    for (uint32_t g = 0; g < NUM_COMM_GROUPS; g++) {
+    /**
+     * 2. MESH narrow test
+     */
+    mmio32(floo_mcast_addr) = 0;
+    receiver                = 1;
 
-        uint32_t group = comm_groups[g];
-
-        /**
-         * Whether this tile is expected to receive the word in the current group.
-         */
-        int receiver = (group == MESH) ||
-                    (group == ROW    && GET_Y_ID(hartid) == GET_Y_ID(SOURCE_HART_ID)) ||
-                    (group == COLUMN && GET_X_ID(hartid) == GET_X_ID(SOURCE_HART_ID));
-
-        /**
-         * 2. Clear the destination word on every tile, then wait for all the tiles
-         * before starting the multicast.
-         */
-        mmio32(floo_mcast_addr) = 0;
-
-        fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global(&fsync_ctrl);
 #if STALLING == 0
-        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 #endif
 
-        if (hartid == SOURCE_HART_ID) {
-            /**
-             * 3. The source tile multicasts the word to the selected communicator group.
-             */
-            switch (group) {
-            case MESH:
-                narrow_mcast_mesh(&coll_ctrl, BROADCAST_WORD, floo_mcast_addr);
-                break;
-            case ROW:
-                narrow_mcast_row(&coll_ctrl, BROADCAST_WORD, floo_mcast_addr);
-                break;
-            case COLUMN:
-                narrow_mcast_column(&coll_ctrl, BROADCAST_WORD, floo_mcast_addr);
-                break;
-            }
-        } else if (receiver) {
-            /**
-             * 4. The destination tiles wait for the reception of the word.
-             */
-            while (mmio32(floo_mcast_addr) != BROADCAST_WORD);
+    if (hartid == SOURCE_HART_ID)
+        floo_narrow_mcast_mesh(BROADCAST_WORD, floo_mcast_addr);
+    else if (receiver) {
+        while (mmio32(floo_mcast_addr) != BROADCAST_WORD)
+            ;
+    }
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    if (hartid != SOURCE_HART_ID && !receiver) {
+        uint32_t detected = mmio32(floo_mcast_addr);
+        if (detected != 0) {
+            printf("NARROW MESH ERROR: detected 0x%x, expected 0x0\n", detected);
+            n_errors++;
         }
+    }
 
-        /**
-         * 5. Wait that all the receivers have got the word before checking the others.
-         */
-        fsync_sync_global(&fsync_ctrl);
+    /**
+     * 3. ROW narrow test
+     */
+    mmio32(floo_mcast_addr) = 0;
+
+    if (GET_Y_ID(hartid) == sender_y)
+        receiver = 1;
+    else
+        receiver = 0;
+
+    fsync_sync_global(&fsync_ctrl);
 #if STALLING == 0
-        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
 #endif
 
-        /**
-         * 6. If the tile is not a receiver we expect its word to be all zeros.
-         */
-        if (hartid != SOURCE_HART_ID && !receiver) {
-            uint32_t detected = mmio32(floo_mcast_addr);
-            if (detected != 0) {
-                printf("COMM_GROUP %d ERROR: detected 0x%x, expected 0x0\n",
-                       group,
-                       detected);
-                n_errors++;
-            }
+    if (hartid == SOURCE_HART_ID)
+        floo_narrow_mcast_row(BROADCAST_WORD, floo_mcast_addr);
+    else if (receiver) {
+        while (mmio32(floo_mcast_addr) != BROADCAST_WORD)
+            ;
+    }
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    if (hartid != SOURCE_HART_ID && !receiver) {
+        uint32_t detected = mmio32(floo_mcast_addr);
+        if (detected != 0) {
+            printf("NARROW ROW ERROR: detected 0x%x, expected 0x0\n", detected);
+            n_errors++;
+        }
+    }
+
+    /**
+     * 4. COLUMN narrow test
+     */
+    mmio32(floo_mcast_addr) = 0;
+
+    if (GET_X_ID(hartid) == sender_x)
+        receiver = 1;
+    else
+        receiver = 0;
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    if (hartid == SOURCE_HART_ID)
+        floo_narrow_mcast_column(BROADCAST_WORD, floo_mcast_addr);
+    else if (receiver) {
+        while (mmio32(floo_mcast_addr) != BROADCAST_WORD)
+            ;
+    }
+
+    fsync_sync_global(&fsync_ctrl);
+#if STALLING == 0
+    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+#endif
+
+    if (hartid != SOURCE_HART_ID && !receiver) {
+        uint32_t detected = mmio32(floo_mcast_addr);
+        if (detected != 0) {
+            printf("NARROW COLUMN ERROR: detected 0x%x, expected 0x0\n", detected);
+            n_errors++;
         }
     }
 

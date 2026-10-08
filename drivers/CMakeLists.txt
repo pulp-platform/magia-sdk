@@ -8,7 +8,7 @@
 
 # Define mappings for drivers
 set(DRIVER_MAPPINGS
-    magia:idma32,redmule16,fsync32,eventunit32,collective
+    magia:idma32,redmule16,fsync32,eventunit32
 )
 
 # Call the macro
