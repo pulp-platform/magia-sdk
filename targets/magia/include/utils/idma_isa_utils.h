@@ -358,16 +358,6 @@ idma_mm_set_std3_rep3(uint32_t dir, uint32_t dst_stride_3, uint32_t src_stride_3
     mmio32(IDMA_REPS_3_LOW_ADDR(dir))       = reps_3;
 }
 
-inline void idma_mm_set_multicast_mask(uint32_t dir, uint32_t mask)
-{
-    mmio32(IDMA_MULTICAST_MASK_ADDR(dir)) = mask;
-}
-
-inline void idma_mm_set_collective_sel(uint32_t dir, uint32_t collective_op)
-{
-    mmio32(IDMA_COLLECTIVE_SEL_ADDR(dir)) = collective_op;
-}
-
 inline uint32_t idma_mm_start(uint32_t dir)
 {
 #if PROFILE_CMI == 1
@@ -399,6 +389,20 @@ inline uint32_t idma_mm_start(uint32_t dir)
     }
 #endif
     return transfer_id;
+}
+
+//=====================================================================
+// Collective Memory Mapped Utils
+//=====================================================================
+
+inline void idma_mm_set_multicast_mask(uint32_t dir, uint32_t mask)
+{
+    mmio32(IDMA_MULTICAST_MASK_ADDR(dir)) = mask;
+}
+
+inline void idma_mm_set_collective_sel(uint32_t dir, uint32_t collective_op)
+{
+    mmio32(IDMA_COLLECTIVE_SEL_ADDR(dir)) = collective_op;
 }
 
 #endif /*IDMA_ISA_UTILS_H*/

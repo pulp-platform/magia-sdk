@@ -137,12 +137,10 @@
 // Hardware mutex registers (0x04 * mutex_id offset)
 #define EU_CORE_HW_MUTEX                  (EU_BASE + 0x0C0) // R/W: HW mutex management
 
-
 //=============================================================================
 // Collective Register Map - Base addresses and offsets
 //=============================================================================
-#define COLLECTIVE_MASK_OFFSET             (COLLECTIVE_CTRL_BASE + 0x00)
-#define COLLECTIVE_OP_OFFSET               (COLLECTIVE_CTRL_BASE + 0x04)
-
+#define COLLECTIVE_MASK_OFFSET            (COLLECTIVE_CTRL_BASE + 0x00)
+#define COLLECTIVE_OP_OFFSET              (COLLECTIVE_CTRL_BASE + 0x04)
 
 #endif // _TILE_ADDR_MAP_INCLUDE_GUARD_

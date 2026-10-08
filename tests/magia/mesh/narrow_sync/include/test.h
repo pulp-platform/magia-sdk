@@ -9,10 +9,9 @@
 
 #include <stdint.h>
 
-#define MEM_OFFSET      (0x1000)
-#define FLOO_SYNC_WORD  (0x12345678)
+#define MEM_OFFSET          (0x1000)
+#define FLOO_SYNC_WORD      (0x12345678)
 
-#define DESTINATION_HART_ID  (3)
-
+#define DESTINATION_HART_ID (3)
 
 #endif

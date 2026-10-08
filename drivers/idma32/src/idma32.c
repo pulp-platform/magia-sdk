@@ -183,7 +183,7 @@ extern int idma_collective_1d(idma_controller_t *ctrl,
 idma_controller_api_t idma_api = {
     .init = idma32_init,
     /*     .wait = idma32_wait, */
-    .memcpy_1d = idma32_memcpy_1d,
-    .memcpy_2d = idma32_memcpy_2d,
+    .memcpy_1d     = idma32_memcpy_1d,
+    .memcpy_2d     = idma32_memcpy_2d,
     .collective_1d = idma32_collective_1d,
 };

@@ -256,25 +256,30 @@ typedef enum {
 // Collective Utility defines
 //=============================================================================
 
-#define MASK_OFFSET 20
+#define MASK_OFFSET              20
 
-#define MULTICAST 1
-#define LSBAND 2
-#define FP_ADD 3
-#define FP_MUL 4
-#define FP_MIN 5
-#define FP_MAX 6
-#define INT_ADD 7
-#define INT_MUL 8
-#define INT_MINS 9
-#define INT_MINU 10
-#define INT_MAXS 11
-#define INT_MAXU 12
+#define MULTICAST                1
+#define LSBAND                   2
+#define FP_ADD                   3
+#define FP_MUL                   4
+#define FP_MIN                   5
+#define FP_MAX                   6
+#define INT_ADD                  7
+#define INT_MUL                  8
+#define INT_MINS                 9
+#define INT_MINU                 10
+#define INT_MAXS                 11
+#define INT_MAXU                 12
 
-#define NUM_COMM_GROUPS     (3)
+#define NUM_COMM_GROUPS          (3)
 
-#define MESH 1
-#define COLUMN 2
-#define ROW 3
+#define MESH                     1
+#define COLUMN                   2
+#define ROW                      3
+
+#define X_BITS                   (__builtin_ctz(MESH_Y_TILES))
+#define MESH_MASK                ((MESH_Y_TILES - 1) << MASK_OFFSET | (MESH_X_TILES - 1) << (MASK_OFFSET + X_BITS))
+#define ROW_MASK                 ((MESH_Y_TILES - 1) << MASK_OFFSET)
+#define COLUMN_MASK              ((MESH_X_TILES - 1) << (MASK_OFFSET + X_BITS))
 
 #endif // _TILE_REG_DEFS_

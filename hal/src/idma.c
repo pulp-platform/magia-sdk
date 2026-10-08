@@ -8,7 +8,6 @@
 #include <stdint.h>
 #include "idma.h"
 
-
 /*-----------------------------------------------------------------*/
 /* IDMA weak stubs (can be overridden by platform implementations) */
 /*-----------------------------------------------------------------*/
@@ -20,35 +19,37 @@ __attribute__((weak)) int idma_init(idma_controller_t *ctrl){
 }
 */
 
-__attribute__((weak)) int idma_memcpy_1d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len){
-    (void) ctrl;
-    (void) dir;
-    (void) axi_addr;
-    (void) obi_addr;
-    (void) len;
+__attribute__((weak)) int idma_memcpy_1d(
+    idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
+{
+    (void)ctrl;
+    (void)dir;
+    (void)axi_addr;
+    (void)obi_addr;
+    (void)len;
     return 1;
 }
 
 /*
-__attribute__((weak)) int idma_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps){
-    (void) ctrl;
-    printf("Wrong IDMA call.");
-    (void) dir;
-    (void) axi_addr;
-    (void) obi_addr;
-    (void) len;
-    (void) std;
-    (void) reps;
-    return 1;
+__attribute__((weak)) int idma_memcpy_2d(idma_controller_t *ctrl, uint8_t dir, uint32_t axi_addr,
+uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps){ (void) ctrl; printf("Wrong IDMA
+call."); (void) dir; (void) axi_addr; (void) obi_addr; (void) len; (void) std; (void) reps; return
+1;
 }*/
 
-__attribute__((weak)) int idma_collective_1d(idma_controller_t *ctrl, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t mask, uint32_t coll_op){
-    (void) ctrl;
-    (void) axi_addr;
-    (void) obi_addr;
-    (void) len;
-    (void) mask;
-    (void) coll_op;
+__attribute__((weak)) int idma_collective_1d(idma_controller_t *ctrl,
+                                             uint32_t axi_addr,
+                                             uint32_t obi_addr,
+                                             uint32_t len,
+                                             uint32_t mask,
+                                             uint32_t coll_op)
+{
+    (void)ctrl;
+    (void)axi_addr;
+    (void)obi_addr;
+    (void)len;
+    (void)mask;
+    (void)coll_op;
     return 1;
 }
 
@@ -57,8 +58,8 @@ __attribute__((weak)) int idma_collective_1d(idma_controller_t *ctrl, uint32_t a
 /*----------------------------------------*/
 __attribute__((weak)) idma_controller_api_t idma_api = {
     .init = idma_init,
-/*     .wait = idma_wait, */
-    .memcpy_1d = idma_memcpy_1d,
-    .memcpy_2d = idma_memcpy_2d,
+    /*     .wait = idma_wait, */
+    .memcpy_1d     = idma_memcpy_1d,
+    .memcpy_2d     = idma_memcpy_2d,
     .collective_1d = idma_collective_1d,
 };
