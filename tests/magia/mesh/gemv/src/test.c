@@ -36,40 +36,16 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
-    idma_init(&idma_ctrl);
+    idma_init();
 
-    redmule_config_t redmule_cfg      = {.hartid = hartid};
-    redmule_controller_t redmule_ctrl = {
-        .base = NULL,
-        .cfg  = &redmule_cfg,
-        .api  = &redmule_api,
-    };
-    redmule_init(&redmule_ctrl);
+    redmule_init();
 
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_redmule_init(&eu_ctrl, 0);
-    eu_idma_init(&eu_ctrl, 0);
-    eu_fsync_init(&eu_ctrl, 0);
+    eu_init();
+    eu_redmule_init(0);
+    eu_idma_init(0);
+    eu_fsync_init(0);
 
     uint32_t y_id         = GET_Y_ID(hartid);
     uint32_t x_id         = GET_X_ID(hartid);
@@ -133,8 +109,8 @@ int main(void)
     uint32_t obi_addr_id = (l1_tile_base);
     uint32_t axi_addr_id = (uint32_t)id_mat;
 
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_id, obi_addr_id, len_id, std_id, reps_id);
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    idma_memcpy_2d(0, axi_addr_id, obi_addr_id, len_id, std_id, reps_id);
+    eu_idma_wait_a2o(WAIT_MODE);
 
     /**
      * 2a. Use iDMA to transfer bias blocks.
@@ -147,8 +123,8 @@ int main(void)
     uint32_t axi_addr_y =
         (x_id == 0) ? (uint32_t)y_in + (y_id * tile_w * 2) : (uint32_t)y_out + (y_id * tile_w * 2);
 
-    idma_memcpy_1d(&idma_ctrl, 0, axi_addr_y, obi_addr_y, len_y);
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    idma_memcpy_1d(0, axi_addr_y, obi_addr_y, len_y);
+    eu_idma_wait_a2o(WAIT_MODE);
 
     /**
      * 2b. Use iDMA to transfer weight matrix blocks.
@@ -159,8 +135,8 @@ int main(void)
     uint32_t obi_addr_w = obi_addr_y + (tile_w * 2);
     uint32_t axi_addr_w = (uint32_t)w_in + (x_id * tile_h * K_SIZE * 2) + (y_id * tile_w * 2);
 
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_w, obi_addr_w, len_w, std_w, reps_w);
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    idma_memcpy_2d(0, axi_addr_w, obi_addr_w, len_w, std_w, reps_w);
+    eu_idma_wait_a2o(WAIT_MODE);
 
     /**
      * 2c. Use iDMA to transfer input vector blocks.
@@ -169,18 +145,18 @@ int main(void)
     uint32_t obi_addr_x = obi_addr_w + (tile_w * tile_h * 2);
     uint32_t axi_addr_x = (uint32_t)x_in + (x_id * tile_h * 2);
 
-    idma_memcpy_1d(&idma_ctrl, 0, axi_addr_x, obi_addr_x, len_x);
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    idma_memcpy_1d(0, axi_addr_x, obi_addr_x, len_x);
+    eu_idma_wait_a2o(WAIT_MODE);
 
     /**
      * 3. Compute partial GeMV.
      */
-    redmule_gemm(&redmule_ctrl, obi_addr_x, obi_addr_w, obi_addr_y, tile_m, tile_h, tile_w);
-    eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+    redmule_gemm(obi_addr_x, obi_addr_w, obi_addr_y, tile_m, tile_h, tile_w);
+    eu_redmule_wait(WAIT_MODE);
 
     // Wait for all tiles to be awake and ready to start the kernel
-    fsync_sync_global(&fsync_ctrl);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_global();
+    eu_fsync_wait(WAIT_MODE);
 
     /**
      * 4. Reduce partial GeMV.
@@ -190,12 +166,12 @@ int main(void)
          * Store the computed gemv in memory, in case we are in a single MAGIA tile.
          */
         axi_addr_y = (uint32_t)y_out;
-        idma_memcpy_1d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y);
-        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        idma_memcpy_1d(1, axi_addr_y, obi_addr_y, len_y);
+        eu_idma_wait_o2a(WAIT_MODE);
     }
     axi_addr_y = (uint32_t)y_out + (y_id * tile_w * 2);
-    idma_memcpy_1d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y);
-    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+    idma_memcpy_1d(1, axi_addr_y, obi_addr_y, len_y);
+    eu_idma_wait_o2a(WAIT_MODE);
     if (MESH_2_POWER != 0) {
         uint32_t log_tree_mask = 1;
         uint32_t log_tree_bit  = 1;
@@ -203,8 +179,8 @@ int main(void)
 #if defined(BASELINE_K2)
             if (i == 0) {                        // First level of the tree
                 if (x_id % reduce_degree == 0) { // Tile is this phase's group leader.
-                    fsync_sync_row(&fsync_ctrl);
-                    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+                    fsync_sync_row();
+                    eu_fsync_wait(WAIT_MODE);
 
                     /**
                      * 4b. Sum partial GeMV on the phases group leader.
@@ -212,14 +188,14 @@ int main(void)
                     for (int j = 0; j < (reduce_degree - 1); j++) {
                         if ((x_id + 1 + j) <= (MESH_X_TILES - 1)) {
                             uint32_t partial_gemv_addr = obi_addr_x + (j * len_y);
-                            redmule_gemm(&redmule_ctrl,
+                            redmule_gemm(,
                                          partial_gemv_addr,
                                          obi_addr_id,
                                          obi_addr_y,
                                          tile_m,
                                          tile_w,
                                          tile_w);
-                            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                            eu_redmule_wait(WAIT_MODE);
                         }
                     }
                 } else { // The non-leader tiles write on the L1 of their group leader.
@@ -233,16 +209,16 @@ int main(void)
                                                  (tile_w * 2) +
                                                  (((x_id % reduce_degree) - 1) * len_y);
 
-                    idma_memcpy_1d(&idma_ctrl, 1, partial_gemv_addr, obi_addr_y, len_y);
-                    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                    idma_memcpy_1d(1, partial_gemv_addr, obi_addr_y, len_y);
+                    eu_idma_wait_o2a(WAIT_MODE);
 
-                    fsync_sync_row(&fsync_ctrl);
-                    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+                    fsync_sync_row();
+                    eu_fsync_wait(WAIT_MODE);
                 }
             } else {             // Second level of the tree
                 if (x_id == 0) { // Leftmost tile
-                    fsync_sync_row(&fsync_ctrl);
-                    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+                    fsync_sync_row();
+                    eu_fsync_wait(WAIT_MODE);
 
                     /**
                      * 4b. Sum partial GeMV on leftmost tile.
@@ -250,14 +226,14 @@ int main(void)
                     for (int j = 0; j < (reduce_degree - 1); j++) {
                         if ((x_id + 1 + j) <= (MESH_X_TILES - 1)) {
                             uint32_t partial_gemv_addr = obi_addr_x + (j * len_y);
-                            redmule_gemm(&redmule_ctrl,
+                            redmule_gemm(,
                                          partial_gemv_addr,
                                          obi_addr_id,
                                          obi_addr_y,
                                          tile_m,
                                          tile_w,
                                          tile_w);
-                            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                            eu_redmule_wait(WAIT_MODE);
                         }
                     }
                 } else if (x_id % reduce_degree ==
@@ -270,14 +246,14 @@ int main(void)
                                                  (tile_w * 2) +
                                                  (((x_id / reduce_degree) - 1) * len_y);
 
-                    idma_memcpy_1d(&idma_ctrl, 1, partial_gemv_addr, obi_addr_y, len_y);
-                    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                    idma_memcpy_1d(1, partial_gemv_addr, obi_addr_y, len_y);
+                    eu_idma_wait_o2a(WAIT_MODE);
 
-                    fsync_sync_row(&fsync_ctrl);
-                    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+                    fsync_sync_row();
+                    eu_fsync_wait(WAIT_MODE);
                 } else {
-                    fsync_sync_row(&fsync_ctrl);
-                    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+                    fsync_sync_row();
+                    eu_fsync_wait(WAIT_MODE);
                 }
             }
 #elif defined(K_LOGN)
@@ -287,15 +263,14 @@ int main(void)
                  */
                 uint32_t partial_gemv_addr =
                     get_l1_base(GET_ID(y_id, x_id ^ log_tree_bit)) + (tile_w * tile_h * 2);
-                idma_memcpy_1d(&idma_ctrl, 0, partial_gemv_addr, obi_addr_x, len_y);
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                idma_memcpy_1d(0, partial_gemv_addr, obi_addr_x, len_y);
+                eu_idma_wait_a2o(WAIT_MODE);
 
                 /**
                  * 4b. Sum partial GeMV.
                  */
-                redmule_gemm(
-                    &redmule_ctrl, obi_addr_x, obi_addr_id, obi_addr_y, tile_m, tile_w, tile_w);
-                eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+                redmule_gemm(obi_addr_x, obi_addr_id, obi_addr_y, tile_m, tile_w, tile_w);
+                eu_redmule_wait(WAIT_MODE);
             }
             log_tree_mask = (log_tree_mask << 1) | 1;
             log_tree_bit <<= 1;
@@ -306,17 +281,17 @@ int main(void)
                      * 5. Store result in memory.
                      */
                     axi_addr_y = (uint32_t)y_out + (y_id * tile_w * 2);
-                    idma_memcpy_1d(&idma_ctrl, 1, axi_addr_y, obi_addr_y, len_y);
-                    eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                    idma_memcpy_1d(1, axi_addr_y, obi_addr_y, len_y);
+                    eu_idma_wait_o2a(WAIT_MODE);
                 }
             }
-            fsync_sync_row(&fsync_ctrl);
-            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+            fsync_sync_row();
+            eu_fsync_wait(WAIT_MODE);
         }
 
         // printf("I'm done dog\n");
-        fsync_sync_global(&fsync_ctrl);
-        eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+        fsync_sync_global();
+        eu_fsync_wait(WAIT_MODE);
     }
 
     /**

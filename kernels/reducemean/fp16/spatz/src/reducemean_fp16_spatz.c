@@ -59,8 +59,6 @@ static int init_input_params(void *params, const float16 *X)
 {
     volatile reducemean_fp16_spatz_params_t *rm_params =
         (volatile reducemean_fp16_spatz_params_t *)params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t src_base;
     uint32_t in_elems;
 
@@ -70,30 +68,26 @@ static int init_input_params(void *params, const float16 *X)
     src_base = rm_params->outer_start * rm_params->reduce_dim * rm_params->inner_dim;
     in_elems = rm_params->outer_len * rm_params->reduce_dim * rm_params->inner_dim;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's outer slice [outer_start, outer_start+outer_len) is contiguous in L2. The
        Spatz task fully writes shard_Y (one mean per output), so it is not zeroed here. */
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
-                   (uint32_t)(X + src_base),
-                   (uint32_t)rm_params->shard_X,
-                   in_elems * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(
+        0, (uint32_t)(X + src_base), (uint32_t)rm_params->shard_X, in_elems * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
 
     return 0;
 }
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
     spatz_run_task_with_params(REDUCEMEAN_FP16_SPATZ_TASK, params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0)
         goto exit;
 
@@ -107,8 +101,6 @@ static int store_result(void *params, float16 *Y)
 {
     volatile reducemean_fp16_spatz_params_t *rm_params =
         (volatile reducemean_fp16_spatz_params_t *)params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t dst_base;
     uint32_t out_elems;
 
@@ -118,16 +110,13 @@ static int store_result(void *params, float16 *Y)
     dst_base  = rm_params->outer_start * rm_params->inner_dim;
     out_elems = rm_params->outer_len * rm_params->inner_dim;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's output outer slice is contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
-                   (uint32_t)(Y + dst_base),
-                   (uint32_t)rm_params->shard_Y,
-                   out_elems * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    idma_memcpy_1d(
+        1, (uint32_t)(Y + dst_base), (uint32_t)rm_params->shard_Y, out_elems * sizeof(float16));
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

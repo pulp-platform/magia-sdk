@@ -48,45 +48,24 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
+    idma_init();
 
-    idma_init(&idma_ctrl);
-
-    /* Init FractalSync */
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
     uint32_t y_id         = GET_Y_ID(hartid);
     uint32_t x_id         = GET_X_ID(hartid);
     uint32_t l1_tile_base = get_l1_base(hartid);
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-
-    eu_init(&eu_ctrl);
+    eu_init();
     eu_clear_events(0xFFFFFFFF);
-    eu_idma_init(&eu_ctrl, 0);
-    eu_fsync_init(&eu_ctrl, 0);
+    eu_idma_init(0);
+    eu_fsync_init(0);
 #endif
 
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WFE);
+    eu_fsync_wait(WFE);
 #endif
 
     uint32_t dst_addr;
@@ -98,30 +77,30 @@ int main(void)
     len      = (uint32_t)(M_SIZE * N_SIZE * 2); // 2 Bytes per element
 
     printf("iDMA moving data from L2 to L1...\n");
-    idma_memcpy_1d(&idma_ctrl, 0, src_addr, dst_addr, len);
+    idma_memcpy_1d(0, src_addr, dst_addr, len);
 #if STALLING == 0
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    eu_idma_wait_a2o(WFE);
 #endif
 
     dst_addr = (uint32_t)w_out;
     src_addr = (uint32_t)X_BASE;
     len      = (uint32_t)(M_SIZE * N_SIZE * 2); // 2 Bytes per element
     printf("iDMA moving data from L1 to L2...\n");
-    idma_memcpy_1d(&idma_ctrl, 1, dst_addr, src_addr, len);
+    idma_memcpy_1d(1, dst_addr, src_addr, len);
 
     dst_addr = (uint32_t)Y_BASE;
     src_addr = (uint32_t)x_inp;
     len      = (uint32_t)(M_SIZE * N_SIZE * 2); // 2 Bytes per element
     // Start both transfers concurrently
     printf("iDMA moving concurrently data from L1 to L2 and from L2 to L1...\n");
-    idma_memcpy_1d(&idma_ctrl, 0, src_addr, dst_addr, len);
+    idma_memcpy_1d(0, src_addr, dst_addr, len);
 
 // Use WFE to wait for both transfers completion
 #if STALLING == 0
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    eu_idma_wait_a2o(WFE);
 #endif
 #if STALLING == 0
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 #endif
 
     printf("Verifying results...\n");

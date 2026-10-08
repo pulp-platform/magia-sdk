@@ -108,8 +108,6 @@ static int init_input_params(void *params,
                              const float16 epsilon)
 {
     volatile batchnorm_fp16_spatz_params_t *batchnorm_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t channels;
     uint32_t c_start;
     uint32_t c_len;
@@ -126,58 +124,46 @@ static int init_input_params(void *params,
     if (c_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* X: this tile's [c_start, c_end) planes are contiguous in L2 (NCHW). The Spatz task
        writes every output element, so shard_Y is not zeroed here. */
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
+    idma_memcpy_1d(0,
                    (uint32_t)(X + c_start * hw),
                    (uint32_t)batchnorm_params->shard_X,
                    c_len * hw * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    eu_idma_wait_a2o(WFE);
 
     /* Per-channel params (full C, contiguous). Every tile needs them all (channel index
        wraps mod C). */
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
-                   (uint32_t)input_mean,
-                   (uint32_t)batchnorm_params->mean,
-                   channels * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
-
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
-                   (uint32_t)input_var,
-                   (uint32_t)batchnorm_params->var,
-                   channels * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
-
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
-                   (uint32_t)scale,
-                   (uint32_t)batchnorm_params->gamma,
-                   channels * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(
+        0, (uint32_t)input_mean, (uint32_t)batchnorm_params->mean, channels * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
 
     idma_memcpy_1d(
-        &idma_ctrl, 0, (uint32_t)B, (uint32_t)batchnorm_params->beta, channels * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+        0, (uint32_t)input_var, (uint32_t)batchnorm_params->var, channels * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
+
+    idma_memcpy_1d(
+        0, (uint32_t)scale, (uint32_t)batchnorm_params->gamma, channels * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
+
+    idma_memcpy_1d(0, (uint32_t)B, (uint32_t)batchnorm_params->beta, channels * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
 
     return 0;
 }
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
 
     spatz_run_task_with_params(BATCHNORM_FP16_SPATZ_TASK, params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -195,8 +181,6 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile batchnorm_fp16_spatz_params_t *batchnorm_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t c_start;
     uint32_t c_len;
     uint32_t hw;
@@ -209,16 +193,15 @@ static int store_result(void *params, float16 *Y)
     if (c_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's output planes [c_start, c_end) are contiguous in L2 (NCHW). */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
+    idma_memcpy_1d(1,
                    (uint32_t)(Y + c_start * hw),
                    (uint32_t)batchnorm_params->shard_Y,
                    c_len * hw * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

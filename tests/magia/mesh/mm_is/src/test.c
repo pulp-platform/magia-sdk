@@ -27,42 +27,15 @@ int main(void)
      */
     uint32_t hartid = get_hartid();
 
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
-
-    redmule_config_t redmule_cfg      = {.hartid = hartid};
-    redmule_controller_t redmule_ctrl = {
-        .base = NULL,
-        .cfg  = &redmule_cfg,
-        .api  = &redmule_api,
-    };
-
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-
-    fsync_init(&fsync_ctrl);
-    idma_init(&idma_ctrl);
-    redmule_init(&redmule_ctrl);
+    fsync_init();
+    idma_init();
+    redmule_init();
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_fsync_init(&eu_ctrl, 0);
-    eu_redmule_init(&eu_ctrl, 0);
-    eu_idma_init(&eu_ctrl, 0);
+    eu_init();
+    eu_fsync_init(0);
+    eu_redmule_init(0);
+    eu_idma_init(0);
 #endif
 
     uint32_t y_id         = GET_Y_ID(hartid);
@@ -145,9 +118,9 @@ int main(void)
 
     // sentinel_start();
 
-    idma_memcpy_2d(&idma_ctrl, 0, axi_addr_x, obi_addr_x, len_x, std_x, reps_x);
+    idma_memcpy_2d(0, axi_addr_x, obi_addr_x, len_x, std_x, reps_x);
 #if STALLING == 0
-    eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+    eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
     /**
@@ -166,10 +139,9 @@ int main(void)
         /**
          * 3a. IDMA to load the weight data-tile for current timeslot
          */
-        idma_memcpy_2d(
-            &idma_ctrl, 0, (axi_addr_w + (t_size * i * 2)), obi_addr_w, len_w, std_w, reps_w);
+        idma_memcpy_2d(0, (axi_addr_w + (t_size * i * 2)), obi_addr_w, len_w, std_w, reps_w);
 #if STALLING == 0
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
         /**
@@ -180,52 +152,40 @@ int main(void)
          */
         if (x_id == 0) {
             if (i % 2) {
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
-                               axi_addr_y + (i * t_size * 2),
-                               obi_addr_y_1,
-                               len_y,
-                               std_y,
-                               reps_y);
+                idma_memcpy_2d(
+                    0, axi_addr_y + (i * t_size * 2), obi_addr_y_1, len_y, std_y, reps_y);
 #if STALLING == 0
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                eu_idma_wait_a2o(WAIT_MODE);
 #endif
             } else {
-                idma_memcpy_2d(&idma_ctrl,
-                               0,
-                               axi_addr_y + (i * t_size * 2),
-                               obi_addr_y_0,
-                               len_y,
-                               std_y,
-                               reps_y);
+                idma_memcpy_2d(
+                    0, axi_addr_y + (i * t_size * 2), obi_addr_y_0, len_y, std_y, reps_y);
 #if STALLING == 0
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                eu_idma_wait_a2o(WAIT_MODE);
 #endif
             }
             // printf("Loaded data from L2: %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y),
             // *(volatile uint16_t*)(obi_addr_y + 2), *(volatile uint16_t*)(obi_addr_y + 4),
             // *(volatile uint16_t*)(obi_addr_y + 6));
         } else {
-            fsync_sync_left(&fsync_ctrl);
+            fsync_sync_left();
 #if STALLING == 0
-            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+            eu_fsync_wait(WAIT_MODE);
 #endif
 
             if (i % 2) {
                 uint32_t src_addr = get_l1_base(hartid - 1) + (tile_h_max * tile_w_max * 2) +
                                     (tile_w_max * t_size * 2) + (tile_h_max * t_size * 2);
-                idma_memcpy_2d(
-                    &idma_ctrl, 0, src_addr, obi_addr_y_1, tile_h * 2, tile_h * 2, t_size);
+                idma_memcpy_2d(0, src_addr, obi_addr_y_1, tile_h * 2, tile_h * 2, t_size);
 #if STALLING == 0
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                eu_idma_wait_a2o(WAIT_MODE);
 #endif
             } else {
                 uint32_t src_addr = get_l1_base(hartid - 1) + (tile_h_max * tile_w_max * 2) +
                                     (tile_w_max * t_size * 2);
-                idma_memcpy_2d(
-                    &idma_ctrl, 0, src_addr, obi_addr_y_0, tile_h * 2, tile_h * 2, t_size);
+                idma_memcpy_2d(0, src_addr, obi_addr_y_0, tile_h * 2, tile_h * 2, t_size);
 #if STALLING == 0
-                eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+                eu_idma_wait_a2o(WAIT_MODE);
 #endif
             }
             // printf("Received this data: %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y),
@@ -238,26 +198,24 @@ int main(void)
          * https://www.youtube.com/watch?v=RG-bRbBuaBI&list=PLTLXyHxNV4azQtL26W-7l6fTrOa3rJgLo&index=35
          */
         if (i % 2) {
-            redmule_gemm(&redmule_ctrl,
-                         obi_addr_x,
+            redmule_gemm(obi_addr_x,
                          obi_addr_w,
                          obi_addr_y_1,
                          (uint16_t)tile_h,
                          (uint16_t)tile_w,
                          (uint16_t)t_size);
 #if STALLING == 0
-            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            eu_redmule_wait(WAIT_MODE);
 #endif
         } else {
-            redmule_gemm(&redmule_ctrl,
-                         obi_addr_x,
+            redmule_gemm(obi_addr_x,
                          obi_addr_w,
                          obi_addr_y_0,
                          (uint16_t)tile_h,
                          (uint16_t)tile_w,
                          (uint16_t)t_size);
 #if STALLING == 0
-            eu_redmule_wait(&eu_ctrl, WAIT_MODE);
+            eu_redmule_wait(WAIT_MODE);
 #endif
         }
 
@@ -267,35 +225,25 @@ int main(void)
          */
         if (x_id == (MESH_X_TILES - 1)) {
             if (i % 2) {
-                idma_memcpy_2d(&idma_ctrl,
-                               1,
-                               axi_addr_y + (i * t_size * 2),
-                               obi_addr_y_1,
-                               len_y,
-                               std_y,
-                               reps_y);
+                idma_memcpy_2d(
+                    1, axi_addr_y + (i * t_size * 2), obi_addr_y_1, len_y, std_y, reps_y);
 #if STALLING == 0
-                eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                eu_idma_wait_o2a(WAIT_MODE);
 #endif
             } else {
-                idma_memcpy_2d(&idma_ctrl,
-                               1,
-                               axi_addr_y + (i * t_size * 2),
-                               obi_addr_y_0,
-                               len_y,
-                               std_y,
-                               reps_y);
+                idma_memcpy_2d(
+                    1, axi_addr_y + (i * t_size * 2), obi_addr_y_0, len_y, std_y, reps_y);
 #if STALLING == 0
-                eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+                eu_idma_wait_o2a(WAIT_MODE);
 #endif
             }
         } else {
             // printf("Sending this data: %x, %x, %x, %x", *(volatile uint16_t*)(obi_addr_y),
             // *(volatile uint16_t*)(obi_addr_y + 2), *(volatile uint16_t*)(obi_addr_y + 4),
             // *(volatile uint16_t*)(obi_addr_y + 6));
-            fsync_sync_right(&fsync_ctrl);
+            fsync_sync_right();
 #if STALLING == 0
-            eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+            eu_fsync_wait(WAIT_MODE);
 #endif
         }
     }
@@ -307,9 +255,9 @@ int main(void)
      * 5. Check results
      */
     uint32_t errors = 0;
-    fsync_sync_row(&fsync_ctrl);
+    fsync_sync_row();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
     if (x_id == MESH_X_TILES - 1) {
         uint16_t computed, expected, diff = 0;

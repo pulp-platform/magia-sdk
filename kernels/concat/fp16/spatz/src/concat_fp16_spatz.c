@@ -80,8 +80,6 @@ static int alloc_l1(void **params, const uint32_t *lens, uint32_t num_inputs, ui
 static int init_input_params(void *params, const float16 **inputs)
 {
     volatile concat_fp16_spatz_params_t *concat_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uintptr_t *shard_input;
     uint32_t *len_input;
     uint32_t iter_start;
@@ -100,8 +98,8 @@ static int init_input_params(void *params, const float16 **inputs)
     if (iter_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* Each input's iterations are contiguous in L2, so this tile's [iter_start, iter_end)
        slice is a single contiguous block per input. The Spatz task fully writes the output
@@ -109,12 +107,11 @@ static int init_input_params(void *params, const float16 **inputs)
     for (uint32_t i = 0; i < num_inputs; i++) {
         len_in = len_input[i];
         if (len_in) {
-            idma_memcpy_1d(&idma_ctrl,
-                           0,
+            idma_memcpy_1d(0,
                            (uint32_t)(inputs[i] + iter_start * len_in),
                            (uint32_t)shard_input[i],
                            iter_len * len_in * sizeof(float16));
-            eu_idma_wait_a2o(&eu_ctrl, WFE);
+            eu_idma_wait_a2o(WFE);
         }
     }
 
@@ -123,14 +120,13 @@ static int init_input_params(void *params, const float16 **inputs)
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
+    eu_ctrl_init();
 
     spatz_run_task_with_params(CONCAT_FP16_SPATZ_TASK, params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -148,8 +144,6 @@ exit:
 static int store_result(void *params, float16 *concat_result, const uint32_t iterations)
 {
     volatile concat_fp16_spatz_params_t *concat_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t *len_input;
     uint32_t shard_output_base;
     uint32_t num_inputs;
@@ -171,16 +165,15 @@ static int store_result(void *params, float16 *concat_result, const uint32_t ite
     for (uint32_t i = 0; i < num_inputs; i++)
         out_len += len_input[i];
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
+    idma_ctrl_init();
+    eu_ctrl_init();
 
     /* This tile's output rows [iter_start, iter_start+iter_len) are contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
+    idma_memcpy_1d(1,
                    (uint32_t)(concat_result + start * out_len),
                    (uint32_t)shard_output_base,
                    len * out_len * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }
