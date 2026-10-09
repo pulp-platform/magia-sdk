@@ -68,3 +68,6 @@ power_report.csv
 trace_file.txt
 transcript
 gvsoc_config.json
+
+TESTLOG.txt
+trace.perfetto-trace
