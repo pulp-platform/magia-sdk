@@ -405,4 +405,10 @@ inline void idma_mm_set_collective_sel(uint32_t dir, uint32_t collective_op)
     mmio32(IDMA_COLLECTIVE_SEL_ADDR(dir)) = collective_op;
 }
 
+inline void idma_mm_collective_clean(uint32_t dir)
+{
+    idma_mm_set_collective_sel(dir, 0);
+    idma_mm_set_multicast_mask(dir, 0);
+}
+
 #endif /*IDMA_ISA_UTILS_H*/

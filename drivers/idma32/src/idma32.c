@@ -62,10 +62,6 @@ int idma32_memcpy_1d(
     idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
     if (dir) {
         idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
-#ifdef IDMA_COLLECTIVE_SEL_ADDR
-        idma_mm_set_collective_sel(dir, 0);
-        idma_mm_set_multicast_mask(dir, 0);
-#endif
     } else {
         idma_mm_set_addr_len(dir, obi_addr, axi_addr, len);
     }
@@ -117,10 +113,6 @@ int idma32_memcpy_2d(idma_controller_t *ctrl,
     if (dir) {
         idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
         idma_mm_set_std2_rep2(dir, std, len, reps);
-#ifdef IDMA_COLLECTIVE_SEL_ADDR
-        idma_mm_set_collective_sel(dir, 0);
-        idma_mm_set_multicast_mask(dir, 0);
-#endif
     } else {
         idma_mm_set_addr_len(dir, obi_addr, axi_addr, len);
         idma_mm_set_std2_rep2(dir, len, std, reps);
