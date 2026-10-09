@@ -44,6 +44,10 @@
 #define SPATZ_CTRL_END              (0x0000173F)
 #define PULP_CTRL_BASE              (0x00001740)
 #define PULP_CTRL_END               (0x000017FF)
+#define COLLECTIVE_CTRL_BASE        (0x00001800)
+#define COLLECTIVE_CTRL_END         (0x000018FF)
+
+#define COLLECTIVE_ADDR_OFFSET      (0xB0000000)
 
 // PULP hart ID helpers
 #define GET_PULP_GLOBAL_ID(mhartid) ((mhartid) - PULP_HARTID_BASE)
@@ -132,5 +136,11 @@
 
 // Hardware mutex registers (0x04 * mutex_id offset)
 #define EU_CORE_HW_MUTEX                  (EU_BASE + 0x0C0) // R/W: HW mutex management
+
+//=============================================================================
+// Collective Register Map - Base addresses and offsets
+//=============================================================================
+#define COLLECTIVE_MASK_OFFSET            (COLLECTIVE_CTRL_BASE + 0x00)
+#define COLLECTIVE_OP_OFFSET              (COLLECTIVE_CTRL_BASE + 0x04)
 
 #endif // _TILE_ADDR_MAP_INCLUDE_GUARD_

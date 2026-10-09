@@ -89,7 +89,7 @@ clone_magia:
   stage: clone
   script:
     - source scripts/deps.env
-    - git clone https://github.com/pulp-platform/MAGIA.git
+    - git clone https://github.com/FondazioneChipsIT/MAGIA.git
     - cd MAGIA && git fetch origin "$MAGIA_COMMIT" && git checkout "$MAGIA_COMMIT"
   artifacts:
     paths: [ "MAGIA" ]
@@ -384,7 +384,7 @@ magia_tiles_4_rtl_sim_spatz_CV32E40P:
     control_core: CV32E40P
   parallel:
     matrix:
-      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv, test_alloc, test_mm_os_mglib, onnx_add, onnx_ceil, onnx_clip, onnx_floor, onnx_relu, onnx_sub]
+      - TESTNAME: [test_helloworld, test_fsync_levels, test_fsync_rc, test_fsync_diag, test_mm_is, test_mm_ws, test_mm_os, test_idma_2d, test_idma_1d, test_cemm_global, test_mm_is_2, test_mm_os_2, test_mm_ws_2, test_fsync_lr, test_gemv, test_alloc, test_mm_os_mglib, onnx_add, onnx_ceil, onnx_clip, onnx_floor, onnx_relu, onnx_sub, test_narrow_mcast, test_narrow_sync, test_idma_collective]
   dependencies:
     - clone_magia
     - magia_tiles_4_CV32E40P

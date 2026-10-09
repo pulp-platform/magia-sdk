@@ -123,6 +123,33 @@ int idma32_memcpy_2d(idma_controller_t *ctrl,
     return 0;
 }
 
+/**
+ * Start 1-dimensional collective transaction.
+ *
+ * @param axi_addr AXI destination address of first element.
+ * @param obi_addr OBI/L1 source address of first element.
+ * @param len Byte length of memory block to transfer.
+ * @param mask Multicast mask selecting the destination tiles.
+ * @param coll_op Collective operation (0 = unicast, 1 = multicast).
+ */
+int idma32_collective_1d(idma_controller_t *ctrl,
+                         uint32_t axi_addr,
+                         uint32_t obi_addr,
+                         uint32_t len,
+                         uint32_t mask,
+                         uint32_t coll_op)
+{
+    const uint32_t dir = 1; // OBI to AXI (L1 to L2)
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
+    idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
+    idma_mm_set_std2_rep2(dir, 0, 0, 1);
+    idma_mm_set_std3_rep3(dir, 0, 0, 1);
+    idma_mm_set_multicast_mask(dir, mask);
+    idma_mm_set_collective_sel(dir, coll_op);
+    idma_mm_start(dir);
+    return 0;
+}
+
 extern int idma_init(idma_controller_t *ctrl)
     __attribute__((alias("idma32_init"), used, visibility("default")));
 extern int idma_memcpy_1d(
@@ -136,11 +163,19 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl,
                           uint32_t std,
                           uint32_t reps)
     __attribute__((alias("idma32_memcpy_2d"), used, visibility("default")));
+extern int idma_collective_1d(idma_controller_t *ctrl,
+                              uint32_t axi_addr,
+                              uint32_t obi_addr,
+                              uint32_t len,
+                              uint32_t mask,
+                              uint32_t coll_op)
+    __attribute__((alias("idma32_collective_1d"), used, visibility("default")));
 
 /* Export the IDMA-specific controller API */
 idma_controller_api_t idma_api = {
     .init = idma32_init,
     /*     .wait = idma32_wait, */
-    .memcpy_1d = idma32_memcpy_1d,
-    .memcpy_2d = idma32_memcpy_2d,
+    .memcpy_1d     = idma32_memcpy_1d,
+    .memcpy_2d     = idma32_memcpy_2d,
+    .collective_1d = idma32_collective_1d,
 };

@@ -72,6 +72,23 @@ extern int idma_memcpy_2d(idma_controller_t *ctrl,
                           uint32_t reps);
 
 /**
+ * Start collective idma transaction from local L1 (OBI) to the NoC (AXI).
+ *
+ * @param ctrl     IDMA controller handle.
+ * @param axi_addr AXI destination address of first element.
+ * @param obi_addr OBI (L1) source address of first element.
+ * @param len      Byte length of memory block to transfer.
+ * @param mask     Multicast mask selecting the destination tiles.
+ * @param coll_op  Collective operation (0 = unicast, 1 = multicast).
+ */
+extern int idma_collective_1d(idma_controller_t *ctrl,
+                              uint32_t axi_addr,
+                              uint32_t obi_addr,
+                              uint32_t len,
+                              uint32_t mask,
+                              uint32_t coll_op);
+
+/**
  * WIP
  * IDMA API
  */
@@ -91,6 +108,13 @@ struct idma_controller_api {
                      uint32_t len,
                      uint32_t std,
                      uint32_t reps);
+
+    int (*collective_1d)(idma_controller_t *ctrl,
+                         uint32_t axi_addr,
+                         uint32_t obi_addr,
+                         uint32_t len,
+                         uint32_t mask,
+                         uint32_t coll_op);
 };
 
 /*
