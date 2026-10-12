@@ -35,6 +35,11 @@ static inline unsigned int perf_get_cycles()
     return value;
 }
 
+static inline void perf_init()
+{
+    asm volatile("csrw 0x320, zero" ::: "memory");
+}
+
 ///////////// TESTBENCH PROFILING UTILITIES //////////////
 /*
  * This utilities ONLY work on RTL emulation, since they trigger specific behaviour of the
