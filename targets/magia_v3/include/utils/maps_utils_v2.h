@@ -90,6 +90,9 @@ typedef struct fifo_tile_plan {
 
     maps_operation_runtime_t *operation_runtime;
     fifo_desc_t fifo;
+    /* Tile-local L1 offset the descriptor arrays are copied to at start-up
+     * (maps_fifo_plan_to_l1); 0 keeps them in L2. */
+    uint32_t descriptor_l1_offset;
 } fifo_tile_plan_t;
 
 typedef struct maps_fifo_pending_send {
@@ -627,6 +630,47 @@ static inline uint32_t maps_fifo_wait_recv(const fifo_tile_plan_t *plan,
                          recv->transition_id);
         return 0u;
     }
+}
+
+/* Copy one descriptor array to *next in L1 and return its new address. */
+static inline const void *maps_fifo_array_to_l1(const void *src, uint32_t bytes,
+                                                uint32_t *next,
+                                                idma_controller_t *idma_ctrl,
+                                                eu_controller_t *eu_ctrl)
+{
+    if (src == 0 || bytes == 0u)
+        return src;
+    const uint32_t dst = *next;
+    /* dir=0: AXI (L2) -> OBI (local L1). */
+    if (maps_idma_copy_1d_ticketed(idma_ctrl, 0u, (uint32_t)src, dst, bytes, eu_ctrl) != 0)
+        maps_trap();
+    *next = (dst + bytes + 15u) & ~15u;
+    return (const void *)dst;
+}
+
+/* The generated descriptors are `static const` data in L2, so every field the
+ * control core reads during a token is a load over the NoC.  Copy them into
+ * this tile's L1 once and repoint the plan.  The generator reserves the region
+ * after the planned slice data and checks it fits below the task scratch. */
+static inline void maps_fifo_plan_to_l1(fifo_tile_plan_t *plan,
+                                        idma_controller_t *idma_ctrl,
+                                        eu_controller_t *eu_ctrl)
+{
+    if (plan->descriptor_l1_offset == 0u)
+        return;
+    uint32_t next = get_l1_base(plan->hartid) + plan->descriptor_l1_offset;
+#define MAPS_FIFO_ARRAY_TO_L1(field, count)                                        \
+    plan->field = maps_fifo_array_to_l1(plan->field, (count) * sizeof(*plan->field), \
+                                        &next, idma_ctrl, eu_ctrl)
+    MAPS_FIFO_ARRAY_TO_L1(slices, plan->num_slices);
+    MAPS_FIFO_ARRAY_TO_L1(init_l2_reads, plan->num_init_l2_reads);
+    MAPS_FIFO_ARRAY_TO_L1(l2_reads, plan->num_l2_reads);
+    MAPS_FIFO_ARRAY_TO_L1(recvs, plan->num_recvs);
+    MAPS_FIFO_ARRAY_TO_L1(ops, plan->num_ops);
+    MAPS_FIFO_ARRAY_TO_L1(sends, plan->num_sends);
+    MAPS_FIFO_ARRAY_TO_L1(l2_writes, plan->num_l2_writes);
+    MAPS_FIFO_ARRAY_TO_L1(fifo.slot_data_sizes, plan->fifo.num_producers);
+#undef MAPS_FIFO_ARRAY_TO_L1
 }
 
 static inline void maps_fifo_init_tile(const fifo_tile_plan_t *plan,
