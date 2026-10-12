@@ -404,9 +404,10 @@ static inline uint32_t subslice_offset_bytes(const subslice_desc_t *sub)
 /*
  * Per-tile slice-address aliases.  The FIFO transport consumes eligible
  * receives in place: for the rest of the token, the destination slice resolves
- * to the FIFO payload instead of its planned L1 storage.  Every consumer
- * (operations, sends, L2 writes) goes through local_slice_slot_addr, so the
- * redirect is transparent to them.
+ * to the FIFO payload (or the shared payload slot its pieces were gathered
+ * into) instead of its planned L1 storage.  Every consumer (operations, sends,
+ * L2 writes) goes through local_slice_slot_addr, so the redirect is transparent
+ * to them.
  */
 #ifndef MAPS_FIFO_INPLACE_RECV
 #define MAPS_FIFO_INPLACE_RECV 1u
@@ -452,6 +453,22 @@ static inline void maps_slice_alias_clear(uint32_t hartid)
 {
     maps_slice_alias_table()->counts[hartid] = 0u;
 }
+
+/* Returns 1 and the aliased address if (slice_id, slot) is aliased. */
+static inline uint32_t maps_slice_alias_lookup(uint32_t hartid, uint32_t slice_id,
+                                               uint32_t slot, uint32_t *addr)
+{
+    const maps_slice_alias_table_t *aliases = maps_slice_alias_table();
+    uint32_t num_aliases = aliases->counts[hartid];
+    for (uint32_t i = 0; i < num_aliases; ++i) {
+        const maps_slice_alias_t *alias = &aliases->entries[hartid][i];
+        if (alias->slice_id == slice_id && alias->slot == slot) {
+            *addr = alias->addr;
+            return 1u;
+        }
+    }
+    return 0u;
+}
 #endif
 
 static inline uint32_t
@@ -464,14 +481,9 @@ local_slice_slot_addr(const tile_plan_t *plan, const slice_desc_t *slice, uint32
     }
 
 #if MAPS_FIFO_INPLACE_RECV
-    const maps_slice_alias_table_t *aliases = maps_slice_alias_table();
-    uint32_t num_aliases = aliases->counts[plan->hartid];
-    for (uint32_t i = 0; i < num_aliases; ++i) {
-        const maps_slice_alias_t *alias = &aliases->entries[plan->hartid][i];
-        if (alias->slice_id == slice->slice_id && alias->slot == slot) {
-            return alias->addr;
-        }
-    }
+    uint32_t alias_addr;
+    if (maps_slice_alias_lookup(plan->hartid, slice->slice_id, slot, &alias_addr))
+        return alias_addr;
 #endif
 
     if (slice->global_kind == GLOBAL_INITIALIZER) {

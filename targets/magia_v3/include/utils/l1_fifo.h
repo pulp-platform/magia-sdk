@@ -40,11 +40,25 @@
  * stored packed (row-major, contiguous) in the slot, making the FIFO usable for
  * arbitrary strided N-D tensor fragments, not just contiguous matrix rows.
  *
+ * Shared payload rings (fifo_init_shared): several producers may write the
+ * fragments of one larger message into a common payload ring, each at its own
+ * offset inside the shared slot. Every producer keeps its own sub-ring, whose
+ * slots then carry only the metadata; its tail counter still has a single
+ * writer. Shared slot k is complete once every member's tail has passed k, and
+ * the consumer frees it by releasing every member's head. Since members only
+ * write into slot `tail % num_slots` while `tail - head < num_slots`, and the
+ * consumer moves all member heads together, a shared slot is never reused
+ * while it is still being read. The first fragment to land in a slot is in
+ * effect its reservation; no atomics are needed.
+ *
  * Memory layout at start of the consumer tile's L1:
- *   +0x00:  fifo_header_t          (16 bytes)
- *   +0x10:  fifo_ring_state_t[P]   (per-producer head/tail, 8 bytes each)
+ *   +0x00:  fifo_header_t          (20 bytes)
+ *   +0x14:  fifo_ring_state_t[P]   (per-producer head/tail, 8 bytes each)
  *   +...:   slot array             (P * num_slots * slot_stride bytes)
  *           sub-ring p occupies slots [p*num_slots, (p+1)*num_slots)
+ * Variable-size layouts (fifo_init_variable / fifo_init_shared) insert a
+ * per-producer offset table (P + 1 words) before the slot array. Shared layouts
+ * append a fifo_payload_ring_t[P] redirect table and the shared payload rings.
  *
  * Each slot:
  *   +0x00: tag         (uint32_t) — caller-defined message tag
@@ -66,12 +80,19 @@ typedef struct {
     uint32_t num_slots;     /**< Slots per sub-ring (per-producer capacity). */
     uint32_t slot_stride;   /**< Bytes per slot (metadata + aligned payload). */
     uint32_t scan_cursor;   /**< Consumer round-robin cursor over producers. */
+    uint32_t payload_map_offset; /**< Header-relative fifo_payload_ring_t[P]; 0 = none. */
 } fifo_header_t;
 
 typedef struct {
     volatile uint32_t head; /**< Monotonic dequeue counter; consumer-owned. */
     volatile uint32_t tail; /**< Monotonic enqueue counter; producer-owned. */
 } fifo_ring_state_t;
+
+/** Where a producer's payloads live. offset == 0: inline in its own slots. */
+typedef struct {
+    uint32_t offset; /**< Header-relative base of the shared payload ring. */
+    uint32_t stride; /**< Bytes per shared payload slot. */
+} fifo_payload_ring_t;
 
 typedef struct {
     uint32_t tag;            /**< Caller-defined message tag. */
@@ -105,7 +126,21 @@ typedef struct {
  * tensor); it shares its element count with `src`. The destination slot is chosen
  * internally (the tail slot of sub-ring `producer_idx`) — there is no
  * caller-assigned slot index.
+ *
+ * `dst`/`dst_offset_bytes` place the fragment inside a shared payload slot
+ * (see fifo_init_shared) and are ignored for ordinary sub-rings, whose payload
+ * is always packed. Pushes into a shared sub-ring fail without them.
+ *
+ * `payload_mode` tells the push whether the sub-ring is shared when the caller
+ * already knows; FIFO_PAYLOAD_QUERY (the zero default) reads it from the
+ * consumer's header, which costs remote loads on every push.
  */
+enum {
+    FIFO_PAYLOAD_QUERY  = 0u, /**< Read the consumer's payload map. */
+    FIFO_PAYLOAD_INLINE = 1u, /**< Payload is packed into the sub-ring's own slot. */
+    FIFO_PAYLOAD_SHARED = 2u, /**< Payload goes into a shared payload ring. */
+};
+
 typedef struct {
     uint32_t target_hartid;        /**< Consumer tile whose FIFO is written. */
     uint32_t producer_idx;         /**< Which sub-ring to push into (this producer's). */
@@ -114,6 +149,9 @@ typedef struct {
     const tensor_sub_slice_t *desc;/**< Logical descriptor to publish. */
     uint32_t tag;                  /**< Caller-defined message tag. */
     uint32_t elem_bytes;           /**< Element size in bytes. */
+    const tensor_sub_slice_t *dst; /**< Fragment layout in a shared payload slot. */
+    uint32_t dst_offset_bytes;     /**< Fragment offset in a shared payload slot. */
+    uint32_t payload_mode;         /**< FIFO_PAYLOAD_*; 0 queries the consumer. */
 } fifo_push_req_t;
 
 /** State of one submitted FIFO push whose payload is not published yet. */
@@ -140,6 +178,7 @@ typedef enum {
 #define FIFO_RING_STATE_SIZE (sizeof(fifo_ring_state_t))
 #define FIFO_SLOT_META_SIZE  (sizeof(fifo_slot_t))
 #define FIFO_SLOT_OFFSET_SIZE (sizeof(uint32_t))
+#define FIFO_PAYLOAD_RING_SIZE (sizeof(fifo_payload_ring_t))
 
 /**
  * Get pointer to a tile's FIFO header in L1.
@@ -201,6 +240,56 @@ static inline void *fifo_slot_data(fifo_slot_t *slot)
 }
 
 /**
+ * Payload area backing ring counter `counter` of producer `producer_idx`: the
+ * slot's inline payload, or the shared payload slot the producer writes into.
+ */
+static inline uint8_t *
+fifo_payload_at(fifo_header_t *hdr, uint32_t producer_idx, uint32_t counter)
+{
+    if (hdr->payload_map_offset != 0u) {
+        const fifo_payload_ring_t *ring = (const fifo_payload_ring_t *)
+            ((uint8_t *)hdr + hdr->payload_map_offset) + producer_idx;
+        if (ring->offset != 0u)
+            return (uint8_t *)hdr + ring->offset +
+                   (counter % hdr->num_slots) * ring->stride;
+    }
+    return (uint8_t *)fifo_slot_data(fifo_slot_at(hdr, producer_idx, counter));
+}
+
+/** fifo_payload_at without the payload map lookup when the mode is known. */
+static inline uint8_t *
+fifo_payload_at_mode(fifo_header_t *hdr, uint32_t producer_idx, uint32_t counter,
+                     uint32_t payload_mode)
+{
+    if (payload_mode == FIFO_PAYLOAD_INLINE)
+        return (uint8_t *)fifo_slot_data(fifo_slot_at(hdr, producer_idx, counter));
+    return fifo_payload_at(hdr, producer_idx, counter);
+}
+
+/**
+ * Non-zero if producer `producer_idx` writes into a shared payload ring of
+ * `target_hartid`'s FIFO.
+ */
+static inline uint32_t fifo_producer_is_shared(uint32_t target_hartid, uint32_t producer_idx)
+{
+    fifo_header_t *hdr = fifo_get_header(target_hartid);
+    if (hdr->payload_map_offset == 0u)
+        return 0u;
+    const fifo_payload_ring_t *ring = (const fifo_payload_ring_t *)
+        ((uint8_t *)hdr + hdr->payload_map_offset) + producer_idx;
+    return ring->offset != 0u;
+}
+
+/** Resolve a push request's payload mode, querying the consumer if needed. */
+static inline uint32_t fifo_req_payload_mode(const fifo_push_req_t *req)
+{
+    if (req->payload_mode != FIFO_PAYLOAD_QUERY)
+        return req->payload_mode;
+    return fifo_producer_is_shared(req->target_hartid, req->producer_idx)
+        ? FIFO_PAYLOAD_SHARED : FIFO_PAYLOAD_INLINE;
+}
+
+/**
  * Initialize own tile's FIFO. Call once per tile at startup.
  *
  * num_producers:  number of per-producer sub-rings. Use the tile count and index
@@ -220,6 +309,7 @@ fifo_init(uint32_t hartid, uint32_t num_producers, uint32_t num_slots, uint32_t 
     hdr->num_slots     = num_slots;
     hdr->slot_stride   = FIFO_SLOT_META_SIZE + aligned_data_size;
     hdr->scan_cursor   = 0;
+    hdr->payload_map_offset = 0u;
 
     fifo_ring_state_t *rs = fifo_ring_states(hdr);
     for (uint32_t p = 0; p < num_producers; p++) {
@@ -239,6 +329,7 @@ static inline void fifo_init_variable(uint32_t hartid, uint32_t num_producers,
     hdr->num_slots = num_slots;
     hdr->slot_stride = 0u;
     hdr->scan_cursor = 0u;
+    hdr->payload_map_offset = 0u;
 
     fifo_ring_state_t *states = fifo_ring_states(hdr);
     for (uint32_t producer = 0u; producer < num_producers; ++producer) {
@@ -252,6 +343,73 @@ static inline void fifo_init_variable(uint32_t hartid, uint32_t num_producers,
         offsets[producer + 1u] = offsets[producer] +
             num_slots * (FIFO_SLOT_META_SIZE + aligned);
     }
+    asm volatile("fence w, w" ::: "memory");
+}
+
+/**
+ * Bytes taken by a fifo_init_shared layout (with num_shared == 0, by the
+ * matching fifo_init_variable layout).
+ */
+static inline uint32_t fifo_shared_layout_bytes(uint32_t num_producers,
+                                                uint32_t num_slots,
+                                                const uint32_t *slot_data_sizes,
+                                                uint32_t num_shared,
+                                                const uint32_t *shared_slot_bytes)
+{
+    uint32_t bytes = FIFO_HEADER_SIZE + num_producers * FIFO_RING_STATE_SIZE +
+                     (num_producers + 1u) * FIFO_SLOT_OFFSET_SIZE;
+    for (uint32_t producer = 0u; producer < num_producers; ++producer)
+        bytes += num_slots * (FIFO_SLOT_META_SIZE +
+                              ((slot_data_sizes[producer] + 3u) & ~3u));
+    if (num_shared != 0u) {
+        bytes += num_producers * FIFO_PAYLOAD_RING_SIZE;
+        for (uint32_t ring = 0u; ring < num_shared; ++ring)
+            bytes += num_slots * ((shared_slot_bytes[ring] + 3u) & ~3u);
+    }
+    return bytes;
+}
+
+/**
+ * Initialize own tile's FIFO with shared payload rings on top of the variable
+ * layout of fifo_init_variable.
+ *
+ * payload_rings[p]:     0 keeps producer p's payloads inline in its own slots;
+ *                       r > 0 makes p write into shared payload ring r - 1. Its
+ *                       own slots then only carry metadata, so give it a zero
+ *                       slot_data_sizes entry.
+ * shared_slot_bytes[r]: bytes per slot of shared payload ring r (num_slots
+ *                       slots each, 4-byte aligned).
+ */
+static inline void fifo_init_shared(uint32_t hartid, uint32_t num_producers,
+                                    uint32_t num_slots,
+                                    const uint32_t *slot_data_sizes,
+                                    const uint32_t *payload_rings,
+                                    uint32_t num_shared,
+                                    const uint32_t *shared_slot_bytes)
+{
+    fifo_init_variable(hartid, num_producers, num_slots, slot_data_sizes);
+    if (num_shared == 0u)
+        return;
+
+    fifo_header_t *hdr = fifo_get_header(hartid);
+    uint32_t *offsets = (uint32_t *)fifo_slots_base(hdr);
+    uint8_t *map_base = (uint8_t *)(offsets + num_producers + 1u) + offsets[num_producers];
+    fifo_payload_ring_t *map = (fifo_payload_ring_t *)map_base;
+
+    uint32_t ring_offsets[num_shared];
+    uint32_t next = (uint32_t)(map_base - (uint8_t *)hdr) +
+                    num_producers * FIFO_PAYLOAD_RING_SIZE;
+    for (uint32_t ring = 0u; ring < num_shared; ++ring) {
+        ring_offsets[ring] = next;
+        next += num_slots * ((shared_slot_bytes[ring] + 3u) & ~3u);
+    }
+    for (uint32_t producer = 0u; producer < num_producers; ++producer) {
+        uint32_t ring = payload_rings[producer];
+        map[producer].offset = ring == 0u ? 0u : ring_offsets[ring - 1u];
+        map[producer].stride = ring == 0u ? 0u :
+            ((shared_slot_bytes[ring - 1u] + 3u) & ~3u);
+    }
+    hdr->payload_map_offset = (uint32_t)(map_base - (uint8_t *)hdr);
     asm volatile("fence w, w" ::: "memory");
 }
 
@@ -358,7 +516,8 @@ fifo_packed_slice(const tensor_sub_slice_t *shape, uint32_t elem_bytes, tensor_s
  *
  * Single-producer-per-sub-ring: the tail slot is stable between reserve and commit.
  */
-static inline void *fifo_reserve(uint32_t target_hartid, uint32_t producer_idx)
+static inline void *fifo_reserve_mode(uint32_t target_hartid, uint32_t producer_idx,
+                                      uint32_t payload_mode)
 {
     fifo_header_t *hdr    = fifo_get_header(target_hartid);
     fifo_ring_state_t *rs = fifo_ring_state(hdr, producer_idx);
@@ -367,20 +526,33 @@ static inline void *fifo_reserve(uint32_t target_hartid, uint32_t producer_idx)
     while ((rs->tail - rs->head) >= hdr->num_slots)
         ;
 
-    return fifo_slot_data(fifo_slot_at(hdr, producer_idx, rs->tail));
+    return fifo_payload_at_mode(hdr, producer_idx, rs->tail, payload_mode);
+}
+
+static inline void *fifo_reserve(uint32_t target_hartid, uint32_t producer_idx)
+{
+    return fifo_reserve_mode(target_hartid, producer_idx, FIFO_PAYLOAD_QUERY);
 }
 
 /** Try to reserve the current tail slot without blocking. */
-static inline uint32_t fifo_try_reserve(uint32_t target_hartid,
-                                        uint32_t producer_idx,
-                                        void **payload)
+static inline uint32_t fifo_try_reserve_mode(uint32_t target_hartid,
+                                             uint32_t producer_idx,
+                                             uint32_t payload_mode,
+                                             void **payload)
 {
     fifo_header_t *hdr = fifo_get_header(target_hartid);
     fifo_ring_state_t *rs = fifo_ring_state(hdr, producer_idx);
     if ((rs->tail - rs->head) >= hdr->num_slots)
         return 0u;
-    *payload = fifo_slot_data(fifo_slot_at(hdr, producer_idx, rs->tail));
+    *payload = fifo_payload_at_mode(hdr, producer_idx, rs->tail, payload_mode);
     return 1u;
+}
+
+static inline uint32_t fifo_try_reserve(uint32_t target_hartid,
+                                        uint32_t producer_idx,
+                                        void **payload)
+{
+    return fifo_try_reserve_mode(target_hartid, producer_idx, FIFO_PAYLOAD_QUERY, payload);
 }
 
 /**
@@ -432,14 +604,25 @@ static inline int fifo_push(idma_controller_t *idma_ctrl,
     if (req->src->rank > IDMA_ND_MAX_RANK)
         return -1;
 
-    uint32_t dst = (uint32_t)fifo_reserve(req->target_hartid, req->producer_idx);
+    const uint32_t mode = fifo_req_payload_mode(req);
+    const uint32_t shared = mode == FIFO_PAYLOAD_SHARED;
+    if (shared && req->dst == 0)
+        return -1;
+
+    uint32_t dst = (uint32_t)fifo_reserve_mode(req->target_hartid, req->producer_idx, mode);
 
     tensor_sub_slice_t packed;
-    fifo_packed_slice(req->src, req->elem_bytes, &packed);
+    const tensor_sub_slice_t *layout = req->dst;
+    if (shared) {
+        dst += req->dst_offset_bytes;
+    } else {
+        fifo_packed_slice(req->src, req->elem_bytes, &packed);
+        layout = &packed;
+    }
 
     /* dir=1: OBI (local L1) -> AXI (remote tile L1 slot payload) */
     int rc = idma_memcpy_md_to_nd(
-        idma_ctrl, 1, dst, req->src_base_addr, req->src, &packed, req->elem_bytes, eu_ctrl);
+        idma_ctrl, 1, dst, req->src_base_addr, req->src, layout, req->elem_bytes, eu_ctrl);
     if (rc != 0)
         return rc;
 
@@ -469,16 +652,25 @@ static inline int fifo_push_async_start(idma_controller_t *idma_ctrl,
         req->src->num_elems != req->desc->num_elems)
         return -1;
 
+    const uint32_t mode = fifo_req_payload_mode(req);
+    const uint32_t shared = mode == FIFO_PAYLOAD_SHARED;
+    if (shared && (req->dst == 0 || req->dst->num_elems != req->src->num_elems))
+        return -1;
+
     void *payload = 0;
-    if (!fifo_try_reserve(req->target_hartid, req->producer_idx, &payload))
+    if (!fifo_try_reserve_mode(req->target_hartid, req->producer_idx, mode, &payload))
         return FIFO_ASYNC_FIFO_FULL;
     uint32_t destination = (uint32_t)payload;
 
     /* dir=1: OBI (local L1) -> AXI (remote tile L1 slot payload). */
     const uint8_t direction = 1u;
-    idma_ticket_t ticket = maps_idma_submit_to_packed(
-        idma_ctrl, direction, destination, req->src_base_addr,
-        req->src, req->elem_bytes);
+    idma_ticket_t ticket = shared
+        ? maps_idma_submit_md_to_nd(
+              idma_ctrl, direction, destination + req->dst_offset_bytes,
+              req->src_base_addr, req->src, req->dst, req->elem_bytes)
+        : maps_idma_submit_to_packed(
+              idma_ctrl, direction, destination, req->src_base_addr,
+              req->src, req->elem_bytes);
     if (ticket == MAPS_IDMA_UNSUPPORTED_TICKET)
         return FIFO_ASYNC_UNSUPPORTED;
     if (ticket == 0u)
@@ -531,7 +723,7 @@ static inline int fifo_push_async_finish(eu_controller_t *eu_ctrl,
  * CPU word-copy push for an already-packed source buffer (no DMA). Useful for
  * small control messages or tiles that do not drive the iDMA. `src_data` must
  * hold desc->num_elems * elem_bytes packed bytes. Blocks on backpressure if the
- * sub-ring is full.
+ * sub-ring is full. Not for shared sub-rings, whose fragments are not packed.
  */
 static inline void fifo_push_cpu(uint32_t target_hartid,
                                  uint32_t producer_idx,
@@ -593,7 +785,7 @@ static inline uint32_t fifo_peek(uint32_t hartid, fifo_msg_t *out)
         asm volatile("fence r, r" ::: "memory");
 
         fifo_slot_t *slot = fifo_slot_at(hdr, p, rs[p].head);
-        out->data_ptr     = (uint32_t)fifo_slot_data(slot);
+        out->data_ptr     = (uint32_t)fifo_payload_at(hdr, p, rs[p].head);
         out->src          = p;
         out->tag          = slot->tag;
         out->elem_bytes   = slot->elem_bytes;
