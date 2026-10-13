@@ -80,6 +80,92 @@ static inline uint32_t maps_idma_address(
     return address;
 }
 
+#ifdef MAPS_IDMA_VERIFY
+#include "addr_map/tile_addr_map.h"
+#include "utils/printf.h"
+/* Debug aid: make every MAPS descriptor synchronous and compare its
+ * destination with its source. Strides are the page-start strides of the HAL
+ * API (idma_submit_3d). Polls DONE_ID so no event-unit events are consumed. */
+static uint32_t maps_idma_verify_reports;
+static inline void maps_idma_verify_3d(uint8_t direction, idma_ticket_t ticket,
+    uint32_t axi_address, uint32_t obi_address, uint32_t row_bytes,
+    uint32_t axi_stride_2, uint32_t obi_stride_2, uint32_t repetitions_2,
+    uint32_t axi_stride_3, uint32_t obi_stride_3, uint32_t repetitions_3)
+{
+    if (ticket == 0u)
+        return;
+    {
+        uint32_t hartid;
+        __asm__ volatile("csrr %0, mhartid" : "=r"(hartid));
+        const uint32_t own = hartid * L1_TILE_OFFSET;
+        const uint32_t local = obi_address >= L1_BASE && obi_address < L1_BASE + L1_SIZE;
+        const uint32_t global = obi_address >= own + L1_BASE &&
+                                obi_address < own + L1_BASE + L1_SIZE;
+        if (!local && !global && maps_idma_verify_reports++ < 4u)
+            printf("MAPS_IDMA_VERIFY tile=%u dir=%u remote-obi obi=%08x axi=%08x row=%u\n",
+                   hartid, direction, obi_address, axi_address, row_bytes);
+    }
+    while (!idma_ticket_is_done(direction, ticket))
+        ;
+    const uint32_t source = direction == 0u ? axi_address : obi_address;
+    const uint32_t destination = direction == 0u ? obi_address : axi_address;
+    const uint32_t source_stride_2 = direction == 0u ? axi_stride_2 : obi_stride_2;
+    const uint32_t destination_stride_2 = direction == 0u ? obi_stride_2 : axi_stride_2;
+    const uint32_t source_stride_3 = direction == 0u ? axi_stride_3 : obi_stride_3;
+    const uint32_t destination_stride_3 = direction == 0u ? obi_stride_3 : axi_stride_3;
+    const uint32_t pages = repetitions_3 == 0u ? 1u : repetitions_3;
+    const uint32_t rows = repetitions_2 == 0u ? 1u : repetitions_2;
+    uint32_t bad = 0u, first_page = 0u, first_row = 0u, first_byte = 0u;
+    for (uint32_t page = 0u; page < pages; ++page)
+        for (uint32_t row = 0u; row < rows; ++row)
+            for (uint32_t byte = 0u; byte < row_bytes; ++byte) {
+                const uint8_t want = *(volatile uint8_t *)(source + page * source_stride_3 +
+                                                           row * source_stride_2 + byte);
+                const uint8_t got = *(volatile uint8_t *)(destination + page * destination_stride_3 +
+                                                          row * destination_stride_2 + byte);
+                if (want != got && bad++ == 0u) {
+                    first_page = page;
+                    first_row = row;
+                    first_byte = byte;
+                }
+            }
+    if (bad != 0u && maps_idma_verify_reports++ < 4u) {
+        uint32_t hartid;
+        __asm__ volatile("csrr %0, mhartid" : "=r"(hartid));
+        printf("MAPS_IDMA_VERIFY tile=%u dir=%u bad=%u axi=%08x obi=%08x row=%u "
+               "s2=%u/%u r2=%u s3=%u/%u r3=%u first=%u/%u/%u\n",
+               hartid, direction, bad, axi_address, obi_address, row_bytes,
+               axi_stride_2, obi_stride_2, repetitions_2, axi_stride_3, obi_stride_3,
+               repetitions_3, first_page, first_row, first_byte);
+    }
+}
+
+static inline idma_ticket_t maps_idma_verified_submit_3d(uint8_t direction,
+    uint32_t axi_address, uint32_t obi_address, uint32_t row_bytes,
+    uint32_t axi_stride_2, uint32_t obi_stride_2, uint32_t repetitions_2,
+    uint32_t axi_stride_3, uint32_t obi_stride_3, uint32_t repetitions_3)
+{
+    const idma_ticket_t ticket = idma_submit_3d(direction, axi_address, obi_address,
+        row_bytes, axi_stride_2, obi_stride_2, repetitions_2,
+        axi_stride_3, obi_stride_3, repetitions_3);
+    maps_idma_verify_3d(direction, ticket, axi_address, obi_address, row_bytes,
+        axi_stride_2, obi_stride_2, repetitions_2, axi_stride_3, obi_stride_3,
+        repetitions_3);
+    return ticket;
+}
+
+static inline idma_ticket_t maps_idma_verified_submit_1d(uint8_t direction,
+    uint32_t axi_address, uint32_t obi_address, uint32_t bytes)
+{
+    const idma_ticket_t ticket = idma_submit_1d(direction, axi_address, obi_address, bytes);
+    maps_idma_verify_3d(direction, ticket, axi_address, obi_address, bytes,
+        0u, 0u, 1u, 0u, 0u, 1u);
+    return ticket;
+}
+#define idma_submit_3d maps_idma_verified_submit_3d
+#define idma_submit_1d maps_idma_verified_submit_1d
+#endif
+
 static inline uint32_t maps_idma_gcd(uint32_t lhs, uint32_t rhs)
 {
     while (rhs != 0u) {

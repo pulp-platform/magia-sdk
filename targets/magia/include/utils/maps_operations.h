@@ -516,8 +516,10 @@ static inline int maps_execute_all_reduce(const tile_plan_t *plan,
         const uint32_t input = remote_tile_l1_base(participant->hartid) +
             participant->l1_data_base_offset + participant->input_l1_offset_bytes +
             slot * participant->input_slot_bytes;
-        if (maps_idma_copy_1d_ticketed(1u, gathered + index * bytes,
-                input, bytes) != 0)
+        /* Remote L1 -> local L1: the remote side must be on AXI, the OBI port
+         * only reaches this tile's TCDM. */
+        if (maps_idma_copy_1d_ticketed(0u, input, gathered + index * bytes,
+                bytes) != 0)
             return -2;
     }
 

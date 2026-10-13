@@ -153,7 +153,13 @@ int main(void)
         const uint32_t participants = participant_counts[test_case];
         if (participants > NUM_HARTS)
             continue;
-        *input = maps_operation_f32_to_f16(1.0f);
+        /* Distinct per-tile inputs, so a root that read its own L1 instead of
+         * a participant's would produce a wrong sum. Small integers keep every
+         * fp16 partial sum exact. */
+        *input = maps_operation_f32_to_f16((float)(hartid % 4u + 1u));
+        uint32_t expected = 0u;
+        for (uint32_t participant = 0u; participant < participants; ++participant)
+            expected += participant % 4u + 1u;
         *output = 0xffffu;
         measured_cycles[hartid] = 0u;
         measured_errors[hartid] = 0u;
@@ -167,7 +173,7 @@ int main(void)
             measured_cycles[hartid] = read_cycle() - start;
             measured_errors[hartid] =
                 result != 0 ||
-                *output != maps_operation_f32_to_f16((float)participants);
+                *output != maps_operation_f32_to_f16((float)expected);
         }
         global_barrier();
 
