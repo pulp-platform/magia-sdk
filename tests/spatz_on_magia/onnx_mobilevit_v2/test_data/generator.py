@@ -69,7 +69,8 @@ output is reproducible bit for bit rather than merely close:
   Mul      one FP16 multiply per element, including the two broadcast forms.
   Add      vfadd. Relu: vfmax against zero.
   ReduceSum
-           inner_dim is 1 here, so the kernel takes its scalar path: ascending FP16 adds.
+           inner_dim is 1 here, so the kernel takes its scalar path: ascending FP32 adds,
+           rounded to FP16 once.
   Transpose
            pure data movement.
   GlobalAveragePool
@@ -284,15 +285,16 @@ def groupnorm_fp16_exact(X, scale, bias, num_groups, eps):
 
 
 def reducesum_last_fp16_exact(X):
-    """inner_dim == 1, so the kernel's scalar path: ascending FP16 adds per row."""
+    """inner_dim == 1, so the kernel's scalar path: ascending FP32 adds per row, rounded
+    to FP16 once at the end (reduce_sum_core_scalar accumulates in a float)."""
     rows = X.reshape(-1, X.shape[-1])
     out = np.zeros(rows.shape[0], dtype=np.float16)
 
     for r in range(rows.shape[0]):
-        acc = np.float16(0.0)
-        for v in rows[r]:
-            acc = (acc + v).astype(np.float16)
-        out[r] = acc
+        acc = np.float32(rows[r][0])
+        for v in rows[r][1:]:
+            acc = np.float32(acc + np.float32(v))
+        out[r] = np.float16(acc)
 
     return out.reshape(X.shape[:-1] + (1,))
 

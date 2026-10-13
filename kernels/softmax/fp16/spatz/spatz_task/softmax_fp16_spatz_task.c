@@ -88,7 +88,11 @@ compute_exponential_sum_fastexp(const _Float16 *src, _Float16 *dst, size_t len, 
     }
 
     asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(original_avl));
-    asm volatile("vfredusum.vs v8, v0, v8");
+    /* Ordered, not vfredusum: RVV leaves the unordered fold's association up to the
+     * implementation, which makes the result unreproducible and so ungoldenable. The
+     * networks that chain softmaxes (MobileViT's linear attention) need it to be exact,
+     * and at 16..1000 lanes the ordered fold costs nothing worth measuring. */
+    asm volatile("vfredosum.vs v8, v0, v8");
     asm volatile("vfmv.f.s %0, v8" : "=f"(sum));
 
     return sum;
