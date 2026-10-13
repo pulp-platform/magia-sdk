@@ -34,6 +34,9 @@ set(MAGIA_TARGET_INCLUDE_DIRS
     "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include/addr_map"
     "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include/regs"
     "${CMAKE_SOURCE_DIR}/tests/common"
+    # Shared CV32-side kernel infrastructure (kernel_idma_utils.h and friends), used by
+    # every kernels/<op>/fp16/spatz driver.
+    "${CMAKE_SOURCE_DIR}/kernels/common"
 )
 set(MAGIA_CV32_EXTRA_INCLUDE_DIRS
     "${CMAKE_SOURCE_DIR}/hal/include"

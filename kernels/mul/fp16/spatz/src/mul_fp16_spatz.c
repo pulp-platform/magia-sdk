@@ -9,10 +9,12 @@
 
 #include "mul_fp16_spatz.h"
 #include "mul_fp16_spatz_params.h"
+#include "mul_bcast_fp16_spatz_params.h"
 #include "mul_fp16_spatz_task_bin.h"
 
 #define HID         get_hartid()
 #define KERNEL_NAME "mul_fp16_spatz"
+#define KERNEL_NAME_BCAST "mul_bcast_fp16_spatz"
 
 static int alloc_l1(void **params, uint32_t total_elems)
 {
@@ -171,4 +173,90 @@ void MAGIA_mul_fp16_spatz(const float16 *A, const float16 *B, float16 *C, uint32
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }
+}
+
+/*
+ * Broadcast multiply, A = [rows, row_len]:
+ *
+ *   MUL_BCAST_ROW     Y[r][i] = A[r][i] * B[i]   - B is one row_len row, staged whole and
+ *                                                  identical on every tile
+ *   MUL_BCAST_SCALAR  Y[r][i] = A[r][i] * B[r]   - B is one scalar per row, so only this
+ *                                                  tile's rows of it are staged
+ *
+ * The mesh splits `rows`, which keeps every shard of A and Y a contiguous run.
+ */
+void MAGIA_mul_bcast_fp16_spatz(const float16 *A,
+                                const float16 *B,
+                                float16 *Y,
+                                uint32_t rows,
+                                uint32_t row_len,
+                                uint32_t mode)
+{
+    volatile mul_bcast_fp16_spatz_params_t *params;
+    uintptr_t shard_A;
+    uintptr_t shard_B;
+    uintptr_t shard_Y;
+    uint32_t r_start;
+    uint32_t r_len;
+    uint32_t b_len;
+    uint32_t bytes;
+    int ret;
+
+    {
+        uint32_t shard = rows / NUM_HARTS;
+        uint32_t left  = rows % NUM_HARTS;
+
+        r_start = HID * shard + (HID < left ? HID : left);
+        r_len   = shard + (HID < left ? 1 : 0);
+    }
+
+    if (r_len == 0)
+        return;
+
+    b_len = (mode == MUL_BCAST_SCALAR) ? r_len : row_len;
+
+    l1_alloc_init();
+
+    params  = l1_alloc(sizeof(mul_bcast_fp16_spatz_params_t));
+    shard_A = (uintptr_t)l1_alloc((size_t)r_len * row_len * sizeof(float16));
+    shard_B = (uintptr_t)l1_alloc((size_t)b_len * sizeof(float16));
+    shard_Y = (uintptr_t)l1_alloc((size_t)r_len * row_len * sizeof(float16));
+
+    if (!params || !shard_A || !shard_B || !shard_Y) {
+        printf("[CV32 (%d)] [%s] L1 allocation failed\n", HID, KERNEL_NAME_BCAST);
+        return;
+    }
+
+    params->shard_A = shard_A;
+    params->shard_B = shard_B;
+    params->shard_Y = shard_Y;
+    params->rows    = r_len;
+    params->row_len = row_len;
+    params->mode    = mode;
+
+    bytes = r_len * row_len * sizeof(float16);
+    idma_memcpy_1d(0, (uint32_t)(A + (uintptr_t)r_start * row_len), (uint32_t)shard_A, bytes);
+    eu_idma_wait_a2o(WFE);
+    idma_memcpy_1d(0,
+                   (uint32_t)(B + (mode == MUL_BCAST_SCALAR ? r_start : 0)),
+                   (uint32_t)shard_B,
+                   b_len * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
+
+    spatz_run_task_with_params(MUL_BCAST_FP16_SPATZ_TASK, params);
+    if (eu_spatz_wait(WFE) == 0) {
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed\n", HID, KERNEL_NAME_BCAST);
+        return;
+    }
+    ret = spatz_get_exit_code();
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME_BCAST,
+               ret);
+        return;
+    }
+
+    idma_memcpy_1d(1, (uint32_t)(Y + (uintptr_t)r_start * row_len), (uint32_t)shard_Y, bytes);
+    eu_idma_wait_o2a(WFE);
 }

@@ -184,4 +184,5 @@ int sigmoid_fp16_spatz_task(void)
 #else
     sigmoid(X, Y, len);
 #endif
+    return 0;
 }
