@@ -24,6 +24,8 @@
 #include "tile.h"
 
 #include "eventunit.h"
+#include "idma.h"
+#include "utils/performance_utils.h"
 
 /* FP16 quiet NaN. None of these kernels can produce NaN from the generated
  * inputs, so it doubles as "this element was never written". */
@@ -159,13 +161,16 @@ kt_check(const float16 *result, const float16 *golden, uint32_t len, int32_t ulp
     return errors == 0;
 }
 
-/* Brings up the event unit and Spatz. The kernels expect this to have been
- * done by the application: they only run the task and wait for it. */
+/* Starts the cycle counters and brings up the event unit, the iDMA and Spatz. The kernels expect this to
+ * have been done by the application: they only run the task and wait for it.
+ * The iDMA event matters for main's kernels, which wait on it without enabling
+ * it (the kdma_* based ones enable it themselves in kdma_open). */
 static inline void kt_spatz_init(uint32_t spatz_binary_start)
 {
-
-
+    perf_init();
     eu_init();
+    idma_init();
+    eu_idma_init(0);
     eu_spatz_init(0);
 
     spatz_init(spatz_binary_start);
