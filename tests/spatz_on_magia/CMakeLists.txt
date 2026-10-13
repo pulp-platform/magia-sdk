@@ -26,6 +26,11 @@ add_subdirectory(onnx_relu)
 # add_subdirectory(onnx_sigmoid)
 # add_subdirectory(onnx_softmax)
 add_subdirectory(onnx_sub)
+# MobileViT nodes 170-179 full-mesh reference (MAPS experiments); needs the
+# prepared slice data (mobilevit_slice_data=... mobilevit_slice_tokens=...).
+if(MOBILEVIT_SLICE_DATA)
+    add_subdirectory(onnx_mobilevit_slice)
+endif()
 # add_subdirectory(onnx_swish)
 
 # Deeploy-generated network tests (created by deployment/generate_with_spatz.py)

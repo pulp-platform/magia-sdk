@@ -1,0 +1,5 @@
+.section .l2_bulk.mobilevit_slice, "a", @progbits
+.balign 16
+.global mobilevit_slice_data
+mobilevit_slice_data:
+.incbin "@MOBILEVIT_SLICE_DATA@"

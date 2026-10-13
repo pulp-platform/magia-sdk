@@ -39,6 +39,19 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 project(magia-sdk LANGUAGES C ASM)
 
+option(MAPS_EXPERIMENT_TRACE "Print MAPS token timing for experiment collection" OFF)
+if(MAPS_EXPERIMENT_TRACE)
+    add_compile_definitions(MAPS_EXPERIMENT_TRACE=1)
+endif()
+option(MAPS_TOKEN_PROGRESS "Print MAPS token completions during execution" OFF)
+if(MAPS_TOKEN_PROGRESS)
+    add_compile_definitions(MAPS_TOKEN_PROGRESS=1)
+endif()
+option(MAPS_KERNEL_PROGRESS "Print MAPS operation starts, completions and errors" OFF)
+if(MAPS_KERNEL_PROGRESS)
+    add_compile_definitions(MAPS_KERNEL_PROGRESS=1)
+endif()
+
 # Speed up rebuilds with ccache when available (opt-out via -DUSE_CCACHE=OFF).
 option(USE_CCACHE "Use ccache to speed up (re)compilation if available" ON)
 if (USE_CCACHE)
@@ -113,3 +126,8 @@ add_subdirectory(kernels)
 ################################################################################
 
 add_subdirectory(tests)
+
+# A MAPS-generated application (maps-codegen output directory).
+if(DEFINED MAPS_APPLICATION_DIR)
+    add_subdirectory("${MAPS_APPLICATION_DIR}" maps_application)
+endif()
