@@ -140,6 +140,197 @@ int idma32_collective_1d(
     return 0;
 }
 
+/**
+ * Submit a 1-dimensional memory copy without waiting and return its transfer ID.
+ *
+ * Reading NEXT_ID dispatches the descriptor. idma_mm_start is not used: it
+ * polls when STALLING=1, while this API must stay asynchronous in every build
+ * configuration. The instruction interface (IDMA_MM == 0) exposes no transfer
+ * ID, so it returns 0 there.
+ */
+idma_ticket_t idma32_submit_1d(uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
+{
+#if IDMA_MM == 0
+    (void)dir;
+    (void)axi_addr;
+    (void)obi_addr;
+    (void)len;
+    return 0u;
+#else
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
+    if (dir)
+        idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
+    else
+        idma_mm_set_addr_len(dir, obi_addr, axi_addr, len);
+    idma_mm_set_std2_rep2(dir, 0, 0, 1);
+    idma_mm_set_std3_rep3(dir, 0, 0, 1);
+    return mmio32(IDMA_NEXT_ID_ADDR(dir, 0));
+#endif
+}
+
+/**
+ * Whether the transfer with ID `ticket` on direction `dir` has completed.
+ * Transfer IDs wrap around, so the comparison is done on the signed distance.
+ */
+uint32_t idma32_ticket_is_done(uint8_t dir, idma_ticket_t ticket)
+{
+#if IDMA_MM == 0
+    (void)dir;
+    (void)ticket;
+    return 0u;
+#else
+    if (ticket == 0u)
+        return 0u;
+    const uint32_t done = mmio32(IDMA_DONE_ID_ADDR(dir, 0));
+    return (int32_t)(done - ticket) >= 0;
+#endif
+}
+
+/**
+ * Submit a 3-dimensional memory copy without waiting and return its transfer ID.
+ *
+ * The public dimension-3 strides are measured between page starts; the iDMA
+ * register advances from the final row of one page, so they are translated
+ * before programming the descriptor.
+ */
+idma_ticket_t idma32_submit_3d(uint8_t dir,
+                               uint32_t axi_addr,
+                               uint32_t obi_addr,
+                               uint32_t row_bytes,
+                               uint32_t axi_stride_2,
+                               uint32_t obi_stride_2,
+                               uint32_t reps_2,
+                               uint32_t axi_stride_3,
+                               uint32_t obi_stride_3,
+                               uint32_t reps_3)
+{
+#if IDMA_MM == 0
+    (void)dir;
+    (void)axi_addr;
+    (void)obi_addr;
+    (void)row_bytes;
+    (void)axi_stride_2;
+    (void)obi_stride_2;
+    (void)reps_2;
+    (void)axi_stride_3;
+    (void)obi_stride_3;
+    (void)reps_3;
+    return 0u;
+#else
+    const uint32_t axi_hardware_stride_3 =
+        reps_2 == 0u ? axi_stride_3 : axi_stride_3 - (reps_2 - 1u) * axi_stride_2;
+    const uint32_t obi_hardware_stride_3 =
+        reps_2 == 0u ? obi_stride_3 : obi_stride_3 - (reps_2 - 1u) * obi_stride_2;
+
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
+    if (dir) {
+        idma_mm_set_addr_len(dir, axi_addr, obi_addr, row_bytes);
+        idma_mm_set_std2_rep2(dir, axi_stride_2, obi_stride_2, reps_2);
+        idma_mm_set_std3_rep3(dir, axi_hardware_stride_3, obi_hardware_stride_3, reps_3);
+    } else {
+        idma_mm_set_addr_len(dir, obi_addr, axi_addr, row_bytes);
+        idma_mm_set_std2_rep2(dir, obi_stride_2, axi_stride_2, reps_2);
+        idma_mm_set_std3_rep3(dir, obi_hardware_stride_3, axi_hardware_stride_3, reps_3);
+    }
+    return mmio32(IDMA_NEXT_ID_ADDR(dir, 0));
+#endif
+}
+
+/**
+ * Start a 2-dimensional memory copy with an independent stride on each side.
+ *
+ * idma32_memcpy_2d hardwires the contiguous side's stride to `len`, which
+ * cannot express a narrow rectangle landing inside a wider buffer.
+ *
+ * @param axi_std Byte stride between row starts on the AXI/L2 side.
+ * @param obi_std Byte stride between row starts on the OBI/L1 side.
+ */
+int idma32_memcpy_2d_ex(uint8_t dir,
+                        uint32_t axi_addr,
+                        uint32_t obi_addr,
+                        uint32_t len,
+                        uint32_t axi_std,
+                        uint32_t obi_std,
+                        uint32_t reps)
+{
+#if IDMA_MM == 0
+    if (dir) { // OBI to AXI (L1 to L2): dst = AXI, src = OBI
+        idma_conf_out();
+        idma_set_addr_len_out(axi_addr, obi_addr, len);
+        idma_set_std2_rep2_out(axi_std, obi_std, reps);
+        idma_set_std3_rep3_out(0, 0, 1);
+        idma_start_out();
+    } else { // AXI to OBI (L2 to L1): dst = OBI, src = AXI
+        idma_conf_in();
+        idma_set_addr_len_in(obi_addr, axi_addr, len);
+        idma_set_std2_rep2_in(obi_std, axi_std, reps);
+        idma_set_std3_rep3_in(0, 0, 1);
+        idma_start_in();
+    }
+#else
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
+    if (dir) {
+        idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
+        idma_mm_set_std2_rep2(dir, axi_std, obi_std, reps);
+    } else {
+        idma_mm_set_addr_len(dir, obi_addr, axi_addr, len);
+        idma_mm_set_std2_rep2(dir, obi_std, axi_std, reps);
+    }
+    idma_mm_set_std3_rep3(dir, 0, 0, 1);
+    idma_mm_start(dir);
+#endif
+    return 0;
+}
+
+/**
+ * Start a 3-dimensional memory copy with independent strides on both sides.
+ * Strides follow the same convention as idma32_submit_3d.
+ */
+int idma32_memcpy_3d(uint8_t dir,
+                     uint32_t axi_addr,
+                     uint32_t obi_addr,
+                     uint32_t row_bytes,
+                     uint32_t axi_stride_2,
+                     uint32_t obi_stride_2,
+                     uint32_t reps_2,
+                     uint32_t axi_stride_3,
+                     uint32_t obi_stride_3,
+                     uint32_t reps_3)
+{
+    const uint32_t axi_hardware_stride_3 =
+        reps_2 == 0u ? axi_stride_3 : axi_stride_3 - (reps_2 - 1u) * axi_stride_2;
+    const uint32_t obi_hardware_stride_3 =
+        reps_2 == 0u ? obi_stride_3 : obi_stride_3 - (reps_2 - 1u) * obi_stride_2;
+#if IDMA_MM == 0
+    if (dir) { // OBI to AXI (L1 to L2): dst = AXI, src = OBI
+        idma_conf_out();
+        idma_set_addr_len_out(axi_addr, obi_addr, row_bytes);
+        idma_set_std2_rep2_out(axi_stride_2, obi_stride_2, reps_2);
+        idma_set_std3_rep3_out(axi_hardware_stride_3, obi_hardware_stride_3, reps_3);
+        idma_start_out();
+    } else { // AXI to OBI (L2 to L1): dst = OBI, src = AXI
+        idma_conf_in();
+        idma_set_addr_len_in(obi_addr, axi_addr, row_bytes);
+        idma_set_std2_rep2_in(obi_stride_2, axi_stride_2, reps_2);
+        idma_set_std3_rep3_in(obi_hardware_stride_3, axi_hardware_stride_3, reps_3);
+        idma_start_in();
+    }
+#else
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
+    if (dir) {
+        idma_mm_set_addr_len(dir, axi_addr, obi_addr, row_bytes);
+        idma_mm_set_std2_rep2(dir, axi_stride_2, obi_stride_2, reps_2);
+        idma_mm_set_std3_rep3(dir, axi_hardware_stride_3, obi_hardware_stride_3, reps_3);
+    } else {
+        idma_mm_set_addr_len(dir, obi_addr, axi_addr, row_bytes);
+        idma_mm_set_std2_rep2(dir, obi_stride_2, axi_stride_2, reps_2);
+        idma_mm_set_std3_rep3(dir, obi_hardware_stride_3, axi_hardware_stride_3, reps_3);
+    }
+    idma_mm_start(dir);
+#endif
+    return 0;
+}
+
 extern int idma_init() __attribute__((alias("idma32_init"), used, visibility("default")));
 extern int idma_memcpy_1d(uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
     __attribute__((alias("idma32_memcpy_1d"), used, visibility("default")));
@@ -149,3 +340,37 @@ extern int idma_memcpy_2d(
 extern int idma_collective_1d(
     uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t mask, uint32_t coll_op)
     __attribute__((alias("idma32_collective_1d"), used, visibility("default")));
+extern idma_ticket_t idma_submit_1d(uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
+    __attribute__((alias("idma32_submit_1d"), used, visibility("default")));
+extern uint32_t idma_ticket_is_done(uint8_t dir, idma_ticket_t ticket)
+    __attribute__((alias("idma32_ticket_is_done"), used, visibility("default")));
+extern idma_ticket_t idma_submit_3d(uint8_t dir,
+                                    uint32_t axi_addr,
+                                    uint32_t obi_addr,
+                                    uint32_t row_bytes,
+                                    uint32_t axi_stride_2,
+                                    uint32_t obi_stride_2,
+                                    uint32_t reps_2,
+                                    uint32_t axi_stride_3,
+                                    uint32_t obi_stride_3,
+                                    uint32_t reps_3)
+    __attribute__((alias("idma32_submit_3d"), used, visibility("default")));
+extern int idma_memcpy_2d_ex(uint8_t dir,
+                             uint32_t axi_addr,
+                             uint32_t obi_addr,
+                             uint32_t len,
+                             uint32_t axi_std,
+                             uint32_t obi_std,
+                             uint32_t reps)
+    __attribute__((alias("idma32_memcpy_2d_ex"), used, visibility("default")));
+extern int idma_memcpy_3d(uint8_t dir,
+                          uint32_t axi_addr,
+                          uint32_t obi_addr,
+                          uint32_t row_bytes,
+                          uint32_t axi_stride_2,
+                          uint32_t obi_stride_2,
+                          uint32_t reps_2,
+                          uint32_t axi_stride_3,
+                          uint32_t obi_stride_3,
+                          uint32_t reps_3)
+    __attribute__((alias("idma32_memcpy_3d"), used, visibility("default")));
