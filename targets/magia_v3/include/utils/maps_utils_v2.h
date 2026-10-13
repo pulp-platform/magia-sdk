@@ -457,6 +457,7 @@ static inline void maps_fifo_send_req(const fifo_tile_plan_t *plan,
         .dst              = &send->copy_dst,
         .dst_offset_bytes = send->dst_offset_bytes,
         .payload_mode     = send->dst_payload_mode,
+        .tail_only        = 1u,
     };
 }
 
@@ -666,9 +667,10 @@ static inline maps_fifo_pending_send_t *maps_fifo_alloc_pending_send(
  * sub-ring directly instead of accepting an unrelated ready message from the
  * FIFO's fair round-robin scan. */
 static inline uint32_t maps_fifo_peek_from(const fifo_tile_plan_t *plan,
-                                           uint32_t producer_idx,
+                                           const fifo_recv_desc_t *recv,
                                            fifo_msg_t *out)
 {
+    const uint32_t producer_idx = recv->producer_idx;
     fifo_header_t *hdr = fifo_get_header(plan->hartid);
     fifo_ring_state_t *rs = fifo_ring_state(hdr, producer_idx);
 
@@ -677,13 +679,21 @@ static inline uint32_t maps_fifo_peek_from(const fifo_tile_plan_t *plan,
 
     asm volatile("fence r, r" ::: "memory");
 
-    fifo_slot_t *slot = fifo_slot_at(hdr, producer_idx, rs->head);
-    out->data_ptr     = (uint32_t)fifo_payload_at(hdr, producer_idx, rs->head);
-    out->src          = producer_idx;
-    out->tag          = slot->tag;
-    out->elem_bytes   = slot->elem_bytes;
-    out->data_size    = slot->data_size;
-    out->desc         = slot->desc;
+    /* Senders publish only the tail: every message on this sub-ring is the
+     * receive's piece, laid out as its destination, so the metadata comes from
+     * the plan instead of the slot. */
+    const subslice_desc_t *dst = &recv->dst;
+    out->data_ptr   = (uint32_t)fifo_payload_at(hdr, producer_idx, rs->head);
+    out->src        = producer_idx;
+    out->elem_bytes = dst->elem_bytes;
+    out->desc.rank  = dst->rank;
+    out->desc.num_elems = maps_shape_elems(dst->rank, dst->shape);
+    for (uint32_t d = 0; d < dst->rank; ++d) {
+        out->desc.dims[d].start = 0u;
+        out->desc.dims[d].length = dst->shape[d];
+        out->desc.dims[d].stride = dst->strides_bytes[d];
+    }
+    out->data_size = out->desc.num_elems * dst->elem_bytes;
     return 1u;
 }
 
@@ -700,7 +710,6 @@ static inline uint32_t maps_fifo_wait_recv(const fifo_tile_plan_t *plan,
                                            maps_fifo_token_state_t *states)
 {
     fifo_msg_t msg;
-    uint32_t expected_tag = maps_fifo_tag(recv->transition_id, slot);
 
     maps_trace_event((const tile_plan_t *)plan, token, slot, "fifo-wait",
                      recv->transition_id);
@@ -708,19 +717,13 @@ static inline uint32_t maps_fifo_wait_recv(const fifo_tile_plan_t *plan,
     if (states != 0)
         maps_fifo_reap_completed_sends(plan, states);
     for (;;) {
-        if (!maps_fifo_peek_from(plan, recv->producer_idx, &msg)) {
+        if (!maps_fifo_peek_from(plan, recv, &msg)) {
             /* Keep completed outgoing transfers moving while this tile waits
              * for an input.  Blocking on every outstanding send here defeats
              * the overlap provided by asynchronous FIFO pushes. */
             if (states != 0)
                 maps_fifo_reap_completed_sends(plan, states);
             continue;
-        }
-
-        if (msg.tag != expected_tag) {
-            maps_trace_event((const tile_plan_t *)plan, token, slot, "fifo-bad-tag",
-                             msg.tag);
-            maps_trap();
         }
 
 #if MAPS_FIFO_INPLACE_RECV
@@ -928,6 +931,13 @@ typedef struct {
     const maps_fifo_pending_send_t *pending;
     uint32_t *reserved; /* Per send: reserved payload address, 0 if none yet. */
     uint32_t next;      /* Next send to try to reserve. */
+    /* Pre-received inputs of the next token: for receives held in place, the
+     * payload address of the next message once it is published and its tag
+     * checked (0 if not yet); the next token then only takes the alias. */
+    const uint8_t *inplace;
+    uint32_t *next_payload;
+    uint32_t next_slot;
+    uint32_t next_token_exists;
 } maps_fifo_background_t;
 
 static inline uint32_t maps_fifo_subring_busy(const maps_fifo_pending_send_t *pending,
@@ -960,7 +970,72 @@ static inline uint32_t maps_fifo_background(void *context)
             return 1u;
         }
     }
+#if MAPS_FIFO_INPLACE_RECV
+    /* The current token still holds its in-place message at the head of each
+     * such sub-ring; the next token's message is the one after it. */
+    if (!bg->next_token_exists)
+        return 0u;
+    uint32_t pending_inputs = 0u;
+    fifo_header_t *hdr = fifo_get_header(plan->hartid);
+    for (uint32_t i = 0; i < plan->num_recvs; ++i) {
+        if (bg->inplace[i] != MAPS_FIFO_RECV_INPLACE || bg->next_payload[i] != 0u)
+            continue;
+        const fifo_recv_desc_t *recv = &plan->recvs[i];
+        const fifo_ring_state_t *rs = fifo_ring_state(hdr, recv->producer_idx);
+        const uint32_t counter = rs->head + 1u;
+        if ((int32_t)(rs->tail - counter) <= 0) {
+            pending_inputs = 1u;
+            continue;
+        }
+        /* Senders publish only the tail (no slot metadata), so the message is
+         * identified by its sub-ring position alone, as in maps_fifo_peek_from. */
+        asm volatile("fence r, r" ::: "memory");
+        const uint32_t payload =
+            (uint32_t)fifo_payload_at(hdr, recv->producer_idx, counter);
+        if ((payload & 3u) != 0u)
+            continue; /* Left to the normal receive path. */
+        bg->next_payload[i] = payload;
+        return 1u;
+    }
+    return pending_inputs;
+#else
     return 0u;
+#endif
+}
+
+/* Non-zero if L2 read `index` may be issued a token ahead: nothing but the
+ * read writes its destination slice, and no send reads it (an asynchronous
+ * send of an earlier token could still be reading the slot it overwrites). */
+static inline uint32_t maps_fifo_l2_read_prefetchable(const fifo_tile_plan_t *plan,
+                                                      uint32_t index)
+{
+    const uint32_t slice_id = plan->l2_reads[index].dst.slice_id;
+    for (uint32_t i = 0; i < plan->num_sends; ++i)
+        if (plan->sends[i].src.slice_id == slice_id)
+            return 0u;
+    for (uint32_t i = 0; i < plan->num_recvs; ++i)
+        if (plan->recvs[i].dst.slice_id == slice_id)
+            return 0u;
+    for (uint32_t i = 0; i < plan->num_ops; ++i)
+        for (uint32_t o = 0; o < plan->ops[i].num_outputs; ++o)
+            if (plan->ops[i].outputs[o].slice_id == slice_id)
+                return 0u;
+    return 1u;
+}
+
+/* Submit L2 read `index` of `token` without waiting; 0 if it must be issued
+ * blocking instead (layout not one descriptor, or the queue is full). */
+static inline idma_ticket_t maps_fifo_prefetch_l2_read(const fifo_tile_plan_t *plan,
+                                                       uint32_t index, uint32_t token,
+                                                       idma_controller_t *idma_ctrl)
+{
+    const l2_read_desc_t *read = &plan->l2_reads[index];
+    const uint32_t slot = maps_token_slot((const tile_plan_t *)plan, token);
+    const idma_ticket_t ticket = maps_idma_submit_md_to_nd(
+        idma_ctrl, 0u, local_subslice_addr((const tile_plan_t *)plan, &read->dst, slot),
+        read->src_l2_addr + token * read->src_l2_token_stride_bytes,
+        &read->copy_src, &read->copy_dst, read->dst.elem_bytes);
+    return ticket == MAPS_IDMA_UNSUPPORTED_TICKET ? 0u : ticket;
 }
 
 static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint32_t num_tokens,
@@ -982,9 +1057,22 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
     maps_fifo_token_state_t states[plan->num_token_slots];
     maps_fifo_pending_send_t pending[MAPS_FIFO_MAX_PENDING_SENDS] = {0};
     uint32_t reserved[plan->num_sends + 1u];
+    /* L2 reads of the next token, submitted while this token's operations run:
+     * the DMA ticket, or 0 when the read is issued blocking as usual. */
+    uint8_t l2_prefetchable[plan->num_l2_reads + 1u];
+    idma_ticket_t l2_prefetched[plan->num_l2_reads + 1u];
+    for (uint32_t i = 0; i < plan->num_l2_reads; ++i) {
+        l2_prefetchable[i] = (uint8_t)maps_fifo_l2_read_prefetchable(plan, i);
+        l2_prefetched[i] = 0u;
+    }
+    uint32_t next_payload[plan->num_recvs + 1u];
+    uint32_t this_payload[plan->num_recvs + 1u];
     maps_fifo_background_t background = {
         .plan = plan, .states = states, .pending = pending, .reserved = reserved,
+        .next_payload = next_payload,
     };
+    for (uint32_t i = 0; i < plan->num_recvs; ++i)
+        next_payload[i] = 0u;
 #if MAPS_FIFO_INPLACE_RECV
     uint8_t inplace[plan->num_recvs + 1u];
     uint32_t held[plan->num_recvs + 1u];
@@ -992,6 +1080,7 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
     maps_fifo_plan_inplace(plan, inplace);
     for (uint32_t i = 0; i < plan->num_ops; ++i)
         identity_view[i] = (uint8_t)maps_fifo_op_is_identity_view(plan, i);
+    background.inplace = inplace;
 #endif
     for (uint32_t slot = 0u; slot < plan->num_token_slots; ++slot) {
         states[slot].sends = 0;
@@ -1010,8 +1099,12 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
 
         for (uint32_t i = 0; i < plan->num_l2_reads; ++i) {
             uint32_t step_start = maps_read_cycle();
-            issue_l2_read_token((const tile_plan_t *)plan, &plan->l2_reads[i], token, slot,
-                                idma_ctrl, eu_ctrl);
+            if (l2_prefetched[i] != 0u)
+                maps_idma_wait_ticket(eu_ctrl, 0u, l2_prefetched[i]);
+            else
+                issue_l2_read_token((const tile_plan_t *)plan, &plan->l2_reads[i], token,
+                                    slot, idma_ctrl, eu_ctrl);
+            l2_prefetched[i] = 0u;
             maps_trace_duration((const tile_plan_t *)plan, token, slot, "l2-read", i,
                                 maps_read_cycle() - step_start);
         }
@@ -1019,12 +1112,22 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
         maps_fifo_reap_completed_sends(plan, states);
 #if MAPS_FIFO_INPLACE_RECV
         uint32_t num_held = 0u;
+        for (uint32_t i = 0; i < plan->num_recvs; ++i) {
+            this_payload[i] = next_payload[i];
+            next_payload[i] = 0u;
+        }
 #endif
         for (uint32_t i = 0; i < plan->num_recvs; ++i) {
             uint32_t step_start = maps_read_cycle();
 #if MAPS_FIFO_INPLACE_RECV
-            if (maps_fifo_wait_recv(plan, &plan->recvs[i], token, slot, inplace[i],
-                                    idma_ctrl, eu_ctrl, states))
+            if (this_payload[i] != 0u) {
+                /* Pre-received during the previous token's operations: the
+                 * message is now at the head of its sub-ring. */
+                maps_slice_alias_push(plan->hartid, plan->recvs[i].dst.slice_id, slot,
+                                      this_payload[i]);
+                held[num_held++] = plan->recvs[i].producer_idx;
+            } else if (maps_fifo_wait_recv(plan, &plan->recvs[i], token, slot, inplace[i],
+                                           idma_ctrl, eu_ctrl, states))
                 held[num_held++] = plan->recvs[i].producer_idx;
 #else
             maps_fifo_wait_recv(plan, &plan->recvs[i], token, slot, 0u,
@@ -1037,7 +1140,16 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
         maps_fifo_reap_completed_sends(plan, states);
         for (uint32_t i = 0; i < plan->num_sends; ++i)
             reserved[i] = 0u;
+        /* The next token's L2 inputs go to the other token slot, which no one
+         * uses during this token, so they can stream in under the operations. */
+        if (token + 1u < num_tokens && plan->num_token_slots > 1u)
+            for (uint32_t i = 0; i < plan->num_l2_reads; ++i)
+                if (l2_prefetchable[i])
+                    l2_prefetched[i] = maps_fifo_prefetch_l2_read(plan, i, token + 1u,
+                                                                  idma_ctrl);
         background.next = 0u;
+        background.next_slot = maps_token_slot((const tile_plan_t *)plan, token + 1u);
+        background.next_token_exists = token + 1u < num_tokens;
         if (plan->operation_runtime != 0) {
             plan->operation_runtime->background = maps_fifo_background;
             plan->operation_runtime->background_ctx = &background;

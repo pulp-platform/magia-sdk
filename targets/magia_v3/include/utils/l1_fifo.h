@@ -155,6 +155,8 @@ typedef struct {
     uint32_t ahead;                /**< Unpublished pushes already reserved on this
                                         sub-ring; this one takes slot tail + ahead
                                         and must be published after them. */
+    uint32_t tail_only;            /**< Publish without slot metadata (the consumer
+                                        derives tag, size and layout itself). */
 } fifo_push_req_t;
 
 /** State of one submitted FIFO push whose payload is not published yet. */
@@ -167,6 +169,7 @@ typedef struct {
     idma_ticket_t ticket;
     uint8_t direction;
     uint8_t active;
+    uint8_t tail_only;
 } fifo_pending_push_t;
 
 typedef enum {
@@ -574,6 +577,20 @@ static inline uint32_t fifo_try_reserve(uint32_t target_hartid,
  * fully-formed message. Pairs with fifo_reserve (or an external DMA that filled
  * the reserved slot's payload).
  */
+/**
+ * Publish the reserved tail slot of producer `producer_idx` without writing any
+ * slot metadata: one remote store.  Only for consumers that know each message's
+ * tag, size and layout from their own plan.
+ */
+static inline void fifo_commit_tail(uint32_t target_hartid, uint32_t producer_idx)
+{
+    fifo_ring_state_t *rs = fifo_ring_state(fifo_get_header(target_hartid), producer_idx);
+
+    /* Ensure all payload writes are visible before the tail bump. */
+    asm volatile("fence w, w" ::: "memory");
+    rs->tail = rs->tail + 1u;
+}
+
 static inline void fifo_commit(uint32_t target_hartid,
                                uint32_t producer_idx,
                                const tensor_sub_slice_t *desc,
@@ -639,7 +656,11 @@ static inline int fifo_push(idma_controller_t *idma_ctrl,
     if (rc != 0)
         return rc;
 
-    fifo_commit(req->target_hartid, req->producer_idx, req->desc, req->tag, req->elem_bytes);
+    if (req->tail_only)
+        fifo_commit_tail(req->target_hartid, req->producer_idx);
+    else
+        fifo_commit(req->target_hartid, req->producer_idx, req->desc, req->tag,
+                    req->elem_bytes);
     return 0;
 }
 
@@ -702,6 +723,7 @@ static inline int fifo_push_async_start_reserved(idma_controller_t *idma_ctrl,
     pending->desc = req->desc;
     pending->tag = req->tag;
     pending->elem_bytes = req->elem_bytes;
+    pending->tail_only = (uint8_t)(req->tail_only != 0u);
     pending->ticket = ticket;
     pending->direction = direction;
     pending->active = 1u;
@@ -722,13 +744,22 @@ static inline uint32_t fifo_push_async_is_done(const fifo_pending_push_t *pendin
         idma_ticket_is_done(pending->direction, pending->ticket);
 }
 
+/* Publish a completed asynchronous push, with or without slot metadata. */
+static inline void fifo_push_async_commit(const fifo_pending_push_t *pending)
+{
+    if (pending->tail_only)
+        fifo_commit_tail(pending->target_hartid, pending->producer_idx);
+    else
+        fifo_commit(pending->target_hartid, pending->producer_idx, pending->desc,
+                    pending->tag, pending->elem_bytes);
+}
+
 /** Publish a completed asynchronous push without blocking. */
 static inline uint32_t fifo_push_async_publish_completed(fifo_pending_push_t *pending)
 {
     if (!fifo_push_async_is_done(pending))
         return 0u;
-    fifo_commit(pending->target_hartid, pending->producer_idx, pending->desc,
-                pending->tag, pending->elem_bytes);
+    fifo_push_async_commit(pending);
     pending->active = 0u;
     return 1u;
 }
@@ -741,8 +772,7 @@ static inline int fifo_push_async_finish(eu_controller_t *eu_ctrl,
         return -1;
 
     maps_idma_wait_ticket(eu_ctrl, pending->direction, pending->ticket);
-    fifo_commit(pending->target_hartid, pending->producer_idx, pending->desc,
-                pending->tag, pending->elem_bytes);
+    fifo_push_async_commit(pending);
     pending->active = 0u;
     return 0;
 }
