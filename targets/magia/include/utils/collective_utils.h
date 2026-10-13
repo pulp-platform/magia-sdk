@@ -110,7 +110,7 @@ static inline void floo_narrow_sync_column(uint32_t collective_word, uint32_t ad
  * @param collective_word Tile-local word participating in the collective AND operation
  * @param addr_offset Destination address offset
  */
-int floo_narrow_sync_mesh(uint32_t collective_word, uint32_t addr_offset)
+static inline int floo_narrow_sync_mesh(uint32_t collective_word, uint32_t addr_offset)
 {
     floo_set_collective_mask(MESH_MASK);
     floo_set_collective_op(LSBAND);
