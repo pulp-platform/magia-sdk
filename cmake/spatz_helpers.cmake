@@ -147,6 +147,38 @@ function(add_spatz_task)
     set(${ARG_TEST_NAME}_TASK_BIN            ${TASK_BIN}             PARENT_SCOPE)
     set(${ARG_TEST_NAME}_TASK_HEADER         ${TASK_HEADER}          PARENT_SCOPE)
     set(${ARG_TEST_NAME}_SPATZ_OUTPUT_DIR    ${SPATZ_OUTPUT_DIR}     PARENT_SCOPE)
+    set(${ARG_TEST_NAME}_SPATZ_INCLUDE_DIRS  ${ARG_INCLUDE_DIRS}     PARENT_SCOPE)
+endfunction()
+
+# target_embed_spatz_task(
+#   TARGET <existing-target>
+#   TASK_NAME <name-passed-to-add_spatz_task>
+# )
+# Attaches a generated Spatz image to an existing CV32 executable: the generated
+# <name>_task_bin.h and the task's include directories (so CV32 code can share its
+# parameter structures) become visible to it, and the image is built first.
+function(target_embed_spatz_task)
+    set(options)
+    set(oneValueArgs TARGET TASK_NAME)
+    set(multiValueArgs)
+    cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if(NOT ARG_TARGET OR NOT TARGET ${ARG_TARGET})
+        message(FATAL_ERROR "target_embed_spatz_task requires an existing TARGET")
+    endif()
+    if(NOT ARG_TASK_NAME OR NOT DEFINED ${ARG_TASK_NAME}_SPATZ_HEADER)
+        message(FATAL_ERROR "target_embed_spatz_task requires a TASK_NAME built by add_spatz_task")
+    endif()
+
+    get_filename_component(_spatz_header_dir "${${ARG_TASK_NAME}_SPATZ_HEADER}" DIRECTORY)
+    target_include_directories(${ARG_TARGET} PRIVATE
+        ${_spatz_header_dir}
+        ${${ARG_TASK_NAME}_SPATZ_INCLUDE_DIRS}
+    )
+    add_dependencies(${ARG_TARGET} ${${ARG_TASK_NAME}_SPATZ_TARGET})
+    if(TARGET spatz_bootrom)
+        add_dependencies(${ARG_TARGET} spatz_bootrom)
+    endif()
 endfunction()
 
 # add_cv32_executable_with_spatz(
@@ -196,6 +228,7 @@ function(add_cv32_executable_with_spatz)
         ${MAGIA_CV32_EXTRA_INCLUDE_DIRS}
         ${ARG_INCLUDE_DIRS}
         ${SPATZ_HEADER_DIR}
+        ${${ARG_TARGET_NAME}_SPATZ_INCLUDE_DIRS}
     )
 
     target_compile_options(${ARG_TARGET_NAME} PRIVATE ${CV32_COMPILE_FLAGS})

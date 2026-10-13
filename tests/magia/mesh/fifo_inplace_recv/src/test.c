@@ -1,0 +1,493 @@
+// Copyright 2026 Fondazione Chips-IT.
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+
+/*
+ * In-place and gathered FIFO receives.
+ *
+ *   tile 0: L2 -> A (8x16)  --tr0--> tile 1 S (whole, dense: in place)
+ *                           --tr3--> tile 1 F (whole, but forwarded: unpacked)
+ *                           --tr5--> tile 1 T (whole, padded rows: gathered)
+ *                           --tr7--> tile 1 Q[:, 0:16]  (gathered, two senders)
+ *   tile 2: L2 -> B (8x32)  --tr1--> tile 1 P[:, 0:16]  (gathered, one sender
+ *                           --tr2--> tile 1 P[:, 16:32]  over two sub-rings)
+ *                           --tr6--> tile 1 Q[:, 16:32] (gathered, two senders)
+ *   tile 1: copy S -> U, P -> V, Q -> W, T -> Y;  U, V, W, Y[:, 0:16] -> L2;
+ *           F --tr4--> tile 3 G
+ *   tile 3: G (whole, dense: in place); copy G -> H; H -> out2
+ *
+ * Every consumer FIFO has a single slot per producer, so each in-place hold
+ * directly back-pressures its producer.  build_plan plays the generator: it
+ * decides which receives tile 1 gathers (P, T and Q), gives them shared payload
+ * rings and tells their senders where each piece lands.  The planned storage of S, P, Q, T and
+ * G is filled with a sentinel: it must stay untouched when receives are
+ * consumed in place, and be overwritten when MAPS_FIFO_INPLACE_RECV=0.
+ */
+
+#include <stdint.h>
+
+#include "eventunit.h"
+#include "fsync.h"
+#include "idma.h"
+#include "tile.h"
+#include "utils/maps_utils_v2.h"
+#include "utils/performance_utils.h"
+#include "utils/printf.h"
+
+#define NUM_TOKENS   4u
+#define TOKEN_SLOTS  2u
+#define ROWS         8u
+#define COLS         16u
+#define WIDE_COLS    32u
+#define PAD_COLS     20u
+#define ELEM         2u
+#define NARROW_BYTES (ROWS * COLS * ELEM)
+#define WIDE_BYTES   (ROWS * WIDE_COLS * ELEM)
+#define PAD_BYTES    (ROWS * PAD_COLS * ELEM)
+#define DATA_OFFSET  0x00010000u
+#define SENTINEL     0xdeadu
+
+enum {
+    SLICE_A, SLICE_B, SLICE_S, SLICE_U, SLICE_P, SLICE_F, SLICE_G, SLICE_H,
+    SLICE_V, SLICE_Q, SLICE_W, SLICE_T, SLICE_Y,
+};
+
+static uint16_t input0[NUM_TOKENS][ROWS][COLS]
+    __attribute__((section(".l2_bulk.fifo_inplace_in0")));
+static uint16_t input1[NUM_TOKENS][ROWS][WIDE_COLS]
+    __attribute__((section(".l2_bulk.fifo_inplace_in1")));
+static uint16_t output0[NUM_TOKENS][ROWS][COLS]
+    __attribute__((section(".l2_bulk.fifo_inplace_out0")));
+static uint16_t output1[NUM_TOKENS][ROWS][WIDE_COLS]
+    __attribute__((section(".l2_bulk.fifo_inplace_out1")));
+static uint16_t output2[NUM_TOKENS][ROWS][COLS]
+    __attribute__((section(".l2_bulk.fifo_inplace_out2")));
+static uint16_t output3[NUM_TOKENS][ROWS][WIDE_COLS]
+    __attribute__((section(".l2_bulk.fifo_inplace_out3")));
+static uint16_t output4[NUM_TOKENS][ROWS][COLS]
+    __attribute__((section(".l2_bulk.fifo_inplace_out4")));
+
+/* Tile 1's generated FIFO layout: P (producers 1, 2), T (4) and Q (5, 6) each
+ * gather into their own shared payload ring, sized like the slice's slot. */
+static const uint32_t tile1_payload_rings[7] = {0u, 1u, 1u, 0u, 2u, 3u, 3u};
+static const uint32_t tile1_shared_ring_bytes[3] = {WIDE_BYTES, PAD_BYTES, WIDE_BYTES};
+
+static slice_desc_t slices[4][9];
+static l2_read_desc_t l2_reads[4];
+static fifo_recv_desc_t recvs[4][7];
+static op_desc_t ops[4][4];
+static fifo_send_desc_t sends[4][4];
+static l2_write_desc_t l2_writes[4][4];
+
+static uint16_t input0_value(uint32_t token, uint32_t row, uint32_t col)
+{
+    return (uint16_t)(0x1000u + token * 0x100u + row * COLS + col);
+}
+
+static uint16_t input1_value(uint32_t token, uint32_t row, uint32_t col)
+{
+    return (uint16_t)(0x8000u + token * 0x200u + row * WIDE_COLS + col);
+}
+
+/* A ROWS x `cols` slice whose rows are `row_cols` elements apart. */
+static slice_desc_t padded_slice(uint32_t id, uint32_t cols, uint32_t row_cols,
+                                 uint32_t l1_offset)
+{
+    slice_desc_t slice = {
+        .slice_id = id,
+        .global_id = id,
+        .global_kind = GLOBAL_INTERMEDIATE,
+        .rank = 2u,
+        .shape = {ROWS, cols},
+        .elem_type = ELEM_F16,
+        .elem_bytes = ELEM,
+        .l1_offset_bytes = l1_offset,
+        .slot_bytes = ROWS * row_cols * ELEM,
+        .num_slots = TOKEN_SLOTS,
+        .strides_bytes = {row_cols * ELEM, ELEM},
+    };
+    return slice;
+}
+
+static slice_desc_t matrix_slice(uint32_t id, uint32_t cols, uint32_t l1_offset)
+{
+    return padded_slice(id, cols, cols, l1_offset);
+}
+
+/* An 8 x `cols` window starting at column `col` of an 8 x `slice_cols` slice. */
+static subslice_desc_t window(uint32_t id, uint32_t slice_cols, uint32_t col, uint32_t cols)
+{
+    subslice_desc_t sub = {
+        .slice_id = id,
+        .offset = {0u, col},
+        .rank = 2u,
+        .shape = {ROWS, cols},
+        .elem_type = ELEM_F16,
+        .elem_bytes = ELEM,
+        .strides_bytes = {slice_cols * ELEM, ELEM},
+    };
+    return sub;
+}
+
+static tensor_sub_slice_t layout(uint32_t row_stride, uint32_t cols)
+{
+    tensor_sub_slice_t slice = {
+        .rank = 2u,
+        .num_elems = ROWS * cols,
+        .dims = {{0u, ROWS, row_stride}, {0u, cols, ELEM}},
+    };
+    return slice;
+}
+
+static fifo_recv_desc_t recv(uint32_t transition, uint32_t src, uint32_t dst,
+                             subslice_desc_t sub, uint32_t producer_idx)
+{
+    fifo_recv_desc_t desc = {
+        .transition_id = transition,
+        .src_hartid = src,
+        .dst_hartid = dst,
+        .dst = sub,
+        .producer_idx = producer_idx,
+    };
+    return desc;
+}
+
+/* `gathered`: the receiver gathers this piece in a shared payload ring. */
+static fifo_send_desc_t send(uint32_t transition, uint32_t src, uint32_t dst,
+                             subslice_desc_t from, subslice_desc_t to,
+                             uint32_t producer_idx, uint32_t gathered)
+{
+    gathered = gathered && MAPS_FIFO_INPLACE_RECV;
+    fifo_send_desc_t desc = {
+        .transition_id = transition,
+        .src_hartid = src,
+        .dst_hartid = dst,
+        .src = from,
+        .dst = to,
+        .copy_src = layout(from.strides_bytes[0], from.shape[1]),
+        .copy_dst = layout(to.strides_bytes[0], to.shape[1]),
+        .producer_idx = producer_idx,
+        .dst_payload_mode = gathered ? FIFO_PAYLOAD_SHARED : FIFO_PAYLOAD_INLINE,
+        .dst_offset_bytes = gathered ? subslice_offset_bytes(&to) : 0u,
+    };
+    return desc;
+}
+
+static l2_write_desc_t l2_write(subslice_desc_t from, uint32_t dst)
+{
+    const uint32_t cols = from.shape[1];
+    l2_write_desc_t desc = {
+        .global_id = from.slice_id,
+        .global_kind = GLOBAL_OUTPUT,
+        .dst_l2_addr = dst,
+        .dst_l2_token_stride_bytes = ROWS * cols * ELEM,
+        .src = from,
+        .copy_src = layout(from.strides_bytes[0], cols),
+        .copy_dst = layout(cols * ELEM, cols),
+    };
+    return desc;
+}
+
+/* Flat copy of a whole `cols`-wide slice, padding included. */
+static op_desc_t copy_op(uint32_t from, uint32_t to, uint32_t cols)
+{
+    op_desc_t op = {
+        .kind = OP_COPY,
+        .num_inputs = 1u,
+        .inputs = {window(from, cols, 0u, cols)},
+        .num_outputs = 1u,
+        .outputs = {window(to, cols, 0u, cols)},
+    };
+    return op;
+}
+
+static void build_plan(uint32_t hartid, fifo_tile_plan_t *plan)
+{
+    const subslice_desc_t a = window(SLICE_A, COLS, 0u, COLS);
+    const subslice_desc_t b_left = window(SLICE_B, WIDE_COLS, 0u, COLS);
+    const subslice_desc_t b_right = window(SLICE_B, WIDE_COLS, COLS, COLS);
+    const subslice_desc_t s = window(SLICE_S, COLS, 0u, COLS);
+    const subslice_desc_t p_left = window(SLICE_P, WIDE_COLS, 0u, COLS);
+    const subslice_desc_t p_right = window(SLICE_P, WIDE_COLS, COLS, COLS);
+    const subslice_desc_t q_left = window(SLICE_Q, WIDE_COLS, 0u, COLS);
+    const subslice_desc_t q_right = window(SLICE_Q, WIDE_COLS, COLS, COLS);
+    const subslice_desc_t t = window(SLICE_T, PAD_COLS, 0u, COLS);
+    const subslice_desc_t f = window(SLICE_F, COLS, 0u, COLS);
+    const subslice_desc_t g = window(SLICE_G, COLS, 0u, COLS);
+
+    *plan = (fifo_tile_plan_t){
+        .hartid = hartid,
+        .l1_data_base = get_l1_base(hartid) + DATA_OFFSET,
+        .num_token_slots = TOKEN_SLOTS,
+        .slices = slices[hartid],
+        .l2_reads = &l2_reads[hartid],
+        .recvs = recvs[hartid],
+        .ops = ops[hartid],
+        .sends = sends[hartid],
+        .l2_writes = l2_writes[hartid],
+        .fifo = {.num_slots = 1u, .slot_data_size = NARROW_BYTES},
+    };
+
+    switch (hartid) {
+    case 0u:
+        slices[0][0] = matrix_slice(SLICE_A, COLS, 0u);
+        plan->num_slices = 1u;
+        l2_reads[0] = (l2_read_desc_t){
+            .global_id = SLICE_A,
+            .src_l2_addr = (uint32_t)input0,
+            .src_l2_token_stride_bytes = NARROW_BYTES,
+            .dst = a,
+            .copy_src = layout(COLS * ELEM, COLS),
+            .copy_dst = layout(COLS * ELEM, COLS),
+        };
+        plan->num_l2_reads = 1u;
+        sends[0][0] = send(0u, 0u, 1u, a, s, 0u, 0u);
+        sends[0][1] = send(3u, 0u, 1u, a, f, 3u, 0u);
+        sends[0][2] = send(5u, 0u, 1u, a, t, 4u, 1u);
+        sends[0][3] = send(7u, 0u, 1u, a, q_left, 6u, 1u);
+        plan->num_sends = 4u;
+        break;
+    case 2u:
+        slices[2][0] = matrix_slice(SLICE_B, WIDE_COLS, 0u);
+        plan->num_slices = 1u;
+        l2_reads[2] = (l2_read_desc_t){
+            .global_id = SLICE_B,
+            .src_l2_addr = (uint32_t)input1,
+            .src_l2_token_stride_bytes = WIDE_BYTES,
+            .dst = window(SLICE_B, WIDE_COLS, 0u, WIDE_COLS),
+            .copy_src = layout(WIDE_COLS * ELEM, WIDE_COLS),
+            .copy_dst = layout(WIDE_COLS * ELEM, WIDE_COLS),
+        };
+        plan->num_l2_reads = 1u;
+        sends[2][0] = send(1u, 2u, 1u, b_left, p_left, 1u, 1u);
+        sends[2][1] = send(2u, 2u, 1u, b_right, p_right, 2u, 1u);
+        sends[2][2] = send(6u, 2u, 1u, b_left, q_right, 5u, 1u);
+        plan->num_sends = 3u;
+        break;
+    case 1u: {
+        uint32_t offset = 0u;
+        slices[1][0] = matrix_slice(SLICE_S, COLS, offset);
+        offset += TOKEN_SLOTS * NARROW_BYTES;
+        slices[1][1] = matrix_slice(SLICE_U, COLS, offset);
+        offset += TOKEN_SLOTS * NARROW_BYTES;
+        slices[1][2] = matrix_slice(SLICE_P, WIDE_COLS, offset);
+        offset += TOKEN_SLOTS * WIDE_BYTES;
+        slices[1][3] = matrix_slice(SLICE_V, WIDE_COLS, offset);
+        offset += TOKEN_SLOTS * WIDE_BYTES;
+        slices[1][4] = matrix_slice(SLICE_F, COLS, offset);
+        offset += TOKEN_SLOTS * NARROW_BYTES;
+        slices[1][5] = matrix_slice(SLICE_Q, WIDE_COLS, offset);
+        offset += TOKEN_SLOTS * WIDE_BYTES;
+        slices[1][6] = matrix_slice(SLICE_W, WIDE_COLS, offset);
+        offset += TOKEN_SLOTS * WIDE_BYTES;
+        slices[1][7] = padded_slice(SLICE_T, COLS, PAD_COLS, offset);
+        offset += TOKEN_SLOTS * PAD_BYTES;
+        slices[1][8] = matrix_slice(SLICE_Y, PAD_COLS, offset);
+        plan->num_slices = 9u;
+        /* Q's right half is received before its left half on purpose: the
+         * alias is taken by whichever piece is waited for first. */
+        recvs[1][0] = recv(0u, 0u, 1u, s, 0u);
+        recvs[1][1] = recv(1u, 2u, 1u, p_left, 1u);
+        recvs[1][2] = recv(2u, 2u, 1u, p_right, 2u);
+        recvs[1][3] = recv(3u, 0u, 1u, f, 3u);
+        recvs[1][4] = recv(5u, 0u, 1u, t, 4u);
+        recvs[1][5] = recv(6u, 2u, 1u, q_right, 5u);
+        recvs[1][6] = recv(7u, 0u, 1u, q_left, 6u);
+        plan->num_recvs = 7u;
+        ops[1][0] = copy_op(SLICE_S, SLICE_U, COLS);
+        ops[1][1] = copy_op(SLICE_P, SLICE_V, WIDE_COLS);
+        ops[1][2] = copy_op(SLICE_Q, SLICE_W, WIDE_COLS);
+        ops[1][3] = copy_op(SLICE_T, SLICE_Y, PAD_COLS);
+        plan->num_ops = 4u;
+        sends[1][0] = send(4u, 1u, 3u, f, g, 0u, 0u);
+        plan->num_sends = 1u;
+        l2_writes[1][0] = l2_write(window(SLICE_U, COLS, 0u, COLS), (uint32_t)output0);
+        l2_writes[1][1] = l2_write(window(SLICE_V, WIDE_COLS, 0u, WIDE_COLS),
+                                   (uint32_t)output1);
+        l2_writes[1][2] = l2_write(window(SLICE_W, WIDE_COLS, 0u, WIDE_COLS),
+                                   (uint32_t)output3);
+        l2_writes[1][3] = l2_write(window(SLICE_Y, PAD_COLS, 0u, COLS), (uint32_t)output4);
+        plan->num_l2_writes = 4u;
+        plan->fifo.num_producers = 7u;
+#if MAPS_FIFO_INPLACE_RECV
+        plan->fifo.payload_rings = tile1_payload_rings;
+        plan->fifo.num_shared_rings = 3u;
+        plan->fifo.shared_ring_bytes = tile1_shared_ring_bytes;
+#endif
+        break;
+    }
+    case 3u:
+        slices[3][0] = matrix_slice(SLICE_G, COLS, 0u);
+        slices[3][1] = matrix_slice(SLICE_H, COLS, 2u * NARROW_BYTES);
+        plan->num_slices = 2u;
+        recvs[3][0] = recv(4u, 1u, 3u, g, 0u);
+        plan->num_recvs = 1u;
+        ops[3][0] = copy_op(SLICE_G, SLICE_H, COLS);
+        plan->num_ops = 1u;
+        l2_writes[3][0] = l2_write(window(SLICE_H, COLS, 0u, COLS), (uint32_t)output2);
+        plan->num_l2_writes = 1u;
+        plan->fifo.num_producers = 1u;
+        break;
+    }
+}
+
+static void fill_sentinel(const fifo_tile_plan_t *plan, uint32_t slice_id)
+{
+    const slice_desc_t *slice = get_slice((const tile_plan_t *)plan, slice_id);
+    volatile uint16_t *storage =
+        (volatile uint16_t *)(plan->l1_data_base + slice->l1_offset_bytes);
+    for (uint32_t i = 0; i < slice->num_slots * slice->slot_bytes / ELEM; ++i)
+        storage[i] = SENTINEL;
+}
+
+/* Planned-storage elements of a slice still holding the sentinel, and how many
+ * an in-place (all) or unpacked (padding only) run must leave. */
+static uint32_t count_sentinel(const fifo_tile_plan_t *plan, uint32_t slice_id,
+                               uint32_t *expected)
+{
+    const slice_desc_t *slice = get_slice((const tile_plan_t *)plan, slice_id);
+    volatile const uint16_t *storage =
+        (volatile const uint16_t *)(plan->l1_data_base + slice->l1_offset_bytes);
+    const uint32_t elements = slice->num_slots * slice->slot_bytes / ELEM;
+    uint32_t count = 0u;
+    for (uint32_t i = 0; i < elements; ++i)
+        count += storage[i] == SENTINEL;
+#if MAPS_FIFO_INPLACE_RECV
+    *expected = elements;
+#else
+    *expected = elements - slice->num_slots * maps_shape_elems(slice->rank, slice->shape);
+#endif
+    return count;
+}
+
+static uint32_t check_outputs(void)
+{
+    uint32_t errors = 0u;
+    for (uint32_t token = 0; token < NUM_TOKENS; ++token)
+        for (uint32_t row = 0; row < ROWS; ++row) {
+            for (uint32_t col = 0; col < COLS; ++col) {
+                errors += output0[token][row][col] != input0_value(token, row, col);
+                errors += output2[token][row][col] != input0_value(token, row, col);
+                errors += output4[token][row][col] != input0_value(token, row, col);
+            }
+            for (uint32_t col = 0; col < WIDE_COLS; ++col) {
+                errors += output1[token][row][col] != input1_value(token, row, col);
+                errors += output3[token][row][col] !=
+                          (col < COLS ? input0_value(token, row, col)
+                                      : input1_value(token, row, col - COLS));
+            }
+        }
+    return errors;
+}
+
+#if MAPS_FIFO_INPLACE_RECV
+/* How tile 1 must consume its receives, given the gathers build_plan chose. */
+static uint32_t check_tile1_modes(const fifo_tile_plan_t *plan)
+{
+    static const uint8_t expected[7] = {
+        MAPS_FIFO_RECV_INPLACE, MAPS_FIFO_RECV_GATHER, MAPS_FIFO_RECV_GATHER,
+        MAPS_FIFO_RECV_UNPACK,  MAPS_FIFO_RECV_GATHER, MAPS_FIFO_RECV_GATHER,
+        MAPS_FIFO_RECV_GATHER,
+    };
+    uint8_t modes[8];
+    uint32_t errors = 0u;
+
+    maps_fifo_plan_inplace(plan, modes);
+    for (uint32_t i = 0; i < plan->num_recvs; ++i)
+        errors += modes[i] != expected[i];
+
+    for (uint32_t p = 0; p < plan->fifo.num_producers; ++p)
+        errors += fifo_producer_is_shared(plan->hartid, p) != (tile1_payload_rings[p] != 0u);
+    return errors;
+}
+#endif
+
+int main(void)
+{
+    perf_init(); /* the CV32E40P resets with its counters inhibited */
+    const uint32_t hartid = get_hartid();
+
+
+    idma_init();
+    eu_init();
+    eu_clear_events(0xffffffffu);
+    eu_idma_init(0u);
+    eu_fsync_init(0u);
+    fsync_init();
+
+    /* Only hart 0 clears .bss at boot; the plan tables live there, so no
+     * tile may fill them before that has finished. */
+    fsync_sync_global();
+    eu_fsync_wait(WFE);
+
+    const uint32_t active = hartid < 4u;
+    fifo_tile_plan_t plan;
+    if (active) {
+        build_plan(hartid, &plan);
+        maps_fifo_init(&plan);
+    }
+    if (hartid == 1u) {
+        fill_sentinel(&plan, SLICE_S);
+        fill_sentinel(&plan, SLICE_P);
+        fill_sentinel(&plan, SLICE_Q);
+        fill_sentinel(&plan, SLICE_T);
+    }
+    if (hartid == 3u)
+        fill_sentinel(&plan, SLICE_G);
+    if (hartid == 0u)
+        for (uint32_t token = 0; token < NUM_TOKENS; ++token)
+            for (uint32_t row = 0; row < ROWS; ++row) {
+                for (uint32_t col = 0; col < COLS; ++col)
+                    input0[token][row][col] = input0_value(token, row, col);
+                for (uint32_t col = 0; col < WIDE_COLS; ++col)
+                    input1[token][row][col] = input1_value(token, row, col);
+            }
+
+    fsync_sync_global();
+    eu_fsync_wait(WFE);
+
+    uint32_t errors = 0u;
+    if (active) {
+        uint32_t start = perf_get_cycles();
+#ifdef FIFO_INPLACE_BLOCKING
+        /* Blocking transport only, for simulator models without queued DMA. */
+        for (uint32_t token = 0; token < NUM_TOKENS; ++token)
+            maps_fifo_run_tile_token(&plan, token);
+#else
+        maps_fifo_run_tile_tokens(&plan, NUM_TOKENS);
+#endif
+        uint32_t cycles = perf_get_cycles() - start;
+
+        if (hartid == 1u || hartid == 3u) {
+            /* S is consumed from its own slot, P, Q and T are gathered, and F
+             * is a send source, so it is always unpacked. */
+            static const uint32_t tile1_slices[] = {SLICE_S, SLICE_P, SLICE_Q, SLICE_T};
+            static const uint32_t tile3_slices[] = {SLICE_G};
+            const uint32_t *checked = hartid == 1u ? tile1_slices : tile3_slices;
+            const uint32_t num_checked = hartid == 1u ? 4u : 1u;
+            for (uint32_t i = 0; i < num_checked; ++i) {
+                uint32_t expected;
+                const uint32_t untouched = count_sentinel(&plan, checked[i], &expected);
+                errors += untouched != expected;
+                printf("fifo_inplace_recv tile=%u slice=%u untouched=%u/%u\n", hartid,
+                       checked[i], untouched, expected);
+            }
+#if MAPS_FIFO_INPLACE_RECV
+            if (hartid == 1u)
+                errors += check_tile1_modes(&plan);
+#endif
+            printf("fifo_inplace_recv tile=%u inplace=%u cycles=%u errors=%u\n",
+                   hartid, (uint32_t)MAPS_FIFO_INPLACE_RECV, cycles, errors);
+        }
+    }
+
+    fsync_sync_global();
+    eu_fsync_wait(WFE);
+
+    if (hartid == 0u) {
+        uint32_t output_errors = check_outputs();
+        errors += output_errors;
+        printf("fifo_inplace_recv outputs errors=%u\n", output_errors);
+    }
+    return (int)errors;
+}

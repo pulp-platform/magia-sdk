@@ -22,8 +22,14 @@ __DYNAMIC  =  0;
  * the link may place another function (e.g. to_x) first, so the entry would boot
  * into arbitrary code with an uninitialized register file instead of crt0. */
 ENTRY(_start)
+/* L2 spans 0xc0000000 .. 0xccfeffff (see the gvsoc magia_v3 arch.py). The program
+ * image sits at its top, from instrram on. l2_bulk is the 192 MB of L2 below the
+ * image, reachable both from the tile's OBI xbar and from the NoC (so the iDMA
+ * reaches it), for payloads too large to live in dataram, e.g. a whole network's
+ * weights. Tests that place nothing there emit no such section. */
 MEMORY
 {
+    l2_bulk     : ORIGIN = 0xc0000000, LENGTH = 0x0C000000
     instrram    : ORIGIN = 0xcc000000, LENGTH = 0x20000
     dataram     : ORIGIN = 0xcc020000, LENGTH = 0xF00000
     stack       : ORIGIN = 0x00010000, LENGTH = 0x4000 /* 16K for control core CV32 (0x10000-0x14000); PULP 0x14000-0x1C000, Spatz 0x1C000-0x20000 */
@@ -41,6 +47,7 @@ PHDRS
 {
     text PT_LOAD;
     data PT_LOAD;
+    bulk PT_LOAD;
 }
 
 SECTIONS
@@ -50,6 +57,34 @@ SECTIONS
         . = ALIGN(4);
         KEEP(*(.vectors))
     } > instrram :text
+
+    /* Read-only bulk payload, loaded from the ELF. */
+    .l2_bulk : {
+        . = ALIGN(4);
+        _l2_bulk_start = .;
+        KEEP(*(.l2_bulk))
+        KEEP(*(.l2_bulk.*))
+        _l2_bulk_end = .;
+    } > l2_bulk :bulk
+
+    /* MAPS application state must remain in the directly addressed application-data
+     * window. Consume its named subsection before the generic network arena below. */
+    .l2_arena (NOLOAD) : {
+        . = ALIGN(4);
+        _l2_arena_start = .;
+        *(.l2_arena.maps_application)
+        _l2_arena_end = .;
+    } > dataram :data
+
+    /* Large model scratch payload, NOLOAD so it never enters the ELF. Nothing zeroes
+     * it, so anything placed here must be written before it is read. */
+    .l2_model_arena (NOLOAD) : {
+        . = ALIGN(4);
+        _l2_model_arena_start = .;
+        *(.l2_arena)
+        *(.l2_arena.*)
+        _l2_model_arena_end = .;
+    } > l2_bulk
 
     .text : {
         . = ALIGN(4);
@@ -168,13 +203,13 @@ SECTIONS
 /* Per-tile-aliased scratch (private to each tile, unlike the shared-L2 .bss).
      * Placed above the stack top so the downward-growing stack never reaches it.
      * Zeroed by every hart in crt0 (see _tile_bss_start/_tile_bss_end). */
-    _tile_bss_size = 0x400;   /* 1 KiB per-tile scratch */
+    _tile_bss_size = 0x800;   /* 2 KiB per-tile scratch (the MAPS slice alias table uses 1.5 KiB) */
     .tile_bss (NOLOAD): {
         . = ALIGN(4);
         _tile_bss_start = . ;
         *(.tile_bss)
         *(.tile_bss.*)
-        . = _tile_bss_start + _tile_bss_size ;   /* fixed 1 KiB reservation */
+        . = _tile_bss_start + _tile_bss_size ;   /* fixed 2 KiB reservation */
         _tile_bss_end = . ;
     } > stack :NONE
 }

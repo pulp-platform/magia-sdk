@@ -149,7 +149,7 @@ static inline uint32_t eu_wait_events_polling(uint32_t event_mask, uint32_t time
 
 static inline unsigned int evt_read32(unsigned int addr)
 {
-    unsigned int value;
+    unsigned int value = 0;
 #if STALLING == 0
 #if CV32E40P == 1
     __asm__ __volatile__("cv.elw %0, 0(%1)" : "=r"(value) : "r"(addr) : "memory");
@@ -167,12 +167,20 @@ static inline unsigned int evt_read32(unsigned int addr)
  */
 static inline uint32_t eu_wait_events_wfe(uint32_t event_mask)
 {
-    while (eu_check_events(event_mask) == 0) {
-        evt_read32(EU_CORE_EVENT_WAIT);
+    uint32_t detected_events = eu_check_events(event_mask);
+
+    while (detected_events == 0) {
+        /* The event-wait load returns the masked event buffer that woke the core.
+         * Consume that value directly: re-reading the buffer can miss the wake-up in
+         * the GVSoC event-unit model. STALLING builds make evt_read32 return 0, so
+         * the explicit read remains their polling fallback. */
+        detected_events = evt_read32(EU_CORE_EVENT_WAIT) & event_mask;
+        if (detected_events == 0)
+            detected_events = eu_check_events(event_mask);
     }
 
     eu_clear_events(event_mask);
-    return 1;
+    return detected_events;
 }
 
 /**
