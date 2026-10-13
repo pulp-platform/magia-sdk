@@ -5,12 +5,7 @@
 
 void MAGIA_add_fp16_spatz(const float16 *A, const float16 *B, float16 *C, uint32_t size);
 
-/* Broadcast variant, see the definition for the modes (ADD_BCAST_*). */
-void MAGIA_add_bcast_fp16_spatz(const float16 *A,
-                                const float16 *B,
-                                float16 *Y,
-                                uint32_t rows,
-                                uint32_t row_len,
-                                uint32_t mode);
+void MAGIA_add_bcast_fp16_spatz(const float16 *A, const float16 *B, float16 *Y,
+                                uint32_t rows, uint32_t row_len, uint32_t mode);
 
 #endif /* ADD_FP16_SPATZ_H_ */

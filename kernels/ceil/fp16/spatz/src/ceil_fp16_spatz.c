@@ -2,16 +2,13 @@
 #include <errno.h>
 
 #include "eventunit.h"
-#include "idma.h"
 #include "tile.h"
-
-#include "kernel_idma_utils.h"
 
 #include "ceil_fp16_spatz.h"
 #include "ceil_fp16_spatz_params.h"
 #include "ceil_fp16_spatz_task_bin.h"
 
-#define HID         get_hartid()
+#define HID get_hartid()
 #define KERNEL_NAME "ceil_fp16_spatz"
 
 static int alloc_l1(void **params, size_t size)
@@ -26,11 +23,11 @@ static int alloc_l1(void **params, size_t size)
     size_t elems;
     size_t left;
 
-    elems       = size / NUM_HARTS;
-    left        = size % NUM_HARTS;
+    elems = size / NUM_HARTS;
+    left = size % NUM_HARTS;
     shard_start = HID * elems + (HID < left ? HID : left);
-    shard_end   = shard_start + elems + (HID < left ? 1 : 0);
-    shard_len   = shard_end - shard_start;
+    shard_end = shard_start + elems + (HID < left ? 1 : 0);
+    shard_len = shard_end - shard_start;
 
     l1_alloc_init();
 
@@ -48,11 +45,11 @@ static int alloc_l1(void **params, size_t size)
 
     ceil_params->shard_X = shard_X;
     ceil_params->shard_Y = shard_Y;
-    ceil_params->start   = shard_start;
-    ceil_params->len     = shard_len;
-    ceil_params->end     = shard_end;
+    ceil_params->start = shard_start;
+    ceil_params->len = shard_len;
+    ceil_params->end = shard_end;
 
-    *params = (void *)ceil_params;
+    *params = (void *) ceil_params;
 
     return 0;
 }
@@ -60,40 +57,41 @@ static int alloc_l1(void **params, size_t size)
 static int init_input_params(void *params, const float16 *X)
 {
     volatile ceil_fp16_spatz_params_t *ceil_params;
+    uintptr_t shard_X;
+    uintptr_t shard_Y;
     uint32_t start;
     uint32_t len;
 
-    ceil_params = (volatile ceil_fp16_spatz_params_t *)params;
-    start       = ceil_params->start;
-    len         = ceil_params->len;
+    ceil_params = (volatile ceil_fp16_spatz_params_t *) params;
 
-    if (len == 0)
-        return 0;
+    shard_X = ceil_params->shard_X;
+    shard_Y = ceil_params->shard_Y;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    start = ceil_params->start;
+    len = ceil_params->len;
 
-    /* This tile's slice [start, start+len) is contiguous in L2. The Spatz task writes every
-       output (Y = ceil(X)), so shard_Y is not zeroed here. */
-    idma_memcpy_1d(0, (uint32_t)(X + start), (uint32_t)ceil_params->shard_X, len * sizeof(float16));
-    eu_idma_wait_a2o(WFE);
+    for (int i = 0; i < len; i++) {
+        uint32_t global_idx = start + i;
+        uint32_t offset = i * sizeof(float16);
+
+        mmio_fp16(shard_X + offset) = X[global_idx];
+        mmio_fp16(shard_Y + offset) = 0;
+    }
 
     return 0;
 }
+
 
 static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_ctrl_init();
+
     spatz_run_task_with_params(CEIL_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
         goto exit;
     }
 
@@ -103,29 +101,27 @@ exit:
     return ret;
 }
 
-static int store_result(void *params, float16 *dst)
+static int store_result(void* params, float16 *dst)
 {
     volatile ceil_fp16_spatz_params_t *ceil_params;
+    uint32_t shard_Y_base;
     uint32_t start;
     uint32_t len;
 
-    ceil_params = (volatile ceil_fp16_spatz_params_t *)params;
-    start       = ceil_params->start;
-    len         = ceil_params->len;
+    ceil_params = (volatile ceil_fp16_spatz_params_t *) params;
+    shard_Y_base = ceil_params->shard_Y;
+    start = ceil_params->start;
+    len = ceil_params->len;
 
-    if (len == 0)
-        return 0;
-
-    idma_ctrl_init();
-    eu_ctrl_init();
-
-    /* This tile's output slice [start, start+len) is contiguous in L2. */
-    idma_memcpy_1d(
-        1, (uint32_t)(dst + start), (uint32_t)ceil_params->shard_Y, len * sizeof(float16));
-    eu_idma_wait_o2a(WFE);
+    for (int i = 0; i < len; i++) {
+        uint32_t global_idx = start + i;
+        uint32_t offset = i * sizeof(float16);
+        dst[global_idx] = mmio_fp16(shard_Y_base + offset);
+    }
 
     return 0;
 }
+
 
 void MAGIA_ceil_fp16_spatz(const float16 *X, float16 *Y, uint32_t size)
 {
@@ -140,19 +136,13 @@ void MAGIA_ceil_fp16_spatz(const float16 *X, float16 *Y, uint32_t size)
 
     ret = init_input_params(params, X);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = offload_spatz_task(params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 

@@ -2,16 +2,13 @@
 #include <errno.h>
 
 #include "eventunit.h"
-#include "idma.h"
 #include "tile.h"
-
-#include "kernel_idma_utils.h"
 
 #include "globalmaxpool_fp16_spatz.h"
 #include "globalmaxpool_fp16_spatz_params.h"
 #include "globalmaxpool_fp16_spatz_task_bin.h"
 
-#define HID         get_hartid()
+#define HID get_hartid()
 #define KERNEL_NAME "globalmaxpool_fp16_spatz"
 
 static int alloc_l1(void **params, uint32_t input_shape[4])
@@ -35,8 +32,8 @@ static int alloc_l1(void **params, uint32_t input_shape[4])
     left  = channel_num % NUM_HARTS;
 
     start = HID * shard + (HID < left ? HID : left);
-    end   = start + shard + (HID < left ? 1 : 0);
-    len   = end - start;
+    end = start + shard + (HID < left ? 1 : 0);
+    len = end - start;
 
     l1_alloc_init();
 
@@ -58,7 +55,7 @@ static int alloc_l1(void **params, uint32_t input_shape[4])
     gap_params->start   = start;
     gap_params->len     = len;
 
-    *params = (void *)gap_params;
+    *params = (void *) gap_params;
 
     return 0;
 }
@@ -66,28 +63,33 @@ static int alloc_l1(void **params, uint32_t input_shape[4])
 static int init_input_params(void *params, const float16 *X)
 {
     volatile globalmaxpool_fp16_spatz_params_t *gap_params;
-    uint32_t start;
-    uint32_t len;
-    uint32_t hw_len;
+    uintptr_t shard_X_base;
+    uintptr_t shard_Y_base;
+    uint32_t local_idx;
+    uint32_t end;
 
-    gap_params = (volatile globalmaxpool_fp16_spatz_params_t *)params;
-    start      = gap_params->start;
-    len        = gap_params->len;
-    hw_len     = gap_params->hw_len;
+    gap_params = (volatile globalmaxpool_fp16_spatz_params_t *) params;
+    shard_X_base = gap_params->shard_X;
+    shard_Y_base = gap_params->shard_Y;
+    end = gap_params->start + gap_params->len;
 
-    if (len == 0)
-        return 0;
+    local_idx = 0;
+    for (uint32_t inst = gap_params->start; inst < end; inst++) {
+        uint32_t global_base = inst * gap_params->hw_len;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+        for (uint32_t i = 0; i < gap_params->hw_len; i++) {
+            uint32_t global_idx = global_base + i;
+            uint32_t offset = local_idx * sizeof(float16);
 
-    /* This tile's channels [start, start+len) are contiguous in L2. The Spatz task writes
-       every output (one max per channel), so shard_Y is not zeroed here. */
-    idma_memcpy_1d(0,
-                   (uint32_t)(X + start * hw_len),
-                   (uint32_t)gap_params->shard_X,
-                   len * hw_len * sizeof(float16));
-    eu_idma_wait_a2o(WFE);
+            mmio_fp16(shard_X_base + offset) = X[global_idx];
+            local_idx++;
+        }
+    }
+
+    for (uint32_t i = 0; i < gap_params->len; i++) {
+        uint32_t offset = i * sizeof(float16);
+        mmio_fp16(shard_Y_base + offset) = 0;
+    }
 
     return 0;
 }
@@ -96,15 +98,12 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_ctrl_init();
+
     spatz_run_task_with_params(GLOBALMAXPOOL_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
         goto exit;
     }
 
@@ -117,22 +116,17 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile globalmaxpool_fp16_spatz_params_t *gap_params;
-    uint32_t start;
-    uint32_t len;
+    uintptr_t shard_Y_base;
 
-    gap_params = (volatile globalmaxpool_fp16_spatz_params_t *)params;
-    start      = gap_params->start;
-    len        = gap_params->len;
+    gap_params = (volatile globalmaxpool_fp16_spatz_params_t *) params;
+    shard_Y_base = gap_params->shard_Y;
 
-    if (len == 0)
-        return 0;
+    for (uint32_t i = 0; i < gap_params->len; i++) {
+        uint32_t global_idx = gap_params->start + i;
+        uint32_t offset = i * sizeof(float16);
 
-    idma_ctrl_init();
-    eu_ctrl_init();
-
-    /* This tile's outputs [start, start+len) are contiguous in L2. */
-    idma_memcpy_1d(1, (uint32_t)(Y + start), (uint32_t)gap_params->shard_Y, len * sizeof(float16));
-    eu_idma_wait_o2a(WFE);
+        Y[global_idx] = mmio_fp16(shard_Y_base + offset);
+    }
 
     return 0;
 }
@@ -150,19 +144,13 @@ void MAGIA_globalmaxpool_fp16_spatz(const float16 *X, float16 *Y, uint32_t input
 
     ret = init_input_params((void *)params, X);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = offload_spatz_task((void *)params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 

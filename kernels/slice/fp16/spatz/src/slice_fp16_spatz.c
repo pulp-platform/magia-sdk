@@ -2,24 +2,16 @@
 #include <errno.h>
 
 #include "eventunit.h"
-#include "idma.h"
 #include "tile.h"
-
-#include "kernel_idma_utils.h"
 
 #include "slice_fp16_spatz.h"
 #include "slice_fp16_spatz_params.h"
 #include "slice_fp16_spatz_task_bin.h"
 
-#define HID         get_hartid()
+#define HID get_hartid()
 #define KERNEL_NAME "slice_fp16_spatz"
 
-static int alloc_l1(void **params,
-                    uint32_t outer_dim,
-                    uint32_t slice_dim,
-                    uint32_t inner_dim,
-                    uint32_t start_idx,
-                    uint32_t out_slice_dim)
+static int alloc_l1(void **params, uint32_t outer_dim, uint32_t slice_dim, uint32_t inner_dim, uint32_t start_idx, uint32_t out_slice_dim)
 {
     volatile slice_fp16_spatz_params_t *slice_params;
     uint32_t shard_X;
@@ -35,11 +27,11 @@ static int alloc_l1(void **params,
     size_t y_size;
 
     elems = outer_dim / NUM_HARTS;
-    left  = outer_dim % NUM_HARTS;
+    left = outer_dim % NUM_HARTS;
 
     start_outer = HID * elems + (HID < left ? HID : left);
-    end_outer   = start_outer + elems + (HID < left ? 1 : 0);
-    len_outer   = end_outer - start_outer;
+    end_outer = start_outer + elems + (HID < left ? 1 : 0);
+    len_outer = end_outer - start_outer;
 
     x_size = len_outer * slice_dim * inner_dim;
     y_size = len_outer * out_slice_dim * inner_dim;
@@ -58,16 +50,16 @@ static int alloc_l1(void **params,
     if (!shard_Y)
         return ENOMEM;
 
-    slice_params->shard_X       = shard_X;
-    slice_params->shard_Y       = shard_Y;
-    slice_params->slice_dim     = slice_dim;
+    slice_params->shard_X = shard_X;
+    slice_params->shard_Y = shard_Y;
+    slice_params->slice_dim = slice_dim;
     slice_params->out_slice_dim = out_slice_dim;
-    slice_params->inner_dim     = inner_dim;
-    slice_params->start_outer   = start_outer;
-    slice_params->len_outer     = len_outer;
-    slice_params->start_idx     = start_idx;
+    slice_params->inner_dim = inner_dim;
+    slice_params->start_outer = start_outer;
+    slice_params->len_outer = len_outer;
+    slice_params->start_idx = start_idx;
 
-    *params = (void *)slice_params;
+    *params = (void *) slice_params;
 
     return 0;
 }
@@ -75,32 +67,39 @@ static int alloc_l1(void **params,
 static int init_input_params(void *params, const float16 *data)
 {
     volatile slice_fp16_spatz_params_t *slice_params;
-    uint32_t start_outer;
-    uint32_t len_outer;
-    uint32_t slice_dim;
-    uint32_t inner_dim;
-    uint32_t global_offset;
-    uint32_t x_bytes;
+    uint32_t shard_X;
+    uint32_t shard_Y;
 
-    slice_params = (volatile slice_fp16_spatz_params_t *)params;
-    start_outer  = slice_params->start_outer;
-    len_outer    = slice_params->len_outer;
-    slice_dim    = slice_params->slice_dim;
-    inner_dim    = slice_params->inner_dim;
+    size_t slice_dim;
+    size_t inner_dim;
+    size_t start_outer;
+    size_t len_outer;
+    size_t x_size;
+    size_t y_size;
+    size_t global_offset;
+    size_t out_slice_dim;
 
-    if (len_outer == 0)
-        return 0;
+    slice_params = (volatile slice_fp16_spatz_params_t *) params;
 
+    shard_X = slice_params->shard_X;
+    shard_Y = slice_params->shard_Y;
+    start_outer = slice_params->start_outer;
+    len_outer = slice_params->len_outer;
+    slice_dim = slice_params->slice_dim;
+    inner_dim = slice_params->inner_dim;
+    out_slice_dim = slice_params->out_slice_dim;
+
+    x_size = len_outer * slice_dim * inner_dim;
+    y_size = len_outer * out_slice_dim * inner_dim;
     global_offset = start_outer * slice_dim * inner_dim;
-    x_bytes       = len_outer * slice_dim * inner_dim * sizeof(float16);
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    for (uint32_t i = 0; i < x_size; i++) {
+        mmio_fp16(shard_X + i * sizeof(float16)) = data[global_offset + i];
+    }
 
-    /* Load this tile's contiguous [len_outer, slice_dim, inner] block; the Spatz
-       task extracts the slice and fully writes shard_Y (so no zeroing needed). */
-    idma_memcpy_1d(0, (uint32_t)(data + global_offset), (uint32_t)slice_params->shard_X, x_bytes);
-    eu_idma_wait_a2o(WFE);
+    for (uint32_t i = 0; i < y_size; i++) {
+        mmio_fp16(shard_Y + i * sizeof(float16)) = 0;
+    }
 
     return 0;
 }
@@ -109,15 +108,12 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_ctrl_init();
+
     spatz_run_task_with_params(SLICE_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
         goto exit;
     }
 
@@ -130,40 +126,37 @@ exit:
 static int store_result(void *params, float16 *sliced)
 {
     volatile slice_fp16_spatz_params_t *slice_params;
+    uint32_t shard_Y_base;
     uint32_t start_outer;
-    uint32_t len_outer;
     uint32_t out_stride;
-    uint32_t global_offset;
-    uint32_t y_bytes;
+    uint32_t len_outer;
+    uint32_t out_slice_dim;
+    uint32_t inner_dim;
 
-    slice_params = (volatile slice_fp16_spatz_params_t *)params;
-    start_outer  = slice_params->start_outer;
-    len_outer    = slice_params->len_outer;
-    out_stride   = slice_params->out_slice_dim * slice_params->inner_dim;
+    slice_params = (volatile slice_fp16_spatz_params_t *) params;
+    shard_Y_base = slice_params->shard_Y;
+    start_outer = slice_params->start_outer;
+    len_outer = slice_params->len_outer;
+    out_slice_dim = slice_params->out_slice_dim;
+    inner_dim = slice_params->inner_dim;
 
-    if (len_outer == 0)
-        return 0;
+    out_stride = out_slice_dim * inner_dim;
 
-    global_offset = start_outer * out_stride;
-    y_bytes       = len_outer * out_stride * sizeof(float16);
+    uint32_t l1_elem_idx = 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    for (uint32_t o = 0; o < len_outer; o++) {
+        uint32_t global_element_offset = (start_outer + o) * out_stride;
 
-    /* This tile's output rows [start_outer, start_outer+len_outer) are contiguous in L2. */
-    idma_memcpy_1d(1, (uint32_t)(sliced + global_offset), (uint32_t)slice_params->shard_Y, y_bytes);
-    eu_idma_wait_o2a(WFE);
+        for (uint32_t i = 0; i < out_stride; i++) {
+            sliced[global_element_offset + i] = mmio_fp16(shard_Y_base + l1_elem_idx * sizeof(float16));
+            l1_elem_idx++;
+        }
+    }
 
     return 0;
 }
 
-void MAGIA_slice_fp16_spatz(const float16 *data,
-                            float16 *sliced,
-                            uint32_t outer_dim,
-                            uint32_t slice_dim,
-                            uint32_t inner_dim,
-                            uint32_t start_idx,
-                            uint32_t out_slice_dim)
+void MAGIA_slice_fp16_spatz(const float16 *data, float16 *sliced, uint32_t outer_dim, uint32_t slice_dim, uint32_t inner_dim, uint32_t start_idx, uint32_t out_slice_dim)
 {
     int ret;
     volatile slice_fp16_spatz_params_t *params;
@@ -176,19 +169,13 @@ void MAGIA_slice_fp16_spatz(const float16 *data,
 
     ret = init_input_params(params, data);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = offload_spatz_task(params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 

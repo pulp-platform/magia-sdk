@@ -2,23 +2,22 @@
 #include <errno.h>
 
 #include "eventunit.h"
-#include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
+#include "kernels_dma_utils.h"
 
 #include "add_fp16_spatz.h"
 #include "add_fp16_spatz_params.h"
 #include "add_bcast_fp16_spatz_params.h"
 #include "add_fp16_spatz_task_bin.h"
 
-#define HID         get_hartid()
+#define HID get_hartid()
 #define KERNEL_NAME "add_fp16_spatz"
 #define KERNEL_NAME_BCAST "add_bcast_fp16_spatz"
 
 static int allocate_l1(void **params, uint32_t size)
 {
-    volatile add_fp16_spatz_params_t *add_params;
+    volatile add_fp16_spatz_params_t * add_params;
     uintptr_t shard_A;
     uintptr_t shard_B;
     uintptr_t shard_C;
@@ -29,11 +28,11 @@ static int allocate_l1(void **params, uint32_t size)
     size_t elems;
     size_t left;
 
-    elems       = size / NUM_HARTS;
-    left        = size % NUM_HARTS;
+    elems = size / NUM_HARTS;
+    left = size % NUM_HARTS;
     shard_start = HID * elems + (HID < left ? HID : left);
-    shard_end   = shard_start + elems + (HID < left ? 1 : 0);
-    shard_len   = shard_end - shard_start;
+    shard_end = shard_start + elems + (HID < left ? 1 : 0);
+    shard_len = shard_end - shard_start;
 
     l1_alloc_init();
 
@@ -56,54 +55,40 @@ static int allocate_l1(void **params, uint32_t size)
     add_params->shard_A = shard_A;
     add_params->shard_B = shard_B;
     add_params->shard_C = shard_C;
-    add_params->start   = shard_start;
-    add_params->len     = shard_len;
-    add_params->end     = shard_end;
+    add_params->start = shard_start;
+    add_params->len = shard_len;
+    add_params->end = shard_end;
 
-    *params = (void *)add_params;
+    *params = (void *) add_params;
 
     return 0;
 }
 
-static int init_input_params(void *params, const float16 *A, const float16 *B)
+/* This tile's shard is a contiguous range of both operands, so one transfer each brings
+ * them in. shard_C is not pre-cleared: the task writes every element of it. */
+static int init_input_params(kdma_t *d, void *params, const float16 *A, const float16 *B)
 {
     volatile add_fp16_spatz_params_t *add_params;
-    uint32_t start;
-    uint32_t len;
+    uint32_t bytes;
 
-    add_params = (volatile add_fp16_spatz_params_t *)params;
-    start      = add_params->start;
-    len        = add_params->len;
+    add_params = (volatile add_fp16_spatz_params_t *) params;
+    bytes = add_params->len * sizeof(float16);
 
-    if (len == 0)
-        return 0;
-
-    idma_ctrl_init();
-    eu_ctrl_init();
-
-    /* This tile's slice [start, start+len) is contiguous in both operands. The Spatz task
-       writes every output (C = A + B), so shard_C is not zeroed here. */
-    idma_memcpy_1d(0, (uint32_t)(A + start), (uint32_t)add_params->shard_A, len * sizeof(float16));
-    eu_idma_wait_a2o(WFE);
-    idma_memcpy_1d(0, (uint32_t)(B + start), (uint32_t)add_params->shard_B, len * sizeof(float16));
-    eu_idma_wait_a2o(WFE);
+    kdma_in(d, (uintptr_t) (A + add_params->start), add_params->shard_A, bytes);
+    kdma_in(d, (uintptr_t) (B + add_params->start), add_params->shard_B, bytes);
 
     return 0;
 }
 
-static int offload_spatz_task(void *params)
+static int offload_spatz_task(kdma_t *d, uint32_t task, void *params)
 {
     int ret;
 
-    eu_ctrl_init();
-    spatz_run_task_with_params(ADD_FP16_SPATZ_TASK, params);
+    spatz_run_task_with_params(task, params);
 
     ret = eu_spatz_wait(WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
         goto exit;
     }
 
@@ -113,26 +98,16 @@ exit:
     return ret;
 }
 
-static int store_result(void *params, float16 *dst)
+static int store_result(kdma_t *d, void* params, float16 *dst)
 {
     volatile add_fp16_spatz_params_t *add_params;
-    uint32_t start;
-    uint32_t len;
 
-    add_params = (volatile add_fp16_spatz_params_t *)params;
-    start      = add_params->start;
-    len        = add_params->len;
+    add_params = (volatile add_fp16_spatz_params_t *) params;
 
-    if (len == 0)
-        return 0;
-
-    idma_ctrl_init();
-    eu_ctrl_init();
-
-    /* This tile's output slice [start, start+len) is contiguous in L2. */
-    idma_memcpy_1d(
-        1, (uint32_t)(dst + start), (uint32_t)add_params->shard_C, len * sizeof(float16));
-    eu_idma_wait_o2a(WFE);
+    kdma_out(d,
+             (uintptr_t) (dst + add_params->start),
+             add_params->shard_C,
+             add_params->len * sizeof(float16));
 
     return 0;
 }
@@ -141,6 +116,9 @@ void MAGIA_add_fp16_spatz(const float16 *A, const float16 *B, float16 *C, uint32
 {
     int ret;
     volatile add_fp16_spatz_params_t *params;
+    kdma_t d;
+
+    kdma_open(&d);
 
     ret = allocate_l1(&params, size);
     if (ret != 0) {
@@ -148,25 +126,23 @@ void MAGIA_add_fp16_spatz(const float16 *A, const float16 *B, float16 *C, uint32
         return;
     }
 
-    ret = init_input_params(params, A, B);
+    /* More tiles than elements: nothing staged, nothing offloaded, nothing written back. */
+    if (params->len == 0)
+        return;
+
+    ret = init_input_params(&d, (void *)params, A, B);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = offload_spatz_task(params);
+    ret = offload_spatz_task(&d, ADD_FP16_SPATZ_TASK, (void *)params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = store_result(params, C);
+    ret = store_result(&d, (void *)params, C);
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }
@@ -197,6 +173,7 @@ void MAGIA_add_bcast_fp16_spatz(const float16 *A,
     uint32_t r_len;
     uint32_t b_len;
     uint32_t bytes;
+    kdma_t d;
     int ret;
 
     {
@@ -214,7 +191,7 @@ void MAGIA_add_bcast_fp16_spatz(const float16 *A,
 
     l1_alloc_init();
 
-    params  = l1_alloc(sizeof(add_bcast_fp16_spatz_params_t));
+    params = l1_alloc(sizeof(add_bcast_fp16_spatz_params_t));
     shard_A = (uintptr_t)l1_alloc((size_t)r_len * row_len * sizeof(float16));
     shard_B = (uintptr_t)l1_alloc((size_t)b_len * sizeof(float16));
     shard_Y = (uintptr_t)l1_alloc((size_t)r_len * row_len * sizeof(float16));
@@ -231,29 +208,20 @@ void MAGIA_add_bcast_fp16_spatz(const float16 *A,
     params->row_len = row_len;
     params->mode    = mode;
 
+    kdma_open(&d);
+
     bytes = r_len * row_len * sizeof(float16);
-    idma_memcpy_1d(0, (uint32_t)(A + (uintptr_t)r_start * row_len), (uint32_t)shard_A, bytes);
-    eu_idma_wait_a2o(WFE);
-    idma_memcpy_1d(0,
-                   (uint32_t)(B + (mode == ADD_BCAST_SCALAR ? r_start : 0)),
-                   (uint32_t)shard_B,
-                   b_len * sizeof(float16));
-    eu_idma_wait_a2o(WFE);
+    kdma_in(&d, (uintptr_t)(A + (uintptr_t)r_start * row_len), shard_A, bytes);
+    kdma_in(&d,
+            (uintptr_t)(B + (mode == ADD_BCAST_SCALAR ? r_start : 0)),
+            shard_B,
+            b_len * sizeof(float16));
 
-    spatz_run_task_with_params(ADD_BCAST_FP16_SPATZ_TASK, params);
-    if (eu_spatz_wait(WFE) == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed\n", HID, KERNEL_NAME_BCAST);
-        return;
-    }
-    ret = spatz_get_exit_code();
+    ret = offload_spatz_task(&d, ADD_BCAST_FP16_SPATZ_TASK, (void *)params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
-               HID,
-               KERNEL_NAME_BCAST,
-               ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME_BCAST, ret);
         return;
     }
 
-    idma_memcpy_1d(1, (uint32_t)(Y + (uintptr_t)r_start * row_len), (uint32_t)shard_Y, bytes);
-    eu_idma_wait_o2a(WFE);
+    kdma_out(&d, (uintptr_t)(Y + (uintptr_t)r_start * row_len), shard_Y, bytes);
 }

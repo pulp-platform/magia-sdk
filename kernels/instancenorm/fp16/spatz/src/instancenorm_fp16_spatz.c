@@ -2,16 +2,13 @@
 #include <errno.h>
 
 #include "eventunit.h"
-#include "idma.h"
 #include "tile.h"
-
-#include "kernel_idma_utils.h"
 
 #include "instancenorm_fp16_spatz.h"
 #include "instancenorm_fp16_spatz_params.h"
 #include "instancenorm_fp16_spatz_task_bin.h"
 
-#define HID         get_hartid()
+#define HID get_hartid()
 #define KERNEL_NAME "instancenorm_fp16_spatz"
 
 static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t *out_num_channels)
@@ -32,9 +29,9 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t *out_num_ch
     uint32_t inst_end;
     uint32_t inst_len;
 
-    num_channels    = input_shape[1];
+    num_channels = input_shape[1];
     total_instances = input_shape[0] * input_shape[1];
-    instance_len    = input_shape[2] * input_shape[3];
+    instance_len = input_shape[2] * input_shape[3];
 
     shard = total_instances / NUM_HARTS;
     left  = total_instances % NUM_HARTS;
@@ -79,53 +76,54 @@ static int alloc_l1(void **params, uint32_t input_shape[4], uint32_t *out_num_ch
     instancenorm_params->hw_len       = instance_len;
     instancenorm_params->num_channels = num_channels;
 
-    *params           = (void *)instancenorm_params;
+    *params = (void *) instancenorm_params;
     *out_num_channels = num_channels;
 
     return 0;
 }
 
-static int init_input_params(void *params,
-                             const float16 *input,
-                             const float16 *scale,
-                             const float16 *B,
-                             const float16 epsilon)
+static int init_input_params(void *params, const float16 *input, const float16 *scale, const float16 *B, const float16 epsilon)
 {
     volatile instancenorm_fp16_spatz_params_t *instancenorm_params;
-    uint32_t num_channels;
-    uint32_t inst_start;
-    uint32_t inst_len;
-    uint32_t hw_len;
+    uintptr_t shard_input_base;
+    uintptr_t shard_output_base;
+    uintptr_t gamma_base;
+    uintptr_t beta_base;
+    uintptr_t eps_base;
+    uint32_t local_idx;
+    uint32_t inst_end;
 
-    instancenorm_params = (volatile instancenorm_fp16_spatz_params_t *)params;
-    inst_start          = instancenorm_params->inst_start;
-    inst_len            = instancenorm_params->inst_len;
-    hw_len              = instancenorm_params->hw_len;
-    num_channels        = instancenorm_params->num_channels;
+    instancenorm_params = (volatile instancenorm_fp16_spatz_params_t *) params;
+    shard_input_base  = instancenorm_params->shard_input;
+    shard_output_base = instancenorm_params->shard_output;
+    gamma_base        = instancenorm_params->gamma;
+    beta_base         = instancenorm_params->beta;
+    eps_base          = instancenorm_params->eps;
+    inst_end          = instancenorm_params->inst_start + instancenorm_params->inst_len;
 
-    mmio_fp16(instancenorm_params->eps) = epsilon;
+    local_idx = 0;
+    for (uint32_t inst = instancenorm_params->inst_start; inst < inst_end; inst++) {
+        uint32_t global_base = inst * instancenorm_params->hw_len;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+        for (uint32_t i = 0; i < instancenorm_params->hw_len; i++) {
+            uint32_t global_idx = global_base + i;
+            uint32_t offset = local_idx * sizeof(float16);
 
-    /* Per-channel gamma/beta (full num_channels, contiguous) are needed by every tile. */
-    idma_memcpy_1d(
-        0, (uint32_t)scale, (uint32_t)instancenorm_params->gamma, num_channels * sizeof(float16));
-    eu_idma_wait_a2o(WFE);
-    idma_memcpy_1d(
-        0, (uint32_t)B, (uint32_t)instancenorm_params->beta, num_channels * sizeof(float16));
-    eu_idma_wait_a2o(WFE);
+            mmio_fp16(shard_input_base + offset) = input[global_idx];
+            mmio_fp16(shard_output_base + offset) = 0;
 
-    if (inst_len == 0)
-        return 0;
+            local_idx++;
+        }
+    }
 
-    /* This tile's instances [inst_start, inst_end) are contiguous in L2. The Spatz task fully
-       writes shard_output, so it is not zeroed here. */
-    idma_memcpy_1d(0,
-                   (uint32_t)(input + inst_start * hw_len),
-                   (uint32_t)instancenorm_params->shard_input,
-                   inst_len * hw_len * sizeof(float16));
-    eu_idma_wait_a2o(WFE);
+    for (uint32_t i = 0; i < instancenorm_params->num_channels; i++) {
+        uint32_t offset = i * sizeof(float16);
+
+        mmio_fp16(gamma_base + offset) = scale[i];
+        mmio_fp16(beta_base + offset) = B[i];
+    }
+
+    mmio_fp16(eps_base) = epsilon;
 
     return 0;
 }
@@ -134,15 +132,12 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_ctrl_init();
+
     spatz_run_task_with_params(INSTANCENORM_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(WFE);
     if (ret == 0) {
-        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n", HID, KERNEL_NAME, ret);
         goto exit;
     }
 
@@ -155,37 +150,31 @@ exit:
 static int store_result(void *params, float16 *output)
 {
     volatile instancenorm_fp16_spatz_params_t *instancenorm_params;
-    uint32_t inst_start;
-    uint32_t inst_len;
-    uint32_t hw_len;
+    uintptr_t shard_output_base;
+    uint32_t local_idx;
 
-    instancenorm_params = (volatile instancenorm_fp16_spatz_params_t *)params;
-    inst_start          = instancenorm_params->inst_start;
-    inst_len            = instancenorm_params->inst_len;
-    hw_len              = instancenorm_params->hw_len;
+    instancenorm_params = (volatile instancenorm_fp16_spatz_params_t *) params;
+    shard_output_base = instancenorm_params->shard_output;
+    local_idx = 0;
 
-    if (inst_len == 0)
-        return 0;
+    for (uint32_t inst = 0; inst < instancenorm_params->inst_len; inst++) {
+        uint32_t global_inst_idx = instancenorm_params->inst_start + inst;
+        uint32_t global_base = global_inst_idx * instancenorm_params->hw_len;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+        for (uint32_t i = 0; i < instancenorm_params->hw_len; i++) {
+            uint32_t global_idx = global_base + i;
+            uint32_t offset = local_idx * sizeof(float16);
 
-    /* This tile's output instances [inst_start, inst_end) are contiguous in L2. */
-    idma_memcpy_1d(1,
-                   (uint32_t)(output + inst_start * hw_len),
-                   (uint32_t)instancenorm_params->shard_output,
-                   inst_len * hw_len * sizeof(float16));
-    eu_idma_wait_o2a(WFE);
+            output[global_idx] = mmio_fp16(shard_output_base + offset);
+
+            local_idx++;
+        }
+    }
 
     return 0;
 }
 
-void MAGIA_instancenorm_fp16_spatz(const float16 *input,
-                                   float16 *output,
-                                   const float16 *scale,
-                                   const float16 *B,
-                                   const float16 epsilon,
-                                   uint32_t input_shape[4])
+void MAGIA_instancenorm_fp16_spatz(const float16 *input, float16 *output, const float16 *scale, const float16 *B, const float16 epsilon, uint32_t input_shape[4])
 {
     int ret;
     volatile instancenorm_fp16_spatz_params_t *params;
@@ -199,19 +188,13 @@ void MAGIA_instancenorm_fp16_spatz(const float16 *input,
 
     ret = init_input_params((void *)params, input, scale, B, epsilon);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
     ret = offload_spatz_task((void *)params);
     if (ret != 0) {
-        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
-               HID,
-               KERNEL_NAME,
-               ret);
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 

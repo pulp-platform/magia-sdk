@@ -1,6 +1,7 @@
 #include "tile.h"
 #include "exp_fp16_spatz_params.h"
 
+
 /**
  * Computes a fast vectorized approximation of exp(x)
  * Uses the bit-level fast exponential method (Schraudolph 1999):
@@ -10,10 +11,10 @@
  */
 static inline void fast_exp(const _Float16 *src, _Float16 *dst, size_t len)
 {
-    register _Float16 MIN asm("f8")   = -10.0f;
-    register _Float16 MAX asm("f9")   = +10.0f;
-    register _Float16 COEF asm("f10") = 1477.0f;
-    register _Float16 BIAS asm("f11") = 15360.0f;
+    register _Float16 MIN asm ("f8") = -10.0f;
+    register _Float16 MAX asm ("f9") = +10.0f;
+    register _Float16 COEF asm ("f10") = 1477.0f;
+    register _Float16 BIAS asm ("f11") = 15360.0f;
 
     const _Float16 *p_src;
     _Float16 *p_dst;
@@ -22,23 +23,23 @@ static inline void fast_exp(const _Float16 *src, _Float16 *dst, size_t len)
 
     p_src = src;
     p_dst = dst;
-    avl   = len;
+    avl = len;
 
     for (; avl > 0; avl -= vl) {
-        asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile ("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
 
-        asm volatile("vle16.v v0, (%0)" ::"r"(p_src));
+        asm volatile ("vle16.v v0, (%0)" :: "r"(p_src));
 
         /* clamp for stability */
-        asm volatile("vfmin.vf v0, v0, %0" ::"f"(MAX));
-        asm volatile("vfmax.vf v0, v0, %0" ::"f"(MIN));
+        asm volatile ("vfmin.vf v0, v0, %0" :: "f"(MAX));
+        asm volatile ("vfmax.vf v0, v0, %0" :: "f"(MIN));
 
-        asm volatile("vfmul.vf v0, v0, %0" ::"f"(COEF));
-        asm volatile("vfadd.vf v0, v0, %0" ::"f"(BIAS));
+        asm volatile ("vfmul.vf v0, v0, %0" :: "f"(COEF));
+        asm volatile ("vfadd.vf v0, v0, %0" :: "f"(BIAS));
 
-        asm volatile("vfcvt.rtz.xu.f.v v0, v0");
+        asm volatile ("vfcvt.rtz.xu.f.v v0, v0");
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst));
+        asm volatile ("vse16.v v0, (%0)" :: "r"(p_dst));
 
         p_src += vl;
         p_dst += vl;
@@ -54,11 +55,11 @@ int exp_fp16_spatz_task(void)
     size_t len;
 
     params_addr = mmio32(SPATZ_DATA);
-    params      = (volatile exp_fp16_spatz_params_t *)params_addr;
+    params = (volatile exp_fp16_spatz_params_t *) params_addr;
 
-    input  = (_Float16 *)params->shard_input;
+    input = (_Float16 *)params->shard_input;
     output = (_Float16 *)params->shard_output;
-    len    = params->len;
+    len = params->len;
 
     fast_exp(input, output, len);
 
