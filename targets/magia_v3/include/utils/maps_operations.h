@@ -81,12 +81,18 @@ typedef struct {
     void *spatz_params;
     uint32_t spatz_params_bytes;
     uint32_t spatz_initialized;
+    /* Work the control core does while a Spatz task runs: called until Spatz
+     * is done or it returns 0 (nothing left), then the core sleeps as usual. */
+    uint32_t (*background)(void *ctx);
+    void *background_ctx;
 } maps_operation_runtime_t;
 
 static inline int maps_operation_runtime_init(maps_operation_runtime_t *runtime)
 {
     if (!runtime)
         return -1;
+    runtime->background = 0;
+    runtime->background_ctx = 0;
     if (runtime->spatz_binary_start == 0u)
         return 0;
     if (runtime->kernel_abi_version != MAPS_KERNEL_ABI_VERSION ||

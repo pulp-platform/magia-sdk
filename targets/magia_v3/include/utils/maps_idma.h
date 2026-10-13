@@ -272,6 +272,104 @@ static inline idma_ticket_t maps_idma_submit_to_packed(
         axi_stride_3, obi_stride_3, repetitions_3);
 }
 
+/**
+ * Submit one rank-N slice into an equally shaped rank-N slice without waiting.
+ *
+ * Both sides must have the same per-dimension lengths.  Unit dimensions are
+ * dropped and adjacent dimensions contiguous on both sides are merged; the
+ * remainder must fit one hardware 1-D/2-D/3-D descriptor, otherwise
+ * MAPS_IDMA_UNSUPPORTED_TICKET is returned without dispatching. Zero means the
+ * hardware temporarily rejected a valid descriptor because its queue is full.
+ */
+static inline idma_ticket_t maps_idma_submit_md_to_nd(
+    idma_controller_t *controller,
+    uint8_t direction,
+    uint32_t destination_address,
+    uint32_t source_address,
+    const tensor_sub_slice_t *source,
+    const tensor_sub_slice_t *destination,
+    uint32_t element_bytes)
+{
+    if (controller == 0 || source == 0 || destination == 0 ||
+        source->rank != destination->rank || source->rank > MAPS_IDMA_MAX_RANK ||
+        source->num_elems == 0u || source->num_elems != destination->num_elems ||
+        element_bytes == 0u)
+        return MAPS_IDMA_UNSUPPORTED_TICKET;
+
+    uint32_t length[MAPS_IDMA_MAX_RANK];
+    uint32_t source_stride[MAPS_IDMA_MAX_RANK];
+    uint32_t destination_stride[MAPS_IDMA_MAX_RANK];
+    uint32_t rank = 0u;
+    for (uint32_t dimension = 0u; dimension < source->rank; ++dimension) {
+        const TensorRange *from = &source->dims[dimension];
+        const TensorRange *to = &destination->dims[dimension];
+        if (from->length != to->length)
+            return MAPS_IDMA_UNSUPPORTED_TICKET;
+        source_address += from->start * from->stride;
+        destination_address += to->start * to->stride;
+        if (from->length == 1u)
+            continue;
+        if (rank != 0u &&
+            source_stride[rank - 1u] == from->length * from->stride &&
+            destination_stride[rank - 1u] == to->length * to->stride) {
+            length[rank - 1u] *= from->length;
+            source_stride[rank - 1u] = from->stride;
+            destination_stride[rank - 1u] = to->stride;
+            continue;
+        }
+        length[rank] = from->length;
+        source_stride[rank] = from->stride;
+        destination_stride[rank] = to->stride;
+        ++rank;
+    }
+
+    /* The innermost dimension becomes the row when both sides are dense. */
+    uint32_t row_bytes = element_bytes;
+    if (rank != 0u && source_stride[rank - 1u] == element_bytes &&
+        destination_stride[rank - 1u] == element_bytes) {
+        --rank;
+        row_bytes = length[rank] * element_bytes;
+    }
+    if (rank > 2u)
+        return MAPS_IDMA_UNSUPPORTED_TICKET;
+
+    uint32_t source_stride_2 = 0u;
+    uint32_t destination_stride_2 = 0u;
+    uint32_t repetitions_2 = 1u;
+    if (rank != 0u) {
+        source_stride_2 = source_stride[rank - 1u];
+        destination_stride_2 = destination_stride[rank - 1u];
+        repetitions_2 = length[rank - 1u];
+    }
+    /* A single page uses the end-of-page stride, which the driver maps to a
+     * zero hardware stride. */
+    uint32_t source_stride_3 = (repetitions_2 - 1u) * source_stride_2;
+    uint32_t destination_stride_3 = (repetitions_2 - 1u) * destination_stride_2;
+    uint32_t repetitions_3 = 1u;
+    if (rank == 2u) {
+        source_stride_3 = source_stride[0];
+        destination_stride_3 = destination_stride[0];
+        repetitions_3 = length[0];
+    }
+
+    const uint32_t axi_address = direction == 0u
+        ? source_address : destination_address;
+    const uint32_t obi_address = direction == 0u
+        ? destination_address : source_address;
+    const uint32_t axi_stride_2 = direction == 0u
+        ? source_stride_2 : destination_stride_2;
+    const uint32_t obi_stride_2 = direction == 0u
+        ? destination_stride_2 : source_stride_2;
+    const uint32_t axi_stride_3 = direction == 0u
+        ? source_stride_3 : destination_stride_3;
+    const uint32_t obi_stride_3 = direction == 0u
+        ? destination_stride_3 : source_stride_3;
+    return idma_submit_3d(
+        controller, direction, axi_address, obi_address, row_bytes,
+        axi_stride_2, obi_stride_2, repetitions_2,
+        axi_stride_3, obi_stride_3, repetitions_3);
+}
+
 static inline int idma_memcpy_md_to_nd(
     idma_controller_t *controller,
     uint8_t direction,
