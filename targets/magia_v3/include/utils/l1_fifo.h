@@ -152,6 +152,9 @@ typedef struct {
     const tensor_sub_slice_t *dst; /**< Fragment layout in a shared payload slot. */
     uint32_t dst_offset_bytes;     /**< Fragment offset in a shared payload slot. */
     uint32_t payload_mode;         /**< FIFO_PAYLOAD_*; 0 queries the consumer. */
+    uint32_t ahead;                /**< Unpublished pushes already reserved on this
+                                        sub-ring; this one takes slot tail + ahead
+                                        and must be published after them. */
 } fifo_push_req_t;
 
 /** State of one submitted FIFO push whose payload is not published yet. */
@@ -535,17 +538,27 @@ static inline void *fifo_reserve(uint32_t target_hartid, uint32_t producer_idx)
 }
 
 /** Try to reserve the current tail slot without blocking. */
+static inline uint32_t fifo_try_reserve_ahead(uint32_t target_hartid,
+                                              uint32_t producer_idx,
+                                              uint32_t payload_mode,
+                                              uint32_t ahead,
+                                              void **payload)
+{
+    fifo_header_t *hdr = fifo_get_header(target_hartid);
+    fifo_ring_state_t *rs = fifo_ring_state(hdr, producer_idx);
+    const uint32_t counter = rs->tail + ahead;
+    if ((counter - rs->head) >= hdr->num_slots)
+        return 0u;
+    *payload = fifo_payload_at_mode(hdr, producer_idx, counter, payload_mode);
+    return 1u;
+}
+
 static inline uint32_t fifo_try_reserve_mode(uint32_t target_hartid,
                                              uint32_t producer_idx,
                                              uint32_t payload_mode,
                                              void **payload)
 {
-    fifo_header_t *hdr = fifo_get_header(target_hartid);
-    fifo_ring_state_t *rs = fifo_ring_state(hdr, producer_idx);
-    if ((rs->tail - rs->head) >= hdr->num_slots)
-        return 0u;
-    *payload = fifo_payload_at_mode(hdr, producer_idx, rs->tail, payload_mode);
-    return 1u;
+    return fifo_try_reserve_ahead(target_hartid, producer_idx, payload_mode, 0u, payload);
 }
 
 static inline uint32_t fifo_try_reserve(uint32_t target_hartid,
@@ -638,9 +651,15 @@ static inline int fifo_push(idma_controller_t *idma_ctrl,
  * Only one uncommitted push may be active per producer sub-ring because the
  * ring tail advances at publication time.
  */
-static inline int fifo_push_async_start(idma_controller_t *idma_ctrl,
-                                        const fifo_push_req_t *req,
-                                        fifo_pending_push_t *pending)
+/**
+ * fifo_push_async_start into a slot reserved earlier with fifo_try_reserve_mode
+ * (`reserved` is that payload address, 0 to reserve now).  The reservation
+ * stays valid until this producer publishes on the sub-ring.
+ */
+static inline int fifo_push_async_start_reserved(idma_controller_t *idma_ctrl,
+                                                 const fifo_push_req_t *req,
+                                                 fifo_pending_push_t *pending,
+                                                 uint32_t reserved)
 {
     if (pending != 0)
         pending->active = 0u;
@@ -657,8 +676,10 @@ static inline int fifo_push_async_start(idma_controller_t *idma_ctrl,
     if (shared && (req->dst == 0 || req->dst->num_elems != req->src->num_elems))
         return -1;
 
-    void *payload = 0;
-    if (!fifo_try_reserve_mode(req->target_hartid, req->producer_idx, mode, &payload))
+    void *payload = (void *)reserved;
+    if (payload == 0 &&
+        !fifo_try_reserve_ahead(req->target_hartid, req->producer_idx, mode, req->ahead,
+                                &payload))
         return FIFO_ASYNC_FIFO_FULL;
     uint32_t destination = (uint32_t)payload;
 
@@ -685,6 +706,13 @@ static inline int fifo_push_async_start(idma_controller_t *idma_ctrl,
     pending->direction = direction;
     pending->active = 1u;
     return FIFO_ASYNC_STARTED;
+}
+
+static inline int fifo_push_async_start(idma_controller_t *idma_ctrl,
+                                        const fifo_push_req_t *req,
+                                        fifo_pending_push_t *pending)
+{
+    return fifo_push_async_start_reserved(idma_ctrl, req, pending, 0u);
 }
 
 /** Return non-zero when the pending push's DMA transfer has completed. */

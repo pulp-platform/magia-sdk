@@ -199,9 +199,17 @@ SECTIONS
 
     /* Reserve the complete control-core stack window.  crt0 initializes sp from
      * `stack`, so this symbol must denote the top of the downward-growing stack. */
+    /* Per-tile runtime state in the control core's private window, below the
+     * stack.  Not loaded: the runtime initializes it. */
+    .tile_local (NOLOAD): {
+        . = ALIGN(4);
+        *(.tile_local .tile_local.*)
+        . = ALIGN(4);
+    } > stack :NONE
+
     .stack (NOLOAD): {
         . = ALIGN(4);
-        . = . + _stack_len;
+        . = . + _stack_len - SIZEOF(.tile_local);
         . = ALIGN(4);
         stack = . ;
         _stack = . ;

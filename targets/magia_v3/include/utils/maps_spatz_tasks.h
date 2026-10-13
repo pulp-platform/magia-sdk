@@ -111,6 +111,10 @@ static inline int maps_execute_matmul_spatz(
 
 static inline int maps_wait_for_spatz(maps_operation_runtime_t *runtime)
 {
+    if (runtime->background != 0)
+        while (!eu_check_events(EU_SPATZ_DONE_MASK) &&
+               runtime->background(runtime->background_ctx))
+            ;
     if (eu_spatz_wait(runtime->eu_ctrl, MAPS_WAIT_MODE) == 0)
         return -1;
     return (int)spatz_get_exit_code();

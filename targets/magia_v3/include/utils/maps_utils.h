@@ -414,60 +414,73 @@ static inline uint32_t subslice_offset_bytes(const subslice_desc_t *sub)
 #endif
 
 #if MAPS_FIFO_INPLACE_RECV
-#define MAPS_MAX_SLICE_ALIASES 8u
+/* Aliases are indexed directly by (slice id, token slot) in the control core's
+ * private memory (.tile_local in link.ld), so a lookup is one local load and
+ * any number of slices may be aliased at once. */
+#ifndef MAPS_ALIAS_MAX_SLICES
+#define MAPS_ALIAS_MAX_SLICES 64u
+#endif
+#ifndef MAPS_ALIAS_MAX_SLOTS
+#define MAPS_ALIAS_MAX_SLOTS 4u
+#endif
+#define MAPS_MAX_SLICE_ALIASES (MAPS_ALIAS_MAX_SLICES * MAPS_ALIAS_MAX_SLOTS)
 
 typedef struct {
-    uint32_t slice_id;
-    uint32_t slot;
-    uint32_t addr;
-} maps_slice_alias_t;
-
-typedef struct {
-    uint32_t counts[NUM_HARTS];
-    maps_slice_alias_t entries[NUM_HARTS][MAPS_MAX_SLICE_ALIASES];
+    uint32_t addr[MAPS_ALIAS_MAX_SLICES][MAPS_ALIAS_MAX_SLOTS]; /* 0: not aliased */
+    uint16_t set[MAPS_MAX_SLICE_ALIASES];                      /* slice * slots + slot */
+    uint32_t count;
 } maps_slice_alias_table_t;
 
 static inline maps_slice_alias_table_t *maps_slice_alias_table(void)
 {
-    static maps_slice_alias_table_t table;
+    static maps_slice_alias_table_t table __attribute__((section(".tile_local")));
     return &table;
+}
+
+/* Clear every entry; the section is not loaded, so maps_fifo_init calls this. */
+static inline void maps_slice_alias_reset(void)
+{
+    maps_slice_alias_table_t *table = maps_slice_alias_table();
+    for (uint32_t i = 0; i < MAPS_ALIAS_MAX_SLICES; ++i)
+        for (uint32_t j = 0; j < MAPS_ALIAS_MAX_SLOTS; ++j)
+            table->addr[i][j] = 0u;
+    table->count = 0u;
 }
 
 static inline void maps_slice_alias_push(uint32_t hartid, uint32_t slice_id,
                                          uint32_t slot, uint32_t addr)
 {
     maps_slice_alias_table_t *table = maps_slice_alias_table();
-    uint32_t count = table->counts[hartid];
+    (void)hartid;
 
-    if (count >= MAPS_MAX_SLICE_ALIASES) {
+    if (slice_id >= MAPS_ALIAS_MAX_SLICES || slot >= MAPS_ALIAS_MAX_SLOTS || addr == 0u)
         maps_trap();
-    }
-
-    table->entries[hartid][count].slice_id = slice_id;
-    table->entries[hartid][count].slot = slot;
-    table->entries[hartid][count].addr = addr;
-    table->counts[hartid] = count + 1u;
+    if (table->addr[slice_id][slot] == 0u)
+        table->set[table->count++] = (uint16_t)(slice_id * MAPS_ALIAS_MAX_SLOTS + slot);
+    table->addr[slice_id][slot] = addr;
 }
 
 static inline void maps_slice_alias_clear(uint32_t hartid)
 {
-    maps_slice_alias_table()->counts[hartid] = 0u;
+    maps_slice_alias_table_t *table = maps_slice_alias_table();
+    (void)hartid;
+    for (uint32_t i = 0; i < table->count; ++i)
+        (&table->addr[0][0])[table->set[i]] = 0u;
+    table->count = 0u;
 }
 
 /* Returns 1 and the aliased address if (slice_id, slot) is aliased. */
 static inline uint32_t maps_slice_alias_lookup(uint32_t hartid, uint32_t slice_id,
                                                uint32_t slot, uint32_t *addr)
 {
-    const maps_slice_alias_table_t *aliases = maps_slice_alias_table();
-    uint32_t num_aliases = aliases->counts[hartid];
-    for (uint32_t i = 0; i < num_aliases; ++i) {
-        const maps_slice_alias_t *alias = &aliases->entries[hartid][i];
-        if (alias->slice_id == slice_id && alias->slot == slot) {
-            *addr = alias->addr;
-            return 1u;
-        }
-    }
-    return 0u;
+    (void)hartid;
+    if (slice_id >= MAPS_ALIAS_MAX_SLICES || slot >= MAPS_ALIAS_MAX_SLOTS)
+        return 0u;
+    const uint32_t alias = maps_slice_alias_table()->addr[slice_id][slot];
+    if (alias == 0u)
+        return 0u;
+    *addr = alias;
+    return 1u;
 }
 #endif
 
