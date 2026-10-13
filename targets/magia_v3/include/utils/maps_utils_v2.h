@@ -18,6 +18,7 @@
 #include "utils/maps_utils.h"
 #include "utils/maps_operations.h"
 #include "utils/l1_fifo.h"
+#include "utils/printf.h"
 
 typedef struct {
     uint32_t transition_id;
@@ -538,6 +539,29 @@ static inline void maps_fifo_init_tile(const fifo_tile_plan_t *plan,
                             idma_ctrl, eu_ctrl);
 }
 
+static inline void maps_fifo_execute_operation(const fifo_tile_plan_t *plan,
+                                               uint32_t token, uint32_t slot,
+                                               uint32_t index)
+{
+    const op_desc_t *op = &plan->ops[index];
+#if MAPS_KERNEL_PROGRESS
+    const uint32_t start = maps_read_cycle();
+    printf("MAPS_KERNEL_BEGIN tile=%u token=%u slot=%u op=%u kind=%u cycle=%u\n",
+           plan->hartid, token, slot, index, op->kind, start);
+#endif
+    const int result = maps_execute_operation((const tile_plan_t *)plan, op, slot,
+                                               plan->operation_runtime);
+    if (result != 0) {
+        printf("MAPS_KERNEL_ERROR tile=%u token=%u slot=%u op=%u kind=%u code=%d cycle=%u\n",
+               plan->hartid, token, slot, index, op->kind, result, maps_read_cycle());
+        maps_trap();
+    }
+#if MAPS_KERNEL_PROGRESS
+    printf("MAPS_KERNEL_DONE tile=%u token=%u slot=%u op=%u kind=%u cycles=%u cycle=%u\n",
+           plan->hartid, token, slot, index, op->kind, maps_read_cycle() - start, maps_read_cycle());
+#endif
+}
+
 static inline void maps_fifo_run_tile_token(const fifo_tile_plan_t *plan, uint32_t token,
                                             idma_controller_t *idma_ctrl,
                                             eu_controller_t *eu_ctrl)
@@ -574,9 +598,7 @@ static inline void maps_fifo_run_tile_token(const fifo_tile_plan_t *plan, uint32
     }
     for (uint32_t i = 0; i < plan->num_ops; ++i) {
         uint32_t step_start = maps_read_cycle();
-        if (maps_execute_operation((const tile_plan_t *)plan, &plan->ops[i], slot,
-                                   plan->operation_runtime) != 0)
-            maps_trap();
+        maps_fifo_execute_operation(plan, token, slot, i);
         maps_trace_duration((const tile_plan_t *)plan, token, slot, "op", i,
                             maps_read_cycle() - step_start);
     }
@@ -601,6 +623,10 @@ static inline void maps_fifo_run_tile_token(const fifo_tile_plan_t *plan, uint32
     uint32_t token_end = maps_read_cycle();
     maps_trace_duration((const tile_plan_t *)plan, token, slot, "token", token,
                         token_end - token_start);
+#if MAPS_TOKEN_PROGRESS
+    printf("MAPS_TOKEN_DONE tile=%u token=%u cycle=%u\n",
+           plan->hartid, token, token_end);
+#endif
 }
 
 static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint32_t num_tokens,
@@ -670,9 +696,7 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
         maps_fifo_reap_completed_sends(plan, states);
         for (uint32_t i = 0; i < plan->num_ops; ++i) {
             uint32_t step_start = maps_read_cycle();
-            if (maps_execute_operation((const tile_plan_t *)plan, &plan->ops[i], slot,
-                                       plan->operation_runtime) != 0)
-                maps_trap();
+            maps_fifo_execute_operation(plan, token, slot, i);
             maps_trace_duration((const tile_plan_t *)plan, token, slot, "op", i,
                                 maps_read_cycle() - step_start);
         }
@@ -750,6 +774,11 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
         maps_fifo_reap_completed_sends(plan, states);
 #ifdef MAPS_EXPERIMENT_TRACE
         trace->ends[plan->hartid][token] = maps_read_cycle();
+#endif
+#if MAPS_TOKEN_PROGRESS
+        /* Processing is complete; asynchronous outgoing transfers may still be in flight. */
+        printf("MAPS_TOKEN_DONE tile=%u token=%u cycle=%u\n",
+               plan->hartid, token, maps_read_cycle());
 #endif
     }
     maps_fifo_finish_all_sends(plan, eu_ctrl, states);

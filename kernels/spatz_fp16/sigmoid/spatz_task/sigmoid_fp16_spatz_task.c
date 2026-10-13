@@ -69,4 +69,5 @@ int sigmoid_fp16_spatz_task(void)
     len = params->len;
 
     sigmoid(X, Y, len);
+    return 0;
 }

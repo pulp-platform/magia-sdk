@@ -47,6 +47,8 @@ profile_cmo		?= 0
 profile_snc		?= 0
 maps_application_dir ?=
 maps_experiment_trace ?= 0
+maps_token_progress ?= 0
+maps_kernel_progress ?= 0
 mobilevit_slice_data ?=
 mobilevit_slice_tokens ?=
 
@@ -146,7 +148,7 @@ endif
 ifeq ($(compiler), LLVM)
 	$(error COMING SOON!)
 endif
-	$(CMAKE) -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz) -DPULP_TESTS=$(pulp_cluster) -DPULP_CORE_COUNT=$(pulp_cores) -DMAPS_EXPERIMENT_TRACE=$(maps_experiment_trace) $(if $(maps_application_dir),-DMAPS_APPLICATION_DIR=$(maps_application_dir),) $(if $(mobilevit_slice_data),-DMOBILEVIT_SLICE_DATA=$(mobilevit_slice_data),) $(if $(mobilevit_slice_tokens),-DMOBILEVIT_SLICE_TOKENS=$(mobilevit_slice_tokens),) -B $(CMAKE_BUILDDIR) $(if $(filter 1,$(verbose)),--trace-expand,)
+	$(CMAKE) -DTARGET_PLATFORM=$(target_platform) -DTILES=$(tiles) -DEVAL=$(eval) -DSTALLING=$(stalling) -DFSYNC_MM=$(fsync_mm) -DIDMA_MM=$(idma_mm) -DREDMULE_MM=$(redmule_mm) -DCOMPILER=$(compiler) -DPROFILE_CMP=$(profile_cmp) -DPROFILE_CMI=$(profile_cmi) -DPROFILE_CMO=$(profile_cmo) -DPROFILE_SNC=$(profile_snc) -DSPATZ_TESTS=$(spatz) -DPULP_TESTS=$(pulp_cluster) -DPULP_CORE_COUNT=$(pulp_cores) -DMAPS_EXPERIMENT_TRACE=$(maps_experiment_trace) -DMAPS_TOKEN_PROGRESS=$(maps_token_progress) -DMAPS_KERNEL_PROGRESS=$(maps_kernel_progress) $(if $(maps_application_dir),-DMAPS_APPLICATION_DIR=$(maps_application_dir),) $(if $(mobilevit_slice_data),-DMOBILEVIT_SLICE_DATA=$(mobilevit_slice_data),) $(if $(mobilevit_slice_tokens),-DMOBILEVIT_SLICE_TOKENS=$(mobilevit_slice_tokens),) -B $(CMAKE_BUILDDIR) $(if $(filter 1,$(verbose)),--trace-expand,)
 	$(CMAKE) --build $(CMAKE_BUILDDIR) $(if $(filter 1,$(verbose)),--verbose,) $(if $(test),--target $(test),) -- --no-print-directory
 
 set_mesh:

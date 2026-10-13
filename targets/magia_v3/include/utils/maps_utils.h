@@ -23,7 +23,13 @@
 #define MAPS_ENABLE_TRACE 0u
 #endif
 */
-#if MAPS_ENABLE_TRACE || defined(MAPS_EXPERIMENT_TRACE)
+#ifndef MAPS_TOKEN_PROGRESS
+#define MAPS_TOKEN_PROGRESS 0u
+#endif
+#ifndef MAPS_KERNEL_PROGRESS
+#define MAPS_KERNEL_PROGRESS 0u
+#endif
+#if MAPS_ENABLE_TRACE || defined(MAPS_EXPERIMENT_TRACE) || MAPS_TOKEN_PROGRESS || MAPS_KERNEL_PROGRESS
 #include "utils/printf.h"
 #endif
 
@@ -336,6 +342,11 @@ typedef struct tile_plan {
 // error handling
 static inline void maps_trap(void)
 {
+#if MAPS_KERNEL_PROGRESS
+    uint32_t hartid;
+    __asm__ volatile("csrr %0, mhartid" : "=r"(hartid));
+    printf("MAPS_RUNTIME_ERROR tile=%u reason=trap\n", hartid);
+#endif
     for (;;) {
         __asm__ volatile("wfi" ::: "memory");
     }
@@ -529,7 +540,7 @@ static inline volatile uint32_t *maps_ready_flag_addr(uint32_t hartid,
 /* GVSoC's CV32 model implements cycle but not cycleh. */
 static inline uint32_t maps_read_cycle(void)
 {
-#if MAPS_ENABLE_TRACE || defined(MAPS_EXPERIMENT_TRACE)
+#if MAPS_ENABLE_TRACE || defined(MAPS_EXPERIMENT_TRACE) || MAPS_TOKEN_PROGRESS || MAPS_KERNEL_PROGRESS
     uint32_t cycle;
     __asm__ volatile("rdcycle %0" : "=r"(cycle));
     return cycle;

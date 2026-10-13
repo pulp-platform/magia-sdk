@@ -17,6 +17,12 @@
 #ifndef MAPS_HAS_MATMUL_SPATZ_TASK
 #define MAPS_HAS_MATMUL_SPATZ_TASK 0u
 #endif
+#ifndef MAPS_HAS_DEPTHWISE_CONV_SPATZ_TASK
+#define MAPS_HAS_DEPTHWISE_CONV_SPATZ_TASK 0u
+#endif
+#ifndef MAPS_HAS_SIGMOID_SPATZ_TASK
+#define MAPS_HAS_SIGMOID_SPATZ_TASK 0u
+#endif
 #ifndef MAPS_HAS_RELU_SPATZ_TASK
 #define MAPS_HAS_RELU_SPATZ_TASK 0u
 #endif
@@ -63,6 +69,8 @@ typedef struct {
     uint32_t mul_bcast_fp16_task;
     uint32_t matmul_fp16_task;
     uint32_t relu_fp16_task;
+    uint32_t sigmoid_fp16_task;
+    uint32_t depthwise_conv_fp16_task;
     uint32_t softmax_exp_fp16_task;
     uint32_t group_reduce_fp16_task;
     uint32_t group_centered_reduce_fp16_task;
@@ -161,8 +169,12 @@ static inline float maps_operation_sigmoid_f32(float value)
     const uint16_t scaled = maps_operation_f32_to_f16(-clamped * coefficient);
     const uint16_t biased = maps_operation_f32_to_f16(
         maps_operation_f16_to_f32(scaled) + bias);
-    const uint16_t exponential_bits =
-        (uint16_t)maps_operation_f16_to_f32(biased);
+    /* Match the Spatz vfcvt.rtz.xu.f.v saturation. Large positive sigmoid
+     * inputs make this approximation negative (or -Inf), which must become
+     * zero rather than wrap to an unrelated FP16 bit pattern. */
+    const float biased_value = maps_operation_f16_to_f32(biased);
+    const uint16_t exponential_bits = biased_value <= 0.0f ? 0u :
+        (biased_value >= 65535.0f ? 65535u : (uint16_t)biased_value);
     const float exponential = maps_operation_f16_to_f32(exponential_bits);
     const uint16_t denominator = maps_operation_f32_to_f16(1.0f + exponential);
     return 1.0f / maps_operation_f16_to_f32(denominator);
@@ -216,6 +228,11 @@ static inline int maps_execute_elementwise_f16(const tile_plan_t *plan,
     const uint32_t rhs_elems = rhs ? maps_operation_elems(&op->inputs[1]) : 0u;
 
     for (uint32_t index = 0u; index < output_elems; ++index) {
+#if MAPS_KERNEL_PROGRESS
+        if ((index & 4095u) == 0u)
+            printf("MAPS_KERNEL_STEP tile=%u slot=%u kind=%u step=%u total=%u cycle=%u\n",
+                   plan->hartid, slot, op->kind, index, output_elems, maps_read_cycle());
+#endif
         const uint32_t lhs_index = maps_operation_broadcast_index(
             &op->outputs[0], &op->inputs[0], index);
         const float left = maps_operation_f16_to_f32(lhs[lhs_index]);
@@ -773,23 +790,23 @@ static inline int maps_execute_im2col_f16(
                     valid_y_end - valid_y_start, runtime->eu_ctrl) != 0)
                 return -2;
         } else {
-            for (uint32_t y = valid_y_start; y < valid_y_end; ++y) {
-                for (uint32_t x = valid_x_start; x < valid_x_end; ++x) {
-                    const uint32_t element_source = source +
-                        (y - valid_y_start) * stride_h *
-                            op->inputs[0].strides_bytes[2] +
-                        (x - valid_x_start) * stride_w * sizeof(uint16_t);
-                    const uint32_t element_destination = output +
-                        local_kernel * op->outputs[0].strides_bytes[0] +
-                        (y * output_w + x) * op->outputs[0].strides_bytes[1];
-                    if (maps_idma_copy_1d_ticketed(
-                            runtime->idma_ctrl, 1u,
-                            element_destination, element_source,
-                            sizeof(uint16_t), runtime->eu_ctrl) != 0)
-                        return -2;
-                }
-            }
+            /* Gather strided pixels and rows in one descriptor. Submitting a
+             * separate two-byte transfer for every pixel repeatedly wakes the
+             * core and waits on the DMA, dominating simulation of stride > 1. */
+            if (maps_idma_copy_3d_ticketed(
+                    runtime->idma_ctrl, 1u, destination, source,
+                    sizeof(uint16_t), sizeof(uint16_t),
+                    stride_w * sizeof(uint16_t), valid_x_end - valid_x_start,
+                    output_w * sizeof(uint16_t),
+                    stride_h * op->inputs[0].strides_bytes[2],
+                    valid_y_end - valid_y_start, runtime->eu_ctrl) != 0)
+                return -2;
         }
+#if MAPS_KERNEL_PROGRESS
+        printf("MAPS_KERNEL_STEP tile=%u slot=%u kind=%u step=%u total=%u cycle=%u\n",
+               plan->hartid, slot, op->kind, local_kernel + 1u, local_k,
+               maps_read_cycle());
+#endif
     }
     return 0;
 }
@@ -891,6 +908,7 @@ static inline int maps_execute_output_reformat_1x1_f16(
 }
 
 #include "utils/maps_spatz_tasks.h"
+#include "utils/maps_dma_tasks.h"
 
 static inline int maps_execute_collective_reduce_spatz_buffer(
     uint32_t input, uint32_t output, uint32_t reduce_dim, uint32_t elements,
@@ -953,8 +971,9 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
 #endif
     }
     case OP_COPY:
-    case OP_RESHAPE:
         return maps_execute_copy_op(plan, op, slot);
+    case OP_RESHAPE:
+        return maps_execute_reshape_dma(plan, op, slot, runtime);
 #if MAPS_HAS_ADD_SPATZ_TASK
     case OP_ADD:
         return maps_execute_add_spatz(plan, op, slot, runtime);
@@ -982,7 +1001,15 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
 #endif
     case OP_NEG:
     case OP_EXP:
+        /* Unary operations have no second operand. The Spatz binary task
+         * below implements subtraction/division and requires two inputs. */
+        return maps_execute_elementwise_f16(plan, op, slot);
     case OP_SIGMOID:
+#if MAPS_HAS_SIGMOID_SPATZ_TASK
+        return maps_execute_sigmoid_spatz(plan, op, slot, runtime);
+#else
+        return maps_execute_elementwise_f16(plan, op, slot);
+#endif
     case OP_SUB:
     case OP_DIV:
 #if MAPS_HAS_BINARY_BCAST_SPATZ_TASK
@@ -1016,9 +1043,13 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
     case OP_IM2COL:
         return maps_execute_im2col_f16(plan, op, slot, runtime);
     case OP_TRANSPOSE:
-        return maps_execute_transpose_f16(plan, op, slot);
+        return maps_execute_transpose_dma(plan, op, slot, runtime);
     case OP_DEPTHWISE_CONV:
-        return maps_execute_depthwise_conv_f16(plan, op, slot);
+#if MAPS_HAS_DEPTHWISE_CONV_SPATZ_TASK
+        return maps_execute_depthwise_conv_spatz(plan, op, slot, runtime);
+#else
+        return -1;
+#endif
     case OP_OUTPUT_REFORMAT:
         return maps_execute_output_reformat_1x1_f16(plan, op, slot);
     default:

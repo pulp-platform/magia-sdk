@@ -10,6 +10,12 @@
 #if MAPS_HAS_MATMUL_SPATZ_TASK
 #include "matmul_fp16_spatz_params.h"
 #endif
+#if MAPS_HAS_DEPTHWISE_CONV_SPATZ_TASK
+#include "depthwise_conv_fp16_spatz_params.h"
+#endif
+#if MAPS_HAS_SIGMOID_SPATZ_TASK
+#include "sigmoid_fp16_spatz_params.h"
+#endif
 #if MAPS_HAS_RELU_SPATZ_TASK
 #include "relu_fp16_spatz_params.h"
 #endif
@@ -494,6 +500,104 @@ static inline int maps_execute_group_normalize_spatz(
     params->epsilon = epsilon.value;
     spatz_run_task_with_params(runtime->group_normalize_fp16_task,
                                (uint32_t)runtime->spatz_params);
+    return maps_wait_for_spatz(runtime);
+}
+#endif
+
+#if MAPS_HAS_DEPTHWISE_CONV_SPATZ_TASK
+static inline int maps_execute_depthwise_conv_spatz(
+    const tile_plan_t *plan, const op_desc_t *op, uint32_t slot,
+    maps_operation_runtime_t *runtime)
+{
+    if (!runtime || !runtime->spatz_initialized || !runtime->depthwise_conv_fp16_task ||
+        (op->num_inputs != 2u && op->num_inputs != 3u) || op->num_outputs != 1u ||
+        runtime->spatz_params_bytes < sizeof(depthwise_conv_fp16_spatz_params_t) ||
+        ((uintptr_t)runtime->spatz_params & 15u) ||
+        !op->params[0] || !op->params[1] || !op->params[2] || !op->params[3] || !op->params[6])
+        return -1;
+    for (uint32_t i = 0; i < 2u; ++i)
+        if (op->inputs[i].rank != 4u || op->inputs[i].elem_type != ELEM_F16 || op->inputs[i].elem_bytes != 2u)
+            return -2;
+    if (op->outputs[0].rank != 4u || op->outputs[0].elem_type != ELEM_F16 || op->outputs[0].elem_bytes != 2u ||
+        op->outputs[0].shape[0] > op->inputs[0].shape[0] || op->outputs[0].shape[1] > op->inputs[1].shape[0] || op->inputs[1].shape[1] != 1u)
+        return -2;
+    if (op->num_inputs == 3u && (op->inputs[2].rank != 1u || op->inputs[2].elem_type != ELEM_F16 || op->inputs[2].shape[0] < op->outputs[0].shape[1]))
+        return -2;
+    uint32_t input_c = maps_operation_global_offset(plan, &op->inputs[0], 1u);
+    uint32_t weight_c = maps_operation_global_offset(plan, &op->inputs[1], 0u);
+    for (uint32_t c = 0; c < op->outputs[0].shape[1]; ++c) {
+        uint32_t global_c = (weight_c + c) / op->params[6];
+        if (global_c < input_c || global_c - input_c >= op->inputs[0].shape[1])
+            return -3;
+    }
+    volatile depthwise_conv_fp16_spatz_params_t *p =
+        (volatile depthwise_conv_fp16_spatz_params_t *)runtime->spatz_params;
+    p->input = local_subslice_addr(plan, &op->inputs[0], slot);
+    p->weight = local_subslice_addr(plan, &op->inputs[1], slot);
+    p->bias = op->num_inputs == 3u ? local_subslice_addr(plan, &op->inputs[2], slot) : 0u;
+    p->output = local_subslice_addr(plan, &op->outputs[0], slot);
+    for (uint32_t axis = 0; axis < 4u; ++axis) {
+        p->input_shape[axis] = op->inputs[0].shape[axis];
+        p->weight_shape[axis] = op->inputs[1].shape[axis];
+        p->output_shape[axis] = op->outputs[0].shape[axis];
+        p->input_strides[axis] = op->inputs[0].strides_bytes[axis];
+        p->weight_strides[axis] = op->inputs[1].strides_bytes[axis];
+        p->output_strides[axis] = op->outputs[0].strides_bytes[axis];
+    }
+    p->input_origin_c = input_c;
+    p->weight_origin_c = weight_c;
+    p->input_origin_h = maps_operation_global_offset(plan, &op->inputs[0], 2u);
+    p->input_origin_w = maps_operation_global_offset(plan, &op->inputs[0], 3u);
+    p->output_origin_h = maps_operation_global_offset(plan, &op->outputs[0], 2u);
+    p->output_origin_w = maps_operation_global_offset(plan, &op->outputs[0], 3u);
+    p->stride_h = op->params[0]; p->stride_w = op->params[1];
+    p->dilation_h = op->params[2]; p->dilation_w = op->params[3];
+    p->pad_top = op->params[4]; p->pad_left = op->params[5];
+    p->channel_multiplier = op->params[6];
+    p->bias_stride = op->num_inputs == 3u ? op->inputs[2].strides_bytes[0] : 0u;
+    spatz_run_task_with_params(runtime->depthwise_conv_fp16_task, (uint32_t)p);
+    return maps_wait_for_spatz(runtime);
+}
+#endif
+
+#if MAPS_HAS_SIGMOID_SPATZ_TASK
+static inline int maps_execute_sigmoid_spatz(const tile_plan_t *plan,
+                                          const op_desc_t *op,
+                                          uint32_t slot,
+                                          maps_operation_runtime_t *runtime)
+{
+    if (!runtime || !runtime->spatz_initialized ||
+        runtime->sigmoid_fp16_task == 0u || op->num_inputs != 1u ||
+        op->num_outputs != 1u || op->inputs[0].elem_type != ELEM_F16 ||
+        op->outputs[0].elem_type != ELEM_F16 ||
+        runtime->spatz_params_bytes < sizeof(sigmoid_fp16_spatz_params_t) ||
+        ((uintptr_t)runtime->spatz_params & 0xfu) != 0u)
+        return -1;
+
+    const uint32_t elements = maps_operation_elems(&op->outputs[0]);
+    if (maps_operation_elems(&op->inputs[0]) != elements)
+        return -2;
+
+    for (uint32_t which = 0u; which < 2u; ++which) {
+        const subslice_desc_t *sub = which ? &op->outputs[0] : &op->inputs[0];
+        uint32_t stride = sizeof(uint16_t);
+        for (uint32_t dim = sub->rank; dim-- > 0u;) {
+            if (sub->shape[dim] > 1u && sub->strides_bytes[dim] != stride)
+                return -3;
+            stride *= sub->shape[dim];
+        }
+        if ((local_subslice_addr(plan, sub, slot) & 3u) != 0u)
+            return -4;
+    }
+    volatile sigmoid_fp16_spatz_params_t *params =
+        (volatile sigmoid_fp16_spatz_params_t *)runtime->spatz_params;
+    params->shard_X = local_subslice_addr(plan, &op->inputs[0], slot);
+    params->shard_Y = local_subslice_addr(plan, &op->outputs[0], slot);
+    params->start = 0u;
+    params->end = elements;
+    params->len = elements;
+    spatz_run_task_with_params(
+        runtime->sigmoid_fp16_task, (uint32_t)runtime->spatz_params);
     return maps_wait_for_spatz(runtime);
 }
 #endif
