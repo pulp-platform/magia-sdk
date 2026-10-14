@@ -38,6 +38,8 @@ function(add_spatz_task)
     endif()
 
     set(TASK_CRT0_OBJ "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}_crt0.o")
+    set(TASK_OBJ "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.o")
+    set(MAGIA_IO_OBJ "${SPATZ_OUTPUT_DIR}/io.o")
     set(TASK_ELF "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.elf")
     set(TASK_BIN "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.bin")
     set(TASK_DUMP "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.dump")
@@ -60,34 +62,65 @@ function(add_spatz_task)
         OUTPUT ${TASK_CRT0_OBJ}
         COMMAND ${SPATZ_CLANG}
             ${SPATZ_ARCH_FLAGS}
-            -c -o ${TASK_CRT0_OBJ}
-            ${SPATZ_CRT0_SRC}
+            -c ${SPATZ_CRT0_SRC}
+            -o ${TASK_CRT0_OBJ}
         DEPENDS ${SPATZ_CRT0_SRC}
         COMMENT "[SPATZ] Compiling crt0..."
         VERBATIM
     )
 
-    # Build ELF [MAGIA/spatz/sw/Makefile: $(ELF)]
+    # Build Task Object
     add_custom_command(
-        OUTPUT ${TASK_ELF}
+        OUTPUT ${TASK_OBJ}
         COMMAND ${SPATZ_CLANG}
             ${SPATZ_COMPILE_FLAGS}
             ${SPATZ_CFLAGS_DEFINES}
             ${SPATZ_TASK_DEFINE}
             ${TASK_INCLUDE_FLAGS}
+            -c ${ARG_TASK_SOURCES}
+            -o ${TASK_OBJ}
+        DEPENDS
+            ${ARG_TASK_SOURCES}
+        COMMENT "[SPATZ] Building Task LLVM bitcode file..."
+        VERBATIM
+    )
+
+    # Build IO Object
+    add_custom_command(
+        OUTPUT ${MAGIA_IO_OBJ}
+        COMMAND ${SPATZ_CLANG}
+            ${SPATZ_COMPILE_FLAGS}
+            ${SPATZ_CFLAGS_DEFINES}
+            ${SPATZ_TASK_DEFINE}
+            ${TASK_INCLUDE_FLAGS}
+            -c ${MAGIA_IO_SRC}
+            -o ${MAGIA_IO_OBJ}
+        DEPENDS
+            ${MAGIA_IO_SRC}
+        COMMENT "[SPATZ] Building IO LLVM bitcode file..."
+        VERBATIM
+    )
+
+    # Link ELF
+    add_custom_command(
+        OUTPUT ${TASK_ELF}
+        COMMAND ${SPATZ_CLANG}
             ${SPATZ_LINK_FLAGS}
+            ${SPATZ_ARCH_FLAGS}
+            ${TASK_INCLUDE_FLAGS}
             -T${SPATZ_LINK_SCRIPT}
             -Wl,--defsym,__first_task=${ARG_FIRST_TASK_NAME}
-            -o ${TASK_ELF}
             ${TASK_CRT0_OBJ}
-            ${MAGIA_IO_SRC}
-            ${ARG_TASK_SOURCES}
+            ${TASK_OBJ}
+            ${MAGIA_IO_OBJ}
+            -o ${TASK_ELF}
+            -v
         DEPENDS
             ${TASK_CRT0_OBJ}
-            ${MAGIA_IO_SRC}
-            ${ARG_TASK_SOURCES}
+            ${TASK_OBJ}
             ${SPATZ_LINK_SCRIPT}
-        COMMENT "[SPATZ] Building ELF..."
+            ${MAGIA_IO_OBJ}
+        COMMENT "[SPATZ] Linking ELF..."
         VERBATIM
     )
 

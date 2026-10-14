@@ -152,6 +152,7 @@ set(SPATZ_COMPILE_FLAGS
     "-fPIC"
     "-fno-builtin"
     "-mcmodel=medany"
+    "-flto"
 )
 set(SPATZ_CFLAGS_DEFINES
     "-DSPATZ_RVD=${SPATZ_RVD}"
@@ -164,6 +165,9 @@ set(SPATZ_CFLAGS_DEFINES
     "-DSPATZ_RVV=${SPATZ_RVV}"
 )
 set(SPATZ_LINK_FLAGS
+    "-flto"
+    "-fno-builtin"
+    "-nostdlib"
     "--ld-path=${SPATZ_LLVM_PATH}/bin/ld.lld"
     "-fuse-ld=${SPATZ_LLVM_PATH}/bin/ld.lld"
     "-Wl,-z,norelro"
