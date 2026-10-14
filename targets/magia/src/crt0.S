@@ -134,6 +134,9 @@ exit:
  cv.elw	 zero, 0(a1)
 #elif CV32E40X == 1
  wfi
+#elif RI5CY == 1
+ li      a1, 0x00000738
+ p.elw	 zero, 0(a1)
 #endif
 
 .section .vectors, "ax"

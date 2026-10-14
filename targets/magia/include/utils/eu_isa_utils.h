@@ -155,6 +155,8 @@ static inline unsigned int evt_read32(unsigned int addr)
     __asm__ __volatile__("cv.elw %0, 0(%1)" : "=r"(value) : "r"(addr) : "memory");
 #elif CV32E40X == 1
     __asm__ __volatile__("lw %0, 0(%1)" : "=r"(value) : "r"(addr) : "memory");
+#elif RI5CY == 1
+    __asm__ __volatile__("p.elw %0, 0(%1)" : "=r"(value) : "r"(addr) : "memory");
 #endif
 #endif
     return value;
