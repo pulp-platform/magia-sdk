@@ -13,7 +13,7 @@ typedef struct {
     uintptr_t beta;    /* GEMM C scalar multiplier (0 when no bias)       */
 
     uint32_t M; /* This tile's output channels (C_out slice)       */
-    uint32_t N; /* H_out * W_out                                   */
+    uint32_t N; /* This tile's output pixels (oh_len * W_out)      */
     uint32_t K; /* C_in * K_h * K_w                                */
 
     uint32_t has_bias;  /* Wether Bias is present or not                   */
@@ -21,6 +21,8 @@ typedef struct {
     uint32_t c_out;     /* Total number of output channels                 */
     uint32_t group;     /* Convolution groups (1 = standard convolution)   */
     uint32_t oc_start;  /* Global index of this tile's first output channel*/
+    uint32_t oh_start;  /* Global index of this tile's first output row    */
+    uint32_t oh_len;    /* This tile's output rows (H_out slice)           */
     uint32_t c_in;      /* Input channels (C_in)                           */
 
     uint32_t h_in;  /* Input Height (H_in)                             */

@@ -3,6 +3,7 @@
 
 // #define SCALAR
 
+
 static inline void compute_window_boundaries(const int out_idx,
                                              const uint32_t stride,
                                              const uint32_t pad,
@@ -219,6 +220,95 @@ static inline void conv2d_rvv(const _Float16 *src,
     }
 }
 
+static inline void conv2d_dw_rvv(const _Float16 *src,
+                                 const _Float16 *weight,
+                                 const _Float16 *bias,
+                                 const uint32_t h_in,
+                                 const uint32_t w_in,
+                                 const uint32_t h_out,
+                                 const uint32_t w_out,
+                                 const uint32_t kernel_h,
+                                 const uint32_t kernel_w,
+                                 const uint32_t stride_h,
+                                 const uint32_t stride_w,
+                                 const uint32_t pad_h,
+                                 const uint32_t pad_w,
+                                 const uint32_t iter_start,
+                                 const uint32_t iter_len,
+                                 const uint32_t c_out,
+                                 const uint32_t has_bias,
+                                 _Float16 *dst)
+{
+    register _Float16 ZERO asm("f10") = 0.0f;
+    uint32_t in_hw                    = h_in * w_in;
+    uint32_t out_hw                   = h_out * w_out;
+    uint32_t ker_hw                   = kernel_h * kernel_w;
+    size_t stride_src                 = in_hw * sizeof(_Float16);
+    size_t stride_weight              = ker_hw * sizeof(_Float16);
+    size_t stride_dst                 = out_hw * sizeof(_Float16);
+
+    int h_win_start, h_win_len, h_ker_start;
+    int w_win_start, w_win_len, w_ker_start;
+
+    size_t vl;
+    size_t avl;
+
+    /* Depthwise: vectorize along the channels (same sum order as conv2d_rvv()) */
+    for (uint32_t i = 0; i < iter_len; i += vl) {
+        uint32_t abs_iter  = iter_start + i;
+        uint32_t batch_idx = abs_iter / c_out;
+        uint32_t oc_idx    = abs_iter % c_out;
+
+        avl = iter_len - i;
+        if (avl > c_out - oc_idx)
+            avl = c_out - oc_idx;
+        asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+
+        const _Float16 *src_c    = src + (batch_idx * c_out + oc_idx) * in_hw;
+        const _Float16 *weight_c = weight + oc_idx * ker_hw;
+        _Float16 *dst_c          = dst + i * out_hw;
+
+        for (int oh = 0; oh < h_out; oh++) {
+            compute_window_boundaries(
+                oh, stride_h, pad_h, kernel_h, h_in, &h_win_start, &h_win_len, &h_ker_start);
+            if (h_win_len == 0)
+                continue;
+
+            for (int ow = 0; ow < w_out; ow++) {
+                compute_window_boundaries(
+                    ow, stride_w, pad_w, kernel_w, w_in, &w_win_start, &w_win_len, &w_ker_start);
+                if (w_win_len == 0)
+                    continue;
+
+                if (has_bias)
+                    asm volatile("vle16.v v0, (%0)" ::"r"(bias + oc_idx));
+                else
+                    asm volatile("vfmv.v.f v0, %0" ::"f"(ZERO));
+
+                for (int kw = 0; kw < w_win_len; kw++) {
+                    asm volatile("vfmv.v.f v8, %0" ::"f"(ZERO));
+
+                    for (int kh = 0; kh < h_win_len; kh++) {
+                        const _Float16 *p_src =
+                            src_c + ((h_win_start + kh) * w_in) + (w_win_start + kw);
+                        const _Float16 *p_weight =
+                            weight_c + ((h_ker_start + kh) * kernel_w) + (w_ker_start + kw);
+
+                        asm volatile("vlse16.v v16, (%0), %1" ::"r"(p_src), "r"(stride_src));
+                        asm volatile("vlse16.v v24, (%0), %1" ::"r"(p_weight), "r"(stride_weight));
+                        asm volatile("vfmacc.vv v8, v16, v24");
+                    }
+
+                    asm volatile("vfadd.vv v0, v0, v8");
+                }
+
+                _Float16 *p_dst = dst_c + ((oh * w_out) + ow);
+                asm volatile("vsse16.v v0, (%0), %1" ::"r"(p_dst), "r"(stride_dst) : "memory");
+            }
+        }
+    }
+}
+
 int conv2d_fp16_spatz_task(void)
 {
     volatile conv2d_fp16_spatz_params_t *params;
@@ -285,26 +375,47 @@ int conv2d_fp16_spatz_task(void)
                   has_bias,
                   dst);
 #else
-    conv2d_rvv(src,
-               weight,
-               bias,
-               c_in_g,
-               c_out_g,
-               h_in,
-               w_in,
-               h_out,
-               w_out,
-               kernel_h,
-               kernel_w,
-               stride_h,
-               stride_w,
-               pad_h,
-               pad_w,
-               iter_start,
-               iter_len,
-               c_out,
-               has_bias,
-               dst);
+    /* Depthwise with more channels than kernel columns: vectorize along the channels */
+    if (c_in_g == 1 && c_out_g == 1 && iter_len >= kernel_w)
+        conv2d_dw_rvv(src,
+                      weight,
+                      bias,
+                      h_in,
+                      w_in,
+                      h_out,
+                      w_out,
+                      kernel_h,
+                      kernel_w,
+                      stride_h,
+                      stride_w,
+                      pad_h,
+                      pad_w,
+                      iter_start,
+                      iter_len,
+                      c_out,
+                      has_bias,
+                      dst);
+    else
+        conv2d_rvv(src,
+                   weight,
+                   bias,
+                   c_in_g,
+                   c_out_g,
+                   h_in,
+                   w_in,
+                   h_out,
+                   w_out,
+                   kernel_h,
+                   kernel_w,
+                   stride_h,
+                   stride_w,
+                   pad_h,
+                   pad_w,
+                   iter_start,
+                   iter_len,
+                   c_out,
+                   has_bias,
+                   dst);
 #endif
 
     return 0;
