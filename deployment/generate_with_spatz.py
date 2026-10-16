@@ -35,6 +35,85 @@ def add_kernel_includes(code: str, operators: list, format: str, arch: str) -> s
     includes = "".join(f'#include "{op}_{format}_{arch}.h"\n' for op in operators)
     return code.replace('#include <stdint.h>\n', f'#include <stdint.h>\n{includes}', 1)
 
+def add_node_profiling(code: str) -> tuple[str, list]:
+    node_block = re.compile(r"#ifdef ENABLE_NODE_LOGS.*?#endif\n", re.DOTALL)
+    name_op = re.compile(r"Running node: (.*?) \((.*?)\)")
+
+    nodes = []
+
+    def marker(match):
+        block = match.group(0)
+        found = name_op.search(block)
+        name, op = (found.group(1).strip(), found.group(2).strip()) if found else ("", "")
+        idx = len(nodes)
+        nodes.append((idx, name, op))
+        return f"{block}        PROF_NODE({idx});\n"
+
+    code = node_block.sub(marker, code)
+    code = code.replace(
+        "magia_sync_tiles();",
+        "PROF_PHASE_VOID(prof_cyc_sync, magia_sync_tiles());")
+    code = code.replace('#include "tile.h"\n',
+                        '#include "tile.h"\n#include "kernels_profiling_utils.h"\n', 1)
+
+    return code, nodes
+
+
+def onnx_name_map(onnx_model) -> dict:
+    return {re.sub(r"[^A-Za-z0-9_]", "", n.name): n.name
+            for n in onnx_model.graph.node if n.name}
+
+
+def layer_indices(nodes: list, onnx_names: dict, depth: int) -> tuple[list, list]:
+    layers, per_node = [], []
+    for _, name, _ in nodes:
+        parts = [p for p in onnx_names.get(name, "").split("/") if p]
+        layer = "/" + "/".join(parts[:depth]) if parts else "(unnamed)"
+        if layer not in layers:
+            layers.append(layer)
+        per_node.append(layers.index(layer))
+    return layers, per_node
+
+
+def profiling_tables(nodes: list, onnx_names: dict, layers: list, node_layer: list) -> str:
+    def c_strings(values):
+        return "".join(f'    "{v}",\n' for v in values)
+
+    return f"""
+#ifdef ENABLE_NODE_PROFILING
+/* Layer and node names for the profiling report, emitted by
+ * generate_with_spatz.py and consumed by prof_report() in main.c. */
+const char *const prof_layer_name[PROF_N_LAYERS] = {{
+{c_strings(layers)}}};
+
+const char *const prof_node_name[PROF_N_NODES] = {{
+{c_strings(onnx_names.get(name, name) for _, name, _ in nodes)}}};
+
+const char *const prof_node_op[PROF_N_NODES] = {{
+{c_strings(op for _, _, op in nodes)}}};
+
+const unsigned short prof_node_layer[PROF_N_NODES] = {{
+{"".join(f"    {i},\n" for i in node_layer)}}};
+#endif /* ENABLE_NODE_PROFILING */
+"""
+
+
+def add_profiling_tables(code: str, block: str) -> str:
+    return code.replace('#include "network.h"\n', '#include "network.h"\n' + block, 1)
+
+
+def add_profiling_decls(code: str, n_nodes: int, n_layers: int) -> str:
+    return (f"#define PROF_N_NODES {n_nodes}\n"
+            f"#define PROF_N_LAYERS {n_layers}\n\n"
+            "#ifdef ENABLE_NODE_PROFILING\n"
+            "/* Defined in the generated network.c. */\n"
+            "extern const char *const prof_layer_name[PROF_N_LAYERS];\n"
+            "extern const char *const prof_node_name[PROF_N_NODES];\n"
+            "extern const char *const prof_node_op[PROF_N_NODES];\n"
+            "extern const unsigned short prof_node_layer[PROF_N_NODES];\n"
+            "#endif /* ENABLE_NODE_PROFILING */\n\n") + code
+
+
 def add_node_logs_define(code: str) -> str:
     # The per-node "Running node" prints in network.c are guarded by
     # #ifdef ENABLE_NODE_LOGS. Define the macro at the top so they compile in.
@@ -143,7 +222,7 @@ def generate_task_bin_shims(operators: list, test: str, format: str, arch: str, 
         with open(dst_inc_dir / shim, "w") as f:
             f.write(content)
 
-def main(test, enable_node_logs=False) -> None:
+def main(test, enable_node_logs=False, layer_depth=2) -> None:
 
     print(f"test: {test}")
 
@@ -224,6 +303,17 @@ def main(test, enable_node_logs=False) -> None:
         raise FileNotFoundError(f"Missing kernels for operators {missing} (looked in kernels/<op>/{format}/{arch}).")
     logger.info(f"network operators ({len(operators)}): {operators}")
 
+    network_source, prof_nodes = add_node_profiling(network_source)
+    onnx_names = onnx_name_map(onnx_graph)
+    unmatched = [n for _, n, _ in prof_nodes if n and n not in onnx_names]
+    if unmatched:
+        logger.warning(f"{len(unmatched)} node(s) without an ONNX name match, e.g. {unmatched[:3]}")
+    prof_layers, prof_node_layer = layer_indices(prof_nodes, onnx_names, layer_depth)
+    network_source = add_profiling_tables(
+        network_source, profiling_tables(prof_nodes, onnx_names, prof_layers, prof_node_layer))
+    logger.info(f"per-node profiling: {len(prof_nodes)} nodes in {len(prof_layers)} layers "
+                f"(hierarchy depth {layer_depth})")
+
     if enable_node_logs:
         network_source = add_node_logs_define(network_source)
 
@@ -238,6 +328,7 @@ def main(test, enable_node_logs=False) -> None:
     network_header = add_kernel_includes(network_header, operators, format, arch)
     network_header = allocator_patch(network_header, inputs, outputs)
     network_header = normalize_spatz_types(network_header)
+    network_header = add_profiling_decls(network_header, len(prof_nodes), len(prof_layers))
     with open(network_header_path, "w") as f:
         f.write(network_header)
     os.system(clang_cmd(network_header_path))
@@ -268,6 +359,8 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('-t', '--test', type=str, required=True)
     parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('--layer-depth', type=int, default=2,
+                        help='export-hierarchy depth used to group nodes into layers')
     parser.add_argument('--enable-node-logs', action='store_true',
                         help='define ENABLE_NODE_LOGS in network.c to print each node as it runs')
 
@@ -294,4 +387,4 @@ if __name__ == "__main__":
     logger.addHandler(stream_handler)
 
     logger.debug(f"args: {args}")
-    main(args.test, args.enable_node_logs)
+    main(args.test, args.enable_node_logs, args.layer_depth)

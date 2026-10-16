@@ -5,7 +5,7 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
+#include "kernels_profiling_utils.h"
 
 #include "matmul_fp16_spatz.h"
 #include "matmul_fp16_spatz_params.h"
@@ -84,9 +84,6 @@ static int init_input_params(
     if (batch_len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
-
     /* batched == 1: this tile's batches are a contiguous L2 block -> a 1D transfer.
        batched == 0 (shared/broadcast weight): replicate the single 2D matrix into every
        batch slot with a 2D transfer whose source stride is 0. The Spatz task overwrites
@@ -126,8 +123,6 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_ctrl_init();
-
     spatz_run_task_with_params(MATMUL_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(WFE);
@@ -160,9 +155,6 @@ static int store_result(void *params, float16 *Y)
     if (batch_len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
-
     /* Y is always batched: this tile's batches are a contiguous L2 block -> a 1D transfer. */
     idma_memcpy_1d(1,
                    (uint32_t)(Y + batch_start * y_elems),
@@ -186,13 +178,14 @@ void MAGIA_matmul_fp16_spatz(const float16 *A,
     int ret;
     volatile matmul_fp16_spatz_params_t *params;
 
-    ret = alloc_l1((void **)&params, M, K, O, total_batches);
+    PROF_PHASE(prof_cyc_alloc, ret, alloc_l1((void **)&params, M, K, O, total_batches));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = init_input_params((void *)params, A, B, a_batched, b_batched);
+    PROF_PHASE(
+        prof_cyc_data_in, ret, init_input_params((void *)params, A, B, a_batched, b_batched));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
                HID,
@@ -201,7 +194,7 @@ void MAGIA_matmul_fp16_spatz(const float16 *A,
         return;
     }
 
-    ret = offload_spatz_task((void *)params);
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task((void *)params));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
                HID,
@@ -210,7 +203,7 @@ void MAGIA_matmul_fp16_spatz(const float16 *A,
         return;
     }
 
-    ret = store_result((void *)params, Y);
+    PROF_PHASE(prof_cyc_data_out, ret, store_result((void *)params, Y));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }

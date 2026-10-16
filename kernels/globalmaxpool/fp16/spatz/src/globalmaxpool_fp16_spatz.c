@@ -5,7 +5,7 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
+#include "kernels_profiling_utils.h"
 
 #include "globalmaxpool_fp16_spatz.h"
 #include "globalmaxpool_fp16_spatz_params.h"
@@ -78,9 +78,6 @@ static int init_input_params(void *params, const float16 *X)
     if (len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
-
     /* This tile's channels [start, start+len) are contiguous in L2. The Spatz task writes
        every output (one max per channel), so shard_Y is not zeroed here. */
     idma_memcpy_1d(0,
@@ -96,7 +93,6 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_ctrl_init();
     spatz_run_task_with_params(GLOBALMAXPOOL_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(WFE);
@@ -127,9 +123,6 @@ static int store_result(void *params, float16 *Y)
     if (len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
-
     /* This tile's outputs [start, start+len) are contiguous in L2. */
     idma_memcpy_1d(1, (uint32_t)(Y + start), (uint32_t)gap_params->shard_Y, len * sizeof(float16));
     eu_idma_wait_o2a(WFE);
@@ -142,13 +135,13 @@ void MAGIA_globalmaxpool_fp16_spatz(const float16 *X, float16 *Y, uint32_t input
     int ret;
     volatile globalmaxpool_fp16_spatz_params_t *params;
 
-    ret = alloc_l1((void **)&params, input_shape);
+    PROF_PHASE(prof_cyc_alloc, ret, alloc_l1((void **)&params, input_shape));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = init_input_params((void *)params, X);
+    PROF_PHASE(prof_cyc_data_in, ret, init_input_params((void *)params, X));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
                HID,
@@ -157,7 +150,7 @@ void MAGIA_globalmaxpool_fp16_spatz(const float16 *X, float16 *Y, uint32_t input
         return;
     }
 
-    ret = offload_spatz_task((void *)params);
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task((void *)params));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
                HID,
@@ -166,7 +159,7 @@ void MAGIA_globalmaxpool_fp16_spatz(const float16 *X, float16 *Y, uint32_t input
         return;
     }
 
-    ret = store_result((void *)params, Y);
+    PROF_PHASE(prof_cyc_data_out, ret, store_result((void *)params, Y));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }

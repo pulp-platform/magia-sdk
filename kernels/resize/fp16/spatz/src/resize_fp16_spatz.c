@@ -5,7 +5,7 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
+#include "kernels_profiling_utils.h"
 
 #include "resize_fp16_spatz.h"
 #include "resize_fp16_spatz_params.h"
@@ -84,9 +84,6 @@ static int init_input_params(void *params, const float16 *X)
     if (it_len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
-
     /* This tile's (batch,channel) planes [it_start, it_start+it_len) are contiguous in L2.
        The Spatz task writes every output pixel, so shard_Y is not zeroed here. */
     idma_memcpy_1d(0,
@@ -102,7 +99,6 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_ctrl_init();
     spatz_run_task_with_params(RESIZE_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(WFE);
@@ -135,9 +131,6 @@ static int store_result(void *params, float16 *Y)
     if (it_len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
-
     /* This tile's output (batch,channel) planes [it_start, it_start+it_len) are contiguous. */
     idma_memcpy_1d(1,
                    (uint32_t)(Y + it_start * out_hw),
@@ -160,13 +153,14 @@ void MAGIA_resize_fp16_spatz(const float16 *X,
     int ret;
     volatile resize_fp16_spatz_params_t *params;
 
-    ret = alloc_l1(&params, batch_size, channels, in_h, in_w, out_h, out_w);
+    PROF_PHASE(
+        prof_cyc_alloc, ret, alloc_l1(&params, batch_size, channels, in_h, in_w, out_h, out_w));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = init_input_params(params, X);
+    PROF_PHASE(prof_cyc_data_in, ret, init_input_params(params, X));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
                HID,
@@ -175,7 +169,7 @@ void MAGIA_resize_fp16_spatz(const float16 *X,
         return;
     }
 
-    ret = offload_spatz_task(params);
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task(params));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
                HID,
@@ -184,7 +178,7 @@ void MAGIA_resize_fp16_spatz(const float16 *X,
         return;
     }
 
-    ret = store_result(params, Y);
+    PROF_PHASE(prof_cyc_data_out, ret, store_result(params, Y));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }

@@ -5,7 +5,7 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
+#include "kernels_profiling_utils.h"
 
 #include "conv2d_fp16_spatz.h"
 #include "conv2d_fp16_spatz_params.h"
@@ -127,9 +127,6 @@ static int init_input_params(void *params, const float16 *X, const float16 *W, c
     total_w =
         conv_params->c_out * conv_params->c_in_g * conv_params->kernel_h * conv_params->kernel_w;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
-
     /* Every tile needs the full input and full weights (each output channel reads all input
        channels), both contiguous in L2 -> straight 1D transfers. The Spatz task writes every
        output element, so shard_Y is not zeroed here. */
@@ -152,8 +149,6 @@ static int init_input_params(void *params, const float16 *X, const float16 *W, c
 static int offload_spatz_task(void *params)
 {
     int ret;
-
-    eu_ctrl_init();
 
     spatz_run_task_with_params(CONV2D_FP16_SPATZ_TASK, (uint32_t)params);
 
@@ -187,9 +182,6 @@ static int store_result(void *params, float16 *Y)
     if (iter_len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
-
     /* This tile's output planes [iter_start, iter_start+iter_len) are contiguous in L2. */
     idma_memcpy_1d(1,
                    (uint32_t)(Y + iter_start * out_hw_len),
@@ -218,23 +210,25 @@ void MAGIA_conv2d_fp16_spatz(const float16 *X,
     int ret;
     volatile conv2d_fp16_spatz_params_t *params;
 
-    ret = alloc_l1(&params,
-                   input_shape,
-                   output_shape,
-                   kernel_h,
-                   kernel_w,
-                   stride_h,
-                   stride_w,
-                   pad_h,
-                   pad_w,
-                   group,
-                   has_bias);
+    PROF_PHASE(prof_cyc_alloc,
+               ret,
+               alloc_l1(&params,
+                        input_shape,
+                        output_shape,
+                        kernel_h,
+                        kernel_w,
+                        stride_h,
+                        stride_w,
+                        pad_h,
+                        pad_w,
+                        group,
+                        has_bias));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] L1 allocation failed with error: %d\n", HID, KERNEL_NAME, ret);
         return;
     }
 
-    ret = init_input_params(params, X, W, B);
+    PROF_PHASE(prof_cyc_data_in, ret, init_input_params(params, X, W, B));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Params initialization failed with error: %d\n",
                HID,
@@ -243,7 +237,7 @@ void MAGIA_conv2d_fp16_spatz(const float16 *X,
         return;
     }
 
-    ret = offload_spatz_task(params);
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task(params));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
                HID,
@@ -252,7 +246,7 @@ void MAGIA_conv2d_fp16_spatz(const float16 *X,
         return;
     }
 
-    ret = store_result(params, Y);
+    PROF_PHASE(prof_cyc_data_out, ret, store_result(params, Y));
     if (ret != 0) {
         printf("[CV32 (%d)] [%s] Result write back failed with error: %d\n", HID, KERNEL_NAME, ret);
     }

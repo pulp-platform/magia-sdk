@@ -40,7 +40,6 @@ Example:
 make deploy_with_spatz test=resnet-reduced/fp16/spatz platform=gvsoc tiles=2
 ```
 
-
 ## Adding a new operator
 
 The frontend (turning a graph node into buffers and an *operator representation*, i.e. the
@@ -101,7 +100,7 @@ groups.
 | Clip | Agnostic | size / HID | |
 | Col2Im | [N,C,H,W] | (N*C) / HID | |
 | Concat | Agnostic | iterations / HID | axis != 0 |
-| Conv | [N,C,H,W] | (N*C_out) / HID | no auto_pad; no dilations; symmetric pad |
+| Conv | [N,C,H,W] | depthwise: (N*C_out) / HID; otherwise: H_out / HID, or C_out / HID for small outputs | no auto_pad; no dilations; symmetric pad |
 | ConvTranspose | [N,C,H,W] | (N*C_out) / HID | no auto_pad; no dilations; no output_padding; no output_shape |
 | Div | Agnostic | size / HID | |
 | Elu | Agnostic | size / HID | |
@@ -144,5 +143,143 @@ Notes:
 - **Elementwise broadcast** (Add / Sub / Mul / Div) is handled by a dedicated
   broadcast layer that expands the operand shapes (numpy semantics), so a scalar/smaller
   operand is materialized to the full output shape.
+- **Conv** has two kernels, picked per node by Deeploy: depthwise convolutions (`group` equal to
+  the input channels) run the direct `conv2d` kernel, every other convolution runs `conv2dgemm`
+  (im2col + GEMM).
 - **Fast exponential**: Elu, Exp, Gelu, Selu, Sigmoid, Softmax, Swish and Tanh use a fast
   Schraudolph reinterpret-cast approximation of the exponential (~3% relative error).
+
+## Cycle profiling
+
+Optional per-node cycle profiling, off by default, measured on gvsoc.
+
+```bash
+make deploy_with_spatz test=tiny-vit/fp16/spatz platform=gvsoc \
+     enable_node_profiling=1 2>&1 | tee run.log
+```
+
+`layer_depth` (default 2) sets how many levels of the export hierarchy define a
+layer: at 2, `/layers.0/blocks.0/conv1/c/Conv` belongs to `/layers.0/blocks.0`.
+
+### API
+
+Everything lives in `kernels/common/kernels_profiling_utils.h`. Five counters, one
+per phase, plain scalars in each tile's own L1 (`.tile_bss`):
+
+```c
+prof_cyc_alloc  prof_cyc_data_in  prof_cyc_compute
+prof_cyc_data_out prof_cyc_sync
+```
+
+and three macros:
+
+| macro | what it does |
+|---|---|
+| `PROF_PHASE(counter, ret, call)` | runs `ret = call`, adds the cycles it took to `counter` |
+| `PROF_PHASE_VOID(counter, call)` | same, for calls returning `void` |
+| `PROF_NODE(idx)`                 | snapshots the counters at a node boundary |
+
+`PROF_NODE`, and the `PROF_PHASE_VOID(prof_cyc_sync, ...)` around the tile
+barrier, are injected into the generated code, so you never write them by hand.
+`PROF_PHASE` is the one that matters when **adding a new operator**: include the header and wrap the phases in the kernel's entry point,
+picking the counter that matches each one.
+
+```c
+#include "kernels_profiling_utils.h"
+
+void MAGIA_myop_fp16_spatz(const float16 *X, float16 *Y, uint32_t size)
+{
+    int ret;
+    volatile myop_fp16_spatz_params_t *params;
+
+    PROF_PHASE(prof_cyc_alloc, ret, alloc_l1((void **)&params, size));
+    PROF_PHASE(prof_cyc_data_in, ret, init_input_params((void *)params, X));
+    PROF_PHASE(prof_cyc_compute, ret, offload_spatz_task((void *)params));
+    PROF_PHASE(prof_cyc_data_out, ret, store_result((void *)params, Y));
+}
+```
+
+### Output
+
+The log is **self-contained** (no sidecar file) and **ordered**: the report runs
+after the closing barrier and is printed by a single tile, which can read every
+tile's numbers because the tables live in shared L2, so lines never interleave.
+
+Every line is prefixed with `[PROF]`, so the whole report is one `grep` away. It
+walks the network layer by layer: each layer opens with a header, then comes one
+line per node and tile, and the layer closes with its own per-tile recap:
+
+```
+[PROF] ### Profiling for Layer 0 (/patch_embed/seq) ###
+[PROF] hid=0 layer_idx=0 node_idx=0 node=/patch_embed/seq/seq.0/c/Conv op=Conv node_cycles=14678 alloc=1069 in=1874 cmp=9990 out=374 snc=726
+[PROF] hid=1 layer_idx=0 node_idx=0 node=/patch_embed/seq/seq.0/c/Conv op=Conv node_cycles=14703 ...
+...
+[PROF] Layer 0 recap:
+[PROF] hid=0 layer_idx=0 layer_cycles=25135 alloc=1915 in=2944 cmp=16599 out=724 snc=1437
+[PROF] hid=1 layer_idx=0 layer_cycles=25159 ...
+```
+
+and the run ends with the totals, followed by the usual per-tile cycle count:
+
+```
+[PROF] ### Final recap ###
+[PROF] hid=0 total_cycles=419404 alloc=48754 in=36428 cmp=218768 out=18222 snc=30036
+...
+[CV32 (0)] Run completed in 419510 cycles
+```
+
+| field | meaning |
+|---|---|
+| `hid`           | **hart id**, i.e. which tile of the mesh (`0..tiles^2-1`) |
+| `layer_idx`     | index of the layer the node belongs to; its name is in the header |
+| `node_idx`      | index of the node in execution order |
+| `node`          | the original ONNX node name |
+| `op`            | the node's operator |
+| `node_cycles`   | cycles between this node's marker and the next one — the node's whole cost, sync included |
+| `layer_cycles`  | same, summed over the nodes of the layer (recap lines) |
+| `total_cycles`  | same, summed over the whole network (final recap) |
+| `alloc`         | L1 allocation |
+| `in`            | copy-in L2->L1 (iDMA + wait) |
+| `cmp`           | Spatz offload (+ wait) |
+| `out`           | copy-out L1->L2 (iDMA + wait) |
+| `snc`           | tile barrier following the node |
+| `other`         | not printed: `node_cycles` minus the five phases above — the generated glue around each kernel call, the zero-copy nodes that run no kernel at all, and the profiling markers themselves |
+
+### Measured results
+
+Measured on gvsoc (`93cedc4c`, chips-it) with a **2x2 mesh**.
+
+Note these numbers are **indicative**: the networks are deployed **un-tiled**, and
+each kernel does its own L2 <-> L1 transfers.
+
+| network | nodes | total | alloc | in | cmp | out | snc | other |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `tiny-vit` | 189 | 419 390 | 49 428 (11.8%) | 34 407 (8.2%) | 188 144 (44.9%) | 16 198 (3.9%) | 59 516 (14.2%) | 71 697 (17.1%) |
+| `resnet-reduced` | 30 | 1 871 901 | 11 951 (0.6%) | 212 209 (11.3%) | 1 609 603 (86.0%) | 15 823 (0.8%) | 9 862 (0.5%) | 12 453 (0.7%) |
+| `bert-reduced` | 64 | 1 043 899 | 15 409 (1.5%) | 19 561 (1.9%) | 274 053 (26.3%) | 9 851 (0.9%) | 701 554 (67.2%) | 23 471 (2.2%) |
+| `efficientnet-reduced` | 94 | 1 540 530 | 37 948 (2.5%) | 266 565 (17.3%) | 1 154 041 (74.9%) | 21 216 (1.4%) | 19 965 (1.3%) | 40 795 (2.6%) |
+| `yolo-reduced` | 233 | 15 049 928 | 72 635 (0.5%) | 526 551 (3.5%) | 14 207 515 (94.4%) | 47 336 (0.3%) | 101 557 (0.7%) | 94 334 (0.6%) |
+
+### Optional: turning the log into tables
+
+`scripts/prof_report.py` is a convenience, not a requirement: the log is readable
+as it is. It takes the log alone — it recovers the layer and node names from it —
+and **prints to stdout** three tables: cycles **per layer**, the **top nodes** by
+cycles, and a **per-operator** summary, each with percentages of the total.
+
+```bash
+# tables on stdout
+scripts/prof_report.py run.log
+
+# 20 nodes ranked, and the raw numbers into a file
+scripts/prof_report.py run.log --top 20 --csv nodes.csv
+```
+
+Nothing is written unless `--csv` is given, and that is the only file produced:
+one row per (node, tile) with `node_idx, node, op, layer_idx, layer, hid`, then
+`node_cycles` and the five phases, ready for a spreadsheet. The script prints the
+path it wrote. `--agg` chooses how the tiles are collapsed:
+`crit` (default) takes every field from the tile that gates the node, keeping the
+parts consistent with the total, while `mean` averages them — useful to spot load
+imbalance, since a node whose mean is dominated by `snc` means the other tiles
+were waiting.
