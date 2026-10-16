@@ -17,22 +17,26 @@
 
 SEARCH_DIR(.)
 __DYNAMIC  =  0;
-/* Pin the ELF entry point to _start. Without this, ld defaults the entry to the
- * first byte of .text, which the loader uses as the core boot address. Under -flto
- * the link may place another function (e.g. to_x) first, so the entry would boot
- * into arbitrary code with an uninitialized register file instead of crt0. */
 ENTRY(_start)
 MEMORY
 {
-    instrram    : ORIGIN = 0xcc000000, LENGTH = 0x20000
-    dataram     : ORIGIN = 0xcc020000, LENGTH = 0xF00000
-    stack       : ORIGIN = 0x00010000, LENGTH = 0x4000 /* 16K for control core CV32 (0x10000-0x14000); PULP 0x14000-0x1C000, Spatz 0x1C000-0x20000 */
+    instrram    : ORIGIN = 0xcc000000, LENGTH = 0x8000
+    dataram     : ORIGIN = 0xcc010000, LENGTH = 0xF00000  /* MAGIA: data at 0xCC010000 */
+    stack       : ORIGIN = 0x00010000, LENGTH = 0x0C000   /* CV32/PULP stacks below Spatz [0x1C000, 0x20000) */
 }
 
-/* Stack information variables */
-_min_stack     = 0x1000;   /* 4K - minimum stack space to reserve */
-_stack_len     = LENGTH(stack);
-_stack_start   = ORIGIN(stack) + LENGTH(stack);
+/* Stack information variables.
+ * Spatz owns [0x1C000, 0x20000) in the tile SPM (_stack_start = 0x1FFF8 in
+ * spatz_program.ld); this region stops at 0x1C000 to avoid overlap.
+ * Each hart gets _stack_slice_size bytes; crt0 computes:
+ *   sp = stack - local_id * _stack_slice_size
+ * Slot 0 = CV32 main core, slots 1..8 = PULP cluster cores. */
+_stack_slice_size = 0x800;                       /* 2 KB per hart */
+_stack_hart_count = 9;                           /* 1 main + 8 PULP cores */
+_min_stack        = _stack_slice_size * _stack_hart_count;  /* 18 KB total */
+_stack_len        = LENGTH(stack);
+_stack_start      = ORIGIN(stack) + LENGTH(stack);
+ASSERT(_min_stack <= _stack_len, "Configured stacks exceed stack memory");
 
 /* We have to align each sector to word boundaries as our current s19->slm
  * conversion scripts are not able to handle non-word aligned sections. */
@@ -70,8 +74,8 @@ SECTIONS
         *(.shdata)
         _endtext = .;
     }  > instrram :text
-	
-	/* Spatz embedded binary - inlined from header file */
+
+    /* Spatz embedded binary - inlined from header file */
     /* Positioned right after CV32 .text in instrram */
 
     . = ALIGN(4);
@@ -84,10 +88,10 @@ SECTIONS
     _spatz_binary_end = .;
     _spatz_binary_size = _spatz_binary_end - _spatz_binary_start;
 
-    /* PULP embedded binary - inlined from header file */
-    /* Positioned right after Spatz binary in instrram */
-
-    .pulp_binary : ALIGN(256) {
+    /* PULP embedded binary - inlined from header file (magia-sdk flow).
+       CV32E40P stores mtvec as mtvec_addr_i[31:8], so keep the PULP
+       boot address and trap base in the same 256-byte page. */
+    .pulp_binary ALIGN(256) : {
         _pulp_binary_start = .;
         KEEP(*(.pulp_binary))
         _pulp_binary_end = .;
@@ -156,9 +160,11 @@ SECTIONS
         _bss_end = .;
     } > dataram :data
 
-    /* ensure there is enough room for stack */
-    .stack (NOLOAD): {
+    /* Stack placed at the TOP of the CV32/PULP region so crt0 can compute
+     * per-hart SP = stack - local_id * _stack_slice_size. */
+    .stack ORIGIN(stack) + LENGTH(stack) - _min_stack (NOLOAD): {
         . = ALIGN(4);
+        _stack_bottom = .;
         . = . + _min_stack ;
         . = ALIGN(4);
         stack = . ;

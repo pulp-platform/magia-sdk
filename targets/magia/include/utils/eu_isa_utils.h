@@ -242,4 +242,8 @@ static inline uint32_t eu_trigger_sw_event_wait(uint32_t sw_event_id)
     return 0;
 }
 
+//=============================================================================
+// Cluster Event Functions
+//=============================================================================
+
 #endif /*EVENT_UNIT_UTILS_H*/

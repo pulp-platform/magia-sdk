@@ -36,23 +36,24 @@
  *                                 PULP cores write 0 to ack; register clears when all done
  *   0x1C: PULP_READY            — each PULP hart writes 1 when booted; CV32 polls until all ready
  */
-#define PULP_CLK_EN           (PULP_CTRL_BASE + 0x00)
-#define PULP_BINARY           (PULP_CTRL_BASE + 0x04)
-#define PULP_NB_CORES_TO_WAIT (PULP_CTRL_BASE + 0x08)
-#define PULP_DONE             (PULP_CTRL_BASE + 0x0C)
-#define PULP_TASKBIN          (PULP_CTRL_BASE + 0x10)
-#define PULP_DATA             (PULP_CTRL_BASE + 0x14)
-#define PULP_START            (PULP_CTRL_BASE + 0x18)
-#define PULP_READY            (PULP_CTRL_BASE + 0x1C)
+#define PULP_FETCH_EN           (PULP_CTRL_BASE + 0x00)
+#define PULP_BINARY             (PULP_CTRL_BASE + 0x04)
+#define PULP_DONE               (PULP_CTRL_BASE + 0x08)
+#define PULP_TASKBIN            (PULP_CTRL_BASE + 0x0C)
+#define PULP_DATA               (PULP_CTRL_BASE + 0x10)
+#define PULP_START              (PULP_CTRL_BASE + 0x14)
+#define PULP_READY              (PULP_CTRL_BASE + 0x18)
+#define PULP_RETURN             (PULP_CTRL_BASE + 0x1C)
+#define PULP_RETURN_CRASHED_BIT (0x80000000u) /* Set when core 0 trapped instead of returning */
+
+static inline void pulp_fetch_en(void)
+{
+    mmio32(PULP_FETCH_EN) = 1;
+}
 
 static inline void pulp_set_binary(uint32_t addr)
 {
     mmio32(PULP_BINARY) = addr;
-}
-
-static inline void pulp_set_nb_cores_to_wait(uint32_t nb_cores)
-{
-    mmio32(PULP_NB_CORES_TO_WAIT) = nb_cores;
 }
 
 static inline void pulp_set_func(uint32_t addr)
@@ -69,29 +70,40 @@ static inline void pulp_pass_params(uint32_t params_ptr)
 static inline void pulp_init(uint32_t binary_start)
 {
     pulp_set_binary(binary_start);
-    mmio32(PULP_CLK_EN) = 1;
-    while (mmio32(PULP_READY) == 0) {
-        printf("[CV32] Waiting for PULP cores to be ready...\n");
+    pulp_fetch_en();
+    while ((mmio32(PULP_READY) & 1u) == 0u) {
     }
 }
 
-/* Set nb_cores_to_wait, dispatch task to cores selected by one-hot core_mask,
- * then poll until all selected cores have ack'd (PULP_START == 0). */
-static inline void pulp_run_task(uint32_t task_addr, uint32_t core_mask)
+/* Dispatch a task to core 0, returns once core 0 acknowledges PULP_START */
+static inline void pulp_run_task(uint32_t task_addr)
 {
-    pulp_set_nb_cores_to_wait(__builtin_popcount(core_mask));
     pulp_set_func(task_addr);
-    mmio32(PULP_START) = core_mask;
-    while (mmio32(PULP_START) != 0)
-        ;
+    mmio32(PULP_START) = 1;
+    while (mmio32(PULP_START) != 0u) {
+    }
 }
 
 /* Pass context pointer and dispatch task in one call. */
-static inline void
-pulp_run_task_with_params(uint32_t task_addr, uint32_t params_ptr, uint32_t core_mask)
+static inline void pulp_run_task_with_params(uint32_t task_addr, uint32_t params_ptr)
 {
     pulp_pass_params(params_ptr);
-    pulp_run_task(task_addr, core_mask);
+    pulp_run_task(task_addr);
+}
+
+static inline int32_t pulp_get_return_value(void)
+{
+    return (int32_t)mmio32(PULP_RETURN);
+}
+
+static inline int pulp_task_crashed(void)
+{
+    return (mmio32(PULP_RETURN) & PULP_RETURN_CRASHED_BIT) != 0;
+}
+
+static inline uint32_t pulp_get_mcause(void)
+{
+    return mmio32(PULP_RETURN) & ~PULP_RETURN_CRASHED_BIT;
 }
 
 #endif /* MAGIA_PULP_UTILS_H */

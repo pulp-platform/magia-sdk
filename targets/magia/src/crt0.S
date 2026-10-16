@@ -62,12 +62,14 @@ _start:
   csrr    a0, mhartid
   andi    a1, a0, 0x1f
   srli    a0, a0, 5
-  # Enabling CV32E40P mstatus.MIE
-  li      t0, 0x1
+  # Control-core IRQ inputs are disconnected; use EU polling / event loads.
+  csrci   mstatus, 8
+  csrw    mie, zero
+
+#if defined(__riscv_f) && defined(__cv32e40p__)
+  li      t0, 0x2000
   csrrs   zero, mstatus, t0
-  # Enabling CV32E40P SW interrupt (mie[3])
-  li      t0, 0x8
-  csrrs   zero, mie, t0
+#endif
 
   # clear the bss segment
   csrr    t2, mhartid
