@@ -211,21 +211,21 @@ line per node and tile, and the layer closes with its own per-tile recap:
 
 ```
 [PROF] ### Profiling for Layer 0 (/patch_embed/seq) ###
-[PROF] hid=0 layer_idx=0 node_idx=0 node=/patch_embed/seq/seq.0/c/Conv op=Conv node_cycles=13883 alloc=923 in=2744 cmp=8121 out=369 snc=1193
-[PROF] hid=1 layer_idx=0 node_idx=0 node=/patch_embed/seq/seq.0/c/Conv op=Conv node_cycles=13911 ...
+[PROF] hid=0 layer_idx=0 node_idx=0 node=/patch_embed/seq/seq.0/c/Conv op=Conv node_cycles=14678 alloc=1069 in=1874 cmp=9990 out=374 snc=726
+[PROF] hid=1 layer_idx=0 node_idx=0 node=/patch_embed/seq/seq.0/c/Conv op=Conv node_cycles=14703 ...
 ...
 [PROF] Layer 0 recap:
-[PROF] hid=0 layer_idx=0 layer_cycles=22138 alloc=1702 in=4012 cmp=12544 out=810 snc=1764
-[PROF] hid=1 layer_idx=0 layer_cycles=22176 ...
+[PROF] hid=0 layer_idx=0 layer_cycles=25135 alloc=1915 in=2944 cmp=16599 out=724 snc=1437
+[PROF] hid=1 layer_idx=0 layer_cycles=25159 ...
 ```
 
 and the run ends with the totals, followed by the usual per-tile cycle count:
 
 ```
 [PROF] ### Final recap ###
-[PROF] hid=0 total_cycles=333471 alloc=41103 in=37646 cmp=152376 out=20799 snc=24781
+[PROF] hid=0 total_cycles=419404 alloc=48754 in=36428 cmp=218768 out=18222 snc=30036
 ...
-[CV32 (0)] Run completed in 333641 cycles
+[CV32 (0)] Run completed in 419510 cycles
 ```
 
 | field | meaning |
@@ -247,18 +247,18 @@ and the run ends with the totals, followed by the usual per-tile cycle count:
 
 ### Measured results
 
-Measured on gvsoc (`20ccbf1e`, chips-it) with a **2x2 mesh**.
+Measured on gvsoc (`93cedc4c`, chips-it) with a **2x2 mesh**.
 
 Note these numbers are **indicative**: the networks are deployed **un-tiled**, and
 each kernel does its own L2 <-> L1 transfers.
 
 | network | nodes | total | alloc | in | cmp | out | snc | other |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `tiny-vit` | 189 | 333 450 | 41 734 (12.5%) | 35 737 (10.7%) | 128 722 (38.6%) | 18 265 (5.5%) | 47 686 (14.3%) | 61 306 (18.4%) |
-| `resnet-reduced` | 30 | 1 361 040 | 10 336 (0.8%) | 284 505 (20.9%) | 967 249 (71.1%) | 54 940 (4.0%) | 33 223 (2.4%) | 10 787 (0.8%) |
-| `bert-reduced` | 64 | 1 204 914 | 12 435 (1.0%) | 70 742 (5.9%) | 258 087 (21.4%) | 28 343 (2.4%) | 815 176 (67.7%) | 20 131 (1.7%) |
-| `efficientnet-reduced` | 94 | 1 287 200 | 32 290 (2.5%) | 671 761 (52.2%) | 408 675 (31.7%) | 37 779 (2.9%) | 101 111 (7.9%) | 35 584 (2.8%) |
-| `yolo-reduced` | 233 | 9 997 376 | 59 758 (0.6%) | 945 334 (9.5%) | 8 541 188 (85.4%) | 134 440 (1.3%) | 235 556 (2.4%) | 81 100 (0.8%) |
+| `tiny-vit` | 189 | 419 390 | 49 428 (11.8%) | 34 407 (8.2%) | 188 144 (44.9%) | 16 198 (3.9%) | 59 516 (14.2%) | 71 697 (17.1%) |
+| `resnet-reduced` | 30 | 1 871 901 | 11 951 (0.6%) | 212 209 (11.3%) | 1 609 603 (86.0%) | 15 823 (0.8%) | 9 862 (0.5%) | 12 453 (0.7%) |
+| `bert-reduced` | 64 | 1 043 899 | 15 409 (1.5%) | 19 561 (1.9%) | 274 053 (26.3%) | 9 851 (0.9%) | 701 554 (67.2%) | 23 471 (2.2%) |
+| `efficientnet-reduced` | 94 | 1 540 530 | 37 948 (2.5%) | 266 565 (17.3%) | 1 154 041 (74.9%) | 21 216 (1.4%) | 19 965 (1.3%) | 40 795 (2.6%) |
+| `yolo-reduced` | 233 | 15 049 928 | 72 635 (0.5%) | 526 551 (3.5%) | 14 207 515 (94.4%) | 47 336 (0.3%) | 101 557 (0.7%) | 94 334 (0.6%) |
 
 ### Optional: turning the log into tables
 

@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "groupnorm_fp16_spatz.h"
@@ -110,8 +109,6 @@ static int init_input_params(
     void *params, const float16 *X, const float16 *scale, const float16 *B, const float16 epsilon)
 {
     volatile groupnorm_fp16_spatz_params_t *groupnorm_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t input_len;
     uint32_t c_out;
 
@@ -121,37 +118,27 @@ static int init_input_params(
 
     mmio_fp16(groupnorm_params->eps) = epsilon;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
-
     /* Every tile needs the full input (group means/vars span all its channels), contiguous
        in L2 -> a 1D transfer. Per-channel gamma/beta (full c_out, contiguous) load likewise.
        The Spatz task fully writes shard_Y, so it is not zeroed here. */
-    idma_memcpy_1d(&idma_ctrl,
-                   0,
-                   (uint32_t)X,
-                   (uint32_t)groupnorm_params->shard_X,
-                   input_len * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
     idma_memcpy_1d(
-        &idma_ctrl, 0, (uint32_t)scale, (uint32_t)groupnorm_params->gamma, c_out * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
-    idma_memcpy_1d(
-        &idma_ctrl, 0, (uint32_t)B, (uint32_t)groupnorm_params->beta, c_out * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+        0, (uint32_t)X, (uint32_t)groupnorm_params->shard_X, input_len * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
+    idma_memcpy_1d(0, (uint32_t)scale, (uint32_t)groupnorm_params->gamma, c_out * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
+    idma_memcpy_1d(0, (uint32_t)B, (uint32_t)groupnorm_params->beta, c_out * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
 
     return 0;
 }
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(GROUPNORM_FP16_SPATZ_TASK, (uint32_t)params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -169,8 +156,6 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile groupnorm_fp16_spatz_params_t *groupnorm_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t elements_per_group;
     uint32_t g_start;
     uint32_t g_len;
@@ -183,16 +168,12 @@ static int store_result(void *params, float16 *Y)
     if (g_len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
-
     /* This tile's groups [g_start, g_start+g_len) are contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
+    idma_memcpy_1d(1,
                    (uint32_t)(Y + g_start * elements_per_group),
                    (uint32_t)groupnorm_params->shard_Y,
                    g_len * elements_per_group * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

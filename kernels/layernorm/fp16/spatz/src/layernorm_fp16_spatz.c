@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "layernorm_fp16_spatz.h"
@@ -94,8 +93,6 @@ static int init_input_params(
     void *params, const float16 *X, const float16 *scale, const float16 *B, const float16 epsilon)
 {
     volatile layernorm_fp16_spatz_params_t *layernorm_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t r_start;
     uint32_t w_len;
     uint32_t rows_bytes;
@@ -105,28 +102,20 @@ static int init_input_params(
     w_len            = layernorm_params->w_len;
     rows_bytes       = layernorm_params->r_len * w_len * sizeof(float16);
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
-
     /* This tile's rows [r_start, r_start+r_len) are contiguous in L2, so X, gamma,
        beta and the output shard are plain 1D transfers. The Spatz task overwrites
        the whole output shard, so it does not need zeroing here. */
     if (rows_bytes > 0) {
-        idma_memcpy_1d(&idma_ctrl,
-                       0,
-                       (uint32_t)(X + r_start * w_len),
-                       (uint32_t)layernorm_params->shard_X,
-                       rows_bytes);
-        eu_idma_wait_a2o(&eu_ctrl, WFE);
+        idma_memcpy_1d(
+            0, (uint32_t)(X + r_start * w_len), (uint32_t)layernorm_params->shard_X, rows_bytes);
+        eu_idma_wait_a2o(WFE);
     }
 
-    idma_memcpy_1d(
-        &idma_ctrl, 0, (uint32_t)scale, (uint32_t)layernorm_params->gamma, w_len * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(0, (uint32_t)scale, (uint32_t)layernorm_params->gamma, w_len * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
 
-    idma_memcpy_1d(
-        &idma_ctrl, 0, (uint32_t)B, (uint32_t)layernorm_params->beta, w_len * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(0, (uint32_t)B, (uint32_t)layernorm_params->beta, w_len * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
 
     mmio_fp16(layernorm_params->eps) = epsilon;
 
@@ -135,13 +124,11 @@ static int init_input_params(
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(LAYERNORM_FP16_SPATZ_TASK, (uint32_t)params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -159,8 +146,6 @@ exit:
 static int store_result(void *params, float16 *Y)
 {
     volatile layernorm_fp16_spatz_params_t *layernorm_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t r_start;
     uint32_t w_len;
     uint32_t rows_bytes;
@@ -173,16 +158,10 @@ static int store_result(void *params, float16 *Y)
     if (rows_bytes == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
-
     /* This tile's output rows are contiguous in L2 -> single 1D transfer (L1->L2). */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
-                   (uint32_t)(Y + r_start * w_len),
-                   (uint32_t)layernorm_params->shard_Y,
-                   rows_bytes);
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    idma_memcpy_1d(
+        1, (uint32_t)(Y + r_start * w_len), (uint32_t)layernorm_params->shard_Y, rows_bytes);
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

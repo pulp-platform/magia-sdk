@@ -26,34 +26,14 @@ int main(void)
     uint32_t hartid       = get_hartid();
     uint32_t l1_tile_base = get_l1_base(hartid);
 
-    // Init DMA
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
-    idma_init(&idma_ctrl);
+    idma_init();
 
-    // Init FSYNC
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-    fsync_init(&fsync_ctrl);
+    fsync_init();
 
 #if STALLING == 0
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_idma_init(&eu_ctrl, 0);
-    eu_fsync_init(&eu_ctrl, 0);
+    eu_init();
+    eu_idma_init(0);
+    eu_fsync_init(0);
 #endif
 
     uint8_t *src_buf;
@@ -69,9 +49,9 @@ int main(void)
     }
 
     // Sync all tiles before measurement
-    fsync_sync_global(&fsync_ctrl);
+    fsync_sync_global();
 #if STALLING == 0
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    eu_fsync_wait(WAIT_MODE);
 #endif
 
     // Array to store cycles for each repetition
@@ -88,16 +68,16 @@ int main(void)
         uint32_t src_addr = (uint32_t)src_buf;
         uint32_t dst_addr = (uint32_t)l1_tile_base;
 
-        idma_memcpy_1d(&idma_ctrl, 0, src_addr, dst_addr, (uint32_t)BUF_SIZE);
+        idma_memcpy_1d(0, src_addr, dst_addr, (uint32_t)BUF_SIZE);
 #if STALLING == 0
-        eu_idma_wait_a2o(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_a2o(WAIT_MODE);
 #endif
 
         src_addr = (uint32_t)l1_tile_base;
         dst_addr = (uint32_t)dst_buf;
-        idma_memcpy_1d(&idma_ctrl, 1, dst_addr, src_addr, (uint32_t)BUF_SIZE);
+        idma_memcpy_1d(1, dst_addr, src_addr, (uint32_t)BUF_SIZE);
 #if STALLING == 0
-        eu_idma_wait_o2a(&eu_ctrl, WAIT_MODE);
+        eu_idma_wait_o2a(WAIT_MODE);
 #endif
 
         sentinel_end();
@@ -135,7 +115,7 @@ int main(void)
     // uint32_t perf_scaled = (total_bytes) / avg_cycles;
 
     // // Sync all tiles before printing
-    // fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
+    // fsync_sync_level(MAX_SYNC_LVL - 1, 0);
 
     // // Each tile prints its own performance
     // printf("Tile %u | Total bytes per repetition: %u | Avg cycles: %u | Performance: %u

@@ -42,17 +42,13 @@ The following steps assume the default target platform, `magia`, on which Spatz 
 
 1. RISC-V GCC toolchain: make sure it is installed and visible in the `$PATH` environment variable. You can check if and where the compiler is installed by running the following command on your root (`/`) directory:
 
-    `find . ! -readable -prune -o -name "riscv32-unknown-elf-gcc" -print`
-
-    It is possible to also use the PULP_MULTILIB toolchain from openhwgroup, which has a different name. However, do keep in mind its full operationality has **NOT** been tested:
-
     `find . ! -readable -prune -o -name "riscv64-unknown-elf-gcc" -print`
 
     Then add the compiler to the `$PATH` environment variable with:
 
     `export PATH=<absolute path to directory containing the compiler binary>:$PATH`
 
-    In case you don't have a toolchain, or the toolchain in your machine has compiler errors (such as requiring strange strange ISA extensions), you can build your own toolchain by following the steps listed [HERE](https://github.com/pulp-platform/pulp-riscv-gnu-toolchain).
+    In case you don't have a toolchain, or the toolchain in your machine has compiler errors (such as requiring strange strange ISA extensions), you can build your own toolchain by following the steps listed [HERE](https://github.com/FrancescoConti/corev-gnu-toolchain).
 
     In case you want to use a different toolchain, or want to specify a particular toolchain installed in your filesystem, you can edit the file *magia-sdk/cmake/toolchain_gcc_multilib.cmake* to point to your desired toolchain binary file. Make sure the ILP and API extensions in *CMakeLists.txt* are supported by the toolchain.
 
@@ -93,7 +89,7 @@ The following *optional* parameters can be specified when running the make comma
 
 `fsync_mode`: **stall**|**interrupt** (**Default** stall). Selects the Fractal Sync module synchronization behaviour.
 
-`compiler`: **GCC_MULTILIB**|**GCC_PULP**|**LLVM** (**Default**: GCC_PULP). Selects the compiler to be used. LLVM is currently WIP. PULP is the risc-v 32 bits only toolchain NOT supporting floating point instructions, wheras the MULTILIB toolchain is the nightly risc-v one.
+`compiler`: **GCC_MULTILIB**|**GCC_PULP**|**LLVM** (**Default**: GCC_MULTILIB). Selects the compiler to be used. LLVM is currently WIP. PULP is the risc-v 32 bits only toolchain NOT supporting floating point instructions, wheras the MULTILIB toolchain is the nightly risc-v one.
 
 `ISA`: **rv32imcxgap9**|**rv32imafc** (**Default**: rv32imcxgap9) ISA target for the GCC toolcahin.
 

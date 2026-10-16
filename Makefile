@@ -20,6 +20,10 @@
 
 SHELL 			:= /bin/bash
 
+# In-place sed that works with both GNU sed and BSD/macOS sed (whose -i needs an
+# explicit, possibly empty, backup suffix).
+SED_INPLACE		:= $(shell sed --version >/dev/null 2>&1 && echo "sed -i" || echo "sed -i ''")
+
 include scripts/deps.env
 
 CURR_DIR		?= $(shell pwd)
@@ -142,7 +146,7 @@ GVSOC2PERFETTO_INCLUDE ?= (?x) \
   | magia-noc\.ni_\d+_\d+\.(narrow_req|wide_req)$$ \
   | L2-mem\.(req_addr|req_size|req_is_write)$$
 
-.PHONY: gvsoc build format run_profiling gvsoc2perfetto
+.PHONY: gvsoc build format run_profiling gvsoc2perfetto clean rtl-clean set_mesh
 
 # Build the Rust VCD->Perfetto converter (cargo tracks its own incremental state).
 gvsoc2perfetto: $(GVSOC2PERFETTO_BIN)
@@ -202,8 +206,10 @@ $(S19TOMEM_BIN): $(S19TOMEM_SRC)
 # Shared by platform=rtl and platform=verilator -- both drive the same magia_tb.
 ifeq ($(compiler), GCC_MULTILIB)
 OBJDUMP ?= riscv64-unknown-elf-objdump
+OBJCOPY ?= riscv64-unknown-elf-objcopy
 else
 OBJDUMP ?= riscv32-unknown-elf-objdump
+OBJCOPY ?= riscv32-unknown-elf-objcopy
 endif
 
 .PHONY: rtl_stimuli
@@ -213,12 +219,13 @@ ifndef test
 endif
 	mkdir -p $(BUILD_DIR_ABS)/build
 	cp $(BIN_ABS_PATH)/$(test) $(BUILD_DIR_ABS)/build/verif
-	objcopy --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
+	$(OBJCOPY) --srec-len 1 --output-target=srec $(BIN) $(BIN).s19
 	$(S19TOMEM_BIN) $(BIN).s19 $(BUILD_DIR_ABS)/build/stim_instr.txt $(BUILD_DIR_ABS)/build/stim_data.txt
 	$(OBJDUMP) -d -S -Mmarch=$(ISA) $(BIN) > $(BIN).dump
 	$(OBJDUMP) -d -l -s -Mmarch=$(ISA) $(BIN) > $(BIN).objdump
 	python3 scripts/objdump2itb.py $(BIN).objdump > $(BIN).itb
 
+.PHONY: run
 run: set_mesh $(GVSOC_WORK_DIR)
 	@echo 'Magia is available at https://github.com/pulp-platform/MAGIA.git'
 	@echo 'please run "source setup_env.sh" in the magia folder before running this script'
@@ -233,7 +240,7 @@ ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|verilator|gvsoc)
 endif
 ifeq ($(platform), gvsoc)
-	$(GVRUN) --target=$(GVRUN_TARGET) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS)
+	$(GVRUN) --target=$(GVRUN_TARGET) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_ARGS) --trace=tile-$(t)-cv32-core/insn
 else ifeq ($(platform), rtl)
 	$(MAKE) rtl_stimuli test=$(test)
 	cd $(BUILD_DIR_ABS)													&& \
@@ -295,6 +302,7 @@ endif
 		--include '$(GVSOC2PERFETTO_INCLUDE)'
 	rm -f -- $(GVSOC2PERFETTO_VCD)
 
+.PHONY: debug_profiling
 debug_profiling: $(GVSOC_WORK_DIR) $(GVSOC2PERFETTO_BIN)
 ifndef test
 	$(error Proper formatting is: make debug_profiling test=<test_name>)
@@ -344,17 +352,17 @@ ifeq ($(shell expr $(tiles_2) \> 256), 1)
 	$(eval tiles_2=256)
 endif
 ifeq ($(target_platform), magia)
-	sed -i -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_RTL_DIR)/Makefile
+	$(SED_INPLACE) -E 's/^(num_cores[[:space:]]*\?=[[:space:]]*)[0-9]+/\1$(tiles_2)/' $(MAGIA_RTL_DIR)/Makefile
 else
 	$(error unrecognized platform (acceptable platform: magia).)
 endif
 ifneq ($(tiles), 1)
-	sed -i -E 's/^(  localparam int unsigned N_TILES_[XY][[:space:]]*=[[:space:]]*)[0-9]+;/\1$(tiles);/' $(MAGIA_RTL_DIR)/hw/mesh/magia_pkg.sv
+	$(SED_INPLACE) -E 's/^(  localparam int unsigned N_TILES_[XY][[:space:]]*=[[:space:]]*)[0-9]+;/\1$(tiles);/' $(MAGIA_RTL_DIR)/hw/mesh/magia_pkg.sv
 endif
 ifeq ($(fsync_mode), stall)
-	sed -i -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\11/' $(MAGIA_RTL_DIR)/hw/tile/magia_tile_pkg.sv
+	$(SED_INPLACE) -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\11/' $(MAGIA_RTL_DIR)/hw/tile/magia_tile_pkg.sv
 else ifeq ($(fsync_mode), interrupt)
-	sed -i -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\10/' $(MAGIA_RTL_DIR)/hw/tile/magia_tile_pkg.sv
+	$(SED_INPLACE) -E 's/(FSYNC_STALL[[:space:]]=[[:space:]])[0-9]+/\10/' $(MAGIA_RTL_DIR)/hw/tile/magia_tile_pkg.sv
 else
 	$(error unrecognized fractal sync mode (acceptable modes: stall|interrupt).)
 endif
@@ -375,9 +383,9 @@ endif
 
 gvsoc:
 ifeq ($(spatz), 1)
-	sed -i 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)False/\1True/' $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
+	$(SED_INPLACE) 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)False/\1True/' $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
 else
-	sed -i 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)True/\1False/' "$(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py"
+	$(SED_INPLACE) 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)True/\1False/' "$(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py"
 endif
 ifeq ($(target_platform), magia)
 	cd $(GVSOC_DIR)	&& \
@@ -413,9 +421,9 @@ PIP_EXTRAS := [gemm]
 endif
 
 gvsoc_uv:
-	uv venv --python 3.12 gvsoc_venv && \
+	uv venv --allow-existing --python 3.12 gvsoc_venv && \
 	source gvsoc_venv/bin/activate && \
-	uv pip install .$(PIP_EXTRAS)
+	uv pip install .$(PIP_EXTRAS) --override <(echo "protobuf>=4.25")
 
 gvsoc_venv:
 	eval "$(pyenv init -)" && \

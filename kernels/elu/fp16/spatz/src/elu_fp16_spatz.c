@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "elu_fp16_spatz.h"
@@ -67,8 +66,6 @@ static int allocate_l1(void **params, uint32_t size)
 static int init_input_params(void *params, const float16 *X, float16 a)
 {
     volatile elu_fp16_spatz_params_t *elu_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t start;
     uint32_t len;
 
@@ -81,27 +78,21 @@ static int init_input_params(void *params, const float16 *X, float16 a)
     if (len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
-
     /* This tile's slice [start, start+len) is contiguous in L2. The Spatz task writes every
        output (Y = elu(X, alpha)), so shard_Y is not zeroed here. */
-    idma_memcpy_1d(
-        &idma_ctrl, 0, (uint32_t)(X + start), (uint32_t)elu_params->shard_X, len * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(0, (uint32_t)(X + start), (uint32_t)elu_params->shard_X, len * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
 
     return 0;
 }
 
 static int offload_spatz_task(void *params)
 {
-    eu_controller_t eu_ctrl;
     int ret;
 
-    eu_ctrl_init(&eu_ctrl);
     spatz_run_task_with_params(ELU_FP16_SPATZ_TASK, params);
 
-    ret = eu_spatz_wait(&eu_ctrl, WFE);
+    ret = eu_spatz_wait(WFE);
     if (ret == 0) {
         printf("[CV32 (%d)] [%s] Wait on Spatz task completion failed with error: %d\n",
                HID,
@@ -119,8 +110,6 @@ exit:
 static int store_result(void *params, float16 *dst)
 {
     volatile elu_fp16_spatz_params_t *elu_params;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t start;
     uint32_t len;
 
@@ -131,16 +120,10 @@ static int store_result(void *params, float16 *dst)
     if (len == 0)
         return 0;
 
-    idma_ctrl_init(&idma_ctrl);
-    eu_ctrl_init(&eu_ctrl);
-
     /* This tile's output slice [start, start+len) is contiguous in L2. */
-    idma_memcpy_1d(&idma_ctrl,
-                   1,
-                   (uint32_t)(dst + start),
-                   (uint32_t)elu_params->shard_Y,
-                   len * sizeof(float16));
-    eu_idma_wait_o2a(&eu_ctrl, WFE);
+    idma_memcpy_1d(
+        1, (uint32_t)(dst + start), (uint32_t)elu_params->shard_Y, len * sizeof(float16));
+    eu_idma_wait_o2a(WFE);
 
     return 0;
 }

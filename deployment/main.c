@@ -107,47 +107,26 @@ static void prof_report(void)
 }
 #endif
 
-int init_fsync(fsync_controller_t *fsync_ctrl)
+int init_fsync()
 {
-    fsync_config_t fsync_cfg;
-
-    fsync_cfg.hartid = get_hartid();
-    fsync_ctrl->base = NULL;
-    fsync_ctrl->cfg  = &fsync_cfg;
-    fsync_ctrl->api  = &fsync_api;
-
-    fsync_init(fsync_ctrl);
+    fsync_init();
 
     return 0;
 }
 
-int init_idma(idma_controller_t *idma_ctrl)
+int init_idma()
 {
-    idma_config_t idma_cfg;
-
-    idma_cfg.hartid = get_hartid();
-    idma_ctrl->base = NULL;
-    idma_ctrl->cfg  = &idma_cfg;
-    idma_ctrl->api  = &idma_api;
-
-    idma_init(idma_ctrl);
+    idma_init();
 
     return 0;
 }
 
-int init_event_unit(eu_controller_t *eu_ctrl)
+int init_event_unit()
 {
-    eu_config_t eu_cfg;
-
-    eu_cfg.hartid = get_hartid();
-    eu_ctrl->base = NULL;
-    eu_ctrl->cfg  = &eu_cfg;
-    eu_ctrl->api  = &eu_api;
-
-    eu_init(eu_ctrl);
-    eu_spatz_init(eu_ctrl, 0);
-    eu_fsync_init(eu_ctrl, 0);
-    eu_idma_init(eu_ctrl, 0);
+    eu_init();
+    eu_spatz_init(0);
+    eu_fsync_init(0);
+    eu_idma_init(0);
 
     return 0;
 }
@@ -166,10 +145,10 @@ int deinit_spatz()
     return 0;
 }
 
-void sync(fsync_controller_t *fsynct_ctrl, eu_controller_t *eu_ctrl)
+void sync()
 {
-    fsync_sync_global(fsynct_ctrl);
-    eu_fsync_wait(eu_ctrl, WFE);
+    fsync_sync_global();
+    eu_fsync_wait(WFE);
 }
 
 void input_copy()
@@ -193,9 +172,6 @@ int check_result()
 
 int main(void)
 {
-    fsync_controller_t fsync_ctrl;
-    idma_controller_t idma_ctrl;
-    eu_controller_t eu_ctrl;
     uint32_t cycle_start;
     uint32_t cycle_stop;
     int hid;
@@ -203,19 +179,19 @@ int main(void)
 
     hid = get_hartid();
 
-    ret = init_fsync(&fsync_ctrl);
+    ret = init_fsync();
     if (ret) {
         printf("[CV32 (%d)] Fsync initialization failed with errno: %d\n", HID, ret);
         return ret;
     }
 
-    ret = init_event_unit(&eu_ctrl);
+    ret = init_event_unit();
     if (ret) {
         printf("[CV32 (%d)] Event Unit initialization failed with errno: %d\n", HID, ret);
         return ret;
     }
 
-    ret = init_idma(&idma_ctrl);
+    ret = init_idma();
     if (ret) {
         printf("[CV32 (%d)] iDMA initialization failed with errno: %d\n", HID, ret);
         return ret;
@@ -227,19 +203,19 @@ int main(void)
         return ret;
     }
 
-    sync(&fsync_ctrl, &eu_ctrl);
+    sync();
 
     if (hid == 0)
         InitNetwork();
 
-    sync(&fsync_ctrl, &eu_ctrl);
+    sync();
 
     if (hid == 0)
         input_copy();
 
-    sync(&fsync_ctrl, &eu_ctrl);
+    sync();
 
-    perf_enable_cycles();
+    perf_init();
 
     cycle_start = perf_get_cycles();
     RunNetwork();
@@ -250,19 +226,19 @@ int main(void)
     PROF_NODE(PROF_N_NODES);
 #endif
 
-    sync(&fsync_ctrl, &eu_ctrl);
+    sync();
 
 #ifdef ENABLE_NODE_PROFILING
     if (hid == 0)
         prof_report();
 
     /* Hold the others until the report is out */
-    sync(&fsync_ctrl, &eu_ctrl);
+    sync();
 #endif
 
     printf("[CV32 (%d)] Run completed in %d cycles\n", hid, cycle_stop - cycle_start);
 
-    sync(&fsync_ctrl, &eu_ctrl);
+    sync();
 
     ret = deinit_spatz();
     if (ret) {
@@ -275,7 +251,7 @@ int main(void)
         printf("[CV32] Test completed with %d mismatches\n", ret);
     }
 
-    sync(&fsync_ctrl, &eu_ctrl);
+    sync();
 
     return ret;
 }
