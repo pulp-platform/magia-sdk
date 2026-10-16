@@ -42,11 +42,11 @@ void eu32_init()
 void eu32_pulp_init(uint32_t enable_irq)
 {
     // Enable PULP cluster events
-    eu_enable_events(EU_PULP_EVT_MASK);
+    eu_enable_events(EU_PULP_DONE_MASK);
 
     // Optionally enable IRQ for PULP cluster completion
     if (enable_irq) {
-        eu_enable_irq(EU_PULP_EVT_MASK);
+        eu_enable_irq(EU_PULP_DONE_MASK);
     }
 }
 
@@ -57,7 +57,7 @@ void eu32_pulp_init(uint32_t enable_irq)
  */
 uint32_t eu32_pulp_wait(eu_wait_mode_t mode)
 {
-    uint32_t retval = eu_wait_events(EU_PULP_EVT_MASK, mode, 1000000);
+    uint32_t retval = eu_wait_events(EU_PULP_DONE_MASK, mode, 1000000);
 #if PROFILE_CMI == 1
     stnl_cmi_f();
 #endif

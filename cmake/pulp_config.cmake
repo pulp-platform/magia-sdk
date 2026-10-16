@@ -45,6 +45,7 @@ set(PULP_COMPILE_FLAGS
     "-mcmodel=medany"
     "-fno-jump-tables"
     "-msmall-data-limit=0"
+    "-mno-relax"
     "-DPULP_CORE_COUNT=${PULP_CORE_COUNT}"
     "-DPULP_CLUSTER=${PULP_CLUSTER}"
     "-nostartfiles"

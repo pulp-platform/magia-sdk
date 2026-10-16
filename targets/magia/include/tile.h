@@ -25,6 +25,7 @@
 #include "utils/alloc.h"
 #include "utils/typedefs.h"
 #include "utils/collective_utils.h"
+#include "utils/cluster_eu_isa_utils.h"
 
 #if CV32E40X == 1
 #include "utils/amo_utils.h"
