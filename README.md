@@ -301,6 +301,8 @@ However, be aware that the utilities are different based on the simulation platf
 
 In case you are simulating on GVSoC, please use the `perf_get_cycles()` utility:
 
+    perf_init()
+
     int start = perf_get_cycles();
 
     // CODE YOU WANT TO PROFILE //
