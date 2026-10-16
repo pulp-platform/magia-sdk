@@ -100,7 +100,7 @@ groups.
 | Clip | Agnostic | size / HID | |
 | Col2Im | [N,C,H,W] | (N*C) / HID | |
 | Concat | Agnostic | iterations / HID | axis != 0 |
-| Conv | [N,C,H,W] | (N*C_out) / HID | no auto_pad; no dilations; symmetric pad |
+| Conv | [N,C,H,W] | depthwise: (N*C_out) / HID; otherwise: H_out / HID, or C_out / HID for small outputs | no auto_pad; no dilations; symmetric pad |
 | ConvTranspose | [N,C,H,W] | (N*C_out) / HID | no auto_pad; no dilations; no output_padding; no output_shape |
 | Div | Agnostic | size / HID | |
 | Elu | Agnostic | size / HID | |
@@ -143,6 +143,9 @@ Notes:
 - **Elementwise broadcast** (Add / Sub / Mul / Div) is handled by a dedicated
   broadcast layer that expands the operand shapes (numpy semantics), so a scalar/smaller
   operand is materialized to the full output shape.
+- **Conv** has two kernels, picked per node by Deeploy: depthwise convolutions (`group` equal to
+  the input channels) run the direct `conv2d` kernel, every other convolution runs `conv2dgemm`
+  (im2col + GEMM).
 - **Fast exponential**: Elu, Exp, Gelu, Selu, Sigmoid, Softmax, Swish and Tanh use a fast
   Schraudolph reinterpret-cast approximation of the exponential (~3% relative error).
 
@@ -160,12 +163,12 @@ layer: at 2, `/layers.0/blocks.0/conv1/c/Conv` belongs to `/layers.0/blocks.0`.
 
 ### API
 
-Everything lives in `kernels/common/kernels_profiling_utils.h`. Six counters, one
-per phase, each an array indexed by hart id:
+Everything lives in `kernels/common/kernels_profiling_utils.h`. Five counters, one
+per phase, plain scalars in each tile's own L1 (`.tile_bss`):
 
 ```c
 prof_cyc_alloc  prof_cyc_data_in  prof_cyc_compute
-prof_cyc_prep   prof_cyc_data_out prof_cyc_sync
+prof_cyc_data_out prof_cyc_sync
 ```
 
 and three macros:
@@ -208,21 +211,21 @@ line per node and tile, and the layer closes with its own per-tile recap:
 
 ```
 [PROF] ### Profiling for Layer 0 (/patch_embed/seq) ###
-[PROF] hid=0 layer_idx=0 node_idx=0 node=/patch_embed/seq/seq.0/c/Conv op=Conv node_cycles=210703 alloc=860 in=2876 cmp=1798 out=373 snc=27046 prep=176836
-[PROF] hid=1 layer_idx=0 node_idx=0 node=/patch_embed/seq/seq.0/c/Conv op=Conv node_cycles=210809 ...
+[PROF] hid=0 layer_idx=0 node_idx=0 node=/patch_embed/seq/seq.0/c/Conv op=Conv node_cycles=13883 alloc=923 in=2744 cmp=8121 out=369 snc=1193
+[PROF] hid=1 layer_idx=0 node_idx=0 node=/patch_embed/seq/seq.0/c/Conv op=Conv node_cycles=13911 ...
 ...
 [PROF] Layer 0 recap:
-[PROF] hid=0 layer_idx=0 layer_cycles=251361 alloc=1597 in=3987 cmp=2975 out=849 snc=32532 prep=207114
-[PROF] hid=1 layer_idx=0 layer_cycles=251396 ...
+[PROF] hid=0 layer_idx=0 layer_cycles=22138 alloc=1702 in=4012 cmp=12544 out=810 snc=1764
+[PROF] hid=1 layer_idx=0 layer_cycles=22176 ...
 ```
 
 and the run ends with the totals, followed by the usual per-tile cycle count:
 
 ```
 [PROF] ### Final recap ###
-[PROF] hid=0 total_cycles=843400 alloc=44681 in=44421 cmp=113061 out=24347 snc=99616 prep=416208
+[PROF] hid=0 total_cycles=333471 alloc=41103 in=37646 cmp=152376 out=20799 snc=24781
 ...
-[CV32 (0)] Run completed in 843891 cycles
+[CV32 (0)] Run completed in 333641 cycles
 ```
 
 | field | meaning |
@@ -240,8 +243,7 @@ and the run ends with the totals, followed by the usual per-tile cycle count:
 | `cmp`           | Spatz offload (+ wait) |
 | `out`           | copy-out L1->L2 (iDMA + wait) |
 | `snc`           | tile barrier following the node |
-| `prep`          | `im2col` of `conv2dgemm`: the host reorders the input, already in L1, into the GEMM matrix (L1 -> L1); 0 for every other kernel |
-| `other`         | not printed: `node_cycles` minus the six phases above — the generated glue around each kernel call, the zero-copy nodes that run no kernel at all, and the profiling markers themselves |
+| `other`         | not printed: `node_cycles` minus the five phases above — the generated glue around each kernel call, the zero-copy nodes that run no kernel at all, and the profiling markers themselves |
 
 ### Measured results
 
@@ -250,13 +252,13 @@ Measured on gvsoc (`20ccbf1e`, chips-it) with a **2x2 mesh**.
 Note these numbers are **indicative**: the networks are deployed **un-tiled**, and
 each kernel does its own L2 <-> L1 transfers.
 
-| network | nodes | total | alloc | in | cmp | out | snc | prep | other |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `tiny-vit` | 189 | 427 032 | 41 867 (9.8%) | 36 825 (8.6%) | 85 592 (20.0%) | 18 351 (4.3%) | 89 550 (21.0%) | 89 543 (21.0%) | 65 303 (15.3%) |
-| `resnet-reduced` | 30 | 5 859 249 | 10 074 (0.2%) | 255 941 (4.4%) | 441 019 (7.5%) | 54 586 (0.9%) | 24 338 (0.4%) | 5 061 876 (86.4%) | 11 417 (0.2%) |
-| `bert-reduced` | 64 | 1 216 026 | 12 695 (1.0%) | 71 178 (5.9%) | 258 172 (21.2%) | 28 584 (2.4%) | 823 937 (67.8%) | 0 (0.0%) | 21 458 (1.8%) |
-| `efficientnet-reduced` | 94 | 13 098 862 | 33 582 (0.3%) | 654 413 (5.0%) | 6 904 530 (52.7%) | 20 409 (0.2%) | 92 760 (0.7%) | 5 355 374 (40.9%) | 37 795 (0.3%) |
-| `yolo-reduced` | 233 | 19 019 728 | 58 920 (0.3%) | 854 555 (4.5%) | 6 409 176 (33.7%) | 132 786 (0.7%) | 208 486 (1.1%) | 11 269 516 (59.3%) | 86 289 (0.5%) |
+| network | nodes | total | alloc | in | cmp | out | snc | other |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `tiny-vit` | 189 | 333 450 | 41 734 (12.5%) | 35 737 (10.7%) | 128 722 (38.6%) | 18 265 (5.5%) | 47 686 (14.3%) | 61 306 (18.4%) |
+| `resnet-reduced` | 30 | 1 361 040 | 10 336 (0.8%) | 284 505 (20.9%) | 967 249 (71.1%) | 54 940 (4.0%) | 33 223 (2.4%) | 10 787 (0.8%) |
+| `bert-reduced` | 64 | 1 204 914 | 12 435 (1.0%) | 70 742 (5.9%) | 258 087 (21.4%) | 28 343 (2.4%) | 815 176 (67.7%) | 20 131 (1.7%) |
+| `efficientnet-reduced` | 94 | 1 287 200 | 32 290 (2.5%) | 671 761 (52.2%) | 408 675 (31.7%) | 37 779 (2.9%) | 101 111 (7.9%) | 35 584 (2.8%) |
+| `yolo-reduced` | 233 | 9 997 376 | 59 758 (0.6%) | 945 334 (9.5%) | 8 541 188 (85.4%) | 134 440 (1.3%) | 235 556 (2.4%) | 81 100 (0.8%) |
 
 ### Optional: turning the log into tables
 
@@ -275,7 +277,7 @@ scripts/prof_report.py run.log --top 20 --csv nodes.csv
 
 Nothing is written unless `--csv` is given, and that is the only file produced:
 one row per (node, tile) with `node_idx, node, op, layer_idx, layer, hid`, then
-`node_cycles` and the six phases, ready for a spreadsheet. The script prints the
+`node_cycles` and the five phases, ready for a spreadsheet. The script prints the
 path it wrote. `--agg` chooses how the tiles are collapsed:
 `crit` (default) takes every field from the tile that gates the node, keeping the
 parts consistent with the total, while `mean` averages them — useful to spot load

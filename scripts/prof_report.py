@@ -8,12 +8,12 @@ from collections import defaultdict
 # one line per (node, tile); the layer's name comes from its header line
 NODE_LINE = re.compile(r"\[PROF\] hid=(\d+) layer_idx=(\d+) node_idx=(\d+) node=(\S+) "
                        r"op=(\S+) node_cycles=(\d+) alloc=(\d+) in=(\d+) cmp=(\d+) "
-                       r"out=(\d+) snc=(\d+) prep=(\d+)")
+                       r"out=(\d+) snc=(\d+)")
 LAYER_HEADER = re.compile(r"\[PROF\] ### Profiling for Layer (\d+) \((.+)\) ###")
 
 # node_cycles is the whole node, the rest are its parts; what is left is unaccounted
-FIELDS = ("node_cycles", "alloc", "in", "cmp", "out", "snc", "prep")
-PARTS = ("alloc", "in", "cmp", "out", "snc", "prep")
+FIELDS = ("node_cycles", "alloc", "in", "cmp", "out", "snc")
+PARTS = ("alloc", "in", "cmp", "out", "snc")
 
 
 def parse_args():
@@ -43,7 +43,7 @@ def parse_log(path):
             data = NODE_LINE.search(line)
             if data:
                 tile, layer, node = (int(x) for x in data.groups()[:3])
-                values = (int(x) for x in data.groups()[5:12])
+                values = (int(x) for x in data.groups()[5:11])
                 samples[node][tile] = dict(zip(FIELDS, values))
                 node_names[node] = data.group(4)
                 node_op[node] = data.group(5)
@@ -92,12 +92,12 @@ def group_nodes(nodes, key_of):
 def print_group_table(title, label, totals, count, order, grand_total):
     print(f"\n{title}")
     print(f"{label:36s} {'nodes':>5s} {'cycles':>10s} {'%':>5s} {'compute':>9s} "
-          f"{'dma(in+out)':>11s} {'prep(host)':>10s} {'sync':>8s} {'alloc':>7s} {'other':>8s}")
+          f"{'dma(in+out)':>11s} {'sync':>8s} {'alloc':>7s} {'other':>8s}")
 
     def row(name, n, e):
         print(f"{name[:36]:36s} {n:5d} {e['node_cycles']:10d} "
               f"{100 * e['node_cycles'] / grand_total:5.1f} "
-              f"{e['cmp']:9d} {e['in'] + e['out']:11d} {e['prep']:10d} {e['snc']:8d} "
+              f"{e['cmp']:9d} {e['in'] + e['out']:11d} {e['snc']:8d} "
               f"{e['alloc']:7d} {unaccounted(e):8d}")
 
     for key in order:
@@ -108,7 +108,6 @@ def print_group_table(title, label, totals, count, order, grand_total):
     print(f"{'  share of total':36s} {'':5s} {'':10s} {'':5s} "
           f"{100 * total['cmp'] / grand_total:8.1f}% "
           f"{100 * (total['in'] + total['out']) / grand_total:10.1f}% "
-          f"{100 * total['prep'] / grand_total:9.1f}% "
           f"{100 * total['snc'] / grand_total:7.1f}% "
           f"{100 * total['alloc'] / grand_total:6.1f}% "
           f"{100 * unaccounted(total) / grand_total:7.1f}%")
@@ -117,13 +116,13 @@ def print_group_table(title, label, totals, count, order, grand_total):
 def print_top_nodes(nodes, node_names, node_op, top):
     print(f"\ntop {top} nodes by cycles")
     print(f"{'idx':>4s} {'op':12s} {'cycles':>10s} {'cmp':>8s} {'in':>7s} {'out':>7s} "
-          f"{'prep':>9s} {'snc':>7s}  node")
+          f"{'snc':>7s}  node")
 
     ranked = sorted(nodes, key=lambda node: nodes[node]["node_cycles"], reverse=True)
     for node in ranked[:top]:
         e = nodes[node]
         print(f"{node:4d} {node_op.get(node, ''):12s} {e['node_cycles']:10d} {e['cmp']:8d} "
-              f"{e['in']:7d} {e['out']:7d} {e['prep']:9d} {e['snc']:7d}  "
+              f"{e['in']:7d} {e['out']:7d} {e['snc']:7d}  "
               f"{node_names.get(node, '')[:46]}")
 
 
