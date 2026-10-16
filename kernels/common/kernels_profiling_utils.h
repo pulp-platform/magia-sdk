@@ -10,7 +10,7 @@
 #ifdef ENABLE_NODE_PROFILING
 
 #define PROF_N_TILES     (MESH_X_TILES * MESH_Y_TILES)
-#define PROF_NODE_FIELDS 7
+#define PROF_NODE_FIELDS 6
 
 /* Phase accumulators, defined in the deployment template main.c. They live in
  * the per-tile .tile_bss (L1), which is private to each tile and zeroed by
@@ -22,7 +22,6 @@ extern uint32_t prof_cyc_data_in;
 extern uint32_t prof_cyc_compute;
 extern uint32_t prof_cyc_data_out;
 extern uint32_t prof_cyc_sync;
-extern uint32_t prof_cyc_prep;
 
 /* Per-node snapshot table, defined and sized in the deployment template main.c.
  * Unlike the counters this one has to stay in shared L2, since a single tile
@@ -50,7 +49,7 @@ extern uint32_t prof_node[];
 /* Snapshot the running counters at a node boundary. A node's cost is the
  * difference between its snapshot and the next one, so one marker per node is
  * enough (plus a final one to close the last node) and no state is needed.
- * The timestamp is stored last, so the six stores above it do not land inside
+ * The timestamp is stored last, so the five stores above it do not land inside
  * the node's own measurement. */
 #define PROF_NODE(idx)                                                                             \
     do {                                                                                           \
@@ -60,7 +59,6 @@ extern uint32_t prof_node[];
         _prof_s[3]        = prof_cyc_compute;                                                      \
         _prof_s[4]        = prof_cyc_data_out;                                                     \
         _prof_s[5]        = prof_cyc_sync;                                                         \
-        _prof_s[6]        = prof_cyc_prep;                                                         \
         _prof_s[0]        = perf_get_cycles();                                                     \
     } while (0)
 
