@@ -125,8 +125,8 @@ static int init_input_params(void *params,
     if (c_len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    idma_init();
+    eu_init();
 
     /* X: this tile's [c_start, c_end) planes are contiguous in L2 (NCHW). The Spatz task
        writes every output element, so shard_Y is not zeroed here. */
@@ -160,7 +160,7 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_ctrl_init();
+    eu_init();
 
     spatz_run_task_with_params(BATCHNORM_FP16_SPATZ_TASK, params);
 
@@ -194,8 +194,8 @@ static int store_result(void *params, float16 *Y)
     if (c_len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    idma_init();
+    eu_init();
 
     /* This tile's output planes [c_start, c_end) are contiguous in L2 (NCHW). */
     idma_memcpy_1d(1,

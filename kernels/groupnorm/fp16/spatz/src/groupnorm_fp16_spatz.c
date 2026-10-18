@@ -119,8 +119,8 @@ static int init_input_params(
 
     mmio_fp16(groupnorm_params->eps) = epsilon;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    idma_init();
+    eu_init();
 
     /* Every tile needs the full input (group means/vars span all its channels), contiguous
        in L2 -> a 1D transfer. Per-channel gamma/beta (full c_out, contiguous) load likewise.
@@ -140,7 +140,7 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_ctrl_init();
+    eu_init();
     spatz_run_task_with_params(GROUPNORM_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(WFE);
@@ -173,8 +173,8 @@ static int store_result(void *params, float16 *Y)
     if (g_len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    idma_init();
+    eu_init();
 
     /* This tile's groups [g_start, g_start+g_len) are contiguous in L2. */
     idma_memcpy_1d(1,
