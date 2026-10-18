@@ -656,18 +656,6 @@ int main(void)
     const uint32_t y_id   = GET_Y_ID(hartid);
     const uint32_t l1     = get_l1_base(hartid);
 
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {.base = NULL, .cfg = &idma_cfg, .api = &idma_api};
-
-    redmule_config_t rm_cfg      = {.hartid = hartid};
-    redmule_controller_t rm_ctrl = {.base = NULL, .cfg = &rm_cfg, .api = &redmule_api};
-
-    fsync_config_t fs_cfg      = {.hartid = hartid};
-    fsync_controller_t fs_ctrl = {.base = NULL, .cfg = &fs_cfg, .api = &fsync_api};
-
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {.base = NULL, .cfg = &eu_cfg, .api = &eu_api};
-
     volatile nn_pulp_core_res_t *pulp_res =
         (volatile nn_pulp_core_res_t *)(l1 + NN_L1_OFF_CTL + NN_CTL_OFF_RES);
 
@@ -685,16 +673,16 @@ int main(void)
     /* ---- controllers ---- */
     perf_counters_enable(hartid);
 
-    fsync_init(&fs_ctrl);
-    idma_init(&idma_ctrl);
-    redmule_init(&rm_ctrl);
+    fsync_init();
+    idma_init();
+    redmule_init();
 
-    eu_init(&eu_ctrl);
-    eu_fsync_init(&eu_ctrl, 0);
-    eu_redmule_init(&eu_ctrl, 0);
-    eu_idma_init(&eu_ctrl, 0);
-    eu_pulp_init(&eu_ctrl, 0);
-    eu_spatz_init(&eu_ctrl, 0);
+    eu_init();
+    eu_fsync_init(0);
+    eu_redmule_init(0);
+    eu_idma_init(0);
+    eu_pulp_init(0);
+    eu_spatz_init(0);
 
     spatz_boot(SPATZ_BINARY_START);
     pulp_boot(PULP_BINARY_START);
@@ -719,10 +707,6 @@ int main(void)
     {
         const uint32_t q_l2 = host_mode ? NN_Q_ADDR : (uint32_t)nn_q_out;
 
-        g.idma     = &idma_ctrl;
-        g.rm       = &rm_ctrl;
-        g.fs       = &fs_ctrl;
-        g.eu       = &eu_ctrl;
         g.hartid   = hartid;
         g.x_id     = x_id;
         g.y_id     = y_id;
@@ -799,7 +783,7 @@ int main(void)
 
         /* Line every tile up before the clock starts, so cyc_total measures the
          * kernel and not the staggered boot. */
-        mesh_barrier(&fs_ctrl, &eu_ctrl);
+        mesh_barrier();
 
         t_run = perf_get_cycles();
 
@@ -841,7 +825,7 @@ int main(void)
 
         /* Every tile has finished its GEMM, so every block is final in L2. */
         t0 = perf_get_cycles();
-        mesh_barrier(&fs_ctrl, &eu_ctrl);
+        mesh_barrier();
         g.cyc_sync += perf_get_cycles() - t0;
 
         if (inflight >= 0) {
@@ -869,7 +853,7 @@ int main(void)
         }
 
         t0 = perf_get_cycles();
-        mesh_barrier(&fs_ctrl, &eu_ctrl);
+        mesh_barrier();
         g.cyc_sync += perf_get_cycles() - t0;
 
         t_run = perf_get_cycles() - t_run - cyc_verify;
@@ -877,13 +861,8 @@ int main(void)
         /* Fingerprint, after the clock has stopped. The four chunks together
          * span rows [row0, row0+NN_CH) over every column, so a single 2D pull
          * brings this tile's whole share of Q back into L1. */
-        idma_memcpy_2d(&idma_ctrl,
-                       0,
-                       q_l2 + chunk_row0(&g, x_id) * NN_K * 2,
-                       l1 + NN_L1_OFF_P,
-                       NN_K * 2,
-                       NN_K * 2,
-                       NN_CH);
+        idma_memcpy_2d(
+            0, q_l2 + chunk_row0(&g, x_id) * NN_K * 2, l1 + NN_L1_OFF_P, NN_K * 2, NN_K * 2, NN_CH);
         wait_evt(EU_IDMA_A2O_DONE_MASK, NULL);
         chk = block_checksum(l1 + NN_L1_OFF_P, NN_CH * NN_K);
     }

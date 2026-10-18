@@ -3,7 +3,6 @@
 
 // #define SCALAR
 
-
 static inline void compute_window_boundaries(const int out_idx,
                                              const uint32_t stride,
                                              const uint32_t pad,

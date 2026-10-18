@@ -232,14 +232,14 @@ int main(void)
     PROF_NODE(PROF_N_NODES);
 #endif
 
-    sync(&fsync_ctrl, &eu_ctrl);
+    sync();
 
 #ifdef ENABLE_NODE_PROFILING
     if (hid == 0)
         prof_report();
 
     /* Hold the others until the report is out */
-    sync(&fsync_ctrl, &eu_ctrl);
+    sync();
 #endif
 
     printf("[CV32 (%d)] Run completed in %d cycles\n", hid, cycle_stop - cycle_start);

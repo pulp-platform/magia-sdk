@@ -52,49 +52,22 @@ int main(void)
     uint32_t cycle_start, cycle_stop;
 
     /* Init tile's iDMA, Redmule, fsync, event-unit */
-    idma_config_t idma_cfg      = {.hartid = hartid};
-    idma_controller_t idma_ctrl = {
-        .base = NULL,
-        .cfg  = &idma_cfg,
-        .api  = &idma_api,
-    };
+    fsync_init();
+    idma_init();
+    redmule_init();
 
-    redmule_config_t redmule_cfg      = {.hartid = hartid};
-    redmule_controller_t redmule_ctrl = {
-        .base = NULL,
-        .cfg  = &redmule_cfg,
-        .api  = &redmule_api,
-    };
-
-    fsync_config_t fsync_cfg      = {.hartid = hartid};
-    fsync_controller_t fsync_ctrl = {
-        .base = NULL,
-        .cfg  = &fsync_cfg,
-        .api  = &fsync_api,
-    };
-
-    fsync_init(&fsync_ctrl);
-    idma_init(&idma_ctrl);
-    redmule_init(&redmule_ctrl);
-
-    eu_config_t eu_cfg      = {.hartid = hartid};
-    eu_controller_t eu_ctrl = {
-        .base = NULL,
-        .cfg  = &eu_cfg,
-        .api  = &eu_api,
-    };
-    eu_init(&eu_ctrl);
-    eu_fsync_init(&eu_ctrl, 0);
-    eu_redmule_init(&eu_ctrl, 0);
-    eu_idma_init(&eu_ctrl, 0);
+    eu_init();
+    eu_fsync_init(0);
+    eu_redmule_init(0);
+    eu_idma_init(0);
 
     /* initialization */
     if (hartid == 0) {
         InitNetwork();
     }
 
-    fsync_sync_level(&fsync_ctrl, MAX_SYNC_LVL - 1, 0);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    eu_fsync_wait(WAIT_MODE);
 
     /* input copy */
     // TODO: check if memcopy is necessary!!!
@@ -104,8 +77,8 @@ int main(void)
         }
     }
 
-    fsync_sync_global(&fsync_ctrl);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_global();
+    eu_fsync_wait(WAIT_MODE);
 
     /* execution */
     cycle_start = perf_get_cycles();
@@ -113,8 +86,8 @@ int main(void)
     cycle_stop = perf_get_cycles();
     printf("id: %d, cycles: %d\n", hartid, cycle_stop - cycle_start);
 
-    fsync_sync_global(&fsync_ctrl);
-    eu_fsync_wait(&eu_ctrl, WAIT_MODE);
+    fsync_sync_global();
+    eu_fsync_wait(WAIT_MODE);
 
     /* comparison */
     uint32_t total_errors = 0;
