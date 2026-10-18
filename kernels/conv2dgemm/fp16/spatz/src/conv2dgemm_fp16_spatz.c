@@ -189,9 +189,8 @@ static int init_input_params(void *params, const float16 *X, const float16 *W, c
     mmio_fp16(conv_params->beta)  = conv_params->has_bias ? (float16)1.0f : (float16)0.0f;
 
     /* The whole input, contiguous in L2 -> a straight 1D transfer */
-    idma_memcpy_1d(
-        &idma_ctrl, 0, (uint32_t)X, (uint32_t)conv_params->shard_X, total_in * sizeof(float16));
-    eu_idma_wait_a2o(&eu_ctrl, WFE);
+    idma_memcpy_1d(0, (uint32_t)X, (uint32_t)conv_params->shard_X, total_in * sizeof(float16));
+    eu_idma_wait_a2o(WFE);
 
     if (M > 0) {
         /* Weights A = [M, K_g] are each output channel's compact weights, contiguous in W
@@ -268,14 +267,13 @@ static int store_result(void *params, float16 *Y)
 
     /* One 2D transfer per batch: M rows of N pixels, HW_out apart in Y  */
     for (uint32_t b = 0; b < n_batches; b++) {
-        idma_memcpy_2d(&idma_ctrl,
-                       1,
+        idma_memcpy_2d(1,
                        (uint32_t)(Y + (b * c_out + oc_start) * hw_out + n_start),
                        (uint32_t)(conv_params->shard_Y + b * M * N * sizeof(float16)),
                        N * sizeof(float16),
                        hw_out * sizeof(float16),
                        M);
-        eu_idma_wait_o2a(&eu_ctrl, WFE);
+        eu_idma_wait_o2a(WFE);
     }
 
     return 0;
