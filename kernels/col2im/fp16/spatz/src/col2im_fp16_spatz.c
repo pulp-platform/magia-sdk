@@ -125,8 +125,8 @@ static int init_input_params(void *params, const float16 *input)
 
     bbl = block_h * block_w * l_len;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    idma_init();
+    eu_init();
 
     /* Column buffer: for each batch this tile's channels [c_start, c_start+c_len) are a
        contiguous run of c_len*bbl elements. Gather them into the packed L1 shard with a 2D
@@ -151,7 +151,7 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_ctrl_init();
+    eu_init();
 
     spatz_run_task_with_params(COL2IM_FP16_SPATZ_TASK, params);
 
@@ -197,8 +197,8 @@ static int store_result(void *params, float16 *output)
 
     ihw = image_h * image_w;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    idma_init();
+    eu_init();
 
     /* For each batch this tile's output channels [c_start, c_start+c_len) are a contiguous
        run of c_len*ihw elements in L2. Scatter the packed L1 shard back with a 2D transfer

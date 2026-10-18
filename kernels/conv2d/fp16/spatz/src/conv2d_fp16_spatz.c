@@ -128,8 +128,8 @@ static int init_input_params(void *params, const float16 *X, const float16 *W, c
     total_w =
         conv_params->c_out * conv_params->c_in_g * conv_params->kernel_h * conv_params->kernel_w;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    idma_init();
+    eu_init();
 
     /* Every tile needs the full input and full weights (each output channel reads all input
        channels), both contiguous in L2 -> straight 1D transfers. The Spatz task writes every
@@ -154,7 +154,7 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_ctrl_init();
+    eu_init();
 
     spatz_run_task_with_params(CONV2D_FP16_SPATZ_TASK, (uint32_t)params);
 
@@ -188,8 +188,8 @@ static int store_result(void *params, float16 *Y)
     if (iter_len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    idma_init();
+    eu_init();
 
     /* This tile's output planes [iter_start, iter_start+iter_len) are contiguous in L2. */
     idma_memcpy_1d(1,

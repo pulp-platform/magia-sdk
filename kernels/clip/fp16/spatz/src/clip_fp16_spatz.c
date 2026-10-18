@@ -86,8 +86,8 @@ static int init_input_params(void *params, const float16 *input, float16 minimum
     if (len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    idma_init();
+    eu_init();
 
     /* This tile's slice [start, start+len) is contiguous in L2. The Spatz task writes every
        output (Y = clip(X, min, max)), so shard_output is not zeroed here. */
@@ -102,7 +102,7 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_ctrl_init();
+    eu_init();
     spatz_run_task_with_params(CLIP_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(WFE);
@@ -133,8 +133,8 @@ static int store_result(void *params, float16 *dst)
     if (len == 0)
         return 0;
 
-    idma_ctrl_init();
-    eu_ctrl_init();
+    idma_init();
+    eu_init();
 
     /* This tile's output slice [start, start+len) is contiguous in L2. */
     idma_memcpy_1d(
