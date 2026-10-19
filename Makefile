@@ -118,7 +118,18 @@ endif
 
 GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)_v3/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace --trace=kill-module
 GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
-GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
+# VCD events dumped by run_profiling: only the signals kept by GVSOC2PERFETTO_INCLUDE (dumping
+# everything costs ~0.5 GB per simulated ms). gvsoc compiles each --event as a POSIX *basic* regex
+# (no +, |, ? or groups) matched against the trace path; profile_events='.*' dumps everything.
+profile_events ?= \
+	$(foreach s,busy asm func active_pc,'/tile-[0-9]*-cv32-core/$(s)$$' '/tile-[0-9]*-snitch-spatz/$(s)$$') \
+	$(foreach s,busy fsm_state,'/tile-[0-9]*-redmule/$(s)$$') \
+	$(foreach s,fe/stream0/busy me/queue be/busy,'/tile-[0-9]*-idma-[a-z0-9]*/$(s)$$') \
+	$(foreach s,active label,'-snitch-spatz/ara/$(s)$$' '-snitch-spatz/ara/v[a-z]*/$(s)$$') \
+	$(foreach s,stalled_queue_[a-z]* req req_size req_is_write,'/magia-noc/[a-z]*_router_[0-9]*_[0-9]*/$(s)$$') \
+	$(foreach s,narrow_req wide_req,'/magia-noc/ni_[0-9]*_[0-9]*/$(s)$$') \
+	$(foreach s,req_addr req_size req_is_write,'/L2-mem/$(s)$$')
+GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd $(foreach e,$(profile_events),--event=$(e)) run
 # ID of the specific tile you want to write traces of, currently writes the memory mapped idma-ctrl
 profile_tile		?=
 PROFILE_TILE_ARG	= $(if $(profile_tile),--trace=tile-$(profile_tile)-idma-ctrl-mm,)
@@ -133,13 +144,13 @@ GVSOC2PERFETTO_DIR     ?= scripts/gvsoc2perfetto-rs
 GVSOC2PERFETTO_BIN     ?= $(GVSOC2PERFETTO_DIR)/target/release/gvsoc2perfetto
 GVSOC2PERFETTO_VCD     ?= $(GVSOC_WORK_DIR)/all.vcd
 GVSOC2PERFETTO_OUT     ?= $(GVSOC_WORK_DIR)/trace.perfetto-trace
-# Per-tile: CV32E40P core, light_redmule, both idma ports (frontend descriptor
-# fields + real me_state/be_state FSM), Snitch+Spatz (scalar core + Spatz/ara
+# Per-tile: CV32E40P core, light_redmule, both idma channels (axi2obi/obi2axi:
+# frontend stream busy, midend queue depth, backend busy), Snitch+Spatz (scalar core + Spatz/ara
 # vector unit). Chip-level: NoC mesh routers/network-interfaces, L2 traffic.
 GVSOC2PERFETTO_INCLUDE ?= (?x) \
 	tile-\d+-cv32-core\.(busy|asm|func|active_pc)$$ \
   | tile-\d+-redmule\.(busy|fsm_state)$$ \
-  | tile-\d+-idma[01]\.(fe\.do_transfer_grant|me\.me_state|be\.be_state)$$ \
+  | tile-\d+-idma-(axi2obi|obi2axi)\.(fe\.stream0\.busy|me\.queue|be\.busy)$$ \
   | tile-\d+-snitch-spatz\.(busy|asm|func|active_pc)$$ \
   | tile-\d+-snitch-spatz\.ara\.(active|label)$$ \
   | tile-\d+-snitch-spatz\.ara\.(vfpu|vlsu|vslide)\.(active|label)$$ \
@@ -293,8 +304,6 @@ endif
 	$(GVSOC2PERFETTO_BIN) $(GVSOC2PERFETTO_VCD) \
 		-o $(GVSOC2PERFETTO_OUT) \
 		--state-map 'fsm_state=0:idle,1:preload,2:routine,3:storing,4:finished,5:acknowledge' \
-		--state-map 'me_state=0:idle,1:decomposing' \
-		--state-map 'be_state=0:idle,1:active' \
 		--rename 'ara=vfu' \
 		--rename 'label=instructions' \
 		--rename 'active_pc=pc' \
@@ -312,8 +321,6 @@ endif
 	$(GVSOC2PERFETTO_BIN) $(GVSOC2PERFETTO_VCD) \
 		-o $(GVSOC2PERFETTO_OUT) \
 		--state-map 'fsm_state=0:idle,1:preload,2:routine,3:storing,4:finished,5:acknowledge' \
-		--state-map 'me_state=0:idle,1:decomposing' \
-		--state-map 'be_state=0:idle,1:active' \
 		--rename 'ara=vfu' \
 		--rename 'label=instructions' \
 		--rename 'active_pc=pc' \
