@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "selu_fp16_spatz.h"
@@ -86,9 +85,6 @@ static int init_input_params(void *params, const float16 *X, float16 a, float16 
     if (len == 0)
         return 0;
 
-    idma_init();
-    eu_init();
-
     /* This tile's slice [start, start+len) is contiguous in L2. The Spatz task writes every
        output (Y = selu(X, alpha, gamma)), so shard_Y is not zeroed here. */
     idma_memcpy_1d(0, (uint32_t)(X + start), (uint32_t)selu_params->shard_X, len * sizeof(float16));
@@ -101,7 +97,6 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_init();
     spatz_run_task_with_params(SELU_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(WFE);
@@ -131,9 +126,6 @@ static int store_result(void *params, float16 *dst)
 
     if (len == 0)
         return 0;
-
-    idma_init();
-    eu_init();
 
     /* This tile's output slice [start, start+len) is contiguous in L2. */
     idma_memcpy_1d(

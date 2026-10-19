@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "conv2dgemm_fp16_spatz.h"
@@ -181,9 +180,6 @@ static int init_input_params(void *params, const float16 *X, const float16 *W, c
     N           = conv_params->N;
     total_in = conv_params->n_batches * conv_params->c_in * conv_params->h_in * conv_params->w_in;
 
-    idma_init();
-    eu_init();
-
     /* GEMM does Y = alpha * A @ B + beta * C; beta gates the bias term. */
     mmio_fp16(conv_params->alpha) = (float16)1.0f;
     mmio_fp16(conv_params->beta)  = conv_params->has_bias ? (float16)1.0f : (float16)0.0f;
@@ -219,8 +215,6 @@ static int init_input_params(void *params, const float16 *X, const float16 *W, c
 static int offload_spatz_task(void *params)
 {
     int ret;
-
-    eu_init();
 
     spatz_run_task_with_params(CONV2DGEMM_FP16_SPATZ_TASK, (uint32_t)params);
 
@@ -261,9 +255,6 @@ static int store_result(void *params, float16 *Y)
 
     if (M == 0)
         return 0;
-
-    idma_init();
-    eu_init();
 
     /* One 2D transfer per batch: M rows of N pixels, HW_out apart in Y  */
     for (uint32_t b = 0; b < n_batches; b++) {

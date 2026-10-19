@@ -24,14 +24,6 @@
 #define PERFORMANCE_UTILS_H
 
 /**
- * @brief Enables the cycle counter on the calling hart
- */
-static inline void perf_enable_cycles()
-{
-    asm volatile("csrci 0x320, 0x1"); // mcountinhibit.CY = 0
-}
-
-/**
  * @brief Returns the cycles of the performance counter
  * !! WARNING !! AT THE MOMENT OF WRITING (06/05/2026) THIS PROFILING UTILITY ONLY WORKS ON GVSOC.
  * PLEASE USE THE TESTBENCH UTILITIES WHEN PROFILING ON RTL.

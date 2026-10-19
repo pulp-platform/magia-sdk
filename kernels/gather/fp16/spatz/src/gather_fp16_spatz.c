@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "gather_fp16_spatz.h"
@@ -90,9 +89,6 @@ static int init_input_params(void *params, const float16 *data)
     if (batch_len == 0)
         return 0;
 
-    idma_init();
-    eu_init();
-
     /* This tile's batches [batch_start, batch_start+batch_len) are a contiguous L2 block.
        The Spatz task fully writes shard_output (axis_length per batch), so it is not zeroed
        here. */
@@ -108,8 +104,6 @@ static int init_input_params(void *params, const float16 *data)
 static int offload_spatz_task(void *params)
 {
     int ret;
-
-    eu_init();
 
     spatz_run_task_with_params(GATHER_FP16_SPATZ_TASK, (uint32_t)params);
 
@@ -142,9 +136,6 @@ static int store_result(void *params, float16 *gather_result)
 
     if (len == 0)
         return 0;
-
-    idma_init();
-    eu_init();
 
     /* This tile's output batches [batch_start, batch_start+batch_len) are contiguous in L2. */
     idma_memcpy_1d(1,

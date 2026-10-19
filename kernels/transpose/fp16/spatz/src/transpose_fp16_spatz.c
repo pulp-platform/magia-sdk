@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "transpose_fp16_spatz.h"
@@ -139,9 +138,6 @@ static int init_input_params(void *params,
     global_offset = trans_params->iteration_start * shard_in_elems;
     in_bytes      = iter_len * shard_in_elems * sizeof(float16);
 
-    idma_init();
-    eu_init();
-
     /* perm[0] == 0, so this tile's slice of the outer axis is contiguous in L2. The
        Spatz task performs the (strided) transpose and fully writes shard_output, so
        shard_output is not zeroed here. */
@@ -156,7 +152,6 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_init();
     spatz_run_task_with_params(TRANSPOSE_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(WFE);
@@ -189,9 +184,6 @@ static int store_result(void *params, float16 *output, uint32_t shard_out_elems)
 
     global_offset = trans_params->iteration_start * shard_out_elems;
     out_bytes     = iter_len * shard_out_elems * sizeof(float16);
-
-    idma_init();
-    eu_init();
 
     /* This tile's output slice of the outer axis is contiguous in L2. */
     idma_memcpy_1d(

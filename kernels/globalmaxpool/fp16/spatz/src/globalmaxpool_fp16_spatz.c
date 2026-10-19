@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "globalmaxpool_fp16_spatz.h"
@@ -79,9 +78,6 @@ static int init_input_params(void *params, const float16 *X)
     if (len == 0)
         return 0;
 
-    idma_init();
-    eu_init();
-
     /* This tile's channels [start, start+len) are contiguous in L2. The Spatz task writes
        every output (one max per channel), so shard_Y is not zeroed here. */
     idma_memcpy_1d(0,
@@ -97,7 +93,6 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_init();
     spatz_run_task_with_params(GLOBALMAXPOOL_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(WFE);
@@ -127,9 +122,6 @@ static int store_result(void *params, float16 *Y)
 
     if (len == 0)
         return 0;
-
-    idma_init();
-    eu_init();
 
     /* This tile's outputs [start, start+len) are contiguous in L2. */
     idma_memcpy_1d(1, (uint32_t)(Y + start), (uint32_t)gap_params->shard_Y, len * sizeof(float16));

@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "exp_fp16_spatz.h"
@@ -71,9 +70,6 @@ static int init_input_params(void *params, const float16 *input)
     if (len == 0)
         return 0;
 
-    idma_init();
-    eu_init();
-
     /* This tile's slice [start, start+len) is contiguous in L2. The Spatz task writes every
        output (Y = exp(X)), so shard_output is not zeroed here. */
     idma_memcpy_1d(
@@ -87,7 +83,6 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_init();
     spatz_run_task_with_params(EXP_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(WFE);
@@ -117,9 +112,6 @@ static int store_result(void *params, float16 *dst)
 
     if (len == 0)
         return 0;
-
-    idma_init();
-    eu_init();
 
     /* This tile's output slice [start, start+len) is contiguous in L2. */
     idma_memcpy_1d(

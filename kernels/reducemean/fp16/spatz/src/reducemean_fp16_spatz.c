@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "reducemean_fp16_spatz.h"
@@ -69,9 +68,6 @@ static int init_input_params(void *params, const float16 *X)
     src_base = rm_params->outer_start * rm_params->reduce_dim * rm_params->inner_dim;
     in_elems = rm_params->outer_len * rm_params->reduce_dim * rm_params->inner_dim;
 
-    idma_init();
-    eu_init();
-
     /* This tile's outer slice [outer_start, outer_start+outer_len) is contiguous in L2. The
        Spatz task fully writes shard_Y (one mean per output), so it is not zeroed here. */
     idma_memcpy_1d(
@@ -85,7 +81,6 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_init();
     spatz_run_task_with_params(REDUCEMEAN_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(WFE);
@@ -110,9 +105,6 @@ static int store_result(void *params, float16 *Y)
 
     dst_base  = rm_params->outer_start * rm_params->inner_dim;
     out_elems = rm_params->outer_len * rm_params->inner_dim;
-
-    idma_init();
-    eu_init();
 
     /* This tile's output outer slice is contiguous in L2. */
     idma_memcpy_1d(
