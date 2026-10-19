@@ -215,7 +215,7 @@ int main(void)
 
     sync();
 
-    perf_enable_cycles();
+    perf_init();
 
     cycle_start = perf_get_cycles();
     RunNetwork();

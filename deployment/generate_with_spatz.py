@@ -51,8 +51,8 @@ def add_node_profiling(code: str) -> tuple[str, list]:
 
     code = node_block.sub(marker, code)
     code = code.replace(
-        "magia_sync_tiles(&magia_fsync_ctrl, &magia_eu_ctrl);",
-        "PROF_PHASE_VOID(prof_cyc_sync, magia_sync_tiles(&magia_fsync_ctrl, &magia_eu_ctrl));")
+        "magia_sync_tiles();",
+        "PROF_PHASE_VOID(prof_cyc_sync, magia_sync_tiles());")
     code = code.replace('#include "tile.h"\n',
                         '#include "tile.h"\n#include "kernels_profiling_utils.h"\n', 1)
 

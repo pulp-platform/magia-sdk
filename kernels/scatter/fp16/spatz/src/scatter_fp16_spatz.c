@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "scatter_fp16_spatz.h"
@@ -124,9 +123,6 @@ static int init_input_params(void *params,
     for (uint32_t i = 0; i < elems_indices_per_tile; i++)
         mmio32(shard_indices + i * sizeof(uint32_t)) = (int32_t)indices[global_offset_indices + i];
 
-    idma_init();
-    eu_init();
-
     /* data and updates are plain fp16 copies of contiguous L2 blocks. shard_output is not
        zeroed here: the Spatz task's step 1 copies shard_data over it in full. */
     idma_memcpy_1d(0,
@@ -149,7 +145,6 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_init();
     spatz_run_task_with_params(SCATTER_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(WFE);
@@ -186,9 +181,6 @@ static int store_result(void *params, float16 *output)
         return 0;
 
     global_offset = iter_start * data_axis_dim * inner_size;
-
-    idma_init();
-    eu_init();
 
     /* This tile's output slice is contiguous in L2. */
     idma_memcpy_1d(1,

@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "resize_fp16_spatz.h"
@@ -85,9 +84,6 @@ static int init_input_params(void *params, const float16 *X)
     if (it_len == 0)
         return 0;
 
-    idma_init();
-    eu_init();
-
     /* This tile's (batch,channel) planes [it_start, it_start+it_len) are contiguous in L2.
        The Spatz task writes every output pixel, so shard_Y is not zeroed here. */
     idma_memcpy_1d(0,
@@ -103,7 +99,6 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_init();
     spatz_run_task_with_params(RESIZE_FP16_SPATZ_TASK, params);
 
     ret = eu_spatz_wait(WFE);
@@ -135,9 +130,6 @@ static int store_result(void *params, float16 *Y)
 
     if (it_len == 0)
         return 0;
-
-    idma_init();
-    eu_init();
 
     /* This tile's output (batch,channel) planes [it_start, it_start+it_len) are contiguous. */
     idma_memcpy_1d(1,

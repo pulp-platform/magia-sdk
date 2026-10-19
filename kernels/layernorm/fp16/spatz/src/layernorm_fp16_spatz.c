@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "layernorm_fp16_spatz.h"
@@ -103,9 +102,6 @@ static int init_input_params(
     w_len            = layernorm_params->w_len;
     rows_bytes       = layernorm_params->r_len * w_len * sizeof(float16);
 
-    idma_init();
-    eu_init();
-
     /* This tile's rows [r_start, r_start+r_len) are contiguous in L2, so X, gamma,
        beta and the output shard are plain 1D transfers. The Spatz task overwrites
        the whole output shard, so it does not need zeroing here. */
@@ -130,7 +126,6 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_init();
     spatz_run_task_with_params(LAYERNORM_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(WFE);
@@ -162,9 +157,6 @@ static int store_result(void *params, float16 *Y)
 
     if (rows_bytes == 0)
         return 0;
-
-    idma_init();
-    eu_init();
 
     /* This tile's output rows are contiguous in L2 -> single 1D transfer (L1->L2). */
     idma_memcpy_1d(

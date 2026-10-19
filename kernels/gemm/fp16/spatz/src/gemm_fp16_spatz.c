@@ -5,7 +5,6 @@
 #include "idma.h"
 #include "tile.h"
 
-#include "kernel_idma_utils.h"
 #include "kernels_profiling_utils.h"
 
 #include "gemm_fp16_spatz.h"
@@ -148,9 +147,6 @@ static int init_input_params(void *params,
     N           = gemm_params->N;
     K           = gemm_params->K;
 
-    idma_init();
-    eu_init();
-
     if (s_len > 0) {
         if (gemm_params->shard_dim == 0) {
             /* Sharded over M: A gets this tile's rows [s_start, s_start+s_len); B is loaded whole.
@@ -231,7 +227,6 @@ static int offload_spatz_task(void *params)
 {
     int ret;
 
-    eu_init();
     spatz_run_task_with_params(GEMM_FP16_SPATZ_TASK, (uint32_t)params);
 
     ret = eu_spatz_wait(WFE);
@@ -265,9 +260,6 @@ static int store_result(void *params, float16 *Y)
 
     if (s_len == 0)
         return 0;
-
-    idma_init();
-    eu_init();
 
     if (gemm_params->shard_dim == 0) {
         /* This tile's output rows [s_start, s_start+s_len) of [M, N] are contiguous in L2. */
