@@ -52,6 +52,14 @@ The following steps assume the default target platform, `magia`, on which Spatz 
 
     In case you want to use a different toolchain, or want to specify a particular toolchain installed in your filesystem, you can edit the file *magia-sdk/cmake/toolchain_gcc_multilib.cmake* to point to your desired toolchain binary file. Make sure the ILP and API extensions in *CMakeLists.txt* are supported by the toolchain.
 
+   For the prebuilt CORE-V compiler (`riscv32-corev-elf-gcc`), set
+   `COREV_ROOT` to its installation directory. `make build` then selects
+   `GCC_COREV`; it can also be selected explicitly with `compiler=GCC_COREV`.
+   This mode targets CV32E40P's Zfinx/Zhinxmin and Xcv extensions with the
+   integer-register ABI. The legacy GCC 7 PULP compiler targets a different ISA.
+   Prebuilt CORE-V packages are available from
+   [Embecosm](https://embecosm.com/downloads/tool-chain-downloads/#core-v-top-of-tree-compilers).
+
 2. Spatz LLVM toolchain: since Spatz support is enabled by default, the compilation flow requires a dedicated Spatz LLVM toolchain.
    You can install it automatically by running the following command from the SDK root:
 
@@ -89,7 +97,7 @@ The following *optional* parameters can be specified when running the make comma
 
 `fsync_mode`: **stall**|**interrupt** (**Default** stall). Selects the Fractal Sync module synchronization behaviour.
 
-`compiler`: **GCC_MULTILIB**|**GCC_PULP**|**LLVM** (**Default**: GCC_MULTILIB). Selects the compiler to be used. LLVM is currently WIP. PULP is the risc-v 32 bits only toolchain NOT supporting floating point instructions, wheras the MULTILIB toolchain is the nightly risc-v one.
+`compiler`: **GCC_COREV**|**GCC_MULTILIB**|**GCC_PULP**|**LLVM** (**Default**: GCC_COREV when `COREV_ROOT` is set, otherwise GCC_MULTILIB). Selects the compiler to be used. LLVM is currently WIP. PULP is the risc-v 32 bits only toolchain NOT supporting floating point instructions, wheras the MULTILIB toolchain is the nightly risc-v one.
 
 `ISA`: **rv32imcxgap9**|**rv32imafc** (**Default**: rv32imcxgap9) ISA target for the GCC toolcahin.
 

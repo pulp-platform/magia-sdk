@@ -84,7 +84,7 @@ mobilevit_slice_tokens	?=
 
 target_platform ?= magia
 control_core 	?= CV32E40P
-compiler 		?= GCC_MULTILIB
+compiler 		?= $(if $(COREV_ROOT),GCC_COREV,GCC_MULTILIB)
 gui 			?= 0
 tiles 			?= 2
 spatz			?= 1
@@ -217,7 +217,10 @@ $(S19TOMEM_BIN): $(S19TOMEM_SRC)
 # $(MAGIA_RTL_DIR)/sw/tests/$(test)/build/: the ELF itself as `verif`, the
 # $readmemh instruction/data images, and the disassembly the core tracer reads.
 # Shared by platform=rtl and platform=verilator -- both drive the same magia_tb.
-ifeq ($(compiler), GCC_MULTILIB)
+ifeq ($(compiler), GCC_COREV)
+OBJDUMP ?= $(COREV_ROOT)/bin/riscv32-corev-elf-objdump
+OBJCOPY ?= $(COREV_ROOT)/bin/riscv32-corev-elf-objcopy
+else ifeq ($(compiler), GCC_MULTILIB)
 OBJDUMP ?= riscv64-unknown-elf-objdump
 OBJCOPY ?= riscv64-unknown-elf-objcopy
 else

@@ -240,7 +240,7 @@ function(add_cv32_executable_with_spatz)
     # --------------------------------------------------------------------------
     set(ELF_DUMP "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${ARG_TARGET_NAME}.s")
     add_custom_command(TARGET ${ARG_TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_OBJDUMP} -D -S $<TARGET_FILE:${ARG_TARGET_NAME}> > ${ELF_DUMP}
+        COMMAND ${CMAKE_OBJDUMP} -d -S $<TARGET_FILE:${ARG_TARGET_NAME}> > ${ELF_DUMP}
         VERBATIM
     )
 endfunction()
