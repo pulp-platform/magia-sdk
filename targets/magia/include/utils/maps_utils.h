@@ -23,13 +23,22 @@
 #define MAPS_ENABLE_TRACE 0u
 #endif
 */
+/* Minimal per-token timing records for experiment CSV collection. */
+#ifndef MAPS_RESULT_TRACE
+#define MAPS_RESULT_TRACE 0u
+#endif
 #ifndef MAPS_TOKEN_PROGRESS
 #define MAPS_TOKEN_PROGRESS 0u
 #endif
 #ifndef MAPS_KERNEL_PROGRESS
 #define MAPS_KERNEL_PROGRESS 0u
 #endif
-#if MAPS_ENABLE_TRACE || defined(MAPS_EXPERIMENT_TRACE) || MAPS_TOKEN_PROGRESS || MAPS_KERNEL_PROGRESS
+/* Formatting one line per im2col row distorts small-kernel cycle timings.
+ * Keep stage/kernel markers independent of this optional fine progress. */
+#ifndef MAPS_IM2COL_STEP_PROGRESS
+#define MAPS_IM2COL_STEP_PROGRESS 0u
+#endif
+#if MAPS_ENABLE_TRACE || defined(MAPS_EXPERIMENT_TRACE) || MAPS_TOKEN_PROGRESS || MAPS_KERNEL_PROGRESS || MAPS_RESULT_TRACE
 #include "utils/printf.h"
 #endif
 
@@ -136,6 +145,7 @@ typedef enum {
     OP_TRANSPOSE,
     OP_ALL_REDUCE_MAX,
     OP_ALL_REDUCE_SUM,
+    OP_MAX_POOL,
 } op_kind_t;
 
 typedef enum {
@@ -565,7 +575,7 @@ static inline volatile uint32_t *maps_ready_flag_addr(uint32_t hartid,
 /* GVSoC's CV32 model implements cycle but not cycleh. */
 static inline uint32_t maps_read_cycle(void)
 {
-#if MAPS_ENABLE_TRACE || defined(MAPS_EXPERIMENT_TRACE) || MAPS_TOKEN_PROGRESS || MAPS_KERNEL_PROGRESS
+#if MAPS_ENABLE_TRACE || defined(MAPS_EXPERIMENT_TRACE) || MAPS_TOKEN_PROGRESS || MAPS_KERNEL_PROGRESS || MAPS_RESULT_TRACE
     uint32_t cycle;
     __asm__ volatile("rdcycle %0" : "=r"(cycle));
     return cycle;

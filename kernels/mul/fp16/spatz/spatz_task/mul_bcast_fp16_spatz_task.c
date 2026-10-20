@@ -45,7 +45,10 @@ int mul_bcast_fp16_spatz_task(void)
     row_len = params->row_len;
     mode    = params->mode;
 
-    vector_safe = ((row_len & 1u) == 0);
+    vector_safe = ((row_len & 1u) == 0) &&
+        (((uintptr_t)A | (uintptr_t)Y) & 3u) == 0u;
+    union { uint32_t bits; float value; } constant;
+    constant.bits = mode == MUL_BCAST_CONSTANT ? params->constant_bits : 0u;
 
     for (uint32_t r = 0; r < rows; r++) {
         const _Float16 *p_a = A + (size_t)r * row_len;
@@ -53,8 +56,16 @@ int mul_bcast_fp16_spatz_task(void)
         size_t avl          = row_len;
         size_t vl;
 
-        if (mode == MUL_BCAST_SCALAR) {
-            _Float16 s = B[r];
+        if (mode == MUL_BCAST_SCALAR || mode == MUL_BCAST_CONSTANT) {
+            _Float16 s = mode == MUL_BCAST_CONSTANT ? (_Float16)constant.value : B[r];
+
+            /* Preserve FP32 descriptor constants that cannot be represented
+             * exactly in FP16; rounding the coefficient first changes results. */
+            if (mode == MUL_BCAST_CONSTANT && (float)s != constant.value) {
+                for (size_t i = 0; i < row_len; ++i)
+                    p_y[i] = (_Float16)((float)p_a[i] * constant.value);
+                continue;
+            }
 
             if (!vector_safe) {
                 mul_row_scalar(p_a, &s, p_y, row_len, 0);
@@ -74,7 +85,7 @@ int mul_bcast_fp16_spatz_task(void)
         } else {
             const _Float16 *p_b = B;
 
-            if (!vector_safe) {
+            if (!vector_safe || ((uintptr_t)p_b & 3u) != 0u) {
                 mul_row_scalar(p_a, p_b, p_y, row_len, 1);
                 continue;
             }

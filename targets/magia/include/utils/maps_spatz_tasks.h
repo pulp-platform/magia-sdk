@@ -13,6 +13,9 @@
 #if MAPS_HAS_DEPTHWISE_CONV_SPATZ_TASK
 #include "depthwise_conv_fp16_spatz_params.h"
 #endif
+#if MAPS_HAS_MAXPOOL_SPATZ_TASK
+#include "maxpool2d_fp16_spatz_params.h"
+#endif
 #if MAPS_HAS_SIGMOID_SPATZ_TASK
 #include "sigmoid_fp16_spatz_params.h"
 #endif
@@ -177,15 +180,34 @@ static inline int maps_execute_reducesum_spatz(
         runtime->reducesum_fp16_task == 0u || op->num_inputs != 1u ||
         op->num_outputs != 1u || op->inputs[0].elem_type != ELEM_F16 ||
         op->outputs[0].elem_type != ELEM_F16 || op->inputs[0].rank == 0u ||
-        op->params[0] != op->inputs[0].rank - 1u ||
+        op->params[0] >= op->inputs[0].rank ||
         runtime->spatz_params_bytes < sizeof(reducesum_fp16_spatz_params_t) ||
         ((uintptr_t)runtime->spatz_params & 0xfu) != 0u)
         return -1;
 
-    const uint32_t reduce_dim = op->inputs[0].shape[op->inputs[0].rank - 1u];
-    const uint32_t input_elements = maps_operation_elems(&op->inputs[0]);
-    const uint32_t output_elements = maps_operation_elems(&op->outputs[0]);
-    if (reduce_dim == 0u || input_elements / reduce_dim != output_elements)
+    /* Dense reductions are [outer, reduce, inner], regardless of axis.
+     * In particular [N,C,H,1] reduced over H has inner_dim == 1. */
+    const subslice_desc_t *input = &op->inputs[0];
+    const uint32_t axis = op->params[0];
+    uint32_t inner_dim = 1u, outer_len = 1u, stride = sizeof(uint16_t);
+    for (uint32_t d = input->rank; d-- > 0u;) {
+        if (input->shape[d] == 0u)
+            return -2;
+        if (input->shape[d] > 1u && input->strides_bytes[d] != stride)
+            return maps_execute_reduce_f16(plan, op, slot);
+        stride *= input->shape[d];
+        if (d > axis) inner_dim *= input->shape[d];
+        if (d < axis) outer_len *= input->shape[d];
+    }
+    stride = sizeof(uint16_t);
+    for (uint32_t d = op->outputs[0].rank; d-- > 0u;) {
+        if (op->outputs[0].shape[d] > 1u &&
+            op->outputs[0].strides_bytes[d] != stride)
+            return maps_execute_reduce_f16(plan, op, slot);
+        stride *= op->outputs[0].shape[d];
+    }
+    const uint32_t reduce_dim = input->shape[axis];
+    if (outer_len * inner_dim != maps_operation_elems(&op->outputs[0]))
         return -2;
 
     volatile reducesum_fp16_spatz_params_t *params =
@@ -193,9 +215,9 @@ static inline int maps_execute_reducesum_spatz(
     params->shard_X = local_subslice_addr(plan, &op->inputs[0], slot);
     params->shard_Y = local_subslice_addr(plan, &op->outputs[0], slot);
     params->reduce_dim = reduce_dim;
-    params->inner_dim = 1u;
+    params->inner_dim = inner_dim;
     params->outer_start = 0u;
-    params->outer_len = output_elements;
+    params->outer_len = outer_len;
     spatz_run_task_with_params(runtime->reducesum_fp16_task,
                                (uint32_t)runtime->spatz_params);
     return maps_wait_for_spatz(runtime);
@@ -268,7 +290,10 @@ static inline int maps_execute_add_spatz(const tile_plan_t *plan,
 }
 #endif
 
-#if MAPS_HAS_MUL_SPATZ_TASK
+#if MAPS_HAS_MUL_SPATZ_TASK || MAPS_HAS_BINARY_BCAST_SPATZ_TASK
+/* Shared geometry mode IDs match both task parameter contracts. */
+#define MAPS_BCAST_ROW 0u
+#define MAPS_BCAST_SCALAR 1u
 static inline int maps_mul_broadcast_params(
     const subslice_desc_t *output, const subslice_desc_t *broadcast,
     uint32_t *rows, uint32_t *row_len, uint32_t *mode)
@@ -278,7 +303,7 @@ static inline int maps_mul_broadcast_params(
     if (broadcast_elements == output_elements) {
         *rows = 1u;
         *row_len = output_elements;
-        *mode = MUL_BCAST_ROW;
+        *mode = MAPS_BCAST_ROW;
         return 0;
     }
     if (output->rank == 0u || broadcast->rank != output->rank)
@@ -291,7 +316,7 @@ static inline int maps_mul_broadcast_params(
                 goto row_broadcast;
         *rows = broadcast_elements;
         *row_len = output->shape[last];
-        *mode = MUL_BCAST_SCALAR;
+        *mode = MAPS_BCAST_SCALAR;
         return *rows * *row_len == output_elements ? 0 : -1;
     }
 
@@ -309,25 +334,44 @@ row_broadcast:
     if (broadcast_elements != *row_len || output_elements % *row_len != 0u)
         return -1;
     *rows = output_elements / *row_len;
-    *mode = MUL_BCAST_ROW;
+    *mode = MAPS_BCAST_ROW;
     return 0;
 }
 
+#endif
+
+#if MAPS_HAS_MUL_SPATZ_TASK
 static inline int maps_execute_mul_spatz(const tile_plan_t *plan,
                                          const op_desc_t *op,
                                          uint32_t slot,
                                          maps_operation_runtime_t *runtime)
 {
     if (!runtime || !runtime->spatz_initialized ||
-        runtime->mul_bcast_fp16_task == 0u || op->num_inputs != 2u ||
+        runtime->mul_bcast_fp16_task == 0u || (op->num_inputs != 1u && op->num_inputs != 2u) ||
         op->num_outputs != 1u || op->inputs[0].elem_type != ELEM_F16 ||
-        op->inputs[1].elem_type != ELEM_F16 ||
+        (op->num_inputs == 2u && op->inputs[1].elem_type != ELEM_F16) ||
         op->outputs[0].elem_type != ELEM_F16 ||
         runtime->spatz_params_bytes < sizeof(mul_bcast_fp16_spatz_params_t) ||
         ((uintptr_t)runtime->spatz_params & 0xfu) != 0u)
         return -1;
 
     const uint32_t elements = maps_operation_elems(&op->outputs[0]);
+    if (op->num_inputs == 1u) {
+        if (maps_operation_elems(&op->inputs[0]) != elements)
+            return -2;
+        volatile mul_bcast_fp16_spatz_params_t *params =
+            (volatile mul_bcast_fp16_spatz_params_t *)runtime->spatz_params;
+        params->shard_A = local_subslice_addr(plan, &op->inputs[0], slot);
+        params->shard_B = 0u;
+        params->shard_Y = local_subslice_addr(plan, &op->outputs[0], slot);
+        params->rows = 1u;
+        params->row_len = elements;
+        params->mode = MUL_BCAST_CONSTANT;
+        params->constant_bits = op->params[0];
+        spatz_run_task_with_params(runtime->mul_bcast_fp16_task,
+                                  (uint32_t)runtime->spatz_params);
+        return maps_wait_for_spatz(runtime);
+    }
     const subslice_desc_t *full = &op->inputs[0];
     const subslice_desc_t *broadcast = &op->inputs[1];
     if (maps_operation_elems(full) != elements) {
@@ -385,7 +429,7 @@ static inline int maps_execute_binary_bcast_spatz(const tile_plan_t *plan,
     params->shard_B = local_subslice_addr(plan, broadcast, slot);
     params->shard_Y = local_subslice_addr(plan, &op->outputs[0], slot);
     params->rows = rows; params->row_len = row_len;
-    params->mode = mode == MUL_BCAST_SCALAR ? BINARY_BCAST_SCALAR : BINARY_BCAST_ROW;
+    params->mode = mode == MAPS_BCAST_SCALAR ? BINARY_BCAST_SCALAR : BINARY_BCAST_ROW;
     params->operation = op->kind == OP_SUB ? BINARY_BCAST_SUB : BINARY_BCAST_DIV;
     spatz_run_task_with_params(runtime->binary_bcast_fp16_task, (uint32_t)runtime->spatz_params);
     return maps_wait_for_spatz(runtime);
@@ -509,6 +553,7 @@ static inline int maps_execute_group_normalize_spatz(
 #endif
 
 #if MAPS_HAS_DEPTHWISE_CONV_SPATZ_TASK
+#include "utils/maps_depthwise_im2col.h"
 static inline int maps_execute_depthwise_conv_spatz(
     const tile_plan_t *plan, const op_desc_t *op, uint32_t slot,
     maps_operation_runtime_t *runtime)
@@ -559,7 +604,94 @@ static inline int maps_execute_depthwise_conv_spatz(
     p->pad_top = op->params[4]; p->pad_left = op->params[5];
     p->channel_multiplier = op->params[6];
     p->bias_stride = op->num_inputs == 3u ? op->inputs[2].strides_bytes[0] : 0u;
+    p->vector_profile = 0u;
+    p->vector_direct = 0u;
+#if defined(MAPS_DEPTHWISE_VECTOR_DIRECT) && MAPS_DEPTHWISE_VECTOR_DIRECT
+    /* Even horizontal stride selects the same half of each aligned word.
+     * An even input width guarantees that the other half stays in the row. */
+    if (p->input_strides[3] == 2u && p->output_strides[3] == 2u &&
+        (p->stride_w & 1u) == 0u && (p->input_shape[3] & 1u) == 0u &&
+        ((p->input | p->input_strides[0] | p->input_strides[1] |
+          p->input_strides[2]) & 3u) == 0u)
+        p->vector_direct = 1u;
+#if defined(MAPS_DEPTHWISE_VECTOR_PLAN) && MAPS_DEPTHWISE_VECTOR_PLAN
+    /* The planned path supports every positive stride: odd strides use
+     * per-lane halfword selection rather than one shift for the whole vector. */
+    if (p->input_strides[3] == 2u && p->output_strides[3] == 2u &&
+        (p->input_shape[3]&1u) == 0u &&
+        ((p->input | p->input_strides[0] | p->input_strides[1] |
+          p->input_strides[2])&3u) == 0u &&
+        p->weight_shape[2] && p->weight_shape[3] &&
+        (uint64_t)p->weight_shape[2]*p->weight_shape[3] <= 49u)
+        p->vector_direct = 2u;
+#endif
+#endif
+#if MAPS_DEPTHWISE_VECTOR_AUTO
+#if !defined(MAPS_DEPTHWISE_VECTOR_DIRECT) || !MAPS_DEPTHWISE_VECTOR_DIRECT
+    if (maps_depthwise_prefer_vector(p)) p->vector_direct=2u;
+#endif
+#endif
+#if defined(MAPS_DEPTHWISE_PROFILE) && MAPS_DEPTHWISE_PROFILE
+    if (p->vector_direct == 2u && runtime->spatz_params_bytes >= sizeof(*p)+32u)
+        p->vector_profile = ((uintptr_t)p + sizeof(*p) + 15u) & ~(uintptr_t)15u;
+#endif
+    p->im2col = 0u;
+    p->im2col_columns = 0u;
+    p->im2col_stride = 0u;
+#if MAPS_DEPTHWISE_IM2COL_GEMM
+    if (!p->vector_direct &&
+        p->input_strides[3] == 2u && p->output_strides[3] == 2u &&
+        p->output_shape[3] != 0u && p->weight_shape[2] != 0u && p->weight_shape[3] != 0u) {
+        const uint64_t kernel = (uint64_t)p->weight_shape[2] * p->weight_shape[3];
+        const uint32_t header = (sizeof(*p) + 15u) & ~15u;
+        /* Reserve an even number of columns for each matrix row and one
+         * output row. Every vector load/store then starts four-byte aligned. */
+        const uint64_t row_bytes = 2u * (kernel + 1u) * ((uint64_t)p->output_shape[3] + 1u);
+        if (runtime->spatz_params_bytes > header && row_bytes <= runtime->spatz_params_bytes - header) {
+            const uint32_t block_rows = (runtime->spatz_params_bytes - header) / (uint32_t)row_bytes;
+            return maps_depthwise_im2col_gemm(runtime, p, block_rows);
+        }
+    }
+#endif
+    MAPS_DW_STAMP(direct_start);
+    MAPS_DW_COUNT(4, 1u);
     spatz_run_task_with_params(runtime->depthwise_conv_fp16_task, (uint32_t)p);
+    const int direct_result = maps_wait_for_spatz(runtime);
+    MAPS_DW_TIME(1, direct_start);
+    return direct_result;
+}
+#endif
+
+#if MAPS_HAS_MAXPOOL_SPATZ_TASK
+static inline int maps_execute_maxpool_spatz(const tile_plan_t *plan,
+    const op_desc_t *op, uint32_t slot, maps_operation_runtime_t *runtime)
+{
+    if (!runtime || !runtime->spatz_initialized || !runtime->maxpool_fp16_task ||
+        op->num_inputs!=1u || op->num_outputs!=1u ||
+        runtime->spatz_params_bytes<sizeof(maxpool2d_fp16_spatz_params_t) ||
+        ((uintptr_t)runtime->spatz_params&15u)) return -1;
+    const subslice_desc_t *x=&op->inputs[0], *y=&op->outputs[0];
+    if (x->rank!=4u || y->rank!=4u || x->elem_type!=ELEM_F16 || y->elem_type!=ELEM_F16 ||
+        x->shape[0]!=y->shape[0] || x->shape[1]!=y->shape[1] ||
+        !op->params[0] || !op->params[1] || !op->params[2] || !op->params[3]) return -2;
+    for (uint32_t which=0; which<2; ++which) {
+        const subslice_desc_t *s=which ? y : x;
+        uint32_t stride=2u;
+        for (uint32_t d=4; d-- >0;) {
+            if (s->shape[d]>1 && s->strides_bytes[d]!=stride) return -3;
+            stride*=s->shape[d];
+        }
+    }
+    volatile maxpool2d_fp16_spatz_params_t *p=(volatile maxpool2d_fp16_spatz_params_t *)runtime->spatz_params;
+    p->shard_X=local_subslice_addr(plan,x,slot);
+    p->shard_Y=local_subslice_addr(plan,y,slot);
+    p->c_start=0; p->c_len=x->shape[0]*x->shape[1];
+    p->h_in=x->shape[2]; p->w_in=x->shape[3];
+    p->h_out=y->shape[2]; p->w_out=y->shape[3];
+    p->kernel_h=op->params[0]; p->kernel_w=op->params[1];
+    p->stride_h=op->params[2]; p->stride_w=op->params[3];
+    p->pad_h=op->params[4]; p->pad_w=op->params[5];
+    spatz_run_task_with_params(runtime->maxpool_fp16_task,(uint32_t)p);
     return maps_wait_for_spatz(runtime);
 }
 #endif

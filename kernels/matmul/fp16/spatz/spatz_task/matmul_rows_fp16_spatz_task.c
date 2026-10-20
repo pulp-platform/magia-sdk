@@ -55,6 +55,56 @@ static void matmul_transposed_b_scalar(
     }
 }
 
+#ifndef MATMUL_TRANSPOSED_B_VECTOR
+#define MATMUL_TRANSPOSED_B_VECTOR 1
+#endif
+
+/* Vectorize over output columns while preserving ascending-K FP16 FMAs.
+ * With even K, a word-aligned B row provides two adjacent weights per word.
+ * Gather those words across classes, select each half through aligned vector
+ * scratch, and reuse the word load for two successive accumulation steps. */
+static void matmul_transposed_b_vector(
+    const _Float16 *A, const _Float16 *B, _Float16 *Y,
+    const size_t dim_M, const size_t dim_K, const size_t dim_O)
+{
+    volatile uint32_t packed[64] __attribute__((aligned(16)));
+    volatile _Float16 output[64] __attribute__((aligned(16)));
+    const uint32_t step=dim_K*sizeof(_Float16), half_step=4u;
+    for (size_t m=0;m<dim_M;++m)
+        for (size_t o=0;o<dim_O;) {
+            size_t count=dim_O-o;
+            if (count>64u) count=64u;
+            size_t vl;
+            asm volatile("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(count));
+            asm volatile("vfmv.v.f v8, %0" :: "f"((_Float16)0.0f));
+            for (size_t k=0;k<dim_K;k+=2u) {
+                const _Float16 *weights=B+o*dim_K+k;
+                asm volatile("vsetvli zero, %0, e32, m8, ta, ma" :: "r"(vl));
+                asm volatile("vlse32.v v16, (%0), %1" :: "r"(weights), "r"(step) : "memory");
+                asm volatile("vse32.v v16, (%0)" :: "r"(packed) : "memory");
+                asm volatile("vsetvli zero, %0, e16, m4, ta, ma" :: "r"(vl));
+                asm volatile("vlse16.v v4, (%0), %1" :: "r"(packed), "r"(half_step) : "memory");
+                const _Float16 a0=A[m*dim_K+k];
+                asm volatile("vfmacc.vf v8, %0, v4" :: "f"(a0));
+                asm volatile("vsetvli zero, %0, e32, m8, ta, ma" :: "r"(vl));
+                asm volatile("vsrl.vi v16, v16, 16");
+                asm volatile("vse32.v v16, (%0)" :: "r"(packed) : "memory");
+                asm volatile("vsetvli zero, %0, e16, m4, ta, ma" :: "r"(vl));
+                asm volatile("vlse16.v v4, (%0), %1" :: "r"(packed), "r"(half_step) : "memory");
+                const _Float16 a1=A[m*dim_K+k+1u];
+                asm volatile("vfmacc.vf v8, %0, v4" :: "f"(a1));
+            }
+            _Float16 *dest=Y+m*dim_O+o;
+            if (((uintptr_t)dest&3u)==0u) {
+                asm volatile("vse16.v v8, (%0)" :: "r"(dest) : "memory");
+            } else {
+                asm volatile("vse16.v v8, (%0)" :: "r"(output) : "memory");
+                for (size_t lane=0;lane<vl;++lane) dest[lane]=output[lane];
+            }
+            o+=vl;
+        }
+}
+
 /*
  * The Spatz VLSU corrupts vector accesses to non-aligned addresses. The B rows and the Y
  * rows are read and written unit-stride and step by dim_O, so every row is 4-byte aligned
@@ -157,7 +207,12 @@ static void matmul(const _Float16 *A, const _Float16 *B, _Float16 *Y, const size
     }
 }
 
-static void add_bias(const _Float16 *bias, _Float16 *Y, const size_t dim_M,
+#ifndef MATMUL_VECTOR_BIAS
+#define MATMUL_VECTOR_BIAS 1
+#endif
+
+#if !MATMUL_VECTOR_BIAS
+static void add_bias_scalar(const _Float16 *bias, _Float16 *Y, const size_t dim_M,
                      const size_t dim_O, uint32_t mode)
 {
     if (!bias || mode == MATMUL_BIAS_NONE)
@@ -169,6 +224,50 @@ static void add_bias(const _Float16 *bias, _Float16 *Y, const size_t dim_M,
                     ? m : (mode == MATMUL_BIAS_COLUMN ? o : m * dim_O + o));
             Y[m * dim_O + o] += bias[bias_index];
         }
+}
+#endif
+
+static void add_bias(const _Float16 *bias, _Float16 *Y, const size_t dim_M,
+                     const size_t dim_O, uint32_t mode)
+{
+#if MATMUL_VECTOR_BIAS
+    if (!bias || mode==MATMUL_BIAS_NONE) return;
+    const int scalar_bias=mode==MATMUL_BIAS_SCALAR || mode==MATMUL_BIAS_ROW;
+    for (size_t m=0;m<dim_M;++m) {
+        const _Float16 *b=mode==MATMUL_BIAS_COLUMN ? bias :
+            (scalar_bias ? bias+(mode==MATMUL_BIAS_ROW ? m : 0u) : bias+m*dim_O);
+        for (size_t o=0;o<dim_O;) {
+            _Float16 *dest=Y+m*dim_O+o;
+            const _Float16 *source=b+(scalar_bias ? 0u : o);
+            if (((uintptr_t)dest&3u) || (!scalar_bias && ((uintptr_t)source&3u))) {
+                *dest+=*source;
+                ++o;
+                continue;
+            }
+            size_t vl;
+            asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(dim_O-o));
+            asm volatile("vle16.v v0, (%0)" :: "r"(dest) : "memory");
+            if (scalar_bias) {
+                const _Float16 value=*source;
+                asm volatile("vfadd.vf v0, v0, %0" :: "f"(value));
+            } else {
+                asm volatile("vle16.v v8, (%0)" :: "r"(source) : "memory");
+                asm volatile("vfadd.vv v0, v0, v8");
+            }
+            asm volatile("vse16.v v0, (%0)" :: "r"(dest) : "memory");
+            o+=vl;
+        }
+    }
+#else
+    add_bias_scalar(bias,Y,dim_M,dim_O,mode);
+#endif
+}
+
+static inline uint32_t matmul_cycle(void)
+{
+    uint32_t value;
+    asm volatile("csrr %0, cycle" : "=r"(value) :: "memory");
+    return value;
 }
 
 int matmul_rows_fp16_spatz_task(void)
@@ -203,6 +302,14 @@ int matmul_rows_fp16_spatz_task(void)
     M = params->M;
     K = params->K;
     O = params->O;
+#if defined(MAPS_MATMUL_PROFILE) && MAPS_MATMUL_PROFILE
+    /* Diagnostic builds reserve two counters after the shared parameter block. */
+    volatile uint32_t *profile = (volatile uint32_t *)
+        ((params_addr + sizeof(*params) + 15u) & ~(uintptr_t)15u);
+#else
+    volatile uint32_t *profile = 0;
+#endif
+    uint32_t compute_cycles=0u, bias_cycles=0u;
 
     if (M == 0 || batch_len == 0)
         return 0;
@@ -216,12 +323,20 @@ int matmul_rows_fp16_spatz_task(void)
         const _Float16 *current_B = shard_B + ((b_batched ? b : 0) * size_B_2d);
         _Float16 *current_Y = shard_Y + (b * size_Y_2d);
 
-        if (transpose_b)
-            matmul_transposed_b_scalar(current_A, current_B, current_Y, M, K, O);
+        uint32_t stamp=profile ? matmul_cycle() : 0u;
+        if (transpose_b) {
+#if MATMUL_TRANSPOSED_B_VECTOR
+            if ((K&1u)==0u && ((uintptr_t)current_B&3u)==0u)
+                matmul_transposed_b_vector(current_A, current_B, current_Y, M, K, O);
+            else
+#endif
+                matmul_transposed_b_scalar(current_A, current_B, current_Y, M, K, O);
+        }
         else if (matmul_vector_safe(current_B, current_Y, O))
             matmul(current_A, current_B, current_Y, M, K, O);
         else
             matmul_scalar(current_A, current_B, current_Y, M, K, O);
+        if (profile) compute_cycles+=matmul_cycle()-stamp;
         const _Float16 *current_bias = bias;
         if (bias_batched) {
             const size_t bias_batch_elements = bias_mode == MATMUL_BIAS_MATRIX
@@ -229,8 +344,15 @@ int matmul_rows_fp16_spatz_task(void)
                     ? M : (bias_mode == MATMUL_BIAS_COLUMN ? O : 1u));
             current_bias += b * bias_batch_elements;
         }
+        if (profile) stamp=matmul_cycle();
         add_bias(current_bias, current_Y, M, O, bias_mode);
+        if (profile) bias_cycles+=matmul_cycle()-stamp;
     }
 
+    if (profile) {
+        profile[0]=compute_cycles;
+        profile[1]=bias_cycles;
+        asm volatile("fence rw,rw" ::: "memory");
+    }
     return 0;
 }

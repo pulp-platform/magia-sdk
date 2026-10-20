@@ -118,7 +118,7 @@ typedef struct {
  * earlier, which is handled by the retry path below. */
 #define MAPS_FIFO_MAX_PENDING_SENDS 16u
 
-#ifdef MAPS_EXPERIMENT_TRACE
+#if defined(MAPS_EXPERIMENT_TRACE) || MAPS_RESULT_TRACE
 #define MAPS_EXPERIMENT_MAX_TOKENS 64u
 typedef struct {
     uint32_t starts[NUM_HARTS][MAPS_EXPERIMENT_MAX_TOKENS];
@@ -1013,10 +1013,15 @@ static inline idma_ticket_t maps_fifo_prefetch_l2_read(const fifo_tile_plan_t *p
     return ticket == MAPS_IDMA_UNSUPPORTED_TICKET ? 0u : ticket;
 }
 
+/* PULP GCC can crash in auto-inc-dec/riscv_classify_address for this large
+ * token loop. Keep the remaining optimizations and disable only that pass. */
+#if defined(__GNUC__) && !defined(__clang__)
+__attribute__((optimize("no-auto-inc-dec")))
+#endif
 static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint32_t num_tokens)
 {
     uint32_t run_start = maps_read_cycle();
-#ifdef MAPS_EXPERIMENT_TRACE
+#if defined(MAPS_EXPERIMENT_TRACE) || MAPS_RESULT_TRACE
     if (num_tokens > MAPS_EXPERIMENT_MAX_TOKENS)
         maps_trap();
     maps_fifo_experiment_trace_t *trace = maps_fifo_experiment_trace();
@@ -1065,7 +1070,7 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
 
     for (uint32_t token = 0; token < num_tokens; ++token) {
         uint32_t slot = maps_token_slot((const tile_plan_t *)plan, token);
-#ifdef MAPS_EXPERIMENT_TRACE
+#if defined(MAPS_EXPERIMENT_TRACE) || MAPS_RESULT_TRACE
         trace->starts[plan->hartid][token] = maps_read_cycle();
 #endif
 
@@ -1217,7 +1222,7 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
             }
         }
         maps_fifo_reap_completed_sends(plan, states);
-#ifdef MAPS_EXPERIMENT_TRACE
+#if defined(MAPS_EXPERIMENT_TRACE) || MAPS_RESULT_TRACE
         trace->ends[plan->hartid][token] = maps_read_cycle();
 #endif
 #if MAPS_TOKEN_PROGRESS
@@ -1235,13 +1240,14 @@ static inline void maps_fifo_run_tile_tokens(const fifo_tile_plan_t *plan, uint3
 static inline void maps_fifo_flush_experiment_trace(const fifo_tile_plan_t *plan,
                                                     uint32_t num_tokens)
 {
-#ifdef MAPS_EXPERIMENT_TRACE
+#if defined(MAPS_EXPERIMENT_TRACE) || MAPS_RESULT_TRACE
     maps_fifo_experiment_trace_t *trace = maps_fifo_experiment_trace();
-    maps_experiment_duration_trace_t *durations = maps_experiment_duration_trace();
     for (uint32_t token = 0; token < num_tokens; ++token)
         printf("MAPS_TOKEN tile=%u token=%u start=%u end=%u output=%u\n",
                plan->hartid, token, trace->starts[plan->hartid][token],
                trace->ends[plan->hartid][token], plan->num_l2_writes != 0u);
+#ifdef MAPS_EXPERIMENT_TRACE
+    maps_experiment_duration_trace_t *durations = maps_experiment_duration_trace();
     uint32_t count = durations->counts[plan->hartid];
     if (count > MAPS_EXPERIMENT_MAX_DURATION_EVENTS)
         count = MAPS_EXPERIMENT_MAX_DURATION_EVENTS;
@@ -1256,6 +1262,7 @@ static inline void maps_fifo_flush_experiment_trace(const fifo_tile_plan_t *plan
                entry->token, entry->slot, phase, entry->index, entry->start_cycle,
                entry->end_cycle, entry->cycles);
     }
+#endif
 #else
     (void)plan;
     (void)num_tokens;

@@ -21,6 +21,13 @@
 #ifndef MAPS_HAS_DEPTHWISE_CONV_SPATZ_TASK
 #define MAPS_HAS_DEPTHWISE_CONV_SPATZ_TASK 0u
 #endif
+#ifndef MAPS_HAS_TRANSPOSE_SPATZ_TASK
+#define MAPS_HAS_TRANSPOSE_SPATZ_TASK 0u
+#endif
+#ifndef MAPS_HAS_MAXPOOL_SPATZ_TASK
+#define MAPS_HAS_MAXPOOL_SPATZ_TASK 0u
+#endif
+
 #ifndef MAPS_HAS_SIGMOID_SPATZ_TASK
 #define MAPS_HAS_SIGMOID_SPATZ_TASK 0u
 #endif
@@ -67,8 +74,10 @@ typedef struct {
     uint32_t mul_bcast_fp16_task;
     uint32_t matmul_fp16_task;
     uint32_t relu_fp16_task;
+    uint32_t maxpool_fp16_task;
     uint32_t sigmoid_fp16_task;
     uint32_t depthwise_conv_fp16_task;
+    uint32_t transpose_fp16_task;
     uint32_t softmax_exp_fp16_task;
     uint32_t group_reduce_fp16_task;
     uint32_t group_centered_reduce_fp16_task;
@@ -284,29 +293,40 @@ static inline int maps_execute_reduce_f16(const tile_plan_t *plan,
                                           const op_desc_t *op,
                                           uint32_t slot)
 {
-    if (op->num_inputs == 0u || op->num_outputs == 0u ||
+    if (op->num_inputs != 1u || op->num_outputs != 1u ||
         op->inputs[0].elem_type != ELEM_F16 ||
         op->outputs[0].elem_type != ELEM_F16 ||
-        op->params[0] != op->inputs[0].rank - 1u)
+        op->inputs[0].rank == 0u ||
+        op->params[0] >= op->inputs[0].rank)
         return -1;
-
-    const uint16_t *input = (const uint16_t *)local_subslice_addr(
-        plan, &op->inputs[0], slot);
-    uint16_t *output = (uint16_t *)local_subslice_addr(
-        plan, &op->outputs[0], slot);
-    const uint32_t columns =
-        op->inputs[0].shape[op->inputs[0].rank - 1u];
-    const uint32_t rows = maps_operation_elems(&op->inputs[0]) / columns;
-
-    for (uint32_t row = 0u; row < rows; ++row) {
-        float result = maps_operation_f16_to_f32(input[row * columns]);
+    const subslice_desc_t *in = &op->inputs[0], *out = &op->outputs[0];
+    const uint32_t axis = op->params[0], columns = in->shape[axis];
+    if (columns == 0u || maps_operation_elems(in) / columns != maps_operation_elems(out))
+        return -2;
+    const uint32_t input = local_subslice_addr(plan, in, slot);
+    const uint32_t output = local_subslice_addr(plan, out, slot);
+    for (uint32_t row = 0u; row < maps_operation_elems(out); ++row) {
+        uint32_t remaining = row, input_offset = 0u, output_offset = 0u;
+        for (uint32_t d = in->rank; d-- > 0u;) {
+            if (d == axis) continue;
+            if (in->shape[d] == 0u) return -2;
+            input_offset += (remaining % in->shape[d]) * in->strides_bytes[d];
+            remaining /= in->shape[d];
+        }
+        remaining = row;
+        for (uint32_t d = out->rank; d-- > 0u;) {
+            if (out->shape[d] == 0u) return -2;
+            output_offset += (remaining % out->shape[d]) * out->strides_bytes[d];
+            remaining /= out->shape[d];
+        }
+        float result = maps_operation_f16_to_f32(*(const uint16_t *)(input + input_offset));
         for (uint32_t column = 1u; column < columns; ++column) {
-            const float value = maps_operation_f16_to_f32(
-                input[row * columns + column]);
+            const float value = maps_operation_f16_to_f32(*(const uint16_t *)(
+                input + input_offset + column * in->strides_bytes[axis]));
             result = op->kind == OP_REDUCE_SUM
                 ? result + value : (value > result ? value : result);
         }
-        output[row] = maps_operation_f32_to_f16(result);
+        *(uint16_t *)(output + output_offset) = maps_operation_f32_to_f16(result);
     }
     return 0;
 }
@@ -664,10 +684,36 @@ static inline int maps_execute_im2col_scalar_f16(const tile_plan_t *plan,
     return 0;
 }
 
+/* Only the complement of the copied rectangle needs initialization. */
+static inline uint32_t maps_im2col_zero_padding(uint32_t output,
+    uint32_t width, uint32_t height, uint32_t xlo, uint32_t xhi,
+    uint32_t ylo, uint32_t yhi)
+{
+    if (xlo>=xhi || ylo>=yhi) {
+        maps_operation_zero(output,width*height*sizeof(uint16_t));
+        return width*height*sizeof(uint16_t);
+    }
+    maps_operation_zero(output,ylo*width*sizeof(uint16_t));
+    maps_operation_zero(output+yhi*width*sizeof(uint16_t),
+                        (height-yhi)*width*sizeof(uint16_t));
+    if (xlo || xhi!=width)
+        for (uint32_t y=ylo;y<yhi;++y) {
+            maps_operation_zero(output+y*width*sizeof(uint16_t),xlo*sizeof(uint16_t));
+            maps_operation_zero(output+(y*width+xhi)*sizeof(uint16_t),
+                                (width-xhi)*sizeof(uint16_t));
+        }
+    return (width*height-(xhi-xlo)*(yhi-ylo))*sizeof(uint16_t);
+}
+
 static inline int maps_execute_im2col_f16(
     const tile_plan_t *plan, const op_desc_t *op, uint32_t slot,
     maps_operation_runtime_t *runtime)
 {
+#if defined(MAPS_IM2COL_PROFILE) && MAPS_IM2COL_PROFILE
+    volatile uint32_t *profile=(volatile uint32_t *)(get_l1_base(plan->hartid)+0xBFF00u);
+    for (uint32_t i=0;i<4u;++i) profile[i]=0u;
+    uint32_t profile_start;
+#endif
     if (op->params[7] == 0u)
         return maps_execute_im2col_scalar_f16(plan, op, slot);
     if (!runtime ||
@@ -712,7 +758,6 @@ static inline int maps_execute_im2col_f16(
         maps_operation_global_offset(plan, &op->outputs[0], 1u) % output_w != 0u)
         return maps_execute_im2col_scalar_f16(plan, op, slot);
 
-    maps_operation_zero(output, local_k * local_n * sizeof(uint16_t));
     const uint32_t local_output_h = local_n / output_w;
     const uint32_t output_h_start =
         maps_operation_global_offset(plan, &op->outputs[0], 1u) / output_w;
@@ -743,8 +788,6 @@ static inline int maps_execute_im2col_f16(
                (int32_t)((valid_x_end - 1u) * stride_w) + first_input_x >=
                    (int32_t)input_w)
             --valid_x_end;
-        if (valid_x_start >= valid_x_end)
-            continue;
 
         uint32_t valid_y_start = 0u;
         while (valid_y_start < local_output_h) {
@@ -764,7 +807,20 @@ static inline int maps_execute_im2col_f16(
                 break;
             ++valid_y_end;
         }
-        if (valid_y_start == valid_y_end)
+#if defined(MAPS_IM2COL_PROFILE) && MAPS_IM2COL_PROFILE
+        profile_start=maps_read_cycle();
+#endif
+        const uint32_t padding_bytes=maps_im2col_zero_padding(
+            output+local_kernel*op->outputs[0].strides_bytes[0],
+            output_w,local_output_h,valid_x_start,valid_x_end,
+            valid_y_start,valid_y_end);
+#if defined(MAPS_IM2COL_PROFILE) && MAPS_IM2COL_PROFILE
+        profile[0]+=maps_read_cycle()-profile_start;
+        profile[3]+=padding_bytes;
+#else
+        (void)padding_bytes;
+#endif
+        if (valid_x_start>=valid_x_end || valid_y_start>=valid_y_end)
             continue;
 
         const uint32_t global_input_y =
@@ -780,6 +836,10 @@ static inline int maps_execute_im2col_f16(
             local_kernel * op->outputs[0].strides_bytes[0] +
             (valid_y_start * output_w + valid_x_start) *
                 op->outputs[0].strides_bytes[1];
+#if defined(MAPS_IM2COL_PROFILE) && MAPS_IM2COL_PROFILE
+        profile_start=maps_read_cycle();
+        ++profile[2];
+#endif
         if (stride_w == 1u) {
             if (maps_idma_copy_2d_ticketed(1u, destination, source,
                     (valid_x_end - valid_x_start) * sizeof(uint16_t),
@@ -799,7 +859,10 @@ static inline int maps_execute_im2col_f16(
                     valid_y_end - valid_y_start) != 0)
                 return -2;
         }
-#if MAPS_KERNEL_PROGRESS
+#if defined(MAPS_IM2COL_PROFILE) && MAPS_IM2COL_PROFILE
+        profile[1]+=maps_read_cycle()-profile_start;
+#endif
+#if MAPS_KERNEL_PROGRESS && MAPS_IM2COL_STEP_PROGRESS
         printf("MAPS_KERNEL_STEP tile=%u slot=%u kind=%u step=%u total=%u cycle=%u\n",
                plan->hartid, slot, op->kind, local_kernel + 1u, local_k,
                maps_read_cycle());
@@ -1039,6 +1102,12 @@ static inline int maps_execute_operation(const tile_plan_t *plan,
         return maps_execute_im2col_f16(plan, op, slot, runtime);
     case OP_TRANSPOSE:
         return maps_execute_transpose_dma(plan, op, slot, runtime);
+    case OP_MAX_POOL:
+#if MAPS_HAS_MAXPOOL_SPATZ_TASK
+        return maps_execute_maxpool_spatz(plan, op, slot, runtime);
+#else
+        return -1;
+#endif
     case OP_DEPTHWISE_CONV:
 #if MAPS_HAS_DEPTHWISE_CONV_SPATZ_TASK
         return maps_execute_depthwise_conv_spatz(plan, op, slot, runtime);
