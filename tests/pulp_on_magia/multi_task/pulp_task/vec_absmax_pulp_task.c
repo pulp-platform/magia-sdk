@@ -16,17 +16,15 @@ void vec_absmax_pulp_task(uint32_t data_ptr)
     volatile int32_t *in_a              = (volatile int32_t *)params->in_a;
     volatile int32_t *out               = (volatile int32_t *)params->out;
     uint32_t len                        = params->len;
-    uint32_t pair_local_id              = GET_PULP_LOCAL_ID(get_hartid()) % 2;
-    uint32_t half                       = len / 2;
-    uint32_t start                      = pair_local_id * half;
+    uint32_t cluster_local_id           = cl_core_id();
 
     int32_t absmax = 0;
-    for (uint32_t i = 0; i < half; i++) {
-        int32_t v  = in_a[start + i];
-        int32_t av = v < 0 ? -v : v;
+    for (uint32_t i = cluster_local_id; i < len; i++) {
+        int32_t v  = in_a[i];
+        int32_t av = (v < 0 ? -v : v);
         if (av > absmax)
             absmax = av;
     }
 
-    out[pair_local_id] = absmax;
+    out[cluster_local_id] = absmax;
 }

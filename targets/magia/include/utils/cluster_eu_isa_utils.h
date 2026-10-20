@@ -36,6 +36,7 @@ static inline void cl_eu_sw_event_wait(unsigned int id)
     (void)evt_read32(CLUSTER_EU_DIRECT_BASE + 0x3C); /* EU_EVENT_WAIT_CLR */
 }
 
+// The ID of the Cluster domain
 static inline uint32_t cl_core_id(void)
 {
     uint32_t hartid;
@@ -43,6 +44,7 @@ static inline uint32_t cl_core_id(void)
     return (hartid - PULP_HARTID_BASE) % PULP_CORE_COUNT;
 }
 
+// The ID of the Control Core connected to the current Cluster
 static inline uint32_t cl_tile_id(void)
 {
     uint32_t hartid;
