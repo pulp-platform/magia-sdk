@@ -26,11 +26,13 @@
 #include <stdint.h>
 #include "magia_tile_utils.h"
 
-static inline void floo_set_collective_mask(uint32_t collective_mask) {
+static inline void floo_set_collective_mask(uint32_t collective_mask)
+{
     mmio32(COLLECTIVE_MASK_OFFSET) = collective_mask;
 }
 
-static inline void floo_set_collective_op(uint32_t collective_op) {
+static inline void floo_set_collective_op(uint32_t collective_op)
+{
     mmio32(COLLECTIVE_OP_OFFSET) = collective_op;
 }
 
@@ -73,7 +75,6 @@ static inline void floo_narrow_mcast_mesh(uint32_t collective_word, uint32_t add
     mmio32(COLLECTIVE_ADDR_OFFSET + addr_offset) = collective_word;
 }
 
-
 /**
  * Syncronization on single row
  *
@@ -86,7 +87,7 @@ static inline void floo_narrow_sync_row(uint32_t collective_word, uint32_t addr_
     floo_set_collective_op(LSBAND);
     mmio32(COLLECTIVE_ADDR_OFFSET + addr_offset) = collective_word;
     // Compiler barrier
-    asm volatile("" :::"memory");
+    asm volatile("" ::: "memory");
 }
 
 /**
@@ -101,7 +102,7 @@ static inline void floo_narrow_sync_column(uint32_t collective_word, uint32_t ad
     floo_set_collective_op(LSBAND);
     mmio32(COLLECTIVE_ADDR_OFFSET + addr_offset) = collective_word;
     // Compiler barrier
-    asm volatile("" :::"memory");
+    asm volatile("" ::: "memory");
 }
 
 /**
@@ -110,13 +111,13 @@ static inline void floo_narrow_sync_column(uint32_t collective_word, uint32_t ad
  * @param collective_word Tile-local word participating in the collective AND operation
  * @param addr_offset Destination address offset
  */
-int floo_narrow_sync_mesh(uint32_t collective_word, uint32_t addr_offset)
+static inline void floo_narrow_sync_mesh(uint32_t collective_word, uint32_t addr_offset)
 {
     floo_set_collective_mask(MESH_MASK);
     floo_set_collective_op(LSBAND);
     mmio32(COLLECTIVE_ADDR_OFFSET + addr_offset) = collective_word;
     // Compiler barrier
-    asm volatile("" :::"memory");
+    asm volatile("" ::: "memory");
 }
 
 #endif

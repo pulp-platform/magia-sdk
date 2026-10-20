@@ -160,18 +160,7 @@ SECTIONS
         _bss_end = .;
     } > dataram :data
 
-    /* Stack placed at the TOP of the CV32/PULP region so crt0 can compute
-     * per-hart SP = stack - local_id * _stack_slice_size. */
-    .stack ORIGIN(stack) + LENGTH(stack) - _min_stack (NOLOAD): {
-        . = ALIGN(4);
-        _stack_bottom = .;
-        . = . + _min_stack ;
-        . = ALIGN(4);
-        stack = . ;
-        _stack = . ;
-    } > stack :NONE
-
-/* Per-tile-aliased scratch (private to each tile, unlike the shared-L2 .bss).
+    /* Per-tile-aliased scratch (private to each tile, unlike the shared-L2 .bss).
      * Placed above the stack top so the downward-growing stack never reaches it.
      * Zeroed by every hart in crt0 (see _tile_bss_start/_tile_bss_end). */
     _tile_bss_size = 0x400;   /* 1 KiB per-tile scratch */
@@ -182,5 +171,16 @@ SECTIONS
         *(.tile_bss.*)
         . = _tile_bss_start + _tile_bss_size ;   /* fixed 1 KiB reservation */
         _tile_bss_end = . ;
+    } > stack :NONE
+
+    /* Stack placed at the TOP of the CV32/PULP region so crt0 can compute
+     * per-hart SP = stack - local_id * _stack_slice_size. */
+    .stack ORIGIN(stack) + LENGTH(stack) - _min_stack - _tile_bss_size (NOLOAD): {
+        . = ALIGN(4);
+        _stack_bottom = .;
+        . = . + _min_stack ;
+        . = ALIGN(4);
+        stack = . ;
+        _stack = . ;
     } > stack :NONE
 }
