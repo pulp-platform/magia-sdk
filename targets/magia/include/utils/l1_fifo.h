@@ -75,6 +75,17 @@
 #include "addr_map/tile_addr_map.h"
 #include "maps_idma.h"
 
+/* Experimental GVSoC-only wake-up alias; requires magia_v3/fifo_events=1.
+ * This address is not a supported RTL doorbell. Default transport is unchanged. */
+#ifndef MAPS_FIFO_EVENT_SLEEP
+#define MAPS_FIFO_EVENT_SLEEP 0
+#endif
+#define MAPS_FIFO_EVENT_BIT 7u
+#define MAPS_FIFO_EVENT_MASK (1u << MAPS_FIFO_EVENT_BIT)
+#define MAPS_FIFO_DOORBELL_BASE 0x80000000u
+/* The NoC requires one aligned page per mapped target. */
+#define MAPS_FIFO_DOORBELL_STRIDE 0x1000u
+
 typedef struct {
     uint32_t num_producers; /**< Number of per-producer sub-rings (P). */
     uint32_t num_slots;     /**< Slots per sub-ring (per-producer capacity). */
@@ -582,6 +593,17 @@ static inline uint32_t fifo_try_reserve(uint32_t target_hartid,
  * slot metadata: one remote store.  Only for consumers that know each message's
  * tag, size and layout from their own plan.
  */
+/* Notify only after publication, for both metadata and tail-only messages. */
+static inline void fifo_notify_consumer(uint32_t target_hartid)
+{
+#if MAPS_FIFO_EVENT_SLEEP
+    /* The tail must be visible before the event: waking before publication
+     * could otherwise leave a consumer asleep after observing an empty ring. */
+    asm volatile("fence rw, rw" ::: "memory");
+    mmio32(MAPS_FIFO_DOORBELL_BASE + target_hartid * MAPS_FIFO_DOORBELL_STRIDE) = 1u;
+#endif
+}
+
 static inline void fifo_commit_tail(uint32_t target_hartid, uint32_t producer_idx)
 {
     fifo_ring_state_t *rs = fifo_ring_state(fifo_get_header(target_hartid), producer_idx);
@@ -589,6 +611,7 @@ static inline void fifo_commit_tail(uint32_t target_hartid, uint32_t producer_id
     /* Ensure all payload writes are visible before the tail bump. */
     asm volatile("fence w, w" ::: "memory");
     rs->tail = rs->tail + 1u;
+    fifo_notify_consumer(target_hartid);
 }
 
 static inline void fifo_commit(uint32_t target_hartid,
@@ -611,6 +634,7 @@ static inline void fifo_commit(uint32_t target_hartid,
 
     /* Publish: makes the entry visible to the consumer. */
     rs->tail = rs->tail + 1u;
+    fifo_notify_consumer(target_hartid);
 }
 
 /**

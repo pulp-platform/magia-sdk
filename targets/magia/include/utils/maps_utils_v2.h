@@ -21,6 +21,7 @@
  * have arrived, the slice is aliased to that slot exactly as above.
  */
 
+#include "utils/eu_isa_utils.h"
 #include "utils/maps_utils.h"
 #include "utils/maps_operations.h"
 #include "utils/l1_fifo.h"
@@ -689,6 +690,59 @@ static inline uint32_t maps_fifo_peek_from(const fifo_tile_plan_t *plan,
     return 1u;
 }
 
+#if MAPS_FIFO_EVENT_SLEEP
+static inline uint32_t maps_fifo_pending_dma_events(
+    const fifo_tile_plan_t *plan, maps_fifo_token_state_t *states)
+{
+    uint32_t mask = 0u;
+    if (states != 0)
+        for (uint32_t slot = 0u; slot < plan->num_token_slots; ++slot)
+            for (maps_fifo_pending_send_t *send = states[slot].sends;
+                 send != 0; send = send->next)
+                if (send->push.active)
+                    mask |= send->push.direction == 0u
+                        ? EU_IDMA_A2O_DONE_MASK : EU_IDMA_O2A_DONE_MASK;
+    return mask;
+}
+
+static inline uint32_t maps_fifo_send_ready_to_publish(
+    const fifo_tile_plan_t *plan, maps_fifo_token_state_t *states)
+{
+    if (states != 0)
+        for (uint32_t slot = 0u; slot < plan->num_token_slots; ++slot)
+            for (maps_fifo_pending_send_t *send = states[slot].sends;
+                 send != 0; send = send->next)
+                if (send->prev_same == 0 && fifo_push_async_is_done(&send->push))
+                    return 1u;
+    return 0u;
+}
+
+static inline void maps_fifo_sleep_recv(const fifo_tile_plan_t *plan,
+                                         const fifo_recv_desc_t *recv,
+                                         maps_fifo_token_state_t *states)
+{
+    const uint32_t saved_mask = mmio32(EU_CORE_MASK);
+    /* Clear stale notifications BEFORE checking conditions again. Data or
+     * DMA completion arriving after this clear is either seen by the recheck
+     * or remains latched to wake p.elw. Notifications may coalesce: counters
+     * and DMA tickets, rather than event counts, are the source of truth. */
+    eu_clear_events(MAPS_FIFO_EVENT_MASK | maps_fifo_pending_dma_events(plan, states));
+    if (states != 0)
+        maps_fifo_reap_completed_sends(plan, states);
+    const uint32_t wait_mask = MAPS_FIFO_EVENT_MASK |
+        maps_fifo_pending_dma_events(plan, states);
+    mmio32(EU_CORE_MASK) = wait_mask;
+    fifo_msg_t message;
+    /* A reaping pass can unblock an already-completed newer push that was
+     * visited earlier in the list. Do not sleep awaiting a DMA event that
+     * has already happened; let the receive loop reap that push next. */
+    if (!maps_fifo_peek_from(plan, recv, &message) &&
+        !maps_fifo_send_ready_to_publish(plan, states))
+        eu_wait_events_wfe(wait_mask);
+    mmio32(EU_CORE_MASK) = saved_mask;
+}
+#endif
+
 /* `inplace` is the receive's MAPS_FIFO_RECV_* mode.  Returns 1 when the
  * payload was left in FIFO memory (in-place or gathered receive); the caller
  * must then release recv->producer_idx with maps_fifo_release_inplace. */
@@ -713,6 +767,9 @@ static inline uint32_t maps_fifo_wait_recv(const fifo_tile_plan_t *plan,
              * the overlap provided by asynchronous FIFO pushes. */
             if (states != 0)
                 maps_fifo_reap_completed_sends(plan, states);
+#if MAPS_FIFO_EVENT_SLEEP
+            maps_fifo_sleep_recv(plan, recv, states);
+#endif
             continue;
         }
 
