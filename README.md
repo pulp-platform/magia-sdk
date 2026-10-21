@@ -293,6 +293,30 @@ To add your own test, you have to integrate a new test folder inside the **tests
     3. An **include** directory containing your test's header (.h) files
 
 
+## Programming models: mglib and mgc
+
+Besides the HAL and driver APIs (`hal/`, `drivers/`), tests can be written at two higher levels:
+
+- **[mglib](mglib/README.md)** is a C library on top of the HAL: asynchronous iDMA transfers
+  (`mg_idma_*`, also row/column multicast) and RedMulE GEMM/MATMUL jobs (`mg_redmule_*`) tracked by
+  software events (`mg_event_*`), with a WFE or polling wait mode. Hand-written examples are the
+  `tests/magia/mesh/mm_*_mglib` tests.
+- **[mgc](mgc/README.md)** is a Python-syntax DSL and compiler that generates mglib C code from a
+  description of the per-tile schedule: tile splits, L1 buffers, transfers, accelerator jobs and
+  software pipelines. mgc is a submodule; its tests are in `tests/magia/mgc`, each with its `.mgc`
+  source and the generated `src/test.c`, and build and run like any other test:
+
+```sh
+git submodule update --init mgc
+python3 -m venv mgc/.venv && mgc/.venv/bin/pip install -r mgc/requirements.txt
+mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/mm_os_mgc/mm_os.mgc -o tests/magia/mgc/mm_os_mgc/src/test.c
+make build tiles=2 test=test_mm_os_mgc
+make run tiles=2 test=test_mm_os_mgc platform=gvsoc
+```
+
+`mgc/scripts/mgc_sweep.py` runs the mgc tests over mesh and problem sizes on GVSoC and reports
+cycles and accelerator utilization (see the [mgc README](mgc/README.md#sweeps-scripts)).
+
 ## Profiling
 
 If you wish to profile your code in terms of cycles, it is possible to do it on both GVSoC and RTL.
@@ -441,6 +465,15 @@ Contains the weak definitions of this SDK APIs. These are the API instruction th
 
 ### drivers
 Contains the architecture-specific implementation and source code for the HAL APIs. Despite each implementation having different names, thanks to an aliasing system the programmer can use the same name for the same API instruction on different architectures.
+
+### mglib
+C library on top of the HAL for asynchronous iDMA transfers and RedMulE jobs with software events, see [mglib/README.md](mglib/README.md).
+
+### mgc
+A submodule containing mgc, the Python-syntax DSL and compiler that generates mglib-based tests, see [mgc/README.md](mgc/README.md).
+
+### kernels
+fp16 Spatz compute kernels, one directory per operator, used by the `tests/spatz_on_magia` and `tests/magia/mgc` tests and by the Deeploy deployment flow.
 
 ### devices
 Nothing there.
