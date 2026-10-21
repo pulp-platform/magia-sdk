@@ -71,3 +71,6 @@ gvsoc_config.json
 
 TESTLOG.txt
 trace.perfetto-trace
+
+# mgc/scripts/mgc_sweep.py results, golden cache and source backups
+mgc_sweep/

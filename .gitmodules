@@ -1,0 +1,3 @@
+[submodule "mgc"]
+	path = mgc
+	url = ssh://git@compute.eees.dei.unibo.it:2424/fconti/mgc.git
