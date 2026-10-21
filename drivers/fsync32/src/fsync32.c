@@ -258,8 +258,14 @@ int fsync32_sync_global()
 {
     if (MAX_SYNC_LVL == 0)
         return 0;
+    // id MESH_Y_TILES: even (h-tree) and above the row ids (y % (MESH_Y_TILES / 2)) * 2, so a
+    // global barrier and a row barrier pending on the same fractal node never share an id.
+    // 2x2: the root accepts only ids 0/1 (one local register per tree; a larger id is an RF error
+    // that wakes the caller at once), so go up the v-tree with id 1, away from the row barriers.
+    else if (MESH_Y_TILES == 2)
+        fsync(1, (uint32_t)(0xFFFFFFFF >> (32 - MAX_SYNC_LVL)));
     else
-        fsync(0, (uint32_t)(0xFFFFFFFF >> (32 - MAX_SYNC_LVL)));
+        fsync(MESH_Y_TILES, (uint32_t)(0xFFFFFFFF >> (32 - MAX_SYNC_LVL)));
     return 0;
 }
 
