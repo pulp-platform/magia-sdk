@@ -156,6 +156,8 @@ GVSOC2PERFETTO_INCLUDE ?= (?x) \
   | magia-noc\.(req|rsp|wide)_router_\d+_\d+\.req(_size)?$$ \
   | magia-noc\.ni_\d+_\d+\.(narrow_req|wide_req)$$ \
   | L2-mem\.(req_addr|req_size|req_is_write)$$
+# Extra converter arguments (shell-quoted), e.g. --pc-in/--or/--keep to reduce the trace to a few bits
+GVSOC2PERFETTO_EXTRA   ?=
 
 .PHONY: gvsoc build format run_profiling gvsoc2perfetto clean rtl-clean set_mesh
 
@@ -244,9 +246,7 @@ run: set_mesh $(GVSOC_WORK_DIR)
 ifndef test
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|verilator|gvsoc)
 endif
-ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
-	$(error No test found with name: $(test))
-endif
+	@test -f "$(CMAKE_BUILDDIR)/bin/$(test)" || { echo "error: No test found with name: $(test)" >&2; exit 1; }
 ifndef platform
 	$(error Proper formatting is: make run test=<test_name> platform=rtl|verilator|gvsoc)
 endif
@@ -295,10 +295,11 @@ run_profiling: set_mesh $(GVSOC_WORK_DIR) $(GVSOC2PERFETTO_BIN)
 ifndef test
 	$(error Proper formatting is: make run_profiling test=<test_name>)
 endif
-ifeq (,$(wildcard $(CMAKE_BUILDDIR)/bin/$(test)))
-	$(error No test found with name: $(test))
-endif
-	$(GVRUN) --target=$(GVRUN_TARGET) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG) $(GVSOC_TRACE_ARG)
+	@test -f "$(CMAKE_BUILDDIR)/bin/$(test)" || { echo "error: No test found with name: $(test)" >&2; exit 1; }
+# The VCD is streamed through a FIFO into the converter, so it never lands on disk (it can
+# reach tens of GB). `: <>` releases the converter if gvsoc died before opening the FIFO. The
+# converter's output is printed after gvsoc's, not interleaved with it.
+	rm -f -- $(GVSOC2PERFETTO_VCD) && mkfifo $(GVSOC2PERFETTO_VCD)
 	$(GVSOC2PERFETTO_BIN) $(GVSOC2PERFETTO_VCD) \
 		-o $(GVSOC2PERFETTO_OUT) \
 		--state-map 'fsm_state=0:idle,1:preload,2:routine,3:storing,4:finished,5:acknowledge' \
@@ -308,8 +309,10 @@ endif
 		--split-asm \
 		--symbolize $(CMAKE_BUILDDIR)/bin/$(test).s \
 		--stats \
-		--include '$(GVSOC2PERFETTO_INCLUDE)'
-	rm -f -- $(GVSOC2PERFETTO_VCD)
+		--include '$(GVSOC2PERFETTO_INCLUDE)' $(GVSOC2PERFETTO_EXTRA) > $(GVSOC_WORK_DIR)/gvsoc2perfetto.log 2>&1 & conv=$$!; \
+	$(GVRUN) --target=$(GVRUN_TARGET) --param binary=$(BIN_ABS_PATH)/$(test) $(GVRUN_PROFILE_ARGS) $(PROFILE_TILE_ARG) $(GVSOC_TRACE_ARG); \
+	rc=$$?; : <> $(GVSOC2PERFETTO_VCD); wait $$conv && [ $$rc -eq 0 ]; rc=$$?; \
+	cat $(GVSOC_WORK_DIR)/gvsoc2perfetto.log; rm -f -- $(GVSOC2PERFETTO_VCD); exit $$rc
 
 .PHONY: debug_profiling
 debug_profiling: $(GVSOC_WORK_DIR) $(GVSOC2PERFETTO_BIN)
