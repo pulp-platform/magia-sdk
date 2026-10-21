@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import argparse
 import os
-from tqdm import tqdm
+from bittrue import matrix_multiply_with_bittrue_fma, write_fp16_array
 
 # COMPUTE:
 # Z[m_size, k_size] = ( X[m_size, n_size] max W[n_size, k_size] ) + Y[m_size, k_size]
@@ -48,32 +48,6 @@ print("\nY is: ", Y, Y.shape, Y.dtype)
 
 print("\nComputing bit-true matrix multiplication..")
 
-import numpy as np
-
-def bittrue_fma(a, x, b):
-    # Simulate FP16 FMA with intermediate rounding
-    a_fp32 = np.float16(a).astype(np.float64)
-    x_fp32 = np.float16(x).astype(np.float64)
-    b_fp32 = np.float16(b).astype(np.float64)
-    result = a_fp32 * x_fp32 + b_fp32
-    return np.float16(result).astype(np.float64)
-
-def matrix_multiply_with_bittrue_fma(X, W, Y):
-    M, K = X.shape
-    K2, N = W.shape
-    assert K == K2, "Inner dimensions must match"
-
-    Z = np.zeros((M, N), dtype=np.float64)
-
-    for m in tqdm(range(M)):
-        for n in range(N):
-            acc = Y[m, n].astype(np.float64)  # Start with Y as accumulator
-            for k in range(K):
-                acc = bittrue_fma(X[m, k], W[k, n], acc)
-            Z[m, n] = acc
-    Z = Z.astype(np.float16)
-
-    return Z
 X_np = X.cpu().numpy()
 W_np = W.cpu().numpy()
 Y_np = Y.cpu().numpy()
@@ -123,65 +97,11 @@ f.write('#define N_SIZE ('+in_cols+')\n')
 f.write('#define K_SIZE ('+out_cols+')\n')
 f.write('\n')
 
-# Write x_inp array
-f.write('uint16_t x_inp       [M_SIZE * N_SIZE] = {\n')
-for i in range(m_size):
-    for j in range(n_size):
-        x_bin = bin(np.float16(X[i][j]).view('H'))[2:].zfill(16)
-        x_hex = hex(int(x_bin, 2))[2:]
-        if (i == m_size - 1 and j == n_size - 1):
-            f.write('0x'+x_hex)
-        else:
-            f.write('0x'+x_hex+', ')
-        if (j == n_size - 1):
-            f.write('\n')
-f.write('};\n')
-f.write('\n')
-
-# Write w_inp array
-f.write('uint16_t w_inp       [N_SIZE * K_SIZE] = {\n')
-for i in range(n_size):
-    for j in range(k_size):
-        w_bin = bin(np.float16(W[i][j]).view('H'))[2:].zfill(16)
-        w_hex = hex(int(w_bin, 2))[2:]
-        if (i == n_size - 1 and j == k_size - 1):
-            f.write('0x'+w_hex)
-        else:
-            f.write('0x'+w_hex+', ')
-        if (j == k_size - 1):
-            f.write('\n')
-f.write('};\n')
-f.write('\n')
-
-# Write y_inp array
-f.write('uint16_t y_inp       [M_SIZE * K_SIZE] = {\n')
-for i in range(m_size):
-    for j in range(k_size):
-        y_bin = bin(np.float16(Y[i][j]).view('H'))[2:].zfill(16)
-        y_hex = hex(int(y_bin, 2))[2:]
-        if (i == m_size - 1 and j == k_size - 1):
-            f.write('0x'+y_hex)
-        else:
-            f.write('0x'+y_hex+', ')
-        if (j == k_size - 1):
-            f.write('\n')
-f.write('};\n')
-f.write('\n')
-
-# Write z_out array
-f.write('uint16_t z_out       [M_SIZE * K_SIZE] = {\n')
-for i in range(m_size):
-    for j in range(k_size):
-        z_bin = bin(np.float16(Z[i][j]).view('H'))[2:].zfill(16)
-        z_hex = hex(int(z_bin, 2))[2:]
-        if (i == m_size - 1 and j == k_size - 1):
-            f.write('0x'+z_hex)
-        else:
-            f.write('0x'+z_hex+', ')
-        if (j == k_size - 1):
-            f.write('\n')
-f.write('};\n')
-f.write('\n')
+# Write the arrays
+write_fp16_array(f, 'x_inp       [M_SIZE * N_SIZE]', X_np)
+write_fp16_array(f, 'w_inp       [N_SIZE * K_SIZE]', W_np)
+write_fp16_array(f, 'y_inp       [M_SIZE * K_SIZE]', Y_np)
+write_fp16_array(f, 'z_out       [M_SIZE * K_SIZE]', Z)
 
 # Write closing header guard
 f.write('#endif //_TEST_GEMM_INCLUDE_GUARD_\n')
