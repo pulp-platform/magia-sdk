@@ -73,6 +73,24 @@ It is then possible to wait for a specific software event by passing the corresp
 
 Supported WAIT_MODEs are WFE and POLLING.
 
+## MATMUL (no accumulation)
+
+GEMM jobs compute `y = x @ w + y`, so `y` must hold the bias (or zeroes) beforehand. To overwrite `y`
+instead, `y = x @ w`, use the MATMUL calls, which take the same arguments:
+
+```
+mg_redmule_matmul(WAIT_MODE, x, w, y, M_SIZE, N_SIZE, K_SIZE, &redmule_evt, callback);
+mg_redmule_matmul_enqueue(WAIT_MODE, x, w, y, M_SIZE, N_SIZE, K_SIZE, &redmule_evt, callback);
+```
+
+The previous content of `y` is never read, so it needs no initialization. MATMUL and GEMM jobs share
+the hardware queue: they are committed, started and waited with the same `mg_redmule_gemm_commit*`,
+`mg_redmule_gemm_start` and `mg_redmule_wait` calls, and can be freely mixed. The MATMUL calls are
+only available with the memory-mapped RedMulE registers (`REDMULE_MM=1`).
+
+As for GEMM, RedMulE stores the output in whole blocks of 8 rows: with `M` not a multiple of 8, the
+rows up to the next multiple of 8 past the end of `y` are overwritten with zeroes.
+
 # IDMA Programming model
 
 Unlike RedMule, the IDMA doesn't support in hardware enqueueing multiple transfers on the same channel. Therefore, a workaround SW-based 1-depth queue has been implemented.
@@ -114,3 +132,17 @@ Other parameters:
 The IDMA call is run ASAP in a non-blocking fashion. To verify it's execution, you can wait on its corresponding event:
 
 `mg_idma_wait(0, WAIT_MODE, &idma_evt);`
+
+## Row / column multicast
+
+To copy one L1 block to the same L1 offset on every other tile of this tile's row or column:
+
+```
+mg_idma_mcast_row(WAIT_MODE, 1, dst_addr, obi_addr, len, &idma_evt, callback);
+mg_idma_mcast_col(WAIT_MODE, 1, dst_addr, obi_addr, len, &idma_evt, callback);
+```
+
+`dst_addr` is the destination offset given as an address in this tile's L1. Each contiguous run of
+destination tiles is a single 2D iDMA job (`idma_memcpy_2d_strided`), reading the source with stride 0
+and writing with the L1 stride between tiles, so the bursts towards successive tiles overlap in the
+NoC. Same-direction jobs complete in order, so waiting on `idma_evt` waits for all of them.

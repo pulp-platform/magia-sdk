@@ -42,6 +42,21 @@ extern int idma_memcpy_1d(uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uin
 extern int idma_memcpy_2d(
     uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps);
 
+/**
+ * Start 2-dimensional memory copy with independent strides on both sides.
+ * Copies `reps` blocks of `len` bytes each; after each block the AXI address
+ * advances by `axi_std` and the OBI address by `obi_std` bytes. A zero stride
+ * re-reads (or re-writes) the same block, e.g. obi_std = 0 with dir = 1 pushes
+ * one L1 block to `reps` equally spaced AXI destinations.
+ */
+extern int idma_memcpy_2d_strided(uint8_t dir,
+                                  uint32_t axi_addr,
+                                  uint32_t obi_addr,
+                                  uint32_t len,
+                                  uint32_t axi_std,
+                                  uint32_t obi_std,
+                                  uint32_t reps);
+
 extern int idma_collective_1d(
     uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t mask, uint32_t coll_op);
 

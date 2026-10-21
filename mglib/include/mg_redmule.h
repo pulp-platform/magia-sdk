@@ -40,6 +40,34 @@ extern void mg_redmule_gemm_enqueue(eu_wait_mode_t mode,
                                     uint16_t k,
                                     mg_event_t *event,
                                     mg_event_callback_t callback);
+#if REDMULE_MM != 0
+/**
+ * Same as mg_redmule_gemm / mg_redmule_gemm_enqueue, but for a MATMUL:
+ * y = x @ w, with no accumulation. The previous content of `y` is not read, so
+ * it needs no initialization. Jobs of both kinds share the hardware queue: they
+ * are committed, started and waited with the same calls.
+ *
+ * Only available with the memory-mapped HWPE registers (REDMULE_MM=1).
+ */
+extern void mg_redmule_matmul(eu_wait_mode_t mode,
+                              uint32_t x,
+                              uint32_t w,
+                              uint32_t y,
+                              uint16_t m,
+                              uint16_t n,
+                              uint16_t k,
+                              mg_event_t *event,
+                              mg_event_callback_t callback);
+extern void mg_redmule_matmul_enqueue(eu_wait_mode_t mode,
+                                      uint32_t x,
+                                      uint32_t w,
+                                      uint32_t y,
+                                      uint16_t m,
+                                      uint16_t n,
+                                      uint16_t k,
+                                      mg_event_t *event,
+                                      mg_event_callback_t callback);
+#endif
 extern void mg_redmule_gemm_commit_start();
 extern void mg_redmule_gemm_start();
 extern void mg_redmule_gemm_commit();
