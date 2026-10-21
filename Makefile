@@ -404,7 +404,8 @@ else
 	$(error unrecognized platform (acceptable platforms: magia).)
 endif
 
-# Pinned commits for FondazioneChipsIT/gvsoc, gvsoc-core, pulp, engine, gvrun live in scripts/deps.env.
+# Pinned commits for FondazioneChipsIT/gvsoc, gvsoc-core, pulp, engine, gvrun (and the gvsoc-pulp
+# repository) live in scripts/deps.env.
 gvsoc_init:
 	git clone https://github.com/FondazioneChipsIT/gvsoc.git || true
 	cd $(GVSOC_DIR) && \
@@ -415,7 +416,7 @@ gvsoc_init:
 	git fetch origin $(GVSOC_CORE_COMMIT) && \
 	git checkout $(GVSOC_CORE_COMMIT) && \
 	cd ../pulp && \
-	git fetch origin $(GVSOC_PULP_COMMIT) && \
+	git fetch $(GVSOC_PULP_REPO) $(GVSOC_PULP_COMMIT) && \
 	git checkout $(GVSOC_PULP_COMMIT) && \
 	cd ../engine && \
 	git fetch origin $(GVSOC_ENGINE_COMMIT) && \
