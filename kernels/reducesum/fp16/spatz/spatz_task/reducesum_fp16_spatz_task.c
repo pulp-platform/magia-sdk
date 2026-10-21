@@ -16,10 +16,10 @@ static inline void narrow_store_v0(_Float16 *p, const size_t vl)
     _Float16 first;
 
     asm volatile("vsetvli zero, %0, e16, m4, ta, ma" ::"r"(vl));
-    asm volatile("vfncvt.f.f.w v8, v0");
+    asm volatile(SPATZ_FPU_FENCE "vfncvt.f.f.w v8, v0");
 
     if (!MISALIGNED(p)) {
-        asm volatile("vse16.v v8, (%0)" ::"r"(p) : "memory");
+        asm volatile("vse16.v v8, (%0)" SPATZ_VST_FENCE ::"r"(p) : "memory");
         return;
     }
 
@@ -28,7 +28,7 @@ static inline void narrow_store_v0(_Float16 *p, const size_t vl)
     if (vl > 1) {
         asm volatile("vsetvli zero, %0, e16, m4, ta, ma" ::"r"(vl - 1));
         asm volatile("vslidedown.vi v12, v8, 1");
-        asm volatile("vse16.v v12, (%0)" ::"r"(p) : "memory");
+        asm volatile("vse16.v v12, (%0)" SPATZ_VST_FENCE ::"r"(p) : "memory");
     }
 }
 

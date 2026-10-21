@@ -130,7 +130,7 @@ static void matmul(const _Float16 *A,
             }
 
             asm volatile("vse16.v v0, (%0)" ::"r"(Y_row1));
-            asm volatile("vse16.v v8, (%0)" ::"r"(Y_row2));
+            asm volatile("vse16.v v8, (%0)" SPATZ_VST_FENCE ::"r"(Y_row2));
         }
 
         if (dim_M % 2) {
@@ -159,7 +159,7 @@ static void matmul(const _Float16 *A,
                 asm volatile("vfmacc.vf v0, %0, v16" ::"f"(*A_col1_elem1));
             }
 
-            asm volatile("vse16.v v0, (%0)" ::"r"(Y_row1));
+            asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(Y_row1));
         }
     }
 }

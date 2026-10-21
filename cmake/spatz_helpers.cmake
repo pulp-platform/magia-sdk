@@ -85,6 +85,8 @@ function(add_spatz_task)
         COMMAND ${SPATZ_CLANG}
             ${SPATZ_COMPILE_FLAGS}
             ${SPATZ_CFLAGS_DEFINES}
+            ${SPATZ_VST_FENCE_FLAGS}
+            ${SPATZ_FPU_FENCE_FLAGS}
             ${SPATZ_TASK_DEFINE}
             ${TASK_INCLUDE_FLAGS}
             ${SPATZ_LINK_FLAGS}

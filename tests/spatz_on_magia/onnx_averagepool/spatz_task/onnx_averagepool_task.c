@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "onnx_averagepool_params.h"
 
 static inline void compute_window_boundaries(const int out_idx,
@@ -86,9 +87,9 @@ static inline void averagepool(const _Float16 *src,
         asm volatile("vfmv.f.s %0, v8" : "=f"(win_avg));
 
         if (cnt_include_pad)
-            win_avg = win_avg / (_Float16)shape;
+            win_avg = spatz_div_f16(win_avg, (_Float16)shape);
         else
-            win_avg = win_avg / (_Float16)win_len;
+            win_avg = spatz_div_f16(win_avg, (_Float16)win_len);
 
         dst[out_idx] = win_avg;
     }

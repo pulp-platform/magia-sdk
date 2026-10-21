@@ -31,7 +31,7 @@ static void selu(const _Float16 *src,
         /* mask negative values */
         // asm volatile ("vfmv.v.f v0, %0" :: "f"(ZERO));               /* TODO: is this needed? -
         // ANSWER: probably not */
-        asm volatile("vmflt.vf v0, v8, %0" ::"f"(ZERO));
+        asm volatile(SPATZ_FPU_FENCE "vmflt.vf v0, v8, %0" ::"f"(ZERO));
 
         /* ---------- fast exp approximation ---------- */
         /* clamp for stability */
@@ -40,7 +40,7 @@ static void selu(const _Float16 *src,
 
         asm volatile("vfmul.vf v8, v8, %0, v0.t" ::"f"(COEF));
         asm volatile("vfadd.vf v8, v8, %0, v0.t" ::"f"(BIAS));
-        asm volatile("vfcvt.rtz.xu.f.v v8, v8, v0.t");
+        asm volatile(SPATZ_FPU_FENCE "vfcvt.rtz.xu.f.v v8, v8, v0.t");
         /* -------------------------------------------- */
 
         asm volatile("vfsub.vf v8, v8, %0, v0.t" ::"f"(ONE));
@@ -48,7 +48,7 @@ static void selu(const _Float16 *src,
 
         asm volatile("vfmul.vf v8, v8, %0" ::"f"(gamma));
 
-        asm volatile("vse16.v v8, (%0)" ::"r"(p_dst));
+        asm volatile("vse16.v v8, (%0)" SPATZ_VST_FENCE ::"r"(p_dst));
 
         p_src += vl;
         p_dst += vl;

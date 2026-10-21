@@ -39,17 +39,17 @@ int colsum_rescale_fp16_spatz_task(void)
             asm volatile("vle16.v v8, (%0)" ::"r"(G + r * cols + c));
             asm volatile("vfwadd.wv v0, v0, v8");
         }
-        asm volatile("vfncvt.f.f.w v8, v0");
+        asm volatile(SPATZ_FPU_FENCE "vfncvt.f.f.w v8, v0");
 
         if (P) {
             asm volatile("vle16.v v16, (%0)" ::"r"(A + c));
             asm volatile("vle16.v v24, (%0)" ::"r"(P + c));
             asm volatile("vfmul.vv v16, v16, v24");
-            asm volatile("vse16.v v16, (%0)" ::"r"(P + c) : "memory");
+            asm volatile("vse16.v v16, (%0)" SPATZ_VST_FENCE ::"r"(P + c) : "memory");
             asm volatile("vfadd.vv v8, v16, v8");
         }
 
-        asm volatile("vse16.v v8, (%0)" ::"r"(S + c) : "memory");
+        asm volatile("vse16.v v8, (%0)" SPATZ_VST_FENCE ::"r"(S + c) : "memory");
     }
 
     return 0;

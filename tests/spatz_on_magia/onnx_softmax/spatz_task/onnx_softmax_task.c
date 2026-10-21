@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "onnx_softmax_params.h"
 
 static inline _Float16 find_max(const _Float16 *vec, size_t len)
@@ -82,9 +83,9 @@ compute_exponential_sum_fastexp(const _Float16 *src, _Float16 *dst, size_t len, 
         asm volatile("vfmul.vf v16, v16, %0" ::"f"(COEF));
         asm volatile("vfadd.vf v16, v16, %0" ::"f"(BIAS));
 
-        asm volatile("vfcvt.rtz.xu.f.v v16, v16");
+        asm volatile(SPATZ_FPU_FENCE "vfcvt.rtz.xu.f.v v16, v16");
 
-        asm volatile("vse16.v v16, (%0)" ::"r"(p_dst));
+        asm volatile("vse16.v v16, (%0)" SPATZ_VST_FENCE ::"r"(p_dst));
         asm volatile("vfadd.vv v0, v0, v16");
 
         p_src += vl;
@@ -100,21 +101,23 @@ compute_exponential_sum_fastexp(const _Float16 *src, _Float16 *dst, size_t len, 
 
 static inline void normalize(_Float16 *dst, size_t len, _Float16 sum)
 {
+    _Float16 sum_inv;
     _Float16 *p_dst;
     size_t avl;
     size_t vl;
 
     p_dst = dst;
     avl   = len;
+    sum_inv = spatz_recip_f16(sum);
 
     for (; avl > 0; avl -= vl) {
         asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
 
         asm volatile("vle16.v v8, (%0)" ::"r"(p_dst));
 
-        asm volatile("vfdiv.vf v8, v8, %0" ::"f"(sum));
+        SPATZ_VFDIV_VF("v16", "v8", "v24", sum, sum_inv); /* no vfdiv, see spatz_recip.h */
 
-        asm volatile("vse16.v v8, (%0)" ::"r"(p_dst));
+        asm volatile("vse16.v v16, (%0)" SPATZ_VST_FENCE ::"r"(p_dst));
 
         p_dst += vl;
     }

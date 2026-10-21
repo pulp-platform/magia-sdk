@@ -1,11 +1,10 @@
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "groupnorm_fp16_spatz_params.h"
 
 static inline _Float16 sqrtf_hp(_Float16 x)
 {
-    _Float16 out;
-    asm volatile("fsqrt.h %0, %1" : "=f"(out) : "f"(x));
-    return out;
+    return spatz_sqrt_f16(x); /* no fsqrt on Spatz, see spatz_recip.h */
 }
 
 static inline _Float16 compute_mean(const _Float16 *src, const size_t len)
@@ -40,7 +39,7 @@ static inline _Float16 compute_mean(const _Float16 *src, const size_t len)
     asm volatile("vfredsum.vs v16, v8, v16");
     asm volatile("vfmv.f.s %0, v16" : "=f"(sum));
 
-    mean = sum / (_Float16)len;
+    mean = spatz_div_f16(sum, (_Float16)len);
 
     return mean;
 }
@@ -80,7 +79,7 @@ static inline _Float16 compute_variance(const _Float16 *src, const _Float16 mean
     asm volatile("vfredosum.vs v16, v8, v16");
     asm volatile("vfmv.f.s %0, v16" : "=f"(sum));
 
-    var = sum / (_Float16)len;
+    var = spatz_div_f16(sum, (_Float16)len);
 
     return var;
 }
@@ -98,7 +97,7 @@ static inline void normalize(const _Float16 *src,
     size_t avl;
     size_t vl;
 
-    denom = 1.0f / sqrtf_hp(var + eps);
+    denom = spatz_div_f16((_Float16)1.0f, sqrtf_hp(var + eps));
     p_src = src;
     p_dst = dst;
     avl   = len;
@@ -111,7 +110,7 @@ static inline void normalize(const _Float16 *src,
         asm volatile("vfsub.vf v0, v0, %0" ::"f"(mean));
         asm volatile("vfmul.vf v0, v0, %0" ::"f"(denom));
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst));
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst));
 
         p_src += vl;
         p_dst += vl;
@@ -136,7 +135,7 @@ affine_channel(_Float16 *dst, const _Float16 gamma, const _Float16 beta, const s
         asm volatile("vfmul.vf v0, v0, %0" ::"f"(gamma));
         asm volatile("vfadd.vf v0, v0, %0" ::"f"(beta));
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst));
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst));
 
         p_dst += vl;
     }

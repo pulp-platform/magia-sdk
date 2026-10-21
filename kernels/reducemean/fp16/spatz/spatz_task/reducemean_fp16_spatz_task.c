@@ -1,4 +1,5 @@
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "reducemean_fp16_spatz_params.h"
 
 static inline void reduce_mean_core(const _Float16 *src,
@@ -25,7 +26,7 @@ static inline void reduce_mean_core(const _Float16 *src,
         asm volatile("vfmul.vf v0, v0, %0" ::"f"(scale_factor));
 
         _Float16 *p_dst = dst + (inner_dim - avl);
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst) : "memory");
     }
 }
 
@@ -49,7 +50,7 @@ int reducemean_fp16_spatz_task(void)
     inner_dim  = params->inner_dim;
     outer_len  = params->outer_len;
 
-    _Float16 scale_factor = (_Float16)1.0 / (_Float16)reduce_dim;
+    _Float16 scale_factor = spatz_div_f16((_Float16)1.0, (_Float16)reduce_dim);
 
     uint32_t in_stride  = reduce_dim * inner_dim;
     uint32_t out_stride = inner_dim;

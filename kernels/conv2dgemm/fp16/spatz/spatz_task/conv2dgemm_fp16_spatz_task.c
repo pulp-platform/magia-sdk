@@ -206,7 +206,7 @@ static void gemm(const _Float16 *A,
             }
 
             asm volatile("vse16.v v0, (%0)" ::"r"(Y_row1));
-            asm volatile("vse16.v v8, (%0)" ::"r"(Y_row2));
+            asm volatile("vse16.v v8, (%0)" SPATZ_VST_FENCE ::"r"(Y_row2));
         }
 
         /* Leftovers for A-cols and B-rows  */
@@ -248,7 +248,7 @@ static void gemm(const _Float16 *A,
                 asm volatile("vfmacc.vf v0, %0, v16" ::"f"(beta));
             }
 
-            asm volatile("vse16.v v0, (%0)" ::"r"(Y_row1));
+            asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(Y_row1));
         }
     }
 }
@@ -360,7 +360,7 @@ static void gemm_grouped(const _Float16 *A,
                 asm volatile("vfmacc.vf v0, %0, v16" ::"f"(beta));
             }
 
-            asm volatile("vse16.v v0, (%0)" ::"r"(Y_row));
+            asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(Y_row));
         }
     }
 }
@@ -416,7 +416,7 @@ static void gemm_accfp32(const _Float16 *A,
                 asm volatile("vfmacc.vf v16, %0, v0" ::"f"(beta));
             }
 
-            asm volatile("vse16.v v16, (%0)" ::"r"(Y_row));
+            asm volatile("vse16.v v16, (%0)" SPATZ_VST_FENCE ::"r"(Y_row));
         }
     }
 }
@@ -475,7 +475,7 @@ static void gemm_grouped_accfp32(const _Float16 *A,
                 asm volatile("vfmacc.vf v16, %0, v0" ::"f"(beta));
             }
 
-            asm volatile("vse16.v v16, (%0)" ::"r"(Y_row));
+            asm volatile("vse16.v v16, (%0)" SPATZ_VST_FENCE ::"r"(Y_row));
         }
     }
 }

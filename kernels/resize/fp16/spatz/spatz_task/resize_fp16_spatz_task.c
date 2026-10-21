@@ -1,4 +1,5 @@
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "resize_fp16_spatz_params.h"
 
 static inline void resize_nearest(const _Float16 *src,
@@ -30,8 +31,8 @@ static inline void resize_nearest(const _Float16 *src,
 
     uint16_t w_idx[out_w];
 
-    scale_h = (float)in_h / (float)out_h;
-    scale_w = (float)in_w / (float)out_w;
+    scale_h = spatz_div_f32((float)in_h, (float)out_h);
+    scale_w = spatz_div_f32((float)in_w, (float)out_w);
 
     for (ow = 0; ow < out_w; ow++) {
         iw_f = ((float)ow + 0.5f) * scale_w - 0.5f;
@@ -78,7 +79,7 @@ static inline void resize_nearest(const _Float16 *src,
                 asm volatile("vsll.vi v4, v4, 1");
                 asm volatile("vloxei16.v v0, (%0), v4" ::"r"(p_src_row));
 
-                asm volatile("vse16.v v0, (%0)" ::"r"(p_dst_row) : "memory");
+                asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst_row) : "memory");
 
                 p_idx += vl;
                 p_dst_row += vl;

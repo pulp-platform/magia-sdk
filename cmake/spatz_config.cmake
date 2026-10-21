@@ -163,6 +163,23 @@ set(SPATZ_CFLAGS_DEFINES
     "-DSPATZ_RVF=${SPATZ_RVF}"
     "-DSPATZ_RVV=${SPATZ_RVV}"
 )
+# Store fence after every vector store in the Spatz tasks (RTL workaround, see spatz_vst_fence.h)
+if(NOT DEFINED SPATZ_VST_FENCE)
+    set(SPATZ_VST_FENCE 0)
+endif()
+set(SPATZ_VST_FENCE_FLAGS
+    "-DSPATZ_VST_FENCE_EN=${SPATZ_VST_FENCE}"
+    "-include" "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include/utils/spatz_vst_fence.h"
+)
+# FPU drain before FP instructions of a shorter-latency op group (RTL workaround, see
+# spatz_fpu_fence.h)
+if(NOT DEFINED SPATZ_FPU_FENCE)
+    set(SPATZ_FPU_FENCE 0)
+endif()
+set(SPATZ_FPU_FENCE_FLAGS
+    "-DSPATZ_FPU_FENCE_EN=${SPATZ_FPU_FENCE}"
+    "-include" "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include/utils/spatz_fpu_fence.h"
+)
 set(SPATZ_LINK_FLAGS
     "--ld-path=${SPATZ_LLVM_PATH}/bin/ld.lld"
     "-fuse-ld=${SPATZ_LLVM_PATH}/bin/ld.lld"
