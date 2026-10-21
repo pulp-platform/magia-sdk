@@ -5,13 +5,16 @@
 #   TASK_SOURCES <src...>
 #   [FIRST_TASK_NAME <entry_symbol>]
 #   [INCLUDE_DIRS <dirs...>]
+#   [HOT_TASKS <symbols...>]
 # )
 # Builds a Spatz task ELF/BIN/DUMP, generates <name>_task_bin.h and exports
 # per-test variables (<TEST_NAME>_SPATZ_HEADER, <TEST_NAME>_TASK_BIN, ...).
+# HOT_TASKS are linked first, in order, right after crt0's trap handler, so that
+# tasks run back to back stay contiguous and do not alias in the Spatz I$.
 function(add_spatz_task)
     set(options)
     set(oneValueArgs TEST_NAME FIRST_TASK_NAME)
-    set(multiValueArgs TASK_SOURCES INCLUDE_DIRS)
+    set(multiValueArgs TASK_SOURCES INCLUDE_DIRS HOT_TASKS)
     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(NOT ARG_TEST_NAME)
@@ -42,6 +45,15 @@ function(add_spatz_task)
     set(TASK_BIN "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.bin")
     set(TASK_DUMP "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.dump")
     set(TASK_HEADER "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}_bin.h")
+
+    set(TASK_ORDER_FILE "")
+    set(TASK_ORDER_FLAGS "")
+    if(ARG_HOT_TASKS)
+        set(TASK_ORDER_FILE "${SPATZ_OUTPUT_DIR}/${FILE_PREFIX}.order")
+        list(JOIN ARG_HOT_TASKS "\n" _hot_tasks)
+        file(GENERATE OUTPUT ${TASK_ORDER_FILE} CONTENT "${_hot_tasks}\n")
+        set(TASK_ORDER_FLAGS "-Wl,--symbol-ordering-file=${TASK_ORDER_FILE}")
+    endif()
 
     set(TASK_INCLUDE_FLAGS "")
     foreach(INCLUDE_DIR ${MAGIA_TARGET_INCLUDE_DIRS})
@@ -78,6 +90,7 @@ function(add_spatz_task)
             ${SPATZ_LINK_FLAGS}
             -T${SPATZ_LINK_SCRIPT}
             -Wl,--defsym,__first_task=${ARG_FIRST_TASK_NAME}
+            ${TASK_ORDER_FLAGS}
             -o ${TASK_ELF}
             ${TASK_CRT0_OBJ}
             ${MAGIA_IO_SRC}
@@ -87,6 +100,7 @@ function(add_spatz_task)
             ${MAGIA_IO_SRC}
             ${ARG_TASK_SOURCES}
             ${SPATZ_LINK_SCRIPT}
+            ${TASK_ORDER_FILE}
         COMMENT "[SPATZ] Building ELF..."
         VERBATIM
     )
