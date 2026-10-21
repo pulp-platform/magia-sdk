@@ -10,13 +10,9 @@
 #include "tile.h"
 #include "multi_task_params.h"
 
-void vec_absmax_pulp_task(uint32_t data_ptr)
+void vec_absmax_pulp(int32_t *in_a, int32_t *out, uint32_t len)
 {
-    volatile pulp_task_params_t *params = (volatile pulp_task_params_t *)data_ptr;
-    volatile int32_t *in_a              = (volatile int32_t *)params->in_a;
-    volatile int32_t *out               = (volatile int32_t *)params->out;
-    uint32_t len                        = params->len;
-    uint32_t pair_local_id              = GET_PULP_LOCAL_ID(get_hartid()) % 2;
+    uint32_t pair_local_id              = cl_core_id() % 2;
     uint32_t half                       = len / 2;
     uint32_t start                      = pair_local_id * half;
 
@@ -29,4 +25,20 @@ void vec_absmax_pulp_task(uint32_t data_ptr)
     }
 
     out[pair_local_id] = absmax;
+
+    cl_eu_team_barrier_id(0);
+
+    return;
+}
+
+void vec_absmax_pulp_entry(void *arg){
+    pulp_task_params_t *p = (pulp_task_params_t *)arg;
+    vec_absmax_pulp((int32_t*) p->in_a, (int32_t*) p->out, (uint32_t) p->len);
+}
+
+int vec_absmax_pulp_task(void *data) {
+    cl_eu_team_barrier_setup(0, (uint32_t) 0xC1);
+    cl_eu_team_push_other((uint32_t) 0xC0, vec_absmax_pulp_entry, data);
+    cl_eu_team_barrier_id(0);
+    return 0;
 }
