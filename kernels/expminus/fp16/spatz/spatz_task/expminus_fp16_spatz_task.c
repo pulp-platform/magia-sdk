@@ -23,10 +23,10 @@ static inline void fast_exp_v0(void)
     register _Float16 coef asm("f10") = EXP_COEF;
     register _Float16 bias asm("f11") = EXP_BIAS;
 
-    asm volatile("vfmax.vf v0, v0, %0" ::"f"(min));
+    asm volatile(SPATZ_FPU_FENCE "vfmax.vf v0, v0, %0" ::"f"(min));
     asm volatile("vfmul.vf v0, v0, %0" ::"f"(coef));
     asm volatile("vfadd.vf v0, v0, %0" ::"f"(bias));
-    asm volatile("vfcvt.rtz.xu.f.v v0, v0");
+    asm volatile(SPATZ_FPU_FENCE "vfcvt.rtz.xu.f.v v0, v0");
 }
 
 /* One row, vectorized along cols. A misaligned row (odd cols) peels its first element. */
@@ -51,7 +51,7 @@ static inline void expminus_row(const _Float16 *src, _Float16 *dst, size_t len, 
         asm volatile("vle16.v v0, (%0)" ::"r"(src));
         asm volatile("vfsub.vf v0, v0, %0" ::"f"(m));
         fast_exp_v0();
-        asm volatile("vse16.v v0, (%0)" ::"r"(dst) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(dst) : "memory");
     }
 }
 

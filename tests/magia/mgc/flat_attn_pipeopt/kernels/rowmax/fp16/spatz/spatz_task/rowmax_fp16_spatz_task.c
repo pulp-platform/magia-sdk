@@ -26,7 +26,7 @@ static __attribute__((noinline, cold)) void rowmax_strided(
             asm volatile("vfmax.vv v0, v0, v8");
         }
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(M + r) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(M + r) : "memory");
     }
 }
 
@@ -75,7 +75,7 @@ int rowmax_fp16_spatz_task(void)
         asm volatile("vsetvli zero, %0, e16, m8, ta, ma" ::"r"(vl0));
         asm volatile("vfredmax.vs v16, v0, v0");
         asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(1));
-        asm volatile("vse16.v v16, (%0)" ::"r"(M + r) : "memory");
+        asm volatile("vse16.v v16, (%0)" SPATZ_VST_FENCE ::"r"(M + r) : "memory");
     }
 
     if (P) {
@@ -85,7 +85,7 @@ int rowmax_fp16_spatz_task(void)
             asm volatile("vle16.v v0, (%0)" ::"r"(m));
             asm volatile("vle16.v v8, (%0)" ::"r"(P));
             asm volatile("vfmax.vv v0, v0, v8");
-            asm volatile("vse16.v v0, (%0)" ::"r"(m) : "memory");
+            asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(m) : "memory");
         }
     }
 

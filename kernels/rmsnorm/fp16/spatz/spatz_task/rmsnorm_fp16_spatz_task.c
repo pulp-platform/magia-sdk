@@ -1,4 +1,5 @@
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "rmsnorm_fp16_spatz_params.h"
 
 /* Sum of squares of one row: the squares are exact in fp32 (vfwmacc, fp16 x fp16) and accumulate
@@ -47,8 +48,8 @@ static inline void scale_row(const _Float16 *src,
         asm volatile("vsetvli zero, %0, e32, m8, ta, ma" ::"r"(vl));
         asm volatile("vfmul.vf v8, v8, %0" ::"f"(rinv));
         asm volatile("vsetvli zero, %0, e16, m4, ta, ma" ::"r"(vl));
-        asm volatile("vfncvt.f.f.w v0, v8");
-        asm volatile("vse16.v v0, (%0)" ::"r"(dst) : "memory");
+        asm volatile(SPATZ_FPU_FENCE "vfncvt.f.f.w v0, v8");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(dst) : "memory");
         src += vl;
         gamma += vl;
         dst += vl;
@@ -77,9 +78,9 @@ int rmsnorm_fp16_spatz_task(void)
         float ms;
         float rinv;
 
-        ms = sum_squares(X + r * w_len, w_len) / (float)w_len + eps;
-        asm volatile("fsqrt.s %0, %1" : "=f"(rinv) : "f"(ms));
-        rinv = 1.0f / rinv;
+        ms = spatz_div_f32(sum_squares(X + r * w_len, w_len), (float)w_len) + eps;
+        rinv = spatz_sqrt_f32(ms); /* no fsqrt/fdiv on Spatz */
+        rinv = spatz_div_f32(1.0f, rinv);
 
         scale_row(X + r * w_len, gamma, Y + r * w_len, rinv, w_len);
     }

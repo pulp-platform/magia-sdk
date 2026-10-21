@@ -31,7 +31,7 @@ static inline _Float16 scale_row(
 
         asm volatile("flh %0, 0(%1)" : "=f"(next) : "r"(s_next));
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst) : "memory");
 
         p_src += vl;
         p_dst += vl;

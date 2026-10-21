@@ -1,4 +1,5 @@
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "swish_fp16_spatz_params.h"
 
 static inline void swish(const _Float16 *src, _Float16 *dst, const _Float16 alpha, const size_t len)
@@ -15,12 +16,12 @@ static inline void swish(const _Float16 *src, _Float16 *dst, const _Float16 alph
     p_dst = dst;
     avl   = len;
 
-    asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+    asm volatile("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl)); /* m4: room for the division */
     asm volatile("vfmv.v.f v8, %0" ::"f"(ONE));
     asm volatile("vfmv.v.f v16, %0" ::"f"(alpha));
 
     for (; avl > 0; avl -= vl) {
-        asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl)); /* m4: room for the division */
 
         asm volatile("vle16.v v0,( %0)" ::"r"(p_src));
 
@@ -30,13 +31,13 @@ static inline void swish(const _Float16 *src, _Float16 *dst, const _Float16 alph
         /* ---------- fast exp approximation ---------- */
         asm volatile("vfmul.vf v24, v24, %0" ::"f"(COEF));
         asm volatile("vfadd.vf v24, v24, %0" ::"f"(BIAS));
-        asm volatile("vfcvt.rtz.xu.f.v v24, v24");
+        asm volatile(SPATZ_FPU_FENCE "vfcvt.rtz.xu.f.v v24, v24");
         /* -------------------------------------------- */
 
         asm volatile("vfadd.vf v24, v24, %0" ::"f"(ONE));
-        asm volatile("vfdiv.vv v0, v0, v24");
+        SPATZ_VFDIV_VV("v4", "v0", "v24", "v12", "v20"); /* no vfdiv, see spatz_recip.h */
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst));
+        asm volatile("vse16.v v4, (%0)" SPATZ_VST_FENCE ::"r"(p_dst));
 
         p_src += vl;
         p_dst += vl;

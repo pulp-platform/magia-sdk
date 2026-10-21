@@ -15,7 +15,7 @@ static inline void gather(const _Float16 *src, _Float16 *dst, const size_t len)
     for (; avl > 0; avl -= vl) {
         asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
         asm volatile("vle16.v v0, (%0)" ::"r"(p_src));
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst) : "memory");
 
         p_src += vl;
         p_dst += vl;

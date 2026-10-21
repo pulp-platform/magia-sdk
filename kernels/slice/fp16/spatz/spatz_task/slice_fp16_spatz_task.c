@@ -17,7 +17,7 @@ static inline void slice(const _Float16 *src, _Float16 *dst, const size_t len)
 
         asm volatile("vle16.v v0, (%0)" ::"r"(p_src));
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst) : "memory");
 
         p_src += vl;
         p_dst += vl;

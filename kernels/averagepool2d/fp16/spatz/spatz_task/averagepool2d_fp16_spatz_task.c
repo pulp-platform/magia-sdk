@@ -1,4 +1,5 @@
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "averagepool2d_fp16_spatz_params.h"
 
 static inline void compute_window_boundaries_2d(const int out_idx,
@@ -108,7 +109,7 @@ static inline void averagepool2d(const _Float16 *src,
                 }
 
                 asm volatile("vfmv.f.s %0, v8" : "=f"(win_avg));
-                win_avg                  = win_avg / (_Float16)(h_win_len * w_win_len);
+                win_avg                  = spatz_div_f16(win_avg, (_Float16)(h_win_len * w_win_len));
                 dst_c[(oh * w_out) + ow] = win_avg;
             }
         }

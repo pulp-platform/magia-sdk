@@ -1,4 +1,5 @@
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "silu_fp16_spatz_params.h"
 
 /* SiLU in fp32, one rounding to fp16 at the end. exp(-x) = 2^t, t = -x * log2(e), clamped to
@@ -36,7 +37,7 @@ int silu_fp16_spatz_task(void)
 
         asm volatile("vsetvli zero, %0, e32, m4, ta, ma" ::"r"(vl));
         asm volatile("vfmul.vf v8, v4, %0" ::"f"(NLOG2E)); /* t = -x * log2(e) */
-        asm volatile("vfmin.vf v8, v8, %0" ::"f"(T_MAX));
+        asm volatile(SPATZ_FPU_FENCE "vfmin.vf v8, v8, %0" ::"f"(T_MAX));
         asm volatile("vfmax.vf v8, v8, %0" ::"f"(T_MIN));
         asm volatile("vfcvt.x.f.v v12, v8");     /* n = round(t) */
         asm volatile("vfcvt.f.x.v v16, v12");
@@ -54,11 +55,11 @@ int silu_fp16_spatz_task(void)
         asm volatile("vsll.vi v12, v12, 23");
         asm volatile("vadd.vv v20, v20, v12");             /* exp(-x) = 2^f * 2^n */
         asm volatile("vfadd.vf v20, v20, %0" ::"f"(ONE));
-        asm volatile("vfdiv.vv v4, v4, v20");              /* x / (1 + exp(-x)) */
+        SPATZ_VFDIV_VV_F32("v8", "v4", "v20", "v12", "v16"); /* x / (1 + exp(-x)), no vfdiv */
 
         asm volatile("vsetvli zero, %0, e16, m2, ta, ma" ::"r"(vl));
-        asm volatile("vfncvt.f.f.w v0, v4");
-        asm volatile("vse16.v v0, (%0)" ::"r"(Y) : "memory");
+        asm volatile(SPATZ_FPU_FENCE "vfncvt.f.f.w v0, v8");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(Y) : "memory");
 
         X += vl;
         Y += vl;

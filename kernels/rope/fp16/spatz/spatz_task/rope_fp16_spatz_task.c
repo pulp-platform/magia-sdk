@@ -50,10 +50,10 @@ int rope_fp16_spatz_task(void)
                 asm volatile("vfadd.vv v16, v16, v20");
 
                 asm volatile("vsetvli zero, %0, e16, m2, ta, ma" ::"r"(vl));
-                asm volatile("vfncvt.f.f.w v24, v8");
+                asm volatile(SPATZ_FPU_FENCE "vfncvt.f.f.w v24, v8");
                 asm volatile("vfncvt.f.f.w v26, v16");
                 asm volatile("vse16.v v24, (%0)" ::"r"(y1) : "memory");
-                asm volatile("vse16.v v26, (%0)" ::"r"(y2) : "memory");
+                asm volatile("vse16.v v26, (%0)" SPATZ_VST_FENCE ::"r"(y2) : "memory");
 
                 x1 += vl;
                 x2 += vl;

@@ -14,10 +14,10 @@ static inline void fast_exp_v0(_Float16 min, _Float16 coef)
 {
     register _Float16 bias asm("f11") = EXPMINUS_ROWSUM_EXP_BIAS;
 
-    asm volatile("vfmax.vf v0, v0, %0" ::"f"(min));
+    asm volatile(SPATZ_FPU_FENCE "vfmax.vf v0, v0, %0" ::"f"(min));
     asm volatile("vfmul.vf v0, v0, %0" ::"f"(coef));
     asm volatile("vfadd.vf v0, v0, %0" ::"f"(bias));
-    asm volatile("vfcvt.rtz.xu.f.v v0, v0");
+    asm volatile(SPATZ_FPU_FENCE "vfcvt.rtz.xu.f.v v0, v0");
 }
 
 /* One row, vectorized along cols. A misaligned row (odd cols) peels its first element.
@@ -55,7 +55,7 @@ static inline _Float16 expminus_row(const _Float16 *src,
         asm volatile("vfsub.vf v0, v0, %0" ::"f"(m));
         fast_exp_v0(min, coef);
         asm volatile("flh %0, 0(%1)" : "=f"(next) : "r"(m_next));
-        asm volatile("vse16.v v0, (%0)" ::"r"(dst) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(dst) : "memory");
     }
 
     return next;
@@ -88,7 +88,7 @@ static inline void expminus_rows_1strip(const _Float16 *X,
         asm volatile("vfsub.vf v0, v0, %0" ::"f"(m));
         fast_exp_v0(min, coef);
         asm volatile("flh %0, 0(%1)" : "=f"(next) : "r"(M));
-        asm volatile("vse16.v v0, (%0)" ::"r"(Y) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(Y) : "memory");
 
         asm volatile("vsetvli zero, %0, e32, m8, ta, ma" ::"r"(1));
         asm volatile("vfmv.s.f v24, %0" ::"f"(0.0f));
@@ -105,8 +105,8 @@ static inline void expminus_rows_1strip(const _Float16 *X,
         asm volatile("vsetvli zero, %0, e32, m8, ta, ma" ::"r"(h));
         asm volatile("vfredusum.vs v24, v8, v24");
         asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(1));
-        asm volatile("vfncvt.f.f.w v16, v24");
-        asm volatile("vse16.v v16, (%0)" ::"r"(S + r) : "memory");
+        asm volatile(SPATZ_FPU_FENCE "vfncvt.f.f.w v16, v24");
+        asm volatile("vse16.v v16, (%0)" SPATZ_VST_FENCE ::"r"(S + r) : "memory");
         asm volatile("vsetvli zero, %0, e16, m8, ta, ma" ::"r"(cols));
     }
 }
@@ -128,8 +128,8 @@ static inline void rowsum(const _Float16 *Y, _Float16 *S, size_t rows, size_t co
             asm volatile("vfwadd.wv v0, v0, v8");
         }
 
-        asm volatile("vfncvt.f.f.w v8, v0");
-        asm volatile("vse16.v v8, (%0)" ::"r"(S + r) : "memory");
+        asm volatile(SPATZ_FPU_FENCE "vfncvt.f.f.w v8, v0");
+        asm volatile("vse16.v v8, (%0)" SPATZ_VST_FENCE ::"r"(S + r) : "memory");
     }
 }
 
@@ -144,9 +144,9 @@ static inline void exp_diff(_Float16 *A, const _Float16 *M, size_t rows, _Float1
         asm volatile("vle16.v v0, (%0)" ::"r"(A + r));
         asm volatile("vle16.v v8, (%0)" ::"r"(M + r));
         asm volatile("vfsub.vv v0, v0, v8");
-        asm volatile("vfmin.vf v0, v0, %0" ::"f"(max));
+        asm volatile(SPATZ_FPU_FENCE "vfmin.vf v0, v0, %0" ::"f"(max));
         fast_exp_v0(min, coef);
-        asm volatile("vse16.v v0, (%0)" ::"r"(A + r) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(A + r) : "memory");
     }
 }
 

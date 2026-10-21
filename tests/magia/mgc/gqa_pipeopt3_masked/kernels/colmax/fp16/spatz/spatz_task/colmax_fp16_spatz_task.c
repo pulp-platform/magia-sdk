@@ -34,7 +34,7 @@ int colmax_fp16_spatz_task(void)
             asm volatile("vfmax.vv v0, v0, v8");
         }
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(M + c) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(M + c) : "memory");
     }
 
     return 0;

@@ -18,10 +18,10 @@ static void leakyrelu(const _Float16 *src, _Float16 *dst, const _Float16 alpha, 
 
         asm volatile("vle16.v v8, (%0)" ::"r"(p_src));
 
-        asm volatile("vmflt.vf v0, v8, %0" ::"f"(ZERO));
+        asm volatile(SPATZ_FPU_FENCE "vmflt.vf v0, v8, %0" ::"f"(ZERO));
         asm volatile("vfmul.vf v8, v8, %0, v0.t" ::"f"(alpha));
 
-        asm volatile("vse16.v v8, (%0)" ::"r"(p_dst));
+        asm volatile("vse16.v v8, (%0)" SPATZ_VST_FENCE ::"r"(p_dst));
 
         p_src += vl;
         p_dst += vl;

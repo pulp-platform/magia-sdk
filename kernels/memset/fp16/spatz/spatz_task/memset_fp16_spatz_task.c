@@ -21,7 +21,7 @@ int memset_fp16_spatz_task(void)
     for (; avl > 0; avl -= vl) {
         asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(C) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(C) : "memory");
 
         C += vl;
     }

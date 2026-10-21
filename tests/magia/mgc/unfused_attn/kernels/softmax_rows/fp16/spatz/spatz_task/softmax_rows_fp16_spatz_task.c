@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "softmax_rows_fp16_spatz_params.h"
 
 /* Unit-stride vector accesses must be 4-byte aligned. */
@@ -41,10 +42,10 @@ int softmax_rows_fp16_spatz_task(void)
         for (p = X + vl0, avl = cols - vl0; avl > 0; avl -= vl, p += vl) {
             asm volatile("vsetvli %0, %1, e16, m8, tu, ma" : "=r"(vl) : "r"(avl));
             asm volatile("vle16.v v0, (%0)" ::"r"(p));
-            asm volatile("vfmax.vv v8, v8, v0");
+            asm volatile(SPATZ_FPU_FENCE "vfmax.vv v8, v8, v0");
         }
         asm volatile("vsetvli zero, %0, e16, m8, ta, ma" ::"r"(vl0));
-        asm volatile("vfredmax.vs v24, v8, v8");
+        asm volatile(SPATZ_FPU_FENCE "vfredmax.vs v24, v8, v8");
         asm volatile("vfmv.f.s %0, v24" : "=f"(m));
 
         /* exp(s * (x - max)) in place, and its sum in fp32 */
@@ -54,11 +55,11 @@ int softmax_rows_fp16_spatz_task(void)
             asm volatile("vsetvli %0, %1, e16, m4, tu, ma" : "=r"(vl) : "r"(avl));
             asm volatile("vle16.v v0, (%0)" ::"r"(p));
             asm volatile("vfsub.vf v0, v0, %0" ::"f"(m));
-            asm volatile("vfmax.vf v0, v0, %0" ::"f"(min));
+            asm volatile(SPATZ_FPU_FENCE "vfmax.vf v0, v0, %0" ::"f"(min));
             asm volatile("vfmul.vf v0, v0, %0" ::"f"(coef));
             asm volatile("vfadd.vf v0, v0, %0" ::"f"(bias));
-            asm volatile("vfcvt.rtz.xu.f.v v0, v0");
-            asm volatile("vse16.v v0, (%0)" ::"r"(p) : "memory");
+            asm volatile(SPATZ_FPU_FENCE "vfcvt.rtz.xu.f.v v0, v0");
+            asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p) : "memory");
             asm volatile("vfwadd.wv v16, v16, v0");
         }
         asm volatile("vsetvli zero, %0, e32, m8, ta, ma" ::"r"(vl0));
@@ -67,12 +68,12 @@ int softmax_rows_fp16_spatz_task(void)
         asm volatile("vfmv.f.s %0, v24" : "=f"(sum));
 
         /* normalize */
-        rcp = (_Float16)(1.0f / sum);
+        rcp = (_Float16)spatz_div_f32(1.0f, sum); /* no fdiv on Spatz */
         for (p = X, avl = cols; avl > 0; avl -= vl, p += vl) {
             asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
             asm volatile("vle16.v v0, (%0)" ::"r"(p));
             asm volatile("vfmul.vf v0, v0, %0" ::"f"(rcp));
-            asm volatile("vse16.v v0, (%0)" ::"r"(p) : "memory");
+            asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p) : "memory");
         }
     }
 
