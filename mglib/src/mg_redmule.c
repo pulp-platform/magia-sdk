@@ -27,6 +27,26 @@
 // path observe a single completion counter.
 uint8_t mg_redmule_completed __attribute__((section(".tile_bss")));
 
+/**
+ * Acquire a hardware job id for the next job and stamp `event` with it. If the
+ * hardware queue (depth 2) is full, drain one completion pulse to free a slot
+ * before retrying the acquire.
+ *
+ * Shared by all the job-issuing calls below; always inlined, so each of them
+ * compiles exactly as if the loop were written in place.
+ */
+static inline __attribute__((always_inline)) void
+mg_redmule_acquire_event(eu_wait_mode_t mode, mg_event_t *event, mg_event_callback_t callback)
+{
+    int32_t id;
+    while ((id = redmule_acquire()) < 0) {
+        if (eu32_redmule_wait(mode)) {
+            mg_redmule_completed++;
+        }
+    }
+    mg_event_init(event, id, callback);
+}
+
 void mg_redmule_gemm(eu_wait_mode_t mode,
                      uint32_t x,
                      uint32_t w,
@@ -37,15 +57,7 @@ void mg_redmule_gemm(eu_wait_mode_t mode,
                      mg_event_t *event,
                      mg_event_callback_t callback)
 {
-    int32_t id;
-    while ((id = redmule_acquire()) < 0) {
-        // Hardware queue (depth 2) is full: drain one completion pulse to
-        // free a slot before retrying the acquire.
-        if (eu32_redmule_wait(mode)) {
-            mg_redmule_completed++;
-        }
-    }
-    mg_event_init(event, id, callback);
+    mg_redmule_acquire_event(mode, event, callback);
     redmule_gemm(x, w, y, m, n, k);
 }
 
@@ -59,17 +71,40 @@ void mg_redmule_gemm_enqueue(eu_wait_mode_t mode,
                              mg_event_t *event,
                              mg_event_callback_t callback)
 {
-    int32_t id;
-    while ((id = redmule_acquire()) < 0) {
-        // Hardware queue (depth 2) is full: drain one completion pulse to
-        // free a slot before retrying the acquire.
-        if (eu32_redmule_wait(mode)) {
-            mg_redmule_completed++;
-        }
-    }
-    mg_event_init(event, id, callback);
+    mg_redmule_acquire_event(mode, event, callback);
     redmule16_gemm_enqueue(x, w, y, m, n, k);
 }
+
+#if REDMULE_MM != 0
+void mg_redmule_matmul(eu_wait_mode_t mode,
+                       uint32_t x,
+                       uint32_t w,
+                       uint32_t y,
+                       uint16_t m,
+                       uint16_t n,
+                       uint16_t k,
+                       mg_event_t *event,
+                       mg_event_callback_t callback)
+{
+    mg_redmule_acquire_event(mode, event, callback);
+    redmule16_matmul_enqueue(x, w, y, m, n, k);
+    redmule16_gemm_commit_start();
+}
+
+void mg_redmule_matmul_enqueue(eu_wait_mode_t mode,
+                               uint32_t x,
+                               uint32_t w,
+                               uint32_t y,
+                               uint16_t m,
+                               uint16_t n,
+                               uint16_t k,
+                               mg_event_t *event,
+                               mg_event_callback_t callback)
+{
+    mg_redmule_acquire_event(mode, event, callback);
+    redmule16_matmul_enqueue(x, w, y, m, n, k);
+}
+#endif
 
 void mg_redmule_gemm_commit_start()
 {
