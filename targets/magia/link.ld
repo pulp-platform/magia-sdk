@@ -27,6 +27,10 @@ MEMORY
     instrram    : ORIGIN = 0xcc000000, LENGTH = 0x20000
     dataram     : ORIGIN = 0xcc020000, LENGTH = 0xF00000
     stack       : ORIGIN = 0x00010000, LENGTH = 0x4000 /* 16K for control core CV32 (0x10000-0x14000); PULP 0x14000-0x1C000, Spatz 0x1C000-0x20000 */
+    /* L2 above the default gvsoc L2 end (and TEST_END, 0xccff0000), up to the largest L2: only
+     * for data placed in .l2ext, which needs a gvsoc built and run with l2_size covering it
+     * (e.g. make ... l2_size=0x10000000 for 0xcd000000-0xd0000000) */
+    l2ext       : ORIGIN = 0xcd000000, LENGTH = 0x32ff0000
 }
 
 /* Stack information variables */
@@ -41,6 +45,7 @@ PHDRS
 {
     text PT_LOAD;
     data PT_LOAD;
+    l2ext PT_LOAD;
 }
 
 SECTIONS
@@ -155,6 +160,13 @@ SECTIONS
         *(COMMON)
         _bss_end = .;
     } > dataram :data
+
+    /* large L2 data, __attribute__((section(".l2ext"))): see l2ext above */
+    .l2ext : {
+        . = ALIGN(64);
+        *(.l2ext)
+        *(.l2ext.*)
+    } > l2ext :l2ext
 
     /* ensure there is enough room for stack */
     .stack (NOLOAD): {

@@ -88,6 +88,12 @@ tiles 			?= 2
 spatz			?= 1
 verbose			?= 0
 pulp_cores		?= 8
+l2_size			?=
+# Optional L2 size of the gvsoc target (bytes, decimal or 0x..., multiple of
+# 4 KiB, up to ~1 GiB), e.g. l2_size=0x10000000 for 256 MiB: passed to gvsoc in
+# decimal as the l2_size target parameter, both when building and running it
+comma := ,
+L2_SIZE_PARAM := $(if $(l2_size),$(comma)l2_size=$(shell printf '%d' $(l2_size)))
 pulp_cluster	:= $(shell [ $(pulp_cores) -gt 0 ] && echo 1 || echo 0)
 
 LLVM_CMAKE			?= cmake
@@ -109,7 +115,7 @@ CMAKE ?= cmake
 GVSOC_WORK_DIR ?= ./gvsoc_work
 
 ifeq ($(target_platform), magia)
-GVRUN_TARGET		:= $(target_platform)_v3:n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores)
+GVRUN_TARGET		:= $(target_platform)_v3:n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores)$(L2_SIZE_PARAM)
 else
 GVRUN_TARGET		:= $(target_platform)_v3
 endif
@@ -399,7 +405,7 @@ else
 endif
 ifeq ($(target_platform), magia)
 	cd $(GVSOC_DIR)	&& \
-	make build TARGETS="magia_v3:n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores)"
+	make build TARGETS="magia_v3:n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores)$(L2_SIZE_PARAM)"
 else
 	$(error unrecognized platform (acceptable platforms: magia).)
 endif
