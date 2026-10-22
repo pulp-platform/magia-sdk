@@ -7,12 +7,20 @@ NONCOMP 1, DOTP 5). An FP instruction issued to the VFU with a lower latency tha
 instruction before it can overtake its last result and deadlock the chaining. Dataflow over each
 function's CFG of the latency L of the FP instructions possibly in flight:
   vector FP op of latency l:  hazard if l < L (the fence drains first); then L = l
+  FP reduction:               no hazard (the VFU waits for the FPU to drain before a reduction,
+                              Reduction_Wait); then L = its latency
   scalar FP op of latency l:  L = max(L, l)  (no VRF dependency of its own, but it sits in the
                               same pipeline: a later vector op still has to wait for the older one)
   VFU integer op:             L = 0  (the VFU drains the FPU before switching to the IPU)
   task entry (_start, *_task): L = 0 (the previous task's last stores waited for its results)
   other function entry:       L = max of L at its call sites; after a call, L = callee's exit L
 Prints `file:line  addr  insn  function` per hazard, de-duplicated by file:line + mnemonic.
+
+Also reports a VFU instruction with a scalar result (vmv.x.s, vfmv.f.s, e.g.
+the fence itself) whose next VFU instruction is a reduction: the VFU accepts the reduction while
+the scalar result is still in the IPU result register, and the result is dropped without a
+response. Paths on which an instruction reads or writes the result register in between are safe:
+it stalls until the response. Printed with `prev_lat=rsp` and the address of the reduction.
 """
 import re
 import subprocess
@@ -29,6 +37,12 @@ NONCOMP = re.compile(r'^vf(min|max|sgnj|sgnjn|sgnjx|class|redmin|redmax)\b|^vmf(
 IPU = re.compile(r'^v(add|sub|rsub|and|or|xor|sll|srl|sra|n?srl|mul|mulh|mulhu|madd|macc|nmsac|nmsub|'
                  r'min|minu|max|maxu|ms(eq|ne|lt|ltu|le|leu|gt|gtu)|redsum|redmax|redmin|merge|mv\.x\.s)\b|'
                  r'^vfmv\.f\.s$|^vmv\.x\.s$')
+# vector reductions (spatz_decoder.sv: is_reduction)
+REDUCTION = re.compile(r'^vf?w?red')
+# VFU instructions with a scalar result sent back to the Snitch
+SCALAR_RSP = re.compile(r'^(vmv\.x\.s|vfmv\.f\.s)$')
+# vector instructions that do not go to the VFU (VLSU, slide unit, controller)
+NON_VFU = re.compile(r'^(vl[0-9a-z]*e|vs[0-9a-z]*e|vset|vf?slide|vfmv\.v\.f$|vfmv\.s\.f$)')
 BRANCH = re.compile(r'^(beq|bne|blt|bge|bltu|bgeu|beqz|bnez|blez|bgez|bltz|bgtz|bgt|ble|bgtu|bleu)$')
 
 
@@ -106,7 +120,7 @@ def analyze(func, insns, entry, exits, addr2func, calls):
         a, mn, ops, loc = insns[i]
         lat = latency(mn)
         if lat and lat[0]:
-            if lat[1] < L:
+            if lat[1] < L and not REDUCTION.match(mn):
                 hazards[i] = L
             out = lat[1]
         elif lat:
@@ -131,6 +145,26 @@ def analyze(func, insns, entry, exits, addr2func, calls):
             if out > state[s]:
                 state[s] = out
                 work.append(s)
+    # a scalar-result VFU instruction followed by a reduction as the next VFU instruction
+    for i, (a, mn, ops, loc) in enumerate(insns):
+        if not SCALAR_RSP.match(mn):
+            continue
+        rd = ops.split(',')[0].strip()
+        seen, todo = set(), list(succ[i])
+        while todo:
+            j = todo.pop()
+            if j in seen:
+                continue
+            seen.add(j)
+            mj = insns[j][1]
+            # an instruction that reads or writes rd waits for the response
+            if rd in re.findall(r'[\w.]+', insns[j][2]):
+                continue
+            if mj.startswith('v') and not NON_VFU.match(mj):
+                if REDUCTION.match(mj):
+                    hazards[j] = 'rsp'
+                continue
+            todo.extend(succ[j])
     return [(insns[i], L) for i, L in sorted(hazards.items())], exit_l
 
 
@@ -157,7 +191,7 @@ def main():
                 if key not in seen:
                     seen[key] = (a, mn, ops, func, L, elf)
     for (loc, mn), (a, _, ops, func, L, elf) in sorted(seen.items()):
-        print('%s\t%x\t%s %s\t%s\tprev_lat=%d' % (loc, a, mn, ops, func, L))
+        print('%s\t%x\t%s %s\t%s\tprev_lat=%s' % (loc, a, mn, ops, func, L))
 
 
 main()

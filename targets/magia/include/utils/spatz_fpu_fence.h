@@ -18,6 +18,11 @@
 // the Spatz tasks never read (no TLS; the compiler does not allocate it), not to x0: GVSoC's
 // vmv.x.s writes its destination without the x0 guard.
 //
+// Never put it right before a reduction: the VFU can accept the reduction
+// while the vmv.x.s result is still in the IPU result register, and drops that result without a
+// response, so tp stays reserved forever. A reduction does not need it anyway: the VFU waits for
+// the FPU to drain before starting one.
+//
 // Enabled with `make build spatz_fpu_fence=1` (CMake -DSPATZ_FPU_FENCE=1); empty otherwise.
 // scripts/spatz_fpu_hazards.py lists the instructions that need it, from the task ELFs.
 

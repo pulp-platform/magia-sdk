@@ -301,11 +301,11 @@ static void gemm_Btrans(const _Float16 *A,
                     A_col1_elem2 = A + ((m + 1) * dim_K + k);
                     A_col2_elem2 = A + ((m + 1) * dim_K + (k + 1));
 
-                    asm volatile("vlse16.v v16, (%0), %1" ::"r"(B_col1), "r"(stride));
+                    asm volatile("vlse16.v v16, (%0), %1" SPATZ_VLD_FENCE ::"r"(B_col1), "r"(stride));
                     asm volatile("vfmacc.vf v0, %0, v16" ::"f"(*A_col1_elem1));
                     asm volatile("vfmacc.vf v8, %0, v16" ::"f"(*A_col1_elem2));
 
-                    asm volatile("vlse16.v v24, (%0), %1" ::"r"(B_col2), "r"(stride));
+                    asm volatile("vlse16.v v24, (%0), %1" SPATZ_VLD_FENCE ::"r"(B_col2), "r"(stride));
                     asm volatile("vfmacc.vf v0, %0, v24" ::"f"(*A_col2_elem1));
                     asm volatile("vfmacc.vf v8, %0, v24" ::"f"(*A_col2_elem2));
                 }
@@ -315,7 +315,7 @@ static void gemm_Btrans(const _Float16 *A,
                     A_col1_elem1 = A + (m * dim_K + (dim_K - 1));
                     A_col1_elem2 = A + ((m + 1) * dim_K + (dim_K - 1));
 
-                    asm volatile("vlse16.v v16, (%0), %1" ::"r"(B_col1), "r"(stride));
+                    asm volatile("vlse16.v v16, (%0), %1" SPATZ_VLD_FENCE ::"r"(B_col1), "r"(stride));
                     asm volatile("vfmacc.vf v0, %0, v16" ::"f"(*A_col1_elem1));
                     asm volatile("vfmacc.vf v8, %0, v16" ::"f"(*A_col1_elem2));
                 }
@@ -348,10 +348,10 @@ static void gemm_Btrans(const _Float16 *A,
                     A_col1_elem1 = A + ((dim_M - 1) * dim_K + k);
                     A_col2_elem1 = A + ((dim_M - 1) * dim_K + (k + 1));
 
-                    asm volatile("vlse16.v v16, (%0), %1" ::"r"(B_col1), "r"(stride));
+                    asm volatile("vlse16.v v16, (%0), %1" SPATZ_VLD_FENCE ::"r"(B_col1), "r"(stride));
                     asm volatile("vfmacc.vf v0, %0, v16" ::"f"(*A_col1_elem1));
 
-                    asm volatile("vlse16.v v24, (%0), %1" ::"r"(B_col2), "r"(stride));
+                    asm volatile("vlse16.v v24, (%0), %1" SPATZ_VLD_FENCE ::"r"(B_col2), "r"(stride));
                     asm volatile("vfmacc.vf v0, %0, v24" ::"f"(*A_col2_elem1));
                 }
 
@@ -359,7 +359,7 @@ static void gemm_Btrans(const _Float16 *A,
                     B_col1       = B + (n * dim_K + (dim_K - 1));
                     A_col1_elem1 = A + ((dim_M - 1) * dim_K + (dim_K - 1));
 
-                    asm volatile("vlse16.v v16, (%0), %1" ::"r"(B_col1), "r"(stride));
+                    asm volatile("vlse16.v v16, (%0), %1" SPATZ_VLD_FENCE ::"r"(B_col1), "r"(stride));
                     asm volatile("vfmacc.vf v0, %0, v16" ::"f"(*A_col1_elem1));
                 }
 
@@ -427,11 +427,11 @@ static void gemm_ABtrans(const _Float16 *A,
                     A_row2_elem1 = A + ((k + 1) * dim_M + m);
                     A_row2_elem2 = A + ((k + 1) * dim_M + (m + 1));
 
-                    asm volatile("vlse16.v v16, (%0), %1" ::"r"(B_col1), "r"(stride));
+                    asm volatile("vlse16.v v16, (%0), %1" SPATZ_VLD_FENCE ::"r"(B_col1), "r"(stride));
                     asm volatile("vfmacc.vf v0, %0, v16" ::"f"(*A_row1_elem1));
                     asm volatile("vfmacc.vf v8, %0, v16" ::"f"(*A_row1_elem2));
 
-                    asm volatile("vlse16.v v24, (%0), %1" ::"r"(B_col2), "r"(stride));
+                    asm volatile("vlse16.v v24, (%0), %1" SPATZ_VLD_FENCE ::"r"(B_col2), "r"(stride));
                     asm volatile("vfmacc.vf v0, %0, v24" ::"f"(*A_row2_elem1));
                     asm volatile("vfmacc.vf v8, %0, v24" ::"f"(*A_row2_elem2));
                 }
@@ -441,7 +441,7 @@ static void gemm_ABtrans(const _Float16 *A,
                     A_row1_elem1 = A + ((dim_K - 1) * dim_M + m);
                     A_row1_elem2 = A + ((dim_K - 1) * dim_M + (m + 1));
 
-                    asm volatile("vlse16.v v16, (%0), %1" ::"r"(B_col1), "r"(stride));
+                    asm volatile("vlse16.v v16, (%0), %1" SPATZ_VLD_FENCE ::"r"(B_col1), "r"(stride));
                     asm volatile("vfmacc.vf v0, %0, v16" ::"f"(*A_row1_elem1));
                     asm volatile("vfmacc.vf v8, %0, v16" ::"f"(*A_row1_elem2));
                 }
@@ -474,10 +474,10 @@ static void gemm_ABtrans(const _Float16 *A,
                     A_row1_elem1 = A + (k * dim_M + (dim_M - 1));
                     A_row2_elem1 = A + ((k + 1) * dim_M + (dim_M - 1));
 
-                    asm volatile("vlse16.v v16, (%0), %1" ::"r"(B_col1), "r"(stride));
+                    asm volatile("vlse16.v v16, (%0), %1" SPATZ_VLD_FENCE ::"r"(B_col1), "r"(stride));
                     asm volatile("vfmacc.vf v0, %0, v16" ::"f"(*A_row1_elem1));
 
-                    asm volatile("vlse16.v v24, (%0), %1" ::"r"(B_col2), "r"(stride));
+                    asm volatile("vlse16.v v24, (%0), %1" SPATZ_VLD_FENCE ::"r"(B_col2), "r"(stride));
                     asm volatile("vfmacc.vf v0, %0, v24" ::"f"(*A_row2_elem1));
                 }
 
@@ -485,7 +485,7 @@ static void gemm_ABtrans(const _Float16 *A,
                     B_col1       = B + (n * dim_K + (dim_K - 1));
                     A_row1_elem1 = A + ((dim_K - 1) * dim_M + (dim_M - 1));
 
-                    asm volatile("vlse16.v v16, (%0), %1" ::"r"(B_col1), "r"(stride));
+                    asm volatile("vlse16.v v16, (%0), %1" SPATZ_VLD_FENCE ::"r"(B_col1), "r"(stride));
                     asm volatile("vfmacc.vf v0, %0, v16" ::"f"(*A_row1_elem1));
                 }
 

@@ -30,7 +30,7 @@ static inline _Float16 find_max(const _Float16 *vec, size_t len)
     }
 
     asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(original_avl));
-    asm volatile(SPATZ_FPU_FENCE "vfredmax.vs v0, v8, v0");
+    asm volatile("vfredmax.vs v0, v8, v0");
     asm volatile("vfmv.f.s %0, v0" : "=f"(max));
 
     return max;

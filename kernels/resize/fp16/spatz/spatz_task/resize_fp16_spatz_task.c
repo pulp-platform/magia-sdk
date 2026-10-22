@@ -77,7 +77,7 @@ static inline void resize_nearest(const _Float16 *src,
                 asm volatile("vle16.v v4, (%0)" ::"r"(p_idx));
 
                 asm volatile("vsll.vi v4, v4, 1");
-                asm volatile("vloxei16.v v0, (%0), v4" ::"r"(p_src_row));
+                asm volatile("vloxei16.v v0, (%0), v4" SPATZ_VLD_FENCE ::"r"(p_src_row));
 
                 asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst_row) : "memory");
 

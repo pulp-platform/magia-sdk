@@ -15,9 +15,9 @@ static __attribute__((noinline, cold)) void rowmax_strided(
     for (size_t r = 0; r < rows; r += vl) {
         asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(rows - r));
 
-        asm volatile("vlse16.v v0, (%0), %1" ::"r"(X + r * cols), "r"(row_stride));
+        asm volatile("vlse16.v v0, (%0), %1" SPATZ_VLD_FENCE ::"r"(X + r * cols), "r"(row_stride));
         for (size_t c = 1; c < cols; c++) {
-            asm volatile("vlse16.v v8, (%0), %1" ::"r"(X + r * cols + c), "r"(row_stride));
+            asm volatile("vlse16.v v8, (%0), %1" SPATZ_VLD_FENCE ::"r"(X + r * cols + c), "r"(row_stride));
             asm volatile("vfmax.vv v0, v0, v8");
         }
 
