@@ -1,6 +1,6 @@
 #include "tile.h"
 
-void hello_pulp_task(void)
+void hello_pulp(void)
 {
     uint32_t hartid   = get_hartid();
     uint32_t local_id = cl_core_id();
@@ -10,4 +10,15 @@ void hello_pulp_task(void)
            tile_id,
            local_id,
            hartid);
+}
+
+void hello_pulp_entry(void *)
+{
+    hello_pulp();
+}
+
+void hello_pulp_task(void)
+{
+    cl_eu_team_fork(PULP_CORE_COUNT, hello_pulp_entry, NULL);
+    return;
 }

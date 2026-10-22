@@ -9,9 +9,9 @@
 #include <stdint.h>
 
 typedef struct {
-    uint32_t in_a; 
-    uint32_t in_b; 
-    uint32_t out; 
+    uint32_t in_a;
+    uint32_t in_b;
+    uint32_t out;
     uint32_t len;
 } pulp_task_params_t;
 
