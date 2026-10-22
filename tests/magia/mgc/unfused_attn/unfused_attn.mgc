@@ -1,0 +1,115 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Unfused attention test, the baseline of the flat_attn_* tests
+# Compile with
+#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/unfused_attn/unfused_attn.mgc \
+#       -o tests/magia/mgc/unfused_attn/src/test.c
+
+from mgc import *
+
+S, P = sizes("SEQ_LENGTH", "PROJ_SIZE")  # from include/test.h
+q_     = l2("q_inp",   (S, P), fp16)
+kt_    = l2("k_inp",   (P, S), fp16)
+v_     = l2("v_inp",   (S, P), fp16)
+o_     = l2("o_out",   (S, P), fp16)
+attn_  = l2("attn_l2", (S, S), fp16)  # scratch between the three steps
+o_gold = l2("o_gold",  (S, P), fp16)  # golden
+
+WAIT_MODE = define(WFE)
+QK_TIMESLOTS = define(2)   # over P
+PV_TIMESLOTS = define(8)   # over S
+# rows of attn per Spatz call: 32, or all the rows of the tile on larger meshes
+SM_CHUNK = define("(SEQ_LENGTH / (MESH_X_TILES * MESH_Y_TILES) < 32 ? SEQ_LENGTH / (MESH_X_TILES * MESH_Y_TILES) : 32)")
+
+# Implemented in src/kernels.c, synchronous on the tile's CV32 core:
+# x[r, :] = softmax(x[r, :] / sqrt(PROJ_SIZE)) in place on Spatz (scale folded into the exp).
+spatz_softmax_rows = l1_kernel("l1_softmax_rows_fp16_spatz", operands=("x:inout",), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
+
+
+@test("test_unfused_attn", authors=["Francesco Conti <francesco.conti@chips.it>"])
+def main():
+    """
+    Unfused attention, O = softmax(Q @ Kt / sqrt(P)) @ V, as three back-to-back kernels over
+    the whole mesh, each through L2: attn = Q @ Kt and O = attn @ V output-static on RedMulE (as
+    mm_os_mgc), the row softmax of attn on Spatz in between.
+    """
+    for y_id, x_id in tiles():
+        tile_h   = y_id.split(S)
+        tile_w   = x_id.split(S)
+        tile_w_p = x_id.split(P)
+
+        t_qk: u16 = P // QK_TIMESLOTS
+        t_pv: u16 = S // PV_TIMESLOTS
+        sm_rows: u32 = S // (MESH_X_TILES * MESH_Y_TILES)
+        sm_row0: u32 = (y_id * MESH_X_TILES + x_id) * sm_rows
+
+        # each step's buffers are pinned to its loop: the three steps share L1
+        # step 1: attn block (y_id, x_id), resident in L1, never initialized; Q and Kt slices
+        # double buffered over the timeslots
+        a  = L1.single_buffer(attn_[tile_h, tile_w], pin="qk")
+        xq = L1.multi_buffer(q_[tile_h, 0:t_qk], depth=2, pin="qk")
+        wk = L1.multi_buffer(kt_[0:t_qk, tile_w], depth=2, pin="qk")
+        # step 2: chunks of SM_CHUNK full rows of attn
+        sm = L1.multi_buffer(attn_[0:SM_CHUNK, :], pin="softmax")
+        # step 3: O block (y_id, x_id), resident in L1, never initialized; attn and V slices
+        # double buffered over the timeslots
+        o  = L1.single_buffer(o_[tile_h, tile_w_p], pin="pv")
+        xp = L1.multi_buffer(attn_[tile_h, 0:t_pv], depth=2, pin="pv")
+        wv = L1.multi_buffer(v_[0:t_pv, tile_w_p], depth=2, pin="pv")
+        ev_qk = redmule.events(2)
+        ev_pv = redmule.events(2)
+
+        # start together, as the flat_attn_* tests do
+        sync(GLOBAL)
+
+        # 1. attn = Q @ Kt: the operands of timeslot i+1 are prefetched while RedMulE computes
+        # timeslot i; the first job is a MATMUL, as attn is never loaded
+        for i in pipeline(QK_TIMESLOTS, name="qk"):
+            with stage(0):
+                ex = idma.load(xq[i], q_[tile_h, i * t_qk:(i + 1) * t_qk])
+                ew = idma.load(wk[i], kt_[i * t_qk:(i + 1) * t_qk, tile_w])
+                redmule.enqueue(xq[i], wk[i], a, op=GEMM, event=ev_qk[i])
+                ex.wait()
+                ew.wait()
+                redmule.commit_start()
+            with stage(1):
+                ev_qk[i].wait()
+        idma.store(attn_[tile_h, tile_w], a).wait()
+        sync(GLOBAL)
+
+        # 2. attn = softmax(attn / sqrt(P)) by rows, in place in L2: this tile owns sm_rows full
+        # rows and streams them through L1, chunk c + 1 loading and chunk c - 1 storing while Spatz
+        # works on chunk c
+        for c in pipeline(sm_rows // SM_CHUNK, name="softmax"):
+            with stage(0):
+                r0: u32 = sm_row0 + c * SM_CHUNK
+                el = idma.load(sm[c], attn_[r0:r0 + SM_CHUNK, :])
+            with stage(1):
+                r1: u32 = sm_row0 + c * SM_CHUNK
+                el.wait()
+                spatz_softmax_rows(sm[c])
+                es = idma.store(attn_[r1:r1 + SM_CHUNK, :], sm[c])
+            with stage(2):
+                es.wait()
+        sync(GLOBAL)
+
+        # 3. O = attn @ V, as step 1
+        for i in pipeline(PV_TIMESLOTS, name="pv"):
+            with stage(0):
+                ex = idma.load(xp[i], attn_[tile_h, i * t_pv:(i + 1) * t_pv])
+                ew = idma.load(wv[i], v_[i * t_pv:(i + 1) * t_pv, tile_w_p])
+                redmule.enqueue(xp[i], wv[i], o, op=GEMM, event=ev_pv[i])
+                ex.wait()
+                ew.wait()
+                redmule.commit_start()
+            with stage(1):
+                ev_pv[i].wait()
+        idma.store(o_[tile_h, tile_w_p], o).wait()
+
+        # check the whole output on tile (0, 0), once every tile has written its block
+        sync(GLOBAL)
+        if y_id == 0:
+            if x_id == 0:
+                check(o_[:, :], o_gold[:, :], tol=0x11)

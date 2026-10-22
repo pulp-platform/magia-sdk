@@ -26,7 +26,7 @@ int mul_fp16_spatz_task(void)
 
         asm volatile("vfmul.vv v0, v0, v8");
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(C) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(C) : "memory");
 
         A += vl;
         B += vl;

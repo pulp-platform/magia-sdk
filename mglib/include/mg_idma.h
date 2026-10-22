@@ -48,6 +48,33 @@ extern void mg_idma_memcpy_2d(eu_wait_mode_t mode,
                               mg_event_callback_t callback);
 
 /**
+ * Native row / column multicast: copy `len` bytes from this tile's L1 at
+ * `obi_addr` to the same L1 offset as `dst_addr` (an address in this tile's
+ * L1) on every other tile of this tile's row / column. Each contiguous run of
+ * destination tiles (before and after this tile) is one 2D iDMA job reading
+ * the source with stride 0 and writing with the L1 stride between the tiles,
+ * so the bursts towards successive tiles overlap in the NoC instead of each
+ * unicast paying the full pipeline fill. Same arguments as mg_idma_memcpy_1d
+ * (`dir` must be 1, L1 -> remote L1); `event` tracks the last job issued, and
+ * same-direction jobs complete in order, so waiting on it waits for all.
+ */
+extern void mg_idma_mcast_row(eu_wait_mode_t mode,
+                              uint8_t dir,
+                              uint32_t dst_addr,
+                              uint32_t obi_addr,
+                              uint32_t len,
+                              mg_event_t *event,
+                              mg_event_callback_t callback);
+
+extern void mg_idma_mcast_col(eu_wait_mode_t mode,
+                              uint8_t dir,
+                              uint32_t dst_addr,
+                              uint32_t obi_addr,
+                              uint32_t len,
+                              mg_event_t *event,
+                              mg_event_callback_t callback);
+
+/**
  * Per-direction completion counter (index 0 = A2O/L2->L1, 1 = O2A/L1->L2).
  * Defined in mg_idma.c and advanced from both the issue path (mg_idma_issue)
  * and mg_idma_wait() below; shared so both observe a single instance.

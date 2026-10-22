@@ -1,4 +1,5 @@
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "batchnorm_fp16_spatz_params.h"
 
 static inline void batchnorm(const _Float16 *src,
@@ -15,6 +16,11 @@ static inline void batchnorm(const _Float16 *src,
     size_t avl;
     size_t vl;
 
+    /* std = sqrt(var + eps) and 1/std once, in scalar: no vector sqrt/div, see spatz_recip.h */
+    const _Float16 var_eps = var + epsilon;
+    const _Float16 std     = (_Float16)spatz_sqrt_f32((float)var_eps);
+    const _Float16 std_inv = spatz_recip_f16(std);
+
     p_src = src;
     p_dst = dst;
     avl   = len;
@@ -27,19 +33,14 @@ static inline void batchnorm(const _Float16 *src,
         /* centering: x_centered[i] = x[i] - mean[i] */
         asm volatile("vfsub.vf v0, v0, %0" ::"f"(mean));
 
-        /* standard deviation: std[i] = sqrt(var[i] + eps) */
-        asm volatile("vfmv.v.f v8, %0" ::"f"(var));
-        asm volatile("vfadd.vf v8, v8, %0" ::"f"(epsilon));
-        asm volatile("vfsqrt.v v8, v8");
-
-        /* normalize: norm[i] = x_centered[i] / std[i] */
-        asm volatile("vfdiv.vv v0, v0, v8");
+        /* normalize: norm[i] = x_centered[i] / std */
+        SPATZ_VFDIV_VF("v8", "v0", "v16", std, std_inv);
 
         /* affine: dst = norm[i] * gamma[i] + beta[i] */
-        asm volatile("vfmul.vf v0, v0, %0" ::"f"(gamma));
+        asm volatile("vfmul.vf v0, v8, %0" ::"f"(gamma));
         asm volatile("vfadd.vf v0, v0, %0" ::"f"(beta));
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst) : "memory");
 
         p_src += vl;
         p_dst += vl;

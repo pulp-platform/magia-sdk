@@ -94,17 +94,17 @@ set(SPATZ_CRT0_SRC "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/spatz/src/spa
 set(SPATZ_LINK_SCRIPT "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/spatz/src/spatz_program.ld" CACHE PATH "Spatz linker script")
 
 # Spatz arch configuration options [MAGIA/Makefile]
-set(SPATZ_RVD 0 CACHE INT "0: 32-bit TCDM w/ ELEN=32, 1: 64-bit TCDM w/ ELEN=64")
-set(SPATZ_VLEN 256 CACHE INT "Vector length in bits (128, 256, 512, ...)")
-set(SPATZ_NRVREG 32 CACHE INT "Number of vector registers - RISC-V standar=32")
-set(SPATZ_NR_VRF_BANKS 4 CACHE INT "Number of VRF banks (banking parallelism: 2, 4, 8)")
-set(SPATZ_N_IPU 1 CACHE INT "Number of Integer Processing Units (1-8)")
-set(SPATZ_N_FPU 4 CACHE INT "Number of Floating Point Units (1-8)")
-set(SPATZ_NR_PARALLEL_INSTR 4 CACHE INT "Number of parallel vector instructions (scoreboard depth)")
-set(SPATZ_XDIVSQRT 0 CACHE INT "0: FP div/sqrt disabled, 1: enabled")
-set(SPATZ_XDMA 0 CACHE INT "0: DMA disabled, 1: enabled")
-set(SPATZ_RVF 1 CACHE INT "0: single-precision FP disabled, 1: enabled")
-set(SPATZ_RVV 1 CACHE INT "0: vector extension disabled, 1: enabled")
+set(SPATZ_RVD 0 CACHE STRING "0: 32-bit TCDM w/ ELEN=32, 1: 64-bit TCDM w/ ELEN=64")
+set(SPATZ_VLEN 256 CACHE STRING "Vector length in bits (128, 256, 512, ...)")
+set(SPATZ_NRVREG 32 CACHE STRING "Number of vector registers - RISC-V standar=32")
+set(SPATZ_NR_VRF_BANKS 4 CACHE STRING "Number of VRF banks (banking parallelism: 2, 4, 8)")
+set(SPATZ_N_IPU 1 CACHE STRING "Number of Integer Processing Units (1-8)")
+set(SPATZ_N_FPU 4 CACHE STRING "Number of Floating Point Units (1-8)")
+set(SPATZ_NR_PARALLEL_INSTR 4 CACHE STRING "Number of parallel vector instructions (scoreboard depth)")
+set(SPATZ_XDIVSQRT 0 CACHE STRING "0: FP div/sqrt disabled, 1: enabled")
+set(SPATZ_XDMA 0 CACHE STRING "0: DMA disabled, 1: enabled")
+set(SPATZ_RVF 1 CACHE STRING "0: single-precision FP disabled, 1: enabled")
+set(SPATZ_RVV 1 CACHE STRING "0: vector extension disabled, 1: enabled")
 
 # ISA setup [MAGIA/spatz/sw/Makefile]
 set(SPATZ_ARCH rv CACHE STRING "Spatz ARCH prefix")
@@ -162,6 +162,32 @@ set(SPATZ_CFLAGS_DEFINES
     "-DSPATZ_XDMA=${SPATZ_XDMA}"
     "-DSPATZ_RVF=${SPATZ_RVF}"
     "-DSPATZ_RVV=${SPATZ_RVV}"
+)
+# Store fence after every vector store in the Spatz tasks (RTL workaround, see spatz_vst_fence.h)
+if(NOT DEFINED SPATZ_VST_FENCE)
+    set(SPATZ_VST_FENCE 1)
+endif()
+set(SPATZ_VST_FENCE_FLAGS
+    "-DSPATZ_VST_FENCE_EN=${SPATZ_VST_FENCE}"
+    "-include" "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include/utils/spatz_vst_fence.h"
+)
+# FPU drain before FP instructions of a shorter-latency op group (RTL workaround, see
+# spatz_fpu_fence.h)
+if(NOT DEFINED SPATZ_FPU_FENCE)
+    set(SPATZ_FPU_FENCE 1)
+endif()
+set(SPATZ_FPU_FENCE_FLAGS
+    "-DSPATZ_FPU_FENCE_EN=${SPATZ_FPU_FENCE}"
+    "-include" "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include/utils/spatz_fpu_fence.h"
+)
+# Store after strided/indexed vector loads, so that nothing chains on them (RTL workaround, see
+# spatz_vld_fence.h)
+if(NOT DEFINED SPATZ_VLD_FENCE)
+    set(SPATZ_VLD_FENCE 1)
+endif()
+set(SPATZ_VLD_FENCE_FLAGS
+    "-DSPATZ_VLD_FENCE_EN=${SPATZ_VLD_FENCE}"
+    "-include" "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include/utils/spatz_vld_fence.h"
 )
 set(SPATZ_LINK_FLAGS
     "--ld-path=${SPATZ_LLVM_PATH}/bin/ld.lld"

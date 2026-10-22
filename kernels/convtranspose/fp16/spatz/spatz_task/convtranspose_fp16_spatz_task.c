@@ -119,7 +119,7 @@ static inline void convtranspose(const _Float16 *src,
 
                             asm volatile("vfmacc.vf v0, %0, v8" ::"f"(val_x));
 
-                            asm volatile("vse16.v v0, (%0)" ::"r"(p_y));
+                            asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_y));
 
                             p_y += vl;
                             p_w += vl;

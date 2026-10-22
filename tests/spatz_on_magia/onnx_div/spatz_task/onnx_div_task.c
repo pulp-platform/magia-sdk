@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "onnx_div_params.h"
 
 int onnx_div_task(void)
@@ -24,14 +25,14 @@ int onnx_div_task(void)
     avl = params->len;
 
     for (; avl > 0; avl -= vl) {
-        asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl)); /* m4: 5 groups */
 
         asm volatile("vle16.v v0, (%0)" ::"r"(A));
         asm volatile("vle16.v v8, (%0)" ::"r"(B));
 
-        asm volatile("vfdiv.vv v16, v0, v8");
+        SPATZ_VFDIV_VV("v16", "v0", "v8", "v20", "v24"); /* no vfdiv, see spatz_recip.h */
 
-        asm volatile("vse16.v v16, (%0)" ::"r"(C));
+        asm volatile("vse16.v v16, (%0)" SPATZ_VST_FENCE ::"r"(C));
 
         A += vl;
         B += vl;

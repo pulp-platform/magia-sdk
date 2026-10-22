@@ -1,0 +1,68 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Output-static MATMUL (Z = X @ W, no bias) on the MAGIA mesh. The output tile is
+# never initialized: the uninit-acc pass makes the RedMulE job of the first
+# timeslot a MATMUL, the others accumulate onto it. Compile with
+#   python mgc/mgcc.py tests/magia/mgc/mm_matmul_mgc/mm_matmul.mgc -o tests/magia/mgc/mm_matmul_mgc/src/test.c
+
+from mgc import *
+
+M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # from include/test.h
+X = l2("x_inp", (M, N), fp16)
+W = l2("w_inp", (N, K), fp16)
+Y = l2("y_out", (M, K), fp16)  # result out
+Z = l2("z_out", (M, K), fp16)  # golden
+
+N_TIMESLOTS = define(8)
+WAIT_MODE = define(WFE)
+
+
+@test("test_mm_matmul_mgc", authors=["Francesco Conti <f.conti@unibo.it>"])
+def main():
+    """
+    This test verifies MATMUL (no accumulation) on MAGIA, following the output-static
+    mechanism of mm_os_mgc without the bias: the output tile is never loaded, so the
+    compiler issues the first RedMulE job of each tile as a MATMUL, which does not read it,
+    and the following ones as GEMMs accumulating onto it.
+    """
+    for y_id, x_id in tiles():
+        """
+        1. Static output data-tile dimensions, and the timeslots the inner dimension
+        is split into.
+        """
+        tile_h = y_id.split(M)
+        tile_w = x_id.split(K)
+        timeslots: u8 = N_TIMESLOTS
+        t_size: u8 = N // timeslots
+
+        """
+        2. Static output data-tile, resident in L1 and never initialized; input and
+        weight data-tiles double buffered over the timeslots.
+        """
+        y = L1.single_buffer(Y[tile_h, tile_w])
+        x = L1.multi_buffer(X[tile_h, 0:t_size], depth=2)
+        w = L1.multi_buffer(W[0:t_size, tile_w], depth=2)
+        redmule_evt = redmule.events(2)
+
+        """
+        3. Run the timeslots as a software pipeline: the operands of timeslot i+1 are
+        prefetched while RedMulE computes timeslot i.
+        """
+        for i in pipeline(timeslots):
+            with stage(0):
+                ex = idma.load(x[i], X[tile_h, i * t_size:(i + 1) * t_size])
+                ew = idma.load(w[i], W[i * t_size:(i + 1) * t_size, tile_w])
+                redmule.enqueue(x[i], w[i], y, op=GEMM, event=redmule_evt[i])
+                ex.wait()
+                ew.wait()
+                redmule.commit_start()
+            with stage(1):
+                redmule_evt[i].wait()
+
+        """
+        4. Store the output data-tile back to L2 and check it
+        """
+        idma.store(Y[tile_h, tile_w], y).wait()
+        check(Y[tile_h, tile_w], Z[tile_h, tile_w])

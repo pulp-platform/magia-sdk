@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "onnx_batchnorm_params.h"
 
 static inline void batchnorm(const _Float16 *src,
@@ -32,7 +33,7 @@ static inline void batchnorm(const _Float16 *src,
     avl     = len;
 
     for (; avl > 0; avl -= vl) {
-        asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl)); /* m4: room for the division */
 
         asm volatile("vle16.v v0, (%0)" ::"r"(p_src));
         asm volatile("vle16.v v8, (%0)" ::"r"(p_mean));
@@ -46,15 +47,15 @@ static inline void batchnorm(const _Float16 *src,
         asm volatile("vfsqrt.v v24, v16");
 
         /* normalize: norm[i] = x_centered[i] / std[i] */
-        asm volatile("vfdiv.vv v0, v0, v24");
+        SPATZ_VFDIV_VV("v28", "v0", "v24", "v4", "v12"); /* no vfdiv, see spatz_recip.h; vfsqrt above still needs one */
 
         /* affine: dst = norm[i] * gamma[i] + beta[i] */
         asm volatile("vle16.v v8, (%0)" ::"r"(p_gamma));
         asm volatile("vle16.v v16, (%0)" ::"r"(p_beta));
-        asm volatile("vfmul.vv v0, v0, v8");
+        asm volatile("vfmul.vv v0, v28, v8");
         asm volatile("vfadd.vv v0, v0, v16");
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst) : "memory");
 
         p_gamma += vl;
         p_mean += vl;

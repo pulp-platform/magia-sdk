@@ -27,10 +27,10 @@ static inline void hardsigmoid(
         asm volatile("vfmul.vf v0, v0, %0" ::"f"(alpha));
         asm volatile("vfadd.vf v0, v0, %0" ::"f"(beta));
 
-        asm volatile("vfmin.vf v0, v0, %0" ::"f"(ONE));
+        asm volatile(SPATZ_FPU_FENCE "vfmin.vf v0, v0, %0" ::"f"(ONE));
         asm volatile("vfmax.vf v0, v0, %0" ::"f"(ZERO));
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst));
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst));
 
         p_src += vl;
         p_dst += vl;

@@ -42,7 +42,7 @@ int scatter_fp16_spatz_task(void)
     while (avl > 0) {
         asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
         asm volatile("vle16.v v0, (%0)" ::"r"(src_ptr));
-        asm volatile("vse16.v v0, (%0)" ::"r"(dst_ptr) : "memory");
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(dst_ptr) : "memory");
         src_ptr += vl;
         dst_ptr += vl;
         avl -= vl;

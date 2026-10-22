@@ -22,7 +22,7 @@ int relu_fp16_spatz_task(void)
         asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
         asm volatile("vle16.v v0, (%0)" ::"r"(X));
         asm volatile("vfmax.vf v8, v0, %0" ::"f"(ZERO));
-        asm volatile("vse16.v v8, (%0)" ::"r"(Y));
+        asm volatile("vse16.v v8, (%0)" SPATZ_VST_FENCE ::"r"(Y));
 
         X += vl;
         Y += vl;
