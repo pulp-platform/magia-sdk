@@ -165,7 +165,7 @@ set(SPATZ_CFLAGS_DEFINES
 )
 # Store fence after every vector store in the Spatz tasks (RTL workaround, see spatz_vst_fence.h)
 if(NOT DEFINED SPATZ_VST_FENCE)
-    set(SPATZ_VST_FENCE 0)
+    set(SPATZ_VST_FENCE 1)
 endif()
 set(SPATZ_VST_FENCE_FLAGS
     "-DSPATZ_VST_FENCE_EN=${SPATZ_VST_FENCE}"
@@ -174,7 +174,7 @@ set(SPATZ_VST_FENCE_FLAGS
 # FPU drain before FP instructions of a shorter-latency op group (RTL workaround, see
 # spatz_fpu_fence.h)
 if(NOT DEFINED SPATZ_FPU_FENCE)
-    set(SPATZ_FPU_FENCE 0)
+    set(SPATZ_FPU_FENCE 1)
 endif()
 set(SPATZ_FPU_FENCE_FLAGS
     "-DSPATZ_FPU_FENCE_EN=${SPATZ_FPU_FENCE}"
@@ -183,7 +183,7 @@ set(SPATZ_FPU_FENCE_FLAGS
 # Store after strided/indexed vector loads, so that nothing chains on them (RTL workaround, see
 # spatz_vld_fence.h)
 if(NOT DEFINED SPATZ_VLD_FENCE)
-    set(SPATZ_VLD_FENCE 0)
+    set(SPATZ_VLD_FENCE 1)
 endif()
 set(SPATZ_VLD_FENCE_FLAGS
     "-DSPATZ_VLD_FENCE_EN=${SPATZ_VLD_FENCE}"
