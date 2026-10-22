@@ -22,7 +22,7 @@ col2im_row_acc(const _Float16 *src, _Float16 *dst, uint32_t count, uint32_t stri
         for (; avl > 0; avl -= vl) {
             asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
             asm volatile("vle16.v v0, (%0)" ::"r"(src));
-            asm volatile("vlse16.v v8, (%0), %1" ::"r"(dst), "r"(stride_bytes));
+            asm volatile("vlse16.v v8, (%0), %1" SPATZ_VLD_FENCE ::"r"(dst), "r"(stride_bytes));
             asm volatile("vfadd.vv v0, v0, v8");
             asm volatile("vsse16.v v0, (%0), %1" SPATZ_VST_FENCE ::"r"(dst), "r"(stride_bytes) : "memory");
             src += vl;

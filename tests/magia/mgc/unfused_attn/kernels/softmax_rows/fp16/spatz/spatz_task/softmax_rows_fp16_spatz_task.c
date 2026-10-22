@@ -45,7 +45,7 @@ int softmax_rows_fp16_spatz_task(void)
             asm volatile(SPATZ_FPU_FENCE "vfmax.vv v8, v8, v0");
         }
         asm volatile("vsetvli zero, %0, e16, m8, ta, ma" ::"r"(vl0));
-        asm volatile(SPATZ_FPU_FENCE "vfredmax.vs v24, v8, v8");
+        asm volatile("vfredmax.vs v24, v8, v8");
         asm volatile("vfmv.f.s %0, v24" : "=f"(m));
 
         /* exp(s * (x - max)) in place, and its sum in fp32 */

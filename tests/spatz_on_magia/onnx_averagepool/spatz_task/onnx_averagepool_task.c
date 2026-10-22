@@ -76,7 +76,7 @@ static inline void averagepool(const _Float16 *src,
         for (; avl > 0; avl -= vl) {
             asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
 
-            asm volatile("vlse16.v v16, (%0), %1" ::"r"(p_src), "r"(strides_bytes));
+            asm volatile("vlse16.v v16, (%0), %1" SPATZ_VLD_FENCE ::"r"(p_src), "r"(strides_bytes));
             asm volatile("vfadd.vv v0, v16, v0");
 
             p_src += vl * dilation;

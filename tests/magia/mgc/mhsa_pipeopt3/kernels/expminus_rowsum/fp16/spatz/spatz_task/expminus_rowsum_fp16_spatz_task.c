@@ -150,10 +150,10 @@ static inline void rowsum(const _Float16 *Y, _Float16 *S, size_t rows, size_t co
     for (size_t r = 0; r < rows; r += vl) {
         asm volatile("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(rows - r));
 
-        asm volatile("vlse16.v v8, (%0), %1" ::"r"(Y + r * cols), "r"(row_stride));
+        asm volatile("vlse16.v v8, (%0), %1" SPATZ_VLD_FENCE ::"r"(Y + r * cols), "r"(row_stride));
         asm volatile("vfwadd.vf v0, v8, %0" ::"f"(zero));
         for (size_t c = 1; c < cols; c++) {
-            asm volatile("vlse16.v v8, (%0), %1" ::"r"(Y + r * cols + c), "r"(row_stride));
+            asm volatile("vlse16.v v8, (%0), %1" SPATZ_VLD_FENCE ::"r"(Y + r * cols + c), "r"(row_stride));
             asm volatile("vfwadd.wv v0, v0, v8");
         }
 

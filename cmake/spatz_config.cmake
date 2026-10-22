@@ -180,6 +180,15 @@ set(SPATZ_FPU_FENCE_FLAGS
     "-DSPATZ_FPU_FENCE_EN=${SPATZ_FPU_FENCE}"
     "-include" "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include/utils/spatz_fpu_fence.h"
 )
+# Store after strided/indexed vector loads, so that nothing chains on them (RTL workaround, see
+# spatz_vld_fence.h)
+if(NOT DEFINED SPATZ_VLD_FENCE)
+    set(SPATZ_VLD_FENCE 0)
+endif()
+set(SPATZ_VLD_FENCE_FLAGS
+    "-DSPATZ_VLD_FENCE_EN=${SPATZ_VLD_FENCE}"
+    "-include" "${CMAKE_SOURCE_DIR}/targets/${TARGET_PLATFORM}/include/utils/spatz_vld_fence.h"
+)
 set(SPATZ_LINK_FLAGS
     "--ld-path=${SPATZ_LLVM_PATH}/bin/ld.lld"
     "-fuse-ld=${SPATZ_LLVM_PATH}/bin/ld.lld"

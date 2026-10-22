@@ -216,9 +216,9 @@ static inline void reduce_max_innermost_strided(const _Float16 *src,
     for (; rows > 0; rows -= vl, src += vl * reduce_dim, dst += vl) {
         asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(rows));
 
-        asm volatile("vlse16.v v0, (%0), %1" ::"r"(src), "r"(row_stride));
+        asm volatile("vlse16.v v0, (%0), %1" SPATZ_VLD_FENCE ::"r"(src), "r"(row_stride));
         for (size_t c = 1; c < reduce_dim; c++) {
-            asm volatile("vlse16.v v8, (%0), %1" ::"r"(src + c), "r"(row_stride));
+            asm volatile("vlse16.v v8, (%0), %1" SPATZ_VLD_FENCE ::"r"(src + c), "r"(row_stride));
             asm volatile("vfmax.vv v0, v0, v8");
         }
 

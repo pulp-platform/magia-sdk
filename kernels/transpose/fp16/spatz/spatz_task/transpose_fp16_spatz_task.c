@@ -13,7 +13,7 @@ transpose(const _Float16 *src, _Float16 *dst, const size_t len, const size_t str
 
     for (; avl > 0; avl -= vl) {
         asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
-        asm volatile("vlse16.v v0, (%0), %1" ::"r"(p_src), "r"(stride_bytes));
+        asm volatile("vlse16.v v0, (%0), %1" SPATZ_VLD_FENCE ::"r"(p_src), "r"(stride_bytes));
         asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst) : "memory");
 
         p_src += vl * stride;

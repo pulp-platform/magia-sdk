@@ -103,6 +103,9 @@ spatz_vst_fence	?= 0
 # 1: FPU drain before FP instructions of a shorter-latency op group in the Spatz tasks (RTL VFU
 # chaining deadlock workaround, see targets/magia/include/utils/spatz_fpu_fence.h)
 spatz_fpu_fence	?= 0
+# 1: dummy store after every strided/indexed vector load in the Spatz tasks (RTL chaining on a
+# partially written VRF word, see targets/magia/include/utils/spatz_vld_fence.h)
+spatz_vld_fence	?= 0
 verbose			?= 0
 pulp_cores		?= 8
 l2_size			?=
