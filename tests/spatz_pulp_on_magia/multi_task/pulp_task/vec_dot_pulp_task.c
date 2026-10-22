@@ -12,28 +12,27 @@
 
 void vec_dot_pulp(int32_t *in_a, int32_t *in_b, int32_t *out, uint32_t len)
 {
-    uint32_t pair_local_id              = cl_core_id() % 2;
-    uint32_t half                       = len / 2;
-    uint32_t start                      = pair_local_id * half;
+    uint32_t pair_local_id = cl_core_id() % 2;
+    uint32_t half          = len / 2;
+    uint32_t start         = pair_local_id * half;
 
     int32_t dot = 0;
     for (uint32_t i = 0; i < half; i++)
         dot += in_a[start + i] * in_b[start + i];
 
     out[pair_local_id] = dot;
-
-    cl_eu_team_barrier_id(0);
 }
 
-
-void vec_dot_pulp_entry(void *arg){
+void vec_dot_pulp_entry(void *arg)
+{
     pulp_task_params_t *p = (pulp_task_params_t *)arg;
-    vec_dot_pulp((int32_t*) p->in_a, (int32_t*) p->in_b, (int32_t*) p->out, (uint32_t) p->len);
+    vec_dot_pulp((int32_t *)p->in_a, (int32_t *)p->in_b, (int32_t *)p->out, (uint32_t)p->len);
 }
 
-int vec_dot_pulp_task(void *data) {
-    cl_eu_team_barrier_setup(0, (uint32_t) 0x0D);
-    cl_eu_team_push_other((uint32_t) 0x0C, vec_dot_pulp_entry, data);
+int vec_dot_pulp_task(void *data)
+{
+    cl_eu_team_barrier_setup(0, (uint32_t)0x0D);
+    cl_eu_team_push_other((uint32_t)0x0D, vec_dot_pulp_entry, data);
     cl_eu_team_barrier_id(0);
     return 0;
 }

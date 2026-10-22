@@ -30,22 +30,25 @@ typedef struct {
     uint32_t len;
 } pulp_task_params_t;
 
-static void vector_add(uint32_t a, uint32_t b, uint32_t out, uint32_t len){
+static void vector_add(uint32_t a, uint32_t b, uint32_t out, uint32_t len)
+{
     volatile uint32_t cid = cl_core_id();
 
-    if(cid == 1)
+    if (cid == 1)
         wait_nop(100);
     mmio32(out + cid * 4) = mmio32(a + cid * 4) + mmio32(b + cid * 4);
 
     return;
 }
 
-static void fork_entry(void *arg) {
+static void fork_entry(void *arg)
+{
     pulp_task_params_t *p = (pulp_task_params_t *)arg;
     vector_add(p->src_a, p->src_b, p->dst, p->len);
 }
 
-int fork_task(void *data) {
+int fork_task(void *data)
+{
     cl_eu_team_fork(NUM_PULP_CORES, fork_entry, data);
     return 0;
 }
