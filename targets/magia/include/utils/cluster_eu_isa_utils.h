@@ -93,7 +93,7 @@ static inline void cl_eu_team_fork(int nb_cores, void (*entry)(void *), void *ar
     /* The calling core is itself a member of the team. */
     entry(arg);
 
-    //cl_eu_team_barrier();
+    cl_eu_team_barrier();
 }
 
 static inline void cl_eu_team_push_other(uint32_t core_mask, void (*entry)(void *), void *arg)
