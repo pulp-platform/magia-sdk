@@ -23,7 +23,7 @@
 // response, so tp stays reserved forever. A reduction does not need it anyway: the VFU waits for
 // the FPU to drain before starting one.
 //
-// Enabled with `make build spatz_fpu_fence=1` (CMake -DSPATZ_FPU_FENCE=1); empty otherwise.
+// On by default; disabled (empty) with `make build spatz_fpu_fence=0` (CMake -DSPATZ_FPU_FENCE=0).
 // scripts/spatz_fpu_hazards.py lists the instructions that need it, from the task ELFs.
 
 #ifndef SPATZ_FPU_FENCE_H

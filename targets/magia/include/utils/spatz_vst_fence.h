@@ -13,7 +13,7 @@
 // snitch.sv), so a dummy load right after the store holds back everything that follows until
 // the store has finished. `fence` does not do this: it only waits for the scalar LSU.
 //
-// Enabled with `make build spatz_vst_fence=1` (CMake -DSPATZ_VST_FENCE=1); empty otherwise.
+// On by default; disabled (empty) with `make build spatz_vst_fence=0` (CMake -DSPATZ_VST_FENCE=0).
 
 #ifndef SPATZ_VST_FENCE_H
 #define SPATZ_VST_FENCE_H

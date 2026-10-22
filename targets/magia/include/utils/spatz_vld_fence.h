@@ -17,7 +17,7 @@
 // The store writes zero to the word below sp, which is not allocated (the RISC-V ABI has no red
 // zone, so the compiler keeps nothing there).
 //
-// Enabled with `make build spatz_vld_fence=1` (CMake -DSPATZ_VLD_FENCE=1); empty otherwise.
+// On by default; disabled (empty) with `make build spatz_vld_fence=0` (CMake -DSPATZ_VLD_FENCE=0).
 
 #ifndef SPATZ_VLD_FENCE_H
 #define SPATZ_VLD_FENCE_H
