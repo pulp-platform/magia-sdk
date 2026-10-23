@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 ETH Zurich and University of Bologna
+ * Copyright (C) 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,22 @@
  * limitations under the License.
  * SPDX-License-Identifier: Apache-2.0
  *
- * Linker script for PULP embedded binary in CV32 instrram (magia).
+ * Linker script for PULP embedded binary in CV32 instrram (magia_v3).
+ *
+ * Aligned with magia-sdk targets/magia_v3/pulp/src/pulp_program.ld.
  *
  * Memory layout when embedded:
- *   0xCC000000:              CV32 .text
- *   0xCC000000 + CV32_size:  .spatz_binary (Spatz code, if present)
- *   0xCC000000 + offset:     _pulp_binary_start (.pulp_binary, this binary)
+ *   0xCC000000:               CV32 .text
+ *   0xCC000000 + CV32_size:   .spatz_binary (Spatz code, if present)
+ *   0xCC000000 + offset:      _pulp_binary_start (.pulp_binary, this binary)
  *
  * Binary is position-independent (compiled with -fPIC -mcmodel=medany).
  * ORIGIN=0x0 means all section addresses are relative to load address.
  *
- * Local stack allocation (tile address space, absolute):
- *   CV32  stack: 0x00010000 – 0x00014000 (16 KB)
- *   PULP  stack: 0x00014000 – 0x0001C000 (32 KB, 8 harts × 2 KB each)
- *   Spatz stack: 0x0001C000 – 0x00020000 (16 KB)
+ * Local stack allocation (tile address space, absolute, set by crt0.S and pulp_crt0.S):
+ *   PULP  stack: 0x00017400 ? 0x0001B400 (16 KB, 8 harts × 2 KB each, hart 0 on top)
+ *   CV32  stack: 0x0001B400 ? 0x0001C000 (3 KB)
+ *   Spatz stack: 0x0001C000 ? 0x00020000 (16 KB)
  */
 
 OUTPUT_ARCH(riscv)

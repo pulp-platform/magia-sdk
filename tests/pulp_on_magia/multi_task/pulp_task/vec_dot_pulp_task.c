@@ -17,13 +17,11 @@ void vec_dot_pulp_task(uint32_t data_ptr)
     volatile int32_t *in_b              = (volatile int32_t *)params->in_b;
     volatile int32_t *out               = (volatile int32_t *)params->out;
     uint32_t len                        = params->len;
-    uint32_t pair_local_id              = GET_PULP_LOCAL_ID(get_hartid()) % 2;
-    uint32_t half                       = len / 2;
-    uint32_t start                      = pair_local_id * half;
+    uint32_t cluster_local_id           = cl_core_id();
 
     int32_t dot = 0;
-    for (uint32_t i = 0; i < half; i++)
-        dot += in_a[start + i] * in_b[start + i];
+    for (uint32_t i = cluster_local_id; i < len; i++)
+        dot += in_a[i] * in_b[i];
 
-    out[pair_local_id] = dot;
+    out[cluster_local_id] = dot;
 }

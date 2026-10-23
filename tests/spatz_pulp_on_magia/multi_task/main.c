@@ -171,7 +171,7 @@ int main(void)
     printf("[CV32] Init PULP cluster\n");
     pulp_init(PULP_BINARY_START);
 
-    /* --- Task 1: vec_sum on cores 0+1 (mask=0x03) --------------------- */
+    /* --- Task 1: vec_sum on cores 0+1 --------------------- */
     {
         static const int32_t a[8] = {1, 2, 3, 4, 5, 6, 7, 8};
         volatile int32_t *in_a    = (volatile int32_t *)IN_A_ADDR;
@@ -183,9 +183,10 @@ int main(void)
         setup_pulp_params(IN_A_ADDR, 0, OUT_ADDR, 8, 0);
 
         printf("[CV32] PULP task 1: vec_sum (cores 0+1)\n");
-        pulp_run_task_with_params(VEC_SUM_PULP_TASK, PULP_PARAMS_ADDR, 0x03);
+        pulp_run_task_with_params(VEC_SUM_PULP_TASK, PULP_PARAMS_ADDR);
         eu_pulp_wait(WFE);
 
+        printf("Checking sum results (DELETE ME IF YOU READ THIS)\n");
         int32_t sum = out[0] + out[1];
         if (sum != 36) {
             printf("[CV32] SUM FAIL: got %d expected 36\n", (int)sum);
@@ -211,7 +212,7 @@ int main(void)
         setup_pulp_params(IN_A_ADDR, IN_B_ADDR, OUT_ADDR, 8, 0);
 
         printf("[CV32] PULP task 2: vec_dot (cores 2+3)\n");
-        pulp_run_task_with_params(VEC_DOT_PULP_TASK, PULP_PARAMS_ADDR, 0x0C);
+        pulp_run_task_with_params(VEC_DOT_PULP_TASK, PULP_PARAMS_ADDR);
         eu_pulp_wait(WFE);
 
         int32_t dot = out[0] + out[1];
@@ -236,7 +237,7 @@ int main(void)
         setup_pulp_params(IN_A_ADDR, 0, OUT_ADDR, 8, 3);
 
         printf("[CV32] PULP task 3: vec_scale (cores 4+5, scale=3)\n");
-        pulp_run_task_with_params(VEC_SCALE_PULP_TASK, PULP_PARAMS_ADDR, 0x30);
+        pulp_run_task_with_params(VEC_SCALE_PULP_TASK, PULP_PARAMS_ADDR);
         eu_pulp_wait(WFE);
 
         if (out[0] != 3 || out[7] != 24) {
@@ -262,7 +263,7 @@ int main(void)
         setup_pulp_params(IN_A_ADDR, 0, OUT_ADDR, 8, 0);
 
         printf("[CV32] PULP task 4: vec_absmax (cores 6+7)\n");
-        pulp_run_task_with_params(VEC_ABSMAX_PULP_TASK, PULP_PARAMS_ADDR, 0xC0);
+        pulp_run_task_with_params(VEC_ABSMAX_PULP_TASK, PULP_PARAMS_ADDR);
         eu_pulp_wait(WFE);
 
         int32_t absmax = out[0] > out[1] ? out[0] : out[1];

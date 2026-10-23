@@ -21,7 +21,6 @@ int main(void)
     printf("[CV32] Initializing Spatz\n");
     spatz_init(SPATZ_BINARY_START);
 
-    uint32_t pulp_core_mask = 0x92; /* one-hot bitmask: which PULP cores to run the task on */
     printf("[CV32] Initializing PULP cluster (binary @ 0x%08x)\n", PULP_BINARY_START);
     pulp_init(PULP_BINARY_START);
 
@@ -37,8 +36,8 @@ int main(void)
     }
     spatz_clk_dis();
 
-    printf("[CV32] Dispatching HELLO_TASK to PULP cluster (mask=0x%02x)\n", pulp_core_mask);
-    pulp_run_task(HELLO_PULP_TASK, pulp_core_mask);
+    printf("[CV32] Dispatching HELLO_TASK to PULP cluster (the print will look bad)\n");
+    pulp_run_task(HELLO_PULP_TASK);
 
     eu_pulp_wait(WFE);
     printf("[CV32] PULP cluster done\n");

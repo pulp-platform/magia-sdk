@@ -46,6 +46,10 @@
 #define PULP_CTRL_END               (0x000017FF)
 #define COLLECTIVE_CTRL_BASE        (0x00001800)
 #define COLLECTIVE_CTRL_END         (0x000018FF)
+#define CLUSTER_EU_DIRECT_BASE      (0x00001900)
+#define CLUSTER_EU_DIRECT_END       (0x000028FF)
+#define CLUSTER_EU_BASE             (0x00002900)
+#define CLUSTER_EU_END              (0x000038FF)
 
 #define COLLECTIVE_ADDR_OFFSET      (0xB0000000)
 
@@ -53,7 +57,7 @@
 #define GET_PULP_GLOBAL_ID(mhartid) ((mhartid) - PULP_HARTID_BASE)
 #define GET_PULP_LOCAL_ID(mhartid)  (GET_PULP_GLOBAL_ID(mhartid) % NUM_PULP_CORES)
 #define GET_PULP_TILE_ID(mhartid)   (GET_PULP_GLOBAL_ID(mhartid) / NUM_PULP_CORES)
-#define RESERVED_START              (0x00001800)
+#define RESERVED_START              (0x00003900)
 #define RESERVED_END                (0x0000FFFF)
 #define STACK_START                 (0x00010000)
 #define STACK_END                   (0x0001FFFF)
@@ -70,7 +74,8 @@
 #define PULP_STACK_SLICE_SIZE (0x800) /* 2 KB per hart */
 #define PULP_STACK_MAX_CORES  (16)
 
-// PULP hart ID mapping (CV32 tiles occupy [0, NUM_HARTS), PULP starts after)
+// PULP hart ID mapping (CV32 tiles occupy [0, NUM_HARTS), Spatz [NUM_HARTS, 2*NUM_HARTS), PULP
+// starts after)
 #define NUM_PULP_CORES        (PULP_CORE_COUNT)
 #define PULP_HARTID_BASE      (2 * NUM_HARTS)
 #define TOTAL_PULP_HARTS      (NUM_HARTS * NUM_PULP_CORES)
