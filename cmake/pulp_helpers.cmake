@@ -102,7 +102,7 @@ function(add_pulp_task)
     # Generate flat binary
     add_custom_command(
         OUTPUT ${TASK_BIN}
-        COMMAND ${CMAKE_OBJCOPY} -O binary ${TASK_ELF} ${TASK_BIN}
+        COMMAND ${CMAKE_OBJCOPY} -O binary --set-section-flags .bss=alloc,load,contents ${TASK_ELF} ${TASK_BIN}
         DEPENDS ${TASK_ELF}
         COMMENT "[PULP] Generating binary..."
         VERBATIM
