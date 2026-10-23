@@ -34,7 +34,7 @@ int main(void)
     } else {
         printf("[CV32] Spatz done\n");
     }
-    //spatz_clk_dis();
+    spatz_clk_dis();
 
     printf("[CV32] Dispatching HELLO_TASK to PULP cluster (the print will look bad)\n");
     pulp_run_task(HELLO_PULP_TASK);

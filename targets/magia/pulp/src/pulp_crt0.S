@@ -94,22 +94,6 @@ _start:
     li      t1, 1
     sw      t1, 0(t0)
 
-    /* GOT fixup, once by core 0: add the runtime base to each entry, linked at ORIGIN=0 */
-    .option push
-    .option norelax
-    la      t3, _start              /* t3 = runtime base (link-time base is 0) */
-    la      t4, __got_start__
-    la      t5, __got_end__
-    .option pop
-gotfix_loop:
-    bgeu    t4, t5, gotfix_done
-    lw      t6, 0(t4)
-    add     t6, t6, t3
-    sw      t6, 0(t4)
-    addi    t4, t4, 4
-    j       gotfix_loop
-gotfix_done:
-
 /*--------------------------------------------------------------------------
  * Dispatcher loop (core 0): sleep on the dispatch event, run the task, signal DONE
  *--------------------------------------------------------------------------*/

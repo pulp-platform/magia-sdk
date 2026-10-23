@@ -41,7 +41,6 @@ set(PULP_COMPILE_FLAGS
     "-Wundef"
     "-ffunction-sections"
     "-fdata-sections"
-    "-fPIC"
     "-mcmodel=medany"
     "-fno-jump-tables"
     "-msmall-data-limit=0"

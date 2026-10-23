@@ -20,6 +20,6 @@ void hello_pulp_entry(void *)
 
 void hello_pulp_task(void)
 {
-    cl_eu_team_fork(PULP_CORE_COUNT, hello_pulp_entry, NULL);
+    cl_eu_team_fork(PULP_CORE_COUNT, hello_pulp_entry, 0);
     return;
 }
