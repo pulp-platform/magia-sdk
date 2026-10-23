@@ -26,9 +26,9 @@
  * Binary is position-independent (compiled with -fPIC -mcmodel=medany).
  * ORIGIN=0x0 means all section addresses are relative to load address.
  *
- * Local stack allocation (tile address space, absolute, set by pulp_crt0.S):
- *   CV32  stack: 0x00010000 ? 0x00014000 (16 KB)
- *   PULP  stack: 0x00014000 ? 0x0001C000 (32 KB, 8 harts × 2 KB each)
+ * Local stack allocation (tile address space, absolute, set by crt0.S and pulp_crt0.S):
+ *   PULP  stack: 0x00017800 ? 0x0001B400 (16 KB, 8 harts × 2 KB each, hart 0 on top)
+ *   CV32  stack: 0x0001B400 ? 0x0001C000 (3 KB)
  *   Spatz stack: 0x0001C000 ? 0x00020000 (16 KB)
  */
 

@@ -94,7 +94,7 @@ function(add_spatz_task)
     # Generate binary [MAGIA/spatz/sw/Makefile: $(BIN)]
     add_custom_command(
         OUTPUT ${TASK_BIN}
-        COMMAND ${SPATZ_OBJCOPY} -O binary ${TASK_ELF} ${TASK_BIN}
+        COMMAND ${SPATZ_OBJCOPY} -O binary --set-section-flags .bss=alloc,load,contents ${TASK_ELF} ${TASK_BIN}
         DEPENDS ${TASK_ELF}
         COMMENT "[SPATZ] Generating binary..."
         VERBATIM

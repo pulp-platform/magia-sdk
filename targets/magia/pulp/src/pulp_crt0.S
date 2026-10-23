@@ -37,7 +37,7 @@
 #define EU_MASK_BAR_MUTEX_DISPATCH  ((1 << 16) | (1 << 17) | (1 << 18))
 
 /* PIC binary: MMIO and stack addresses are absolute, so they are loaded with li, not la */
-#define STACK_TOP        0x0001B400   /* 2KB below tile top (0x1C000): reserves CV32's slot */
+#define STACK_TOP        0x0001B400   /* 3KB below tile top (0x1C000): reserves CV32's slot */
 #define LOG2_SLICE       11           /* log2(2 KB) ? each hart gets 2 KB */
 
 .section .text.start, "ax"
