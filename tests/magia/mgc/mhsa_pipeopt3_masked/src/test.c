@@ -352,39 +352,31 @@ int main(void)
 
     mg_event_t idma_evt_q_in, idma_evt_q_out, idma_evt_kt_in, idma_evt_kt_out, idma_evt_v_in,
         idma_evt_v_out, idma_evt_o, idma_evt_attn, idma_evt_row_max, idma_evt_row_sum,
-        idma_evt_row_gather_buf, idma_evt_yq, idma_evt_yv, idma_evt_yk, idma_evt_yo;
-    mg_event_t redmule_evt;
+        idma_evt_row_gather_buf, idma_evt_xqv, idma_evt_wq, idma_evt_wv, idma_evt_yq, idma_evt_yv,
+        idma_evt_wk, idma_evt_xk, idma_evt_yk, idma_evt_xo, idma_evt_wo, idma_evt_yo;
     mg_event_t redmule_evt_attn;
     mg_event_t redmule_evt_o;
-    mg_event_t ev_q_0;
-    mg_event_t ev_v_0;
-    mg_event_t idma_evts_xqv_in_0, idma_evts_xqv_in_1;
-    mg_event_t *idma_evts_xqv_in_next, *idma_evts_xqv_in_curr;
-    mg_event_t idma_evts_wq_in_0, idma_evts_wq_in_1;
-    mg_event_t *idma_evts_wq_in_next, *idma_evts_wq_in_curr;
-    mg_event_t idma_evts_wv_in_0, idma_evts_wv_in_1;
-    mg_event_t *idma_evts_wv_in_next, *idma_evts_wv_in_curr;
-    mg_event_t idma_evts_wk_in_0, idma_evts_wk_in_1;
-    mg_event_t *idma_evts_wk_in_next, *idma_evts_wk_in_curr;
-    mg_event_t idma_evts_xk_in_0, idma_evts_xk_in_1;
-    mg_event_t *idma_evts_xk_in_next, *idma_evts_xk_in_curr;
-    mg_event_t idma_evts_xo_in_0, idma_evts_xo_in_1;
-    mg_event_t *idma_evts_xo_in_next, *idma_evts_xo_in_curr;
-    mg_event_t idma_evts_wo_in_0, idma_evts_wo_in_1;
-    mg_event_t *idma_evts_wo_in_next, *idma_evts_wo_in_curr;
+    mg_event_t ev_q_0, ev_q_1;
+    mg_event_t *ev_q_next, *ev_q_curr;
+    mg_event_t ev_v_0, ev_v_1;
+    mg_event_t *ev_v_next, *ev_v_curr;
+    mg_event_t redmule_evts_0, redmule_evts_1;
+    mg_event_t *redmule_evts_next, *redmule_evts_curr;
 
     // start together, as the flat_attn_* tests do
     fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     /**
-     * STEP 1: Q = X @ Wq, V = X @ Wv, block k + 1 of X, Wq, Wv loading while RedMulE accumulates
-     * block k
+     * STEP 1: Q = X @ Wq, V = X @ Wv, block k of X, Wq, Wv loading while RedMulE accumulates block
+     * k - 1
      */
+    // as mm_os: the jobs of block k are programmed while its operands load, committed once they
+    // have landed (stage 0) and waited one step later (stage 1). The RedMulE queue holds 2 jobs, so
+    // each job of block k is enqueued only once its counterpart of block k - 1 is done: Q(k) after
+    // Q(k - 1), V(k) after V(k - 1), and RedMulE runs Q(k - 1), V(k - 1), Q(k), V(k) back to back
     uint16_t n_kb_e = EMBED_SIZE / PROJ_KB_E;
-
-    // one event per job: the two jobs of an iteration are queued together
-    uint16_t k0 = 0;
+    uint16_t k0     = 0;
 
     mg_idma_memcpy_2d(WAIT_MODE,
                       0,
@@ -393,7 +385,7 @@ int main(void)
                       len_xqv,
                       std_xqv,
                       reps_xqv,
-                      &idma_evts_xqv_in_0,
+                      &idma_evt_xqv,
                       NULL);
 
     mg_idma_memcpy_2d(WAIT_MODE,
@@ -403,7 +395,7 @@ int main(void)
                       len_wq,
                       std_wq,
                       reps_wq,
-                      &idma_evts_wq_in_0,
+                      &idma_evt_wq,
                       NULL);
 
     mg_idma_memcpy_2d(WAIT_MODE,
@@ -413,47 +405,65 @@ int main(void)
                       len_wv,
                       std_wv,
                       reps_wv,
-                      &idma_evts_wv_in_0,
+                      &idma_evt_wv,
                       NULL);
+
+    mg_redmule_matmul_enqueue(WAIT_MODE,
+                              l1_addr_xqv_0,
+                              l1_addr_wq_0,
+                              l1_addr_yq,
+                              (uint16_t)tile_s,
+                              (uint16_t)PROJ_KB_E,
+                              (uint16_t)tile_hp,
+                              &ev_q_0,
+                              NULL);
+    mg_idma_wait(0, WAIT_MODE, &idma_evt_xqv);
+    mg_idma_wait(0, WAIT_MODE, &idma_evt_wq);
+    mg_idma_wait(0, WAIT_MODE, &idma_evt_wv);
+    mg_redmule_gemm_commit_start();
+
+    mg_redmule_matmul_enqueue(WAIT_MODE,
+                              l1_addr_xqv_0,
+                              l1_addr_wv_0,
+                              l1_addr_yv,
+                              (uint16_t)tile_s,
+                              (uint16_t)PROJ_KB_E,
+                              (uint16_t)tile_hp,
+                              &ev_v_0,
+                              NULL);
+    mg_redmule_gemm_commit_start();
 
     /**
      * pipeline: 2 stages; step k runs stage k on iteration k + 1 - k
-     * xqv               stages 0..1  depth 2
-     * wq                stages 0..1  depth 2
-     * wv                stages 0..1  depth 2
-     * idma_evts_xqv_in  stages 0..1  depth 2
-     * idma_evts_wq_in   stages 0..1  depth 2
-     * idma_evts_wv_in   stages 0..1  depth 2
-     * ev_q              stages 1..1  depth 1
-     * ev_v              stages 1..1  depth 1
+     * xqv   stages 0..1  depth 2
+     * wq    stages 0..1  depth 2
+     * wv    stages 0..1  depth 2
+     * ev_q  stages 0..1  depth 2
+     * ev_v  stages 0..1  depth 2
      */
     for (int k = 0; k < n_kb_e; k++) {
         if (k % 2) {
-            xqv_pt                = l1_addr_xqv_1;
-            xqv_pt_next           = l1_addr_xqv_0;
-            wq_pt                 = l1_addr_wq_1;
-            wq_pt_next            = l1_addr_wq_0;
-            wv_pt                 = l1_addr_wv_1;
-            wv_pt_next            = l1_addr_wv_0;
-            idma_evts_wq_in_curr  = &idma_evts_wq_in_1;
-            idma_evts_wq_in_next  = &idma_evts_wq_in_0;
-            idma_evts_wv_in_curr  = &idma_evts_wv_in_1;
-            idma_evts_wv_in_next  = &idma_evts_wv_in_0;
-            idma_evts_xqv_in_curr = &idma_evts_xqv_in_1;
-            idma_evts_xqv_in_next = &idma_evts_xqv_in_0;
+            xqv_pt      = l1_addr_xqv_1;
+            xqv_pt_next = l1_addr_xqv_0;
+            wq_pt       = l1_addr_wq_1;
+            wq_pt_next  = l1_addr_wq_0;
+            wv_pt       = l1_addr_wv_1;
+            wv_pt_next  = l1_addr_wv_0;
+            ev_q_curr   = &ev_q_1;
+            ev_q_next   = &ev_q_0;
+            ev_v_curr   = &ev_v_1;
+            ev_v_next   = &ev_v_0;
         } else {
-            xqv_pt                = l1_addr_xqv_0;
-            xqv_pt_next           = l1_addr_xqv_1;
-            wq_pt                 = l1_addr_wq_0;
-            wq_pt_next            = l1_addr_wq_1;
-            wv_pt                 = l1_addr_wv_0;
-            wv_pt_next            = l1_addr_wv_1;
-            idma_evts_wq_in_curr  = &idma_evts_wq_in_0;
-            idma_evts_wq_in_next  = &idma_evts_wq_in_1;
-            idma_evts_wv_in_curr  = &idma_evts_wv_in_0;
-            idma_evts_wv_in_next  = &idma_evts_wv_in_1;
-            idma_evts_xqv_in_curr = &idma_evts_xqv_in_0;
-            idma_evts_xqv_in_next = &idma_evts_xqv_in_1;
+            xqv_pt      = l1_addr_xqv_0;
+            xqv_pt_next = l1_addr_xqv_1;
+            wq_pt       = l1_addr_wq_0;
+            wq_pt_next  = l1_addr_wq_1;
+            wv_pt       = l1_addr_wv_0;
+            wv_pt_next  = l1_addr_wv_1;
+            ev_q_curr   = &ev_q_0;
+            ev_q_next   = &ev_q_1;
+            ev_v_curr   = &ev_v_0;
+            ev_v_next   = &ev_v_1;
         }
 
         if (k < (n_kb_e - 1)) {
@@ -466,7 +476,7 @@ int main(void)
                               len_xqv,
                               std_xqv,
                               reps_xqv,
-                              idma_evts_xqv_in_next,
+                              &idma_evt_xqv,
                               NULL);
 
             mg_idma_memcpy_2d(WAIT_MODE,
@@ -476,7 +486,7 @@ int main(void)
                               len_wq,
                               std_wq,
                               reps_wq,
-                              idma_evts_wq_in_next,
+                              &idma_evt_wq,
                               NULL);
 
             mg_idma_memcpy_2d(WAIT_MODE,
@@ -486,111 +496,38 @@ int main(void)
                               len_wv,
                               std_wv,
                               reps_wv,
-                              idma_evts_wv_in_next,
+                              &idma_evt_wv,
                               NULL);
-            mg_idma_wait(0, WAIT_MODE, idma_evts_xqv_in_curr);
-            mg_idma_wait(0, WAIT_MODE, idma_evts_wq_in_curr);
-            mg_idma_wait(0, WAIT_MODE, idma_evts_wv_in_curr);
+            mg_redmule_wait(WAIT_MODE, ev_q_curr);
 
-            if (k == 0) {
-                mg_redmule_matmul_enqueue(WAIT_MODE,
-                                          xqv_pt,
-                                          wq_pt,
-                                          l1_addr_yq,
-                                          (uint16_t)tile_s,
-                                          (uint16_t)PROJ_KB_E,
-                                          (uint16_t)tile_hp,
-                                          &ev_q_0,
-                                          NULL);
-            } else {
-                mg_redmule_gemm_enqueue(WAIT_MODE,
-                                        xqv_pt,
-                                        wq_pt,
-                                        l1_addr_yq,
-                                        (uint16_t)tile_s,
-                                        (uint16_t)PROJ_KB_E,
-                                        (uint16_t)tile_hp,
-                                        &ev_q_0,
-                                        NULL);
-            }
+            mg_redmule_gemm_enqueue(WAIT_MODE,
+                                    xqv_pt_next,
+                                    wq_pt_next,
+                                    l1_addr_yq,
+                                    (uint16_t)tile_s,
+                                    (uint16_t)PROJ_KB_E,
+                                    (uint16_t)tile_hp,
+                                    ev_q_next,
+                                    NULL);
+            mg_idma_wait(0, WAIT_MODE, &idma_evt_xqv);
+            mg_idma_wait(0, WAIT_MODE, &idma_evt_wq);
+            mg_idma_wait(0, WAIT_MODE, &idma_evt_wv);
             mg_redmule_gemm_commit_start();
+            mg_redmule_wait(WAIT_MODE, ev_v_curr);
 
-            if (k == 0) {
-                mg_redmule_matmul_enqueue(WAIT_MODE,
-                                          xqv_pt,
-                                          wv_pt,
-                                          l1_addr_yv,
-                                          (uint16_t)tile_s,
-                                          (uint16_t)PROJ_KB_E,
-                                          (uint16_t)tile_hp,
-                                          &ev_v_0,
-                                          NULL);
-            } else {
-                mg_redmule_gemm_enqueue(WAIT_MODE,
-                                        xqv_pt,
-                                        wv_pt,
-                                        l1_addr_yv,
-                                        (uint16_t)tile_s,
-                                        (uint16_t)PROJ_KB_E,
-                                        (uint16_t)tile_hp,
-                                        &ev_v_0,
-                                        NULL);
-            }
+            mg_redmule_gemm_enqueue(WAIT_MODE,
+                                    xqv_pt_next,
+                                    wv_pt_next,
+                                    l1_addr_yv,
+                                    (uint16_t)tile_s,
+                                    (uint16_t)PROJ_KB_E,
+                                    (uint16_t)tile_hp,
+                                    ev_v_next,
+                                    NULL);
             mg_redmule_gemm_commit_start();
-            mg_redmule_wait(WAIT_MODE, &ev_q_0);
-            mg_redmule_wait(WAIT_MODE, &ev_v_0);
         } else {
-            mg_idma_wait(0, WAIT_MODE, idma_evts_xqv_in_curr);
-            mg_idma_wait(0, WAIT_MODE, idma_evts_wq_in_curr);
-            mg_idma_wait(0, WAIT_MODE, idma_evts_wv_in_curr);
-
-            if (k == 0) {
-                mg_redmule_matmul_enqueue(WAIT_MODE,
-                                          xqv_pt,
-                                          wq_pt,
-                                          l1_addr_yq,
-                                          (uint16_t)tile_s,
-                                          (uint16_t)PROJ_KB_E,
-                                          (uint16_t)tile_hp,
-                                          &ev_q_0,
-                                          NULL);
-            } else {
-                mg_redmule_gemm_enqueue(WAIT_MODE,
-                                        xqv_pt,
-                                        wq_pt,
-                                        l1_addr_yq,
-                                        (uint16_t)tile_s,
-                                        (uint16_t)PROJ_KB_E,
-                                        (uint16_t)tile_hp,
-                                        &ev_q_0,
-                                        NULL);
-            }
-            mg_redmule_gemm_commit_start();
-
-            if (k == 0) {
-                mg_redmule_matmul_enqueue(WAIT_MODE,
-                                          xqv_pt,
-                                          wv_pt,
-                                          l1_addr_yv,
-                                          (uint16_t)tile_s,
-                                          (uint16_t)PROJ_KB_E,
-                                          (uint16_t)tile_hp,
-                                          &ev_v_0,
-                                          NULL);
-            } else {
-                mg_redmule_gemm_enqueue(WAIT_MODE,
-                                        xqv_pt,
-                                        wv_pt,
-                                        l1_addr_yv,
-                                        (uint16_t)tile_s,
-                                        (uint16_t)PROJ_KB_E,
-                                        (uint16_t)tile_hp,
-                                        &ev_v_0,
-                                        NULL);
-            }
-            mg_redmule_gemm_commit_start();
-            mg_redmule_wait(WAIT_MODE, &ev_q_0);
-            mg_redmule_wait(WAIT_MODE, &ev_v_0);
+            mg_redmule_wait(WAIT_MODE, ev_q_curr);
+            mg_redmule_wait(WAIT_MODE, ev_v_curr);
         }
     }
     int k_last = n_kb_e - 1;
@@ -615,7 +552,7 @@ int main(void)
                       len_wk,
                       std_wk,
                       reps_wk,
-                      &idma_evts_wk_in_0,
+                      &idma_evt_wk,
                       NULL);
 
     mg_idma_memcpy_2d(WAIT_MODE,
@@ -625,35 +562,43 @@ int main(void)
                       len_xk,
                       std_xk,
                       reps_xk,
-                      &idma_evts_xk_in_0,
+                      &idma_evt_xk,
                       NULL);
+
+    mg_redmule_matmul_enqueue(WAIT_MODE,
+                              l1_addr_wk_0,
+                              l1_addr_xk_0,
+                              l1_addr_yk,
+                              (uint16_t)tile_khp,
+                              (uint16_t)PROJ_KB_E,
+                              (uint16_t)tile_ks,
+                              &redmule_evts_0,
+                              NULL);
+    mg_idma_wait(0, WAIT_MODE, &idma_evt_wk);
+    mg_idma_wait(0, WAIT_MODE, &idma_evt_xk);
+    mg_redmule_gemm_commit_start();
 
     /**
      * pipeline: 2 stages; step k runs stage k on iteration k + 1 - k
-     * wk               stages 0..1  depth 2
-     * xk               stages 0..1  depth 2
-     * idma_evts_wk_in  stages 0..1  depth 2
-     * idma_evts_xk_in  stages 0..1  depth 2
+     * wk            stages 0..1  depth 2
+     * xk            stages 0..1  depth 2
+     * redmule_evts  stages 0..1  depth 2
      */
     for (int k = 0; k < n_kb_e; k++) {
         if (k % 2) {
-            wk_pt                = l1_addr_wk_1;
-            wk_pt_next           = l1_addr_wk_0;
-            xk_pt                = l1_addr_xk_1;
-            xk_pt_next           = l1_addr_xk_0;
-            idma_evts_wk_in_curr = &idma_evts_wk_in_1;
-            idma_evts_wk_in_next = &idma_evts_wk_in_0;
-            idma_evts_xk_in_curr = &idma_evts_xk_in_1;
-            idma_evts_xk_in_next = &idma_evts_xk_in_0;
+            wk_pt             = l1_addr_wk_1;
+            wk_pt_next        = l1_addr_wk_0;
+            xk_pt             = l1_addr_xk_1;
+            xk_pt_next        = l1_addr_xk_0;
+            redmule_evts_curr = &redmule_evts_1;
+            redmule_evts_next = &redmule_evts_0;
         } else {
-            wk_pt                = l1_addr_wk_0;
-            wk_pt_next           = l1_addr_wk_1;
-            xk_pt                = l1_addr_xk_0;
-            xk_pt_next           = l1_addr_xk_1;
-            idma_evts_wk_in_curr = &idma_evts_wk_in_0;
-            idma_evts_wk_in_next = &idma_evts_wk_in_1;
-            idma_evts_xk_in_curr = &idma_evts_xk_in_0;
-            idma_evts_xk_in_next = &idma_evts_xk_in_1;
+            wk_pt             = l1_addr_wk_0;
+            wk_pt_next        = l1_addr_wk_1;
+            xk_pt             = l1_addr_xk_0;
+            xk_pt_next        = l1_addr_xk_1;
+            redmule_evts_curr = &redmule_evts_0;
+            redmule_evts_next = &redmule_evts_1;
         }
 
         if (k < (n_kb_e - 1)) {
@@ -666,7 +611,7 @@ int main(void)
                               len_wk,
                               std_wk,
                               reps_wk,
-                              idma_evts_wk_in_next,
+                              &idma_evt_wk,
                               NULL);
 
             mg_idma_memcpy_2d(WAIT_MODE,
@@ -676,61 +621,24 @@ int main(void)
                               len_xk,
                               std_xk,
                               reps_xk,
-                              idma_evts_xk_in_next,
+                              &idma_evt_xk,
                               NULL);
-            mg_idma_wait(0, WAIT_MODE, idma_evts_wk_in_curr);
-            mg_idma_wait(0, WAIT_MODE, idma_evts_xk_in_curr);
 
-            if (k == 0) {
-                mg_redmule_matmul_enqueue(WAIT_MODE,
-                                          wk_pt,
-                                          xk_pt,
-                                          l1_addr_yk,
-                                          (uint16_t)tile_khp,
-                                          (uint16_t)PROJ_KB_E,
-                                          (uint16_t)tile_ks,
-                                          &redmule_evt,
-                                          NULL);
-            } else {
-                mg_redmule_gemm_enqueue(WAIT_MODE,
-                                        wk_pt,
-                                        xk_pt,
-                                        l1_addr_yk,
-                                        (uint16_t)tile_khp,
-                                        (uint16_t)PROJ_KB_E,
-                                        (uint16_t)tile_ks,
-                                        &redmule_evt,
-                                        NULL);
-            }
+            mg_redmule_gemm_enqueue(WAIT_MODE,
+                                    wk_pt_next,
+                                    xk_pt_next,
+                                    l1_addr_yk,
+                                    (uint16_t)tile_khp,
+                                    (uint16_t)PROJ_KB_E,
+                                    (uint16_t)tile_ks,
+                                    redmule_evts_next,
+                                    NULL);
+            mg_idma_wait(0, WAIT_MODE, &idma_evt_wk);
+            mg_idma_wait(0, WAIT_MODE, &idma_evt_xk);
             mg_redmule_gemm_commit_start();
-            mg_redmule_wait(WAIT_MODE, &redmule_evt);
+            mg_redmule_wait(WAIT_MODE, redmule_evts_curr);
         } else {
-            mg_idma_wait(0, WAIT_MODE, idma_evts_wk_in_curr);
-            mg_idma_wait(0, WAIT_MODE, idma_evts_xk_in_curr);
-
-            if (k == 0) {
-                mg_redmule_matmul_enqueue(WAIT_MODE,
-                                          wk_pt,
-                                          xk_pt,
-                                          l1_addr_yk,
-                                          (uint16_t)tile_khp,
-                                          (uint16_t)PROJ_KB_E,
-                                          (uint16_t)tile_ks,
-                                          &redmule_evt,
-                                          NULL);
-            } else {
-                mg_redmule_gemm_enqueue(WAIT_MODE,
-                                        wk_pt,
-                                        xk_pt,
-                                        l1_addr_yk,
-                                        (uint16_t)tile_khp,
-                                        (uint16_t)PROJ_KB_E,
-                                        (uint16_t)tile_ks,
-                                        &redmule_evt,
-                                        NULL);
-            }
-            mg_redmule_gemm_commit_start();
-            mg_redmule_wait(WAIT_MODE, &redmule_evt);
+            mg_redmule_wait(WAIT_MODE, redmule_evts_curr);
         }
     }
     k_last = n_kb_e - 1;
@@ -1366,7 +1274,7 @@ int main(void)
                       len_xo,
                       std_xo,
                       reps_xo,
-                      &idma_evts_xo_in_0,
+                      &idma_evt_xo,
                       NULL);
 
     mg_idma_memcpy_2d(WAIT_MODE,
@@ -1376,35 +1284,43 @@ int main(void)
                       len_wo,
                       std_wo,
                       reps_wo,
-                      &idma_evts_wo_in_0,
+                      &idma_evt_wo,
                       NULL);
+
+    mg_redmule_matmul_enqueue(WAIT_MODE,
+                              l1_addr_xo_0,
+                              l1_addr_wo_0,
+                              l1_addr_yo,
+                              (uint16_t)tile_s,
+                              (uint16_t)PROJ_KB_HP,
+                              (uint16_t)tile_e,
+                              &redmule_evts_0,
+                              NULL);
+    mg_idma_wait(0, WAIT_MODE, &idma_evt_xo);
+    mg_idma_wait(0, WAIT_MODE, &idma_evt_wo);
+    mg_redmule_gemm_commit_start();
 
     /**
      * pipeline: 2 stages; step k runs stage k on iteration k + 1 - k
-     * xo               stages 0..1  depth 2
-     * wo               stages 0..1  depth 2
-     * idma_evts_xo_in  stages 0..1  depth 2
-     * idma_evts_wo_in  stages 0..1  depth 2
+     * xo            stages 0..1  depth 2
+     * wo            stages 0..1  depth 2
+     * redmule_evts  stages 0..1  depth 2
      */
     for (int k = 0; k < n_kb_hp; k++) {
         if (k % 2) {
-            xo_pt                = l1_addr_xo_1;
-            xo_pt_next           = l1_addr_xo_0;
-            wo_pt                = l1_addr_wo_1;
-            wo_pt_next           = l1_addr_wo_0;
-            idma_evts_wo_in_curr = &idma_evts_wo_in_1;
-            idma_evts_wo_in_next = &idma_evts_wo_in_0;
-            idma_evts_xo_in_curr = &idma_evts_xo_in_1;
-            idma_evts_xo_in_next = &idma_evts_xo_in_0;
+            xo_pt             = l1_addr_xo_1;
+            xo_pt_next        = l1_addr_xo_0;
+            wo_pt             = l1_addr_wo_1;
+            wo_pt_next        = l1_addr_wo_0;
+            redmule_evts_curr = &redmule_evts_1;
+            redmule_evts_next = &redmule_evts_0;
         } else {
-            xo_pt                = l1_addr_xo_0;
-            xo_pt_next           = l1_addr_xo_1;
-            wo_pt                = l1_addr_wo_0;
-            wo_pt_next           = l1_addr_wo_1;
-            idma_evts_wo_in_curr = &idma_evts_wo_in_0;
-            idma_evts_wo_in_next = &idma_evts_wo_in_1;
-            idma_evts_xo_in_curr = &idma_evts_xo_in_0;
-            idma_evts_xo_in_next = &idma_evts_xo_in_1;
+            xo_pt             = l1_addr_xo_0;
+            xo_pt_next        = l1_addr_xo_1;
+            wo_pt             = l1_addr_wo_0;
+            wo_pt_next        = l1_addr_wo_1;
+            redmule_evts_curr = &redmule_evts_0;
+            redmule_evts_next = &redmule_evts_1;
         }
 
         if (k < (n_kb_hp - 1)) {
@@ -1417,7 +1333,7 @@ int main(void)
                               len_xo,
                               std_xo,
                               reps_xo,
-                              idma_evts_xo_in_next,
+                              &idma_evt_xo,
                               NULL);
 
             mg_idma_memcpy_2d(WAIT_MODE,
@@ -1427,61 +1343,24 @@ int main(void)
                               len_wo,
                               std_wo,
                               reps_wo,
-                              idma_evts_wo_in_next,
+                              &idma_evt_wo,
                               NULL);
-            mg_idma_wait(0, WAIT_MODE, idma_evts_xo_in_curr);
-            mg_idma_wait(0, WAIT_MODE, idma_evts_wo_in_curr);
 
-            if (k == 0) {
-                mg_redmule_matmul_enqueue(WAIT_MODE,
-                                          xo_pt,
-                                          wo_pt,
-                                          l1_addr_yo,
-                                          (uint16_t)tile_s,
-                                          (uint16_t)PROJ_KB_HP,
-                                          (uint16_t)tile_e,
-                                          &redmule_evt,
-                                          NULL);
-            } else {
-                mg_redmule_gemm_enqueue(WAIT_MODE,
-                                        xo_pt,
-                                        wo_pt,
-                                        l1_addr_yo,
-                                        (uint16_t)tile_s,
-                                        (uint16_t)PROJ_KB_HP,
-                                        (uint16_t)tile_e,
-                                        &redmule_evt,
-                                        NULL);
-            }
+            mg_redmule_gemm_enqueue(WAIT_MODE,
+                                    xo_pt_next,
+                                    wo_pt_next,
+                                    l1_addr_yo,
+                                    (uint16_t)tile_s,
+                                    (uint16_t)PROJ_KB_HP,
+                                    (uint16_t)tile_e,
+                                    redmule_evts_next,
+                                    NULL);
+            mg_idma_wait(0, WAIT_MODE, &idma_evt_xo);
+            mg_idma_wait(0, WAIT_MODE, &idma_evt_wo);
             mg_redmule_gemm_commit_start();
-            mg_redmule_wait(WAIT_MODE, &redmule_evt);
+            mg_redmule_wait(WAIT_MODE, redmule_evts_curr);
         } else {
-            mg_idma_wait(0, WAIT_MODE, idma_evts_xo_in_curr);
-            mg_idma_wait(0, WAIT_MODE, idma_evts_wo_in_curr);
-
-            if (k == 0) {
-                mg_redmule_matmul_enqueue(WAIT_MODE,
-                                          xo_pt,
-                                          wo_pt,
-                                          l1_addr_yo,
-                                          (uint16_t)tile_s,
-                                          (uint16_t)PROJ_KB_HP,
-                                          (uint16_t)tile_e,
-                                          &redmule_evt,
-                                          NULL);
-            } else {
-                mg_redmule_gemm_enqueue(WAIT_MODE,
-                                        xo_pt,
-                                        wo_pt,
-                                        l1_addr_yo,
-                                        (uint16_t)tile_s,
-                                        (uint16_t)PROJ_KB_HP,
-                                        (uint16_t)tile_e,
-                                        &redmule_evt,
-                                        NULL);
-            }
-            mg_redmule_gemm_commit_start();
-            mg_redmule_wait(WAIT_MODE, &redmule_evt);
+            mg_redmule_wait(WAIT_MODE, redmule_evts_curr);
         }
     }
     k_last = n_kb_hp - 1;

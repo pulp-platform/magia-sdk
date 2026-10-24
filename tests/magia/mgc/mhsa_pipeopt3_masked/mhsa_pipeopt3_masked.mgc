@@ -146,11 +146,14 @@ def main():
         sync(GLOBAL)
 
         """
-        STEP 1: Q = X @ Wq, V = X @ Wv, block k + 1 of X, Wq, Wv loading while RedMulE accumulates block k
+        STEP 1: Q = X @ Wq, V = X @ Wv, block k of X, Wq, Wv loading while RedMulE accumulates block k - 1
         """
 
+        # as mm_os: the jobs of block k are programmed while its operands load, committed once they have landed
+        # (stage 0) and waited one step later (stage 1). The RedMulE queue holds 2 jobs, so each job of block k is
+        # enqueued only once its counterpart of block k - 1 is done: Q(k) after Q(k - 1), V(k) after V(k - 1),
+        # and RedMulE runs Q(k - 1), V(k - 1), Q(k), V(k) back to back
         n_kb_e: u16 = E // PROJ_KB_E
-        # one event per job: the two jobs of an iteration are queued together
         ev_q = redmule.events()
         ev_v = redmule.events()
         for k in pipeline(n_kb_e, name="qv_proj"):
@@ -160,15 +163,18 @@ def main():
                 ewq = idma.load(wq[k], wq_[k0:k0 + PROJ_KB_E, tile_hp])
                 ewv = idma.load(wv[k], wv_[k0:k0 + PROJ_KB_E, tile_hp])
             with stage(1):
+                ev_q[k].wait()
+            with stage(0):
+                redmule.enqueue(xqv[k], wq[k], yq, op=GEMM, event=ev_q[k], uninit=k == 0)
                 ex.wait()
                 ewq.wait()
                 ewv.wait()
-                redmule.enqueue(xqv[k], wq[k], yq, op=GEMM, event=ev_q[k], uninit=k == 0)
                 redmule.commit_start()
+            with stage(1):
+                ev_v[k].wait()
+            with stage(0):
                 redmule.enqueue(xqv[k], wv[k], yv, op=GEMM, event=ev_v[k], uninit=k == 0)
                 redmule.commit_start()
-                ev_q[k].wait()
-                ev_v[k].wait()
         esq = idma.store(q_[tile_s, tile_hp], yq)
         esv = idma.store(v_[tile_s, tile_hp], yv)
         esq.wait()
@@ -183,11 +189,11 @@ def main():
                 k0: u16 = k * PROJ_KB_E
                 ew = idma.load(wk[k], wkt_[tile_khp, k0:k0 + PROJ_KB_E])
                 ex = idma.load(xk[k], xt_[k0:k0 + PROJ_KB_E, tile_ks])
-            with stage(1):
+                jk = redmule.enqueue(wk[k], xk[k], yk, op=GEMM, uninit=k == 0)
                 ew.wait()
                 ex.wait()
-                jk = redmule.enqueue(wk[k], xk[k], yk, op=GEMM, uninit=k == 0)
                 redmule.commit_start()
+            with stage(1):
                 jk.wait()
         idma.store(kt_[tile_khp, tile_ks], yk).wait()
 
@@ -391,11 +397,11 @@ def main():
                 k0: u16 = k * PROJ_KB_HP
                 ex = idma.load(xo[k], o_[tile_s, k0:k0 + PROJ_KB_HP])
                 ew = idma.load(wo[k], wo_[k0:k0 + PROJ_KB_HP, tile_e])
-            with stage(1):
+                jo = redmule.enqueue(xo[k], wo[k], yo, op=GEMM, uninit=k == 0)
                 ex.wait()
                 ew.wait()
-                jo = redmule.enqueue(xo[k], wo[k], yo, op=GEMM, uninit=k == 0)
                 redmule.commit_start()
+            with stage(1):
                 jo.wait()
         idma.store(y_[tile_s, tile_e], yo).wait()
 
