@@ -1,0 +1,404 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Grouped-query self-attention test (as mhsa_pipeopt4, with NUM_KV_HEADS K/V heads each shared by
+# NUM_HEADS / NUM_KV_HEADS consecutive Q heads): Q/K/V projections, per-head Flat-Attention, output projection
+# Compile with
+#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/gqa_pipeopt4/gqa_pipeopt4.mgc \
+#       -o tests/magia/mgc/gqa_pipeopt4/src/test.c
+
+from mgc import *
+
+S, E, P, H, HKV = sizes("SEQ_LENGTH", "EMBED_SIZE", "PROJ_SIZE", "NUM_HEADS", "NUM_KV_HEADS")  # from include/test.h
+x_   = l2("x_inp",   (S, E),     fp16)
+xt_  = l2("xt_inp",  (E, S),     fp16)  # X transposed, for Kt = Wk^T @ X^T
+wq_  = l2("wq_inp",  (E, H * P), fp16)
+wkt_ = l2("wkt_inp", (HKV * P, E), fp16)  # Wk transposed
+wv_  = l2("wv_inp",  (E, HKV * P), fp16)
+wo_  = l2("wo_inp",  (H * P, E), fp16)
+# Q, V and O with the heads side by side, head h in columns h * P:(h + 1) * P (any NUM_HEADS on any mesh:
+# the projection blocks of a tile may straddle heads); Kt head h in rows h * P:(h + 1) * P; Q head h uses
+# K/V head h // (H // HKV)
+q_   = l2("q_l2",    (S, H * P), fp16)
+kt_  = l2("kt_l2",   (HKV * P, S), fp16)
+v_   = l2("v_l2",    (S, HKV * P), fp16)
+o_   = l2("o_l2",    (S, H * P), fp16)
+y_   = l2("y_out",   (S, E),     fp16)
+y_gold = l2("y_gold", (S, E),    fp16)  # golden
+
+WAIT_MODE = define(WFE)
+S_BLOCK_SIZE_Q  = define(512)
+S_BLOCK_SIZE_KV = define(512)
+# per-tile sizes: Flat-Attention block rows/columns, projection output blocks (Q [PRJ_TS x PRJ_THP],
+# V [PRJ_TS x PRJ_TKVHP], Kt [PRJ_TKHP x PRJ_TKS], Y [PRJ_TS x PRJ_TE])
+ATT_BR   = define("((S_BLOCK_SIZE_Q + MESH_Y_TILES - 1) / MESH_Y_TILES)")
+ATT_BC   = define("((S_BLOCK_SIZE_KV + MESH_X_TILES - 1) / MESH_X_TILES)")
+# rows of the output block of a Q block owned by each tile of the row after the reduce-scatter (the rows of a Q
+# block per tile must be a multiple of MESH_X_TILES)
+ATT_RS   = define("(ATT_BR / MESH_X_TILES)")
+PRJ_TS   = define("((SEQ_LENGTH + MESH_Y_TILES - 1) / MESH_Y_TILES)")
+PRJ_THP  = define("((NUM_HEADS * PROJ_SIZE + MESH_X_TILES - 1) / MESH_X_TILES)")
+PRJ_TKVHP = define("((NUM_KV_HEADS * PROJ_SIZE + MESH_X_TILES - 1) / MESH_X_TILES)")
+PRJ_TKHP = define("((NUM_KV_HEADS * PROJ_SIZE + MESH_Y_TILES - 1) / MESH_Y_TILES)")
+PRJ_TKS  = define("((SEQ_LENGTH + MESH_X_TILES - 1) / MESH_X_TILES)")
+PRJ_TE   = define("((EMBED_SIZE + MESH_X_TILES - 1) / MESH_X_TILES)")
+# L1 bytes of the projection buffers: all the L1, as every buffer is pinned to its loop (the Flat-Attention ones
+# too, so the projections share L1 with them)
+PRJ_L1   = define("(L1_SIZE + 1)")
+# reduction block of the projections (output-static, one RedMulE job per block): over EMBED_SIZE for Q/Kt/V,
+# over NUM_HEADS * PROJ_SIZE for the output projection; the largest of 256/128/64 that divides it and whose
+# buffers (double-buffered input blocks, resident output block) fit PRJ_L1 (64 is not checked: the output
+# blocks alone may not fit, e.g. Llama-70B on a 4x4 mesh)
+PROJ_KB_E  = define("(EMBED_SIZE % 256 == 0 && 2 * (2 * PRJ_TS * 256 + 2 * 256 * (PRJ_THP + PRJ_TKVHP) + PRJ_TS * (PRJ_THP + PRJ_TKVHP)) <= PRJ_L1 && 2 * (2 * PRJ_TKHP * 256 + 2 * 256 * PRJ_TKS + PRJ_TKHP * PRJ_TKS) <= PRJ_L1 ? 256 : EMBED_SIZE % 128 == 0 && 2 * (2 * PRJ_TS * 128 + 2 * 128 * (PRJ_THP + PRJ_TKVHP) + PRJ_TS * (PRJ_THP + PRJ_TKVHP)) <= PRJ_L1 && 2 * (2 * PRJ_TKHP * 128 + 2 * 128 * PRJ_TKS + PRJ_TKHP * PRJ_TKS) <= PRJ_L1 ? 128 : 64)")
+PROJ_KB_HP = define("((NUM_HEADS * PROJ_SIZE) % 256 == 0 && 2 * (2 * PRJ_TS * 256 + 2 * 256 * PRJ_TE + PRJ_TS * PRJ_TE) <= PRJ_L1 ? 256 : (NUM_HEADS * PROJ_SIZE) % 128 == 0 && 2 * (2 * PRJ_TS * 128 + 2 * 128 * PRJ_TE + PRJ_TS * PRJ_TE) <= PRJ_L1 ? 128 : 64)")
+
+# Implemented in src/kernels.c, synchronous on the tile's CV32 core.
+# Merged Spatz kernels from kernels/ (the softmax scale 1/sqrt(PROJ_SIZE) is folded into the exp):
+# spatz_rowmax: m[r] = max_c x[r, c]; spatz_rowmax_max: m[r] = max(max_c x[r, c], p[r]).
+spatz_rowmax = l1_kernel("l1_rowmax_fp16_spatz", operands=("m:out", "x:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
+spatz_rowmax_max = l1_kernel("l1_rowmax_max_fp16_spatz", operands=("m:out", "x:in", "p:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
+# spatz_expminus_rowsum: y[r, c] = exp((x[r, c] - m[r]) / sqrt(PROJ_SIZE)), s[r] = sum_c y[r, c];
+# spatz_expminus_rowsum_alpha: also a[r] = exp((a[r] - m[r]) / sqrt(PROJ_SIZE)) in-place.
+# The _start variants only launch Spatz, so that the CV32 can drive the iDMA meanwhile;
+# spatz_expminus_rowsum_wait(y, s) waits for them.
+spatz_expminus_rowsum_start = l1_kernel("l1_expminus_rowsum_start_fp16_spatz", operands=("y:out", "s:out", "x:in", "m:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
+spatz_expminus_rowsum_alpha_start = l1_kernel("l1_expminus_rowsum_alpha_start_fp16_spatz", operands=("y:out", "s:out", "a:inout", "x:in", "m:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
+spatz_expminus_rowsum_wait = l1_kernel("l1_spatz_wait", operands=("y:out", "s:out"), params=(), executor=CORE)
+# spatz_colsum_acc: s[c] += sum_{r >= 1} g[r, c]; spatz_colsum_acc_rescale: then p = a * p, s = p + s.
+spatz_colsum_acc = l1_kernel("l1_colsum_acc_fp16_spatz", operands=("s:inout", "g:in"), params=("g.shape[0]", "g.shape[1]"), executor=CORE)
+spatz_colsum_acc_rescale = l1_kernel("l1_colsum_acc_rescale_fp16_spatz", operands=("s:inout", "g:in", "p:inout", "a:in"), params=("g.shape[0]", "g.shape[1]"), executor=CORE)
+# spatz_colmax: m[c] = max_r x[r, c] on Spatz (reducemax kernel, reduce over the first axis).
+spatz_colmax = l1_kernel("l1_colmax_fp16_spatz", operands=("m:out", "x:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
+# spatz_rowscale: y[r, c] = x[r, c] * s[r], i.e. y = diag(s) x, on Spatz (rowscale kernel).
+spatz_rowscale = l1_kernel("l1_rowscale_fp16_spatz", operands=("y:out", "x:in", "s:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
+# spatz_rowslice_sum_div: reduce-scatter sum and normalization of the output, on the tile of column jj
+# y[r, c] = (o[jj * R + r, c] + sum_{k != jj} g[k, r, c]) / s[jj * R + r], R = y.shape[0]
+spatz_rowslice_sum_div = l1_kernel("l1_rowslice_sum_div_fp16_spatz", operands=("y:out", "o:in", "g:in", "s:in"), params=("g.shape[0]", "y.shape[0]", "y.shape[1]"), executor=CORE)
+
+@test("test_gqa_pipeopt4", authors=["Francesco Conti <francesco.conti@chips.it>"])
+def main():
+
+    """
+    Grouped-query self-attention, Y = concat_h(softmax(Q_h @ Kt_g / sqrt(P)) @ V_g) @ Wo with g = h // (H // HKV), in four
+    steps through L2: Q = X @ Wq and V = X @ Wv, Kt = Wk^T @ X^T (output-static on RedMulE, the
+    output block resident in L1 and blocks of the reduction dimension streamed), the Flat-Attention of every
+    head in one software pipeline (as flat_attn_pipeopt3), Y = O @ Wo (as the Q/V projection).
+    """
+    for ii, jj in tiles():
+
+        """
+        Flat-Attention buffers, pinned to their loop although used by other tiles: the sync(GLOBAL) around the
+        loop keeps the other tiles out of them while this one runs the projections
+        """
+
+        # spatial sharding of each Q block [Br x P] over the rows and of each K/V block [Bc x P] over the columns
+        tiles_i = ii.split(S_BLOCK_SIZE_Q)
+        tiles_j = jj.split(S_BLOCK_SIZE_KV)
+
+        q  = L1.multi_buffer(q_[tiles_i, 0:P], pin="attn")
+        kt = L1.multi_buffer(kt_[0:P, tiles_j], pin="attn")
+        v  = L1.multi_buffer(v_[tiles_j, 0:P], pin="attn")
+        o  = L1.single_buffer(o_[tiles_i, 0:P], pin="attn")
+        attn = L1.multi_buffer((tiles_i, tiles_j), fp16, pin="attn")
+        row_max = L1.multi_buffer((tiles_i,), fp16, pin="attn")
+        row_sum = L1.multi_buffer((tiles_i,), fp16, pin="attn")
+
+        # row maxima/sums of all the tiles of this row [MESH_X_TILES x Stile]: only used on tile (ii, 0), but every tile
+        # allocates it so that the L1 layout is the same everywhere
+        row_gather_buf = L1.single_buffer((MESH_X_TILES, tiles_i), fp16, pin="attn")
+        # reduce-scatter of o: slice jj [ATT_RS x P] of o sent by every other tile of the row lands in
+        # o_rs_recv_buf[jj] of the tile owning it, which sums them into o_rs and stores it
+        o_rs_recv_buf = L1.single_buffer((MESH_X_TILES, ATT_RS, P), fp16, pin="attn")
+        o_rs = L1.single_buffer(o_[0:ATT_RS, 0:P], pin="attn")
+
+        """
+        Projection buffers, each pinned to its loop: they share L1
+        """
+
+        # Q/V projection: tile (ii, jj) owns the blocks [tile_s x tile_hp] of Q and [tile_s x tile_kvhp] of V,
+        # resident in L1 (output-static), accumulated over blocks of PROJ_KB_E of the reduction dimension E:
+        # X [tile_s x PROJ_KB_E], Wq [PROJ_KB_E x tile_hp] and Wv [PROJ_KB_E x tile_kvhp] streamed
+        tile_s    = ii.split(S)
+        tile_hp   = jj.split(H * P)
+        tile_kvhp = jj.split(HKV * P)
+        xqv = L1.multi_buffer(x_[tile_s, 0:PROJ_KB_E], pin="qv_proj")
+        wq  = L1.multi_buffer(wq_[0:PROJ_KB_E, tile_hp], pin="qv_proj")
+        wv  = L1.multi_buffer(wv_[0:PROJ_KB_E, tile_kvhp], pin="qv_proj")
+        yq  = L1.single_buffer(q_[tile_s, tile_hp], pin="qv_proj")
+        yv  = L1.single_buffer(v_[tile_s, tile_kvhp], pin="qv_proj")
+
+        # Kt projection: tile (ii, jj) owns the block [tile_khp x tile_ks] of Kt, accumulated in the same way over
+        # Wk^T [tile_khp x PROJ_KB_E] and X^T [PROJ_KB_E x tile_ks]
+        tile_khp = ii.split(HKV * P)
+        tile_ks  = jj.split(S)
+        wk = L1.multi_buffer(wkt_[tile_khp, 0:PROJ_KB_E], pin="k_proj")
+        xk = L1.multi_buffer(xt_[0:PROJ_KB_E, tile_ks], pin="k_proj")
+        yk = L1.single_buffer(kt_[tile_khp, tile_ks], pin="k_proj")
+
+        # output projection: tile (ii, jj) owns the block [tile_s x tile_e] of Y, accumulated over blocks of
+        # PROJ_KB_HP of the reduction dimension H * P
+        tile_e = jj.split(E)
+        xo = L1.multi_buffer(o_[tile_s, 0:PROJ_KB_HP], pin="o_proj")
+        wo = L1.multi_buffer(wo_[0:PROJ_KB_HP, tile_e], pin="o_proj")
+        yo = L1.single_buffer(y_[tile_s, tile_e], pin="o_proj")
+
+        # start together, as the flat_attn_* tests do
+        sync(GLOBAL)
+
+        """
+        STEP 1: Q = X @ Wq, V = X @ Wv, block k of X, Wq, Wv loading while RedMulE accumulates block k - 1
+        """
+
+        # as mm_os: the jobs of block k are programmed while its operands load, committed once they have landed
+        # (stage 0) and waited one step later (stage 1). The RedMulE queue holds 2 jobs, so each job of block k is
+        # enqueued only once its counterpart of block k - 1 is done: Q(k) after Q(k - 1), V(k) after V(k - 1),
+        # and RedMulE runs Q(k - 1), V(k - 1), Q(k), V(k) back to back
+        n_kb_e: u16 = E // PROJ_KB_E
+        ev_q = redmule.events()
+        ev_v = redmule.events()
+        for k in pipeline(n_kb_e, name="qv_proj"):
+            with stage(0):
+                k0: u16 = k * PROJ_KB_E
+                ex  = idma.load(xqv[k], x_[tile_s, k0:k0 + PROJ_KB_E])
+                ewq = idma.load(wq[k], wq_[k0:k0 + PROJ_KB_E, tile_hp])
+                ewv = idma.load(wv[k], wv_[k0:k0 + PROJ_KB_E, tile_kvhp])
+            with stage(1):
+                ev_q[k].wait()
+            with stage(0):
+                redmule.enqueue(xqv[k], wq[k], yq, op=GEMM, event=ev_q[k], uninit=k == 0)
+                ex.wait()
+                ewq.wait()
+                ewv.wait()
+                redmule.commit_start()
+            with stage(1):
+                ev_v[k].wait()
+            with stage(0):
+                redmule.enqueue(xqv[k], wv[k], yv, op=GEMM, event=ev_v[k], uninit=k == 0)
+                redmule.commit_start()
+        esq = idma.store(q_[tile_s, tile_hp], yq)
+        esv = idma.store(v_[tile_s, tile_kvhp], yv)
+        esq.wait()
+        esv.wait()
+
+        """
+        STEP 2: Kt = Wk^T @ X^T, as step 1
+        """
+
+        for k in pipeline(n_kb_e, name="k_proj"):
+            with stage(0):
+                k0: u16 = k * PROJ_KB_E
+                ew = idma.load(wk[k], wkt_[tile_khp, k0:k0 + PROJ_KB_E])
+                ex = idma.load(xk[k], xt_[k0:k0 + PROJ_KB_E, tile_ks])
+                jk = redmule.enqueue(wk[k], xk[k], yk, op=GEMM, uninit=k == 0)
+                ew.wait()
+                ex.wait()
+                redmule.commit_start()
+            with stage(1):
+                jk.wait()
+        idma.store(kt_[tile_khp, tile_ks], yk).wait()
+
+        # Q, Kt, V complete in L2
+        sync(GLOBAL)
+
+        """
+        STEP 3: Flat-Attention of every Q head, O[:, h * P:(h + 1) * P] = softmax(Q_h @ Kt_g / sqrt(P)) @ V_g
+        """
+
+        s_block_size_q:  u16 = S_BLOCK_SIZE_Q
+        s_block_size_kv: u16 = S_BLOCK_SIZE_KV
+        s_block_nb_q:  u8 = S // S_BLOCK_SIZE_Q
+        s_block_nb_kv: u8 = S // S_BLOCK_SIZE_KV
+
+        # one software pipeline over all the (head, Q block, K/V block) triples,
+        # it = (h * s_block_nb_q + siq) * s_block_nb_kv + sikv, so that the first Q @ Kt of a Q block (or head)
+        # overlaps the softmax and Attn @ V of the previous one
+        s_block_nb_h: u16 = s_block_nb_q * s_block_nb_kv
+        s_block_nb: u16 = H * s_block_nb_h
+
+        # stages are encoded out-of-order to enable correct overlap
+        for it in pipeline(s_block_nb, sync=GLOBAL, name="attn"):
+
+            """
+            STAGE 1: MATMUL Q @ Kt
+            """
+
+            with stage(1):
+
+                # tiles Q @ Kt -> attn [Stile x Stile]
+                jqk = redmule.enqueue(q[it], kt[it], attn[it], op=MATMUL)
+                redmule.commit_start()
+
+            """
+            STAGE 3: MATMUL Attn @ V
+            """
+
+            with stage(3):
+
+                # accumulate the block of the current K/V block into the output:
+                # o [Stile x P] += attn [Stile x Stile] @ v [Stile x P]; the first K/V block of a Q block
+                # initializes it, o = attn @ v
+                jav = redmule.enqueue(attn[it], v[it], o, op=GEMM, uninit=it % s_block_nb_kv == 0)
+
+                # from the second K/V block of a Q block on, rescale the output accumulator of the previous blocks
+                # to the new max in-place
+                if it % s_block_nb_kv > 0:
+                    spatz_rowscale(o, o, row_max[it - 1])
+
+                redmule.commit_start()
+
+            """
+            STAGE 2: SOFTMAX
+            """
+
+            with stage(2):
+
+                # per-tile row max of attn [Stile x Stile] -> row_gather_buf[0, :] [Stile]; from the second K/V
+                # block of a Q block on, keep the largest of the new row max and of the previous one
+                if it % s_block_nb_kv > 0:
+                    spatz_rowmax_max(row_gather_buf, attn[it], row_max[it - 1])
+                else:
+                    spatz_rowmax(row_gather_buf, attn[it])
+
+                # FIXME: this row reduction could be optimized better using flash-decoding
+                # gather all row maxima from tiles horizontally into the first column tiles
+                if jj > 0:
+                    idma.store(row_gather_buf.at(ii, 0)[jj, :], row_gather_buf[0, :]).wait()
+                sync(ROW)
+
+                # row max over the whole S dimension:
+                # row_max [Stile] = max over the rows of row_gather_buf [MESH_X_TILES x Stile],
+                # then multicast it from tiles in the first column to all the other tiles of the row
+                if jj==0:
+                    spatz_colmax(row_max[it], row_gather_buf)
+                    idma.store(row_max.row[it], row_max[it]).wait()
+                sync(ROW)
+
+                # start attn [Stile x Stile] = exp((attn - row_max [Stile]) / sqrt(P)), in-place, with row_max
+                # broadcast along the columns, and its per-tile row sum -> row_sum [Stile]; from the second K/V
+                # block on, also the rescaling factor exp((row_max[it - 1] - row_max[it]) / sqrt(P)) in-place in
+                # row_max[it - 1], which is not needed anymore
+                if it % s_block_nb_kv > 0:
+                    spatz_expminus_rowsum_alpha_start(attn[it], row_sum[it], row_max[it - 1], attn[it], row_max[it])
+                else:
+                    spatz_expminus_rowsum_start(attn[it], row_sum[it], attn[it], row_max[it])
+
+            """
+            STAGE 0: LOAD, while Spatz computes the exp
+            """
+
+            with stage(0):
+                # Q head of iteration it, its K/V head, and first row of the slice of Q / O and of K / V owned by
+                # this tile in its blocks
+                hp_start: u16 = (it // s_block_nb_h) * P
+                hkv_start: u16 = (it // s_block_nb_h // (H // HKV)) * P
+                s_start_q:  u16 = ((it // s_block_nb_kv) % s_block_nb_q) * s_block_size_q + tiles_i.start
+                s_start_kv: u16 = (it % s_block_nb_kv) * s_block_size_kv + tiles_j.start
+
+                # load Q (every iteration: the next Q block is loaded while the previous one is still used), K
+                # and V of the head on the first column / first row / last row of tiles, so that the three
+                # multicasts start from different tiles; each tile has size [Stile x P] (transposed for Kt)
+                if jj==0:
+                    eq = idma.load(q[it], q_[s_start_q:s_start_q + tiles_i.size, hp_start:hp_start + P])
+                if ii==0:
+                    ekt = idma.load(kt[it], kt_[hkv_start:hkv_start + P, s_start_kv:s_start_kv + tiles_j.size])
+                if ii==MESH_Y_TILES - 1:
+                    ev = idma.load(v[it], v_[s_start_kv:s_start_kv + tiles_j.size, hkv_start:hkv_start + P])
+                if jj==0:
+                    eq.wait()
+                if ii==0:
+                    ekt.wait()
+                if ii==MESH_Y_TILES - 1:
+                    ev.wait()
+
+                # multicast them by binary trees (recursive doubling): Q along the rows from the first column, Kt
+                # down the columns from the first row, V up the columns from the last row. At each level, every
+                # tile that already holds the block pushes it to the tile `stride` further away, so a block
+                # reaches all the MESH_X_TILES tiles in log2(MESH_X_TILES) levels of a single transfer per tile
+                # instead of MESH_X_TILES - 1 serialized pushes from the source (square, power-of-two mesh)
+                dv: u8 = MESH_Y_TILES - 1 - ii
+                stride_mc: u8 = MESH_X_TILES // 2
+                for lvl_mc in range(MESH_X_TILES):
+                    if stride_mc > 0:
+                        if jj % (2 * stride_mc) == 0:
+                            eq_mc = idma.store(q.at(ii, jj + stride_mc)[it], q[it])
+                        if ii % (2 * stride_mc) == 0:
+                            ekt_mc = idma.store(kt.at(ii + stride_mc, jj)[it], kt[it])
+                        if dv % (2 * stride_mc) == 0:
+                            ev_mc = idma.store(v.at(ii - stride_mc, jj)[it], v[it])
+                        if jj % (2 * stride_mc) == 0:
+                            eq_mc.wait()
+                        if ii % (2 * stride_mc) == 0:
+                            ekt_mc.wait()
+                        if dv % (2 * stride_mc) == 0:
+                            ev_mc.wait()
+                        sync(GLOBAL)
+                        stride_mc = stride_mc // 2
+
+            with stage(2):
+                spatz_expminus_rowsum_wait(attn[it], row_sum[it])
+
+                # gather the row sums into row_gather_buf[jj, :] on the first column
+                if jj > 0:
+                    idma.store(row_gather_buf.at(ii, 0)[jj, :], row_sum[it]).wait()
+                sync(ROW)
+
+                # row sum over the whole S dimension:
+                # row_sum [Stile] += sum over the rows jj > 0 of row_gather_buf [MESH_X_TILES x Stile]; from the second
+                # K/V block on, rescale the previous row sum row_sum[it - 1] in-place by the rescaling factor and add
+                # it to row_sum; then multicast it from tiles in the first column to all the other tiles of the row.
+                if jj==0:
+                    if it % s_block_nb_kv > 0:
+                        spatz_colsum_acc_rescale(row_sum[it], row_gather_buf, row_sum[it - 1], row_max[it - 1])
+                    else:
+                        spatz_colsum_acc(row_sum[it], row_gather_buf)
+                    idma.store(row_sum.row[it], row_sum[it]).wait()
+                sync(ROW)
+
+            with stage(3):
+                jav.wait()
+
+                # last K/V block of a Q block: reduce-scatter o along the row, tile (ii, jj) owning rows
+                # [jj * ATT_RS, (jj + 1) * ATT_RS) of the block. Each tile sends the other slices of its o to
+                # their owners, starting from the next tile so that every round has a single destination per
+                # tile, then sums its slice with the received ones, normalizes it by the row sum over the whole
+                # S dimension (row-wise division) and writes it back to the columns of the head in o_
+                if it % s_block_nb_kv == s_block_nb_kv - 1:
+                    ho_start: u16 = (it // s_block_nb_h) * P
+                    s_start_o: u16 = ((it // s_block_nb_kv) % s_block_nb_q) * s_block_size_q + tiles_i.start + jj * ATT_RS
+                    for d_rs in range(MESH_X_TILES - 1):
+                        c_rs: u8 = (jj + d_rs + 1) % MESH_X_TILES
+                        idma.store(o_rs_recv_buf.at(ii, c_rs)[jj, :, :], o[c_rs * ATT_RS:(c_rs + 1) * ATT_RS, :]).wait()
+                    sync(ROW)
+                    spatz_rowslice_sum_div(o_rs, o, o_rs_recv_buf, row_sum[it])
+                    idma.store(o_[s_start_o:s_start_o + ATT_RS, ho_start:ho_start + P], o_rs).wait()
+
+            with stage(1):
+                jqk.wait()
+
+        # O complete in L2
+        sync(GLOBAL)
+
+        """
+        STEP 4: Y = O @ Wo, as step 1
+        """
+
+        n_kb_hp: u16 = (H * P) // PROJ_KB_HP
+        for k in pipeline(n_kb_hp, name="o_proj"):
+            with stage(0):
+                k0: u16 = k * PROJ_KB_HP
+                ex = idma.load(xo[k], o_[tile_s, k0:k0 + PROJ_KB_HP])
+                ew = idma.load(wo[k], wo_[k0:k0 + PROJ_KB_HP, tile_e])
+                jo = redmule.enqueue(xo[k], wo[k], yo, op=GEMM, uninit=k == 0)
+                ex.wait()
+                ew.wait()
+                redmule.commit_start()
+            with stage(1):
+                jo.wait()
+        idma.store(y_[tile_s, tile_e], yo).wait()
+
+        # check the whole output on tile (0, 0), once every tile has written its blocks
+        sync(GLOBAL)
+        if ii == 0:
+            if jj == 0:
+                check(y_[:, :], y_gold[:, :], tol=0x11)
