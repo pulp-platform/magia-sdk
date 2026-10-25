@@ -18,13 +18,16 @@
 #define WAIT_MODE WFE
 
 /** L1 kernel (CORE): all pointers are L1 addresses. */
-extern void l1_swiglu_fp16_spatz(uint32_t g, uint32_t u, uint32_t p0);
+extern void l1_swiglu_start_fp16_spatz(uint32_t g, uint32_t u, uint32_t p0);
+
+/** L1 kernel (CORE): all pointers are L1 addresses. */
+extern void l1_spatz_wait1(uint32_t x);
 
 /**
  * Qwen2.5 FFN with the residual, Y = R + (silu(X @ Wg) * (X @ Wu)) @ Wd, in two steps through L2: H
  * = silu(X @ Wg) * (X @ Wu) in chunks of columns (output-static on RedMulE, the G and U chunks
- * resident in L1 and blocks of E streamed, then SwiGLU on Spatz), Y = R + H @ Wd (output-static,
- * accumulating on R).
+ * resident in L1 and blocks of E streamed, then SwiGLU on Spatz overlapped with the next chunk), Y
+ * = R + H @ Wd (output-static, accumulating on R).
  */
 int main(void)
 {
@@ -76,8 +79,8 @@ int main(void)
         return 0;
     }
 
-    // step 1: chunk [tile_s x FFN_CI] of G and U, resident, accumulated over X [tile_s x FFN_KB_E],
-    // Wg and Wu [FFN_KB_E x FFN_CI] streamed
+    // step 1: chunk [tile_s x FFN_CI] of G and U, double-buffered across the chunks, accumulated
+    // over X [tile_s x FFN_KB_E], Wg and Wu [FFN_KB_E x FFN_CI] streamed
     uint32_t len_xg       = FFN_KB_E * 2;
     uint32_t std_xg       = EMBED_SIZE * 2;
     uint32_t reps_xg      = (uint32_t)tile_s;
@@ -99,17 +102,19 @@ int main(void)
     uint32_t len_yg       = FFN_CI * 2;
     uint32_t std_yg       = FFN_SIZE * 2;
     uint32_t reps_yg      = (uint32_t)tile_s;
-    uint32_t l1_addr_yg   = l1_addr_wu_1 + (FFN_KB_E * FFN_CI * 2);
+    uint32_t l1_addr_yg_0 = l1_addr_wu_1 + (FFN_KB_E * FFN_CI * 2);
+    uint32_t l1_addr_yg_1 = l1_addr_yg_0 + (tile_s * FFN_CI * 2);
     uint32_t l2_addr_yg   = (uint32_t)h_l2 + (tile_s_max * ii * FFN_SIZE * 2);
     uint32_t len_yu       = tile_s * FFN_CI * 2;
-    uint32_t l1_addr_yu   = l1_addr_yg + (tile_s * FFN_CI * 2);
+    uint32_t l1_addr_yu_0 = l1_addr_yg_1 + (tile_s * FFN_CI * 2);
+    uint32_t l1_addr_yu_1 = l1_addr_yu_0 + (tile_s * FFN_CI * 2);
 
     // step 2: block [tile_s x tile_e] of Y, accumulated over H [tile_s x FFN_KB_I], Wd [FFN_KB_I x
     // tile_e]
     uint32_t len_xd       = FFN_KB_I * 2;
     uint32_t std_xd       = FFN_SIZE * 2;
     uint32_t reps_xd      = (uint32_t)tile_s;
-    uint32_t l1_addr_xd_0 = l1_addr_yu + (tile_s * FFN_CI * 2);
+    uint32_t l1_addr_xd_0 = l1_addr_yu_1 + (tile_s * FFN_CI * 2);
     uint32_t l1_addr_xd_1 = l1_addr_xd_0 + (tile_s * FFN_KB_I * 2);
     uint32_t l2_addr_xd   = (uint32_t)h_l2 + (tile_s_max * ii * FFN_SIZE * 2);
     uint32_t len_wd       = tile_e * 2;
@@ -128,8 +133,11 @@ int main(void)
     volatile uint32_t xg_pt;
     volatile uint32_t wg_pt;
     volatile uint32_t wu_pt;
+    volatile uint32_t yg_pt;
+    volatile uint32_t yu_pt;
     volatile uint32_t xd_pt;
     volatile uint32_t wd_pt;
+    volatile uint32_t yg_pt_prev;
     volatile uint32_t xg_pt_next;
     volatile uint32_t wg_pt_next;
     volatile uint32_t wu_pt_next;
@@ -150,7 +158,8 @@ int main(void)
     /**
      * STEP 1: H = silu(X @ Wg) * (X @ Wu), chunk by chunk of FFN_CI columns; in each chunk, block k
      * of X, Wg, Wu loading while RedMulE accumulates block k - 1 (as the Q/V projection of
-     * gqa_pipeopt4)
+     * gqa_pipeopt4). The SwiGLU of chunk c - 1 runs on Spatz during chunk c, and its store is
+     * issued once RedMulE has the last jobs of chunk c.
      */
     uint16_t n_kb_e = EMBED_SIZE / FFN_KB_E;
     uint16_t n_ci   = tile_i / FFN_CI;
@@ -189,10 +198,20 @@ int main(void)
                           &idma_evt_wu,
                           NULL);
 
+        if (c % 2) {
+            yg_pt      = l1_addr_yg_1;
+            yg_pt_prev = l1_addr_yg_0;
+            yu_pt      = l1_addr_yu_1;
+        } else {
+            yg_pt      = l1_addr_yg_0;
+            yg_pt_prev = l1_addr_yg_1;
+            yu_pt      = l1_addr_yu_0;
+        }
+
         mg_redmule_matmul_enqueue(WAIT_MODE,
                                   l1_addr_xg_0,
                                   l1_addr_wg_0,
-                                  l1_addr_yg,
+                                  yg_pt,
                                   (uint16_t)tile_s,
                                   (uint16_t)FFN_KB_E,
                                   (uint16_t)FFN_CI,
@@ -206,13 +225,31 @@ int main(void)
         mg_redmule_matmul_enqueue(WAIT_MODE,
                                   l1_addr_xg_0,
                                   l1_addr_wu_0,
-                                  l1_addr_yu,
+                                  yu_pt,
                                   (uint16_t)tile_s,
                                   (uint16_t)FFN_KB_E,
                                   (uint16_t)FFN_CI,
                                   &ev_u_0,
                                   NULL);
         mg_redmule_gemm_commit_start();
+
+        // H chunk c - 1, while RedMulE runs the last jobs of chunk c
+        if (0 == (n_kb_e - 1)) {
+            if (c > 0) {
+                l1_spatz_wait1(yg_pt_prev);
+
+                mg_idma_memcpy_2d(WAIT_MODE,
+                                  1,
+                                  l2_addr_yg + ((i0 - FFN_CI) * 2),
+                                  yg_pt_prev,
+                                  len_yg,
+                                  std_yg,
+                                  reps_yg,
+                                  &idma_evt_yg,
+                                  NULL);
+                mg_idma_wait(1, WAIT_MODE, &idma_evt_yg);
+            }
+        }
 
         /**
          * pipeline: 2 stages; step k runs stage k on iteration k + 1 - k
@@ -284,7 +321,7 @@ int main(void)
                 mg_redmule_gemm_enqueue(WAIT_MODE,
                                         xg_pt_next,
                                         wg_pt_next,
-                                        l1_addr_yg,
+                                        yg_pt,
                                         (uint16_t)tile_s,
                                         (uint16_t)FFN_KB_E,
                                         (uint16_t)FFN_CI,
@@ -299,31 +336,53 @@ int main(void)
                 mg_redmule_gemm_enqueue(WAIT_MODE,
                                         xg_pt_next,
                                         wu_pt_next,
-                                        l1_addr_yu,
+                                        yu_pt,
                                         (uint16_t)tile_s,
                                         (uint16_t)FFN_KB_E,
                                         (uint16_t)FFN_CI,
                                         ev_u_next,
                                         NULL);
                 mg_redmule_gemm_commit_start();
+
+                // H chunk c - 1, while RedMulE runs the last jobs of chunk c
+                if ((k + 1) == (n_kb_e - 1)) {
+                    if (c > 0) {
+                        l1_spatz_wait1(yg_pt_prev);
+
+                        mg_idma_memcpy_2d(WAIT_MODE,
+                                          1,
+                                          l2_addr_yg + ((i0 - FFN_CI) * 2),
+                                          yg_pt_prev,
+                                          len_yg,
+                                          std_yg,
+                                          reps_yg,
+                                          &idma_evt_yg,
+                                          NULL);
+                        mg_idma_wait(1, WAIT_MODE, &idma_evt_yg);
+                    }
+                }
             } else {
                 mg_redmule_wait(WAIT_MODE, ev_g_curr);
                 mg_redmule_wait(WAIT_MODE, ev_u_curr);
             }
         }
 
-        l1_swiglu_fp16_spatz(l1_addr_yg, l1_addr_yu, tile_s * FFN_CI);
+        l1_swiglu_start_fp16_spatz(yg_pt, yu_pt, tile_s * FFN_CI);
 
-        mg_idma_memcpy_2d(WAIT_MODE,
-                          1,
-                          l2_addr_yg + (i0 * 2),
-                          l1_addr_yg,
-                          len_yg,
-                          std_yg,
-                          reps_yg,
-                          &idma_evt_yg,
-                          NULL);
-        mg_idma_wait(1, WAIT_MODE, &idma_evt_yg);
+        if (c == (n_ci - 1)) {
+            l1_spatz_wait1(yg_pt);
+
+            mg_idma_memcpy_2d(WAIT_MODE,
+                              1,
+                              l2_addr_yg + (i0 * 2),
+                              yg_pt,
+                              len_yg,
+                              std_yg,
+                              reps_yg,
+                              &idma_evt_yg,
+                              NULL);
+            mg_idma_wait(1, WAIT_MODE, &idma_evt_yg);
+        }
     }
 
     // H complete in L2

@@ -11,10 +11,11 @@ Generate include/test.h for ffn_qwen2.5, a Qwen2.5 FFN layer (SwiGLU MLP, no bia
   Y = R + H @ Wd                    [S x E]
 
 X is the input of the layer after the RMSNorm and R the residual stream. The golden is bit-true for the
-matrix products (one RedMulE job per output element, FP16 FMA in k order); the SwiGLU is computed in float64 and
-rounded once to FP16, as kernels/swiglu does in fp32 (equal but for rare 1-ulp differences). It does not depend
-on the mesh; the chunking of the test (FFN_CI columns of H per chunk, reduction blocks FFN_KB_E and FFN_KB_I) is
-chosen per mesh side so that all the L1 buffers fit.
+matrix products (one RedMulE job per output element, FP16 FMA in k order) and for the SwiGLU of
+kernels/swiglu_fast (FP16 Schraudolph exp and division, one FP16 rounding per instruction). It does not depend on
+the mesh; the chunking of the test (FFN_CI columns of H per chunk, at least 2 chunks so that the SwiGLU of a chunk
+overlaps the next one, reduction blocks FFN_KB_E and FFN_KB_I) is chosen per mesh side: the widest chunk, then
+the largest blocks whose buffers fit L1.
 
 Usage:
   python3 tests/magia/mgc/ffn_qwen2.5/gen_golden.py
@@ -54,17 +55,17 @@ def ceil_div(a, b):
 
 
 def schedule(mesh):
-    """(FFN_CI, FFN_KB_E, FFN_KB_I) for a mesh side: the widest chunk of H, then the largest reduction blocks,
-    whose buffers fit L1 (step 1: double-buffered X, Wg, Wu blocks and resident G, U chunks; step 2:
-    double-buffered H, Wd blocks and resident Y block; the two steps do not share L1)."""
+    """(FFN_CI, FFN_KB_E, FFN_KB_I) for a mesh side: the widest chunk of H with at least 2 chunks, then the
+    largest reduction blocks, whose buffers fit L1 (step 1: double-buffered X, Wg, Wu blocks and G, U chunks;
+    step 2: double-buffered H, Wd blocks and resident Y block; the two steps do not share L1)."""
     assert i_size % mesh == 0, "FFN_SIZE must be a multiple of the mesh side"
     ts, ti, te = ceil_div(s_size, mesh), i_size // mesh, ceil_div(e_size, mesh)
-    cis = [args.ci] if args.ci else [c for c in range(ti, 0, -2) if ti % c == 0]
+    cis = [args.ci] if args.ci else [c for c in range(ti // 2, 0, -2) if ti % c == 0]
     for ci in cis:
         assert ti % ci == 0 and ci % 2 == 0, "FFN_CI must be even and divide FFN_SIZE / mesh"
         for kb_e in [k for k in (256, 128, 64) if e_size % k == 0]:
             for kb_i in [k for k in (256, 128, 64) if i_size % k == 0]:
-                step1 = 2 * (2 * ts * kb_e + 2 * 2 * kb_e * ci + 2 * ts * ci)
+                step1 = 2 * (2 * ts * kb_e + 2 * 2 * kb_e * ci + 2 * 2 * ts * ci)
                 step2 = 2 * (2 * ts * kb_i + 2 * kb_i * te + ts * te)
                 if step1 + step2 <= L1_BYTES:
                     return ci, kb_e, kb_i
@@ -84,11 +85,40 @@ Wu = (torch.rand(e_size, i_size) * (2.0 / e_size)).to(torch.float16).numpy()
 Wd = (torch.rand(i_size, e_size) * (4.0 / i_size)).to(torch.float16).numpy()
 R  = (torch.rand(s_size, e_size) + 0.5).to(torch.float16).numpy()
 
+
+
+def f16(x):
+    # one FP16 rounding of a result exact in float64 (products of FP16 values, fused multiply-adds)
+    return np.asarray(x, dtype=np.float64).astype(np.float16)
+
+
+def swiglu_fast(g, u):
+    # kernels/swiglu_fast, instruction by instruction
+    g, u = g.astype(np.float16), u.astype(np.float16)
+    t = f16(np.maximum(g, np.float16(-11.0)).astype(np.float64) * -1477.0 + 15360.0)  # vfmax, vfmadd
+    e = np.maximum(np.trunc(t.astype(np.float64)), 0).astype(np.uint16).view(np.float16)  # vfcvt.rtz.xu
+    d = f16(e.astype(np.float64) + 1.0)
+    p = f16(g.astype(np.float64) * u)
+    a = f16(d.astype(np.float64) * 2.0**-4)
+    y = (np.uint16(0x77a0) - a.view(np.uint16)).view(np.float16)  # vrsub.vx
+    for _ in range(2):
+        r = f16(1.0 - a.astype(np.float64) * y)  # vfnmsac
+        y = f16(y.astype(np.float64) + y.astype(np.float64) * r)  # vfmacc
+    y = f16(y.astype(np.float64) * 2.0**-4)
+    q = f16(p.astype(np.float64) * y)
+    r = f16(p.astype(np.float64) - d.astype(np.float64) * q)  # vfnmsub
+    return f16(q.astype(np.float64) + y.astype(np.float64) * r)  # vfmacc
+
+
 zero = np.float16(0)
 print("Computing bit-true FFN..")
-G = matrix_multiply_with_bittrue_fma(X, Wg, zero).astype(np.float64)
-U = matrix_multiply_with_bittrue_fma(X, Wu, zero).astype(np.float64)
-H = (G / (1.0 + np.exp(-G)) * U).astype(np.float16)
+G = matrix_multiply_with_bittrue_fma(X, Wg, zero)
+U = matrix_multiply_with_bittrue_fma(X, Wu, zero)
+H = swiglu_fast(G, U)
+G64, U64 = G.astype(np.float64), U.astype(np.float64)
+h_ref = G64 / (1.0 + np.exp(-G64)) * U64
+print("SwiGLU max abs error w.r.t. float64 (same G, U): %.3g (max |H| %.3g)" % (np.abs(H - h_ref).max(),
+                                                                               np.abs(h_ref).max()))
 Y = matrix_multiply_with_bittrue_fma(H, Wd, R)
 
 X64 = X.astype(np.float64)

@@ -4,14 +4,14 @@
 //
 // Francesco Conti <f.conti@unibo.it>
 //
-// L1 kernels called (synchronously, on the CV32 control core) by the
-// mgc-generated test.c. All pointer arguments are L1 addresses.
+// L1 kernels called (on the CV32 control core) by the mgc-generated test.c.
+// All pointer arguments are L1 addresses.
 
 #include <stdint.h>
 
 #include "test.h"
 #include "tile.h"
-#include "swiglu_fp16_spatz_params.h"
+#include "swiglu_fast_fp16_spatz_params.h"
 #include "eventunit.h"
 #include "ffn_qwen2_5_spatz_task_bin.h"
 
@@ -20,7 +20,7 @@ static volatile uint8_t spatz_ready __attribute__((section(".tile_bss")));
 
 /* Per-tile Spatz task parameters, preallocated in the per-tile L1. */
 static struct {
-    swiglu_fp16_spatz_params_t swiglu;
+    swiglu_fast_fp16_spatz_params_t swiglu;
 } spatz_params __attribute__((section(".tile_bss")));
 
 /**
@@ -36,30 +36,35 @@ static void spatz_setup(void)
     spatz_ready = 1;
 }
 
-/* Runs `task` on this tile's Spatz with the parameter block `params`, and waits for it. */
-static inline void spatz_offload(uint32_t task, void *params)
+/* Starts `task` on this tile's Spatz with the parameter block `params`, without waiting. */
+static inline void spatz_launch(uint32_t task, void *params)
 {
     spatz_setup();
     /* The block stores must land before Spatz is triggered. */
     asm volatile("" ::: "memory");
     spatz_run_task_with_params(task, (uint32_t)params);
-    eu_wait_events(EU_SPATZ_DONE_MASK, WFE, 0);
 }
 
 /**
- * g[i] = silu(g[i]) * u[i] for `n` fp16 elements, in place, on this tile's Spatz.
+ * Starts g[i] = silu(g[i]) * u[i] for `n` fp16 elements, in place, on this tile's Spatz;
+ * l1_spatz_wait1(g) waits for it. The parameter block is rewritten at every start: the double-buffered
+ * chunks alternate, and Spatz reads it only when the task starts (after the previous one is waited).
  */
-void l1_swiglu_fp16_spatz(uint32_t g, uint32_t u, uint32_t n)
+void l1_swiglu_start_fp16_spatz(uint32_t g, uint32_t u, uint32_t n)
 {
-    swiglu_fp16_spatz_params_t *p = &spatz_params.swiglu;
+    swiglu_fast_fp16_spatz_params_t *p = &spatz_params.swiglu;
 
-    if (!p->elem_len) {
-        p->shard_G     = g;
-        p->shard_U     = u;
-        p->shard_Y     = g;
-        p->total_elems = n;
-        p->elem_start  = 0;
-        p->elem_len    = n;
-    }
-    spatz_offload(SWIGLU_FP16_SPATZ_TASK, p);
+    p->shard_G = g;
+    p->shard_U = u;
+    p->shard_Y = g;
+    p->len     = n;
+    spatz_launch(SWIGLU_FAST_FP16_SPATZ_TASK, p);
+}
+
+/**
+ * Waits for the Spatz task started by an l1_*_start kernel, which writes x.
+ */
+void l1_spatz_wait1(uint32_t x)
+{
+    eu_wait_events(EU_SPATZ_DONE_MASK, WFE, 0);
 }

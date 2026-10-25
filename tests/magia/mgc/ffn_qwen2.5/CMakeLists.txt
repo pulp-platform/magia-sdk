@@ -9,8 +9,10 @@
 set(TEST_NAME test_ffn_qwen2.5)
 
 set(KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels)
-# Generic kernels from kernels/
-set(SPATZ_KERNELS swiglu)
+set(LOCAL_KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/kernels)
+# FP16 SwiGLU (Schraudolph exp) from this test's kernels/
+set(SPATZ_KERNELS)
+set(LOCAL_SPATZ_KERNELS swiglu_fast)
 
 # All the Spatz kernels in one task binary -> ffn_qwen2_5_spatz_task_bin.h
 set(SPATZ_TASK_SRCS)
@@ -21,18 +23,23 @@ foreach(K ${SPATZ_KERNELS})
   list(APPEND SPATZ_KERNEL_SRCS ${KERNELS_DIR}/${K}/fp16/spatz/src/${K}_fp16_spatz.c)
   list(APPEND SPATZ_KERNEL_INCS ${KERNELS_DIR}/${K}/fp16/spatz/include)
 endforeach()
+foreach(K ${LOCAL_SPATZ_KERNELS})
+  list(APPEND SPATZ_TASK_SRCS ${LOCAL_KERNELS_DIR}/${K}/fp16/spatz/spatz_task/${K}_fp16_spatz_task.c)
+  list(APPEND SPATZ_KERNEL_SRCS ${LOCAL_KERNELS_DIR}/${K}/fp16/spatz/src/${K}_fp16_spatz.c)
+  list(APPEND SPATZ_KERNEL_INCS ${LOCAL_KERNELS_DIR}/${K}/fp16/spatz/include)
+endforeach()
 add_spatz_task(
   TEST_NAME ffn_qwen2_5_spatz
   TASK_SOURCES ${SPATZ_TASK_SRCS}
-  FIRST_TASK_NAME swiglu_fp16_spatz_task
+  FIRST_TASK_NAME swiglu_fast_fp16_spatz_task
   INCLUDE_DIRS ${SPATZ_KERNEL_INCS}
-  HOT_TASKS swiglu_fp16_spatz_task
+  HOT_TASKS swiglu_fast_fp16_spatz_task
 )
 
 # Each kernel source includes its own <kernel>_task_bin.h: point them all to the shared header,
 # without redefining the binary array (defined once, in src/kernels.c).
 set(SPATZ_SHIM_DIR ${CMAKE_CURRENT_BINARY_DIR}/spatz_shim)
-foreach(K ${SPATZ_KERNELS})
+foreach(K ${SPATZ_KERNELS} ${LOCAL_SPATZ_KERNELS})
   file(WRITE ${SPATZ_SHIM_DIR}/${K}_fp16_spatz_task_bin.h
        "#define SPATZ_BINARY_NO_DEFINE\n#include \"ffn_qwen2_5_spatz_task_bin.h\"\n")
 endforeach()
