@@ -30,7 +30,7 @@ import torch
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'mesh', 'mm_generator'))
 from bittrue import matrix_multiply_with_bittrue_fma, write_fp16_array  # noqa: E402
 
-L1_BYTES = 0xE0000 - 0x4000  # L1_SIZE + 1, minus some room for the rest of the per-tile L1
+L1_BYTES = 0xE0000  # L1_SIZE + 1: the mgc buffers have all the L1 (stack and .tile_bss are below L1_BASE)
 
 parser = argparse.ArgumentParser("Qwen2.5 FFN layer test")
 parser.add_argument('--s_size', type=int, default=512)   # SEQ_LENGTH
