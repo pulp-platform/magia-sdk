@@ -5,9 +5,11 @@
 # Qwen2.5 self-attention layer (as gqa_pipeopt4, with what a Qwen2/Llama-style decoder adds to it):
 # - Q/K/V biases, added after the projections;
 # - RoPE on Q and K, after the biases, in the projection steps (the projection blocks are resident in L1). The
-#   channels of every Q/K head are interleaved offline (Wq, Wk, bq, bk columns i, P/2 + i -> 2i, 2i + 1), which
-#   leaves Q_h @ Kt_g unchanged and makes the rotate-half RoPE a rotation of adjacent pairs, so that a projection
-#   block may start or end inside a head;
+#   channels of every Q/K head are permuted offline (Wq, Wk, bq, bk) so that the rotate-half pairs (i, P/2 + i)
+#   become pairs (c, c + G/2) inside groups of G = ROPE_GROUP consecutive channels: Q_h @ Kt_g is unchanged, a
+#   projection block may start or end inside a head (at a multiple of G), and the RoPE is unit-stride on Spatz;
+# - three projection loops, Q, Kt, V, each block's bias and RoPE on Spatz overlapped with the next projection on
+#   RedMulE (only the V bias is not overlapped);
 # - causal attention as gqa_pipeopt3_masked: an additive mask [S x S] (0 where a query sees a key, -32768 where it
 #   does not), shared by all the heads; every tile loads its block of the mask into attn, and Q @ Kt runs as a GEMM
 #   accumulating on it. The exp kernel (kernels/expminus_rowsum) has its lower clamp at -11, so that a masked score
@@ -70,9 +72,12 @@ PRJ_L1   = define("(L1_SIZE + 1)")
 # over NUM_HEADS * PROJ_SIZE for the output projection; the largest of 256/128/64 that divides it and whose
 # buffers (double-buffered input blocks, resident output block, biases and RoPE tables) fit PRJ_L1 (64 is not
 # checked: the output blocks alone may not fit, e.g. Llama-70B on a 4x4 mesh)
-PRJ_QV_FIX = define("(PRJ_TS * (PRJ_THP + PRJ_TKVHP) + PRJ_THP + PRJ_TKVHP + PRJ_TS * PROJ_SIZE)")
+# elements resident during the Q, Kt and V loops besides their streamed blocks: the Q block (bias, tables) in the
+# Q and Kt loops, the Kt block in the Kt and V loops, the V block in the V loop
+PRJ_Q_FIX  = define("(PRJ_TS * PRJ_THP + PRJ_THP + PRJ_TS * PROJ_SIZE)")
 PRJ_K_FIX  = define("(PRJ_TKHP * PRJ_TKS + PRJ_TKHP + PROJ_SIZE * PRJ_TKS)")
-PROJ_KB_E  = define("(EMBED_SIZE % 256 == 0 && 2 * (2 * PRJ_TS * 256 + 2 * 256 * (PRJ_THP + PRJ_TKVHP) + PRJ_QV_FIX) <= PRJ_L1 && 2 * (2 * PRJ_TKHP * 256 + 2 * 256 * PRJ_TKS + PRJ_K_FIX) <= PRJ_L1 ? 256 : EMBED_SIZE % 128 == 0 && 2 * (2 * PRJ_TS * 128 + 2 * 128 * (PRJ_THP + PRJ_TKVHP) + PRJ_QV_FIX) <= PRJ_L1 && 2 * (2 * PRJ_TKHP * 128 + 2 * 128 * PRJ_TKS + PRJ_K_FIX) <= PRJ_L1 ? 128 : 64)")
+PRJ_V_FIX  = define("(PRJ_TS * PRJ_TKVHP + PRJ_TKVHP)")
+PROJ_KB_E  = define("(EMBED_SIZE % 256 == 0 && 2 * (2 * PRJ_TS * 256 + 2 * 256 * PRJ_THP + PRJ_Q_FIX) <= PRJ_L1 && 2 * (2 * PRJ_TKHP * 256 + 2 * 256 * PRJ_TKS + PRJ_Q_FIX + PRJ_K_FIX) <= PRJ_L1 && 2 * (2 * PRJ_TS * 256 + 2 * 256 * PRJ_TKVHP + PRJ_K_FIX + PRJ_V_FIX) <= PRJ_L1 ? 256 : EMBED_SIZE % 128 == 0 && 2 * (2 * PRJ_TS * 128 + 2 * 128 * PRJ_THP + PRJ_Q_FIX) <= PRJ_L1 && 2 * (2 * PRJ_TKHP * 128 + 2 * 128 * PRJ_TKS + PRJ_Q_FIX + PRJ_K_FIX) <= PRJ_L1 && 2 * (2 * PRJ_TS * 128 + 2 * 128 * PRJ_TKVHP + PRJ_K_FIX + PRJ_V_FIX) <= PRJ_L1 ? 128 : 64)")
 PROJ_KB_HP = define("((NUM_HEADS * PROJ_SIZE) % 256 == 0 && 2 * (2 * PRJ_TS * 256 + 2 * 256 * PRJ_TE + PRJ_TS * PRJ_TE) <= PRJ_L1 ? 256 : (NUM_HEADS * PROJ_SIZE) % 128 == 0 && 2 * (2 * PRJ_TS * 128 + 2 * 128 * PRJ_TE + PRJ_TS * PRJ_TE) <= PRJ_L1 ? 128 : 64)")
 
 # Implemented in src/kernels.c, synchronous on the tile's CV32 core.
@@ -98,20 +103,22 @@ spatz_rowscale = l1_kernel("l1_rowscale_fp16_spatz", operands=("y:out", "x:in", 
 # y[r, c] = (o[jj * R + r, c] + sum_{k != jj} g[k, r, c]) / s[jj * R + r], R = y.shape[0]
 spatz_rowslice_sum_div = l1_kernel("l1_rowslice_sum_div_fp16_spatz", operands=("y:out", "o:in", "g:in", "s:in"), params=("g.shape[0]", "y.shape[0]", "y.shape[1]"), executor=CORE)
 # Projection epilogues (the position of the block in Q / V / Kt comes from the tile ids, in src/kernels.c):
-# spatz_bias_rope_q: x[r, c] += b[c], then the RoPE of each row (token) on the interleaved channel pairs;
-# spatz_bias_v: x[r, c] += b[c]; spatz_bias_rope_kt: x[r, t] += b[r], then the RoPE of each column (token) of Kt
-spatz_bias_rope_q = l1_kernel("l1_bias_rope_q_fp16_spatz", operands=("x:inout", "b:in", "c:in", "s:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
+# spatz_bias_rope_q_start: starts x[r, c] += b[c], then the RoPE of each row (token) on the permuted channel pairs;
+# spatz_bias_rope_kt_start: starts x[r, t] += b[r], then the RoPE of each column (token) of Kt; spatz_wait(x) waits
+# for the started task, which writes x; spatz_bias_v: x[r, c] += b[c] (synchronous)
+spatz_bias_rope_q_start = l1_kernel("l1_bias_rope_q_start_fp16_spatz", operands=("x:inout", "b:in", "c:in", "s:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
+spatz_bias_rope_kt_start = l1_kernel("l1_bias_rope_kt_start_fp16_spatz", operands=("x:inout", "b:in", "c:in", "s:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
+spatz_wait = l1_kernel("l1_spatz_wait1", operands=("x:out",), params=(), executor=CORE)
 spatz_bias_v = l1_kernel("l1_bias_v_fp16_spatz", operands=("x:inout", "b:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
-spatz_bias_rope_kt = l1_kernel("l1_bias_rope_kt_fp16_spatz", operands=("x:inout", "b:in", "c:in", "s:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
 
 @test("test_gqa_pipeopt4_qwen2.5", authors=["Francesco Conti <francesco.conti@chips.it>"])
 def main():
 
     """
     Qwen2.5 self-attention, Y = R + concat_h(softmax((Q_h @ Kt_g + M) / sqrt(P)) @ V_g) @ Wo with g = h // (H // HKV),
-    Q = rope(X @ Wq + bq), Kt = rope(Wk^T @ X^T + bk), V = X @ Wv + bv and M the causal mask, in four steps through
-    L2: Q and V, Kt (output-static on RedMulE, the output block resident in L1 and blocks of the reduction dimension
-    streamed, then bias and RoPE on Spatz), the masked Flat-Attention of every head in one software pipeline (as
+    Q = rope(X @ Wq + bq), Kt = rope(Wk^T @ X^T + bk), V = X @ Wv + bv and M the causal mask, in five steps through
+    L2: Q, Kt, V (output-static on RedMulE, the output block resident in L1 and blocks of the reduction dimension
+    streamed, then bias and RoPE on Spatz during the next projection), the masked Flat-Attention of every head in one software pipeline (as
     gqa_pipeopt3_masked), Y = R + O @ Wo (as the Q/V projection, accumulating on R).
     """
     for ii, jj in tiles():
@@ -143,36 +150,39 @@ def main():
         o_rs = L1.single_buffer(o_[0:ATT_RS, 0:P], pin="attn")
 
         """
-        Projection buffers, each pinned to its loop: they share L1
+        Projection buffers, each pinned to its loop(s): they share L1. The block of Q (Kt) stays in L1 during the
+        next projection, while Spatz adds its bias and RoPE, so it is pinned to both loops
         """
 
-        # Q/V projection: tile (ii, jj) owns the blocks [tile_s x tile_hp] of Q and [tile_s x tile_kvhp] of V,
-        # resident in L1 (output-static), accumulated over blocks of PROJ_KB_E of the reduction dimension E:
-        # X [tile_s x PROJ_KB_E], Wq [PROJ_KB_E x tile_hp] and Wv [PROJ_KB_E x tile_kvhp] streamed
+        # Q projection: tile (ii, jj) owns the block [tile_s x tile_hp] of Q, resident in L1 (output-static),
+        # accumulated over blocks of PROJ_KB_E of the reduction dimension E: X [tile_s x PROJ_KB_E] and
+        # Wq [PROJ_KB_E x tile_hp] streamed; bias of the block and RoPE angles of its tokens
         tile_s    = ii.split(S)
         tile_hp   = jj.split(H * P)
         tile_kvhp = jj.split(HKV * P)
-        xqv = L1.multi_buffer(x_[tile_s, 0:PROJ_KB_E], pin="qv_proj")
-        wq  = L1.multi_buffer(wq_[0:PROJ_KB_E, tile_hp], pin="qv_proj")
-        wv  = L1.multi_buffer(wv_[0:PROJ_KB_E, tile_kvhp], pin="qv_proj")
-        yq  = L1.single_buffer(q_[tile_s, tile_hp], pin="qv_proj")
-        yv  = L1.single_buffer(v_[tile_s, tile_kvhp], pin="qv_proj")
-        # biases of the Q/V blocks, RoPE angles of their tokens
-        bq  = L1.single_buffer(bq_[tile_hp], pin="qv_proj")
-        bv  = L1.single_buffer(bv_[tile_kvhp], pin="qv_proj")
-        cq  = L1.single_buffer(cos_[tile_s, 0:P // 2], pin="qv_proj")
-        sq  = L1.single_buffer(sin_[tile_s, 0:P // 2], pin="qv_proj")
+        yq  = L1.single_buffer(q_[tile_s, tile_hp], pin=("q_proj", "k_proj"))
+        bq  = L1.single_buffer(bq_[tile_hp], pin=("q_proj", "k_proj"))
+        cq  = L1.single_buffer(cos_[tile_s, 0:P // 2], pin=("q_proj", "k_proj"))
+        sq  = L1.single_buffer(sin_[tile_s, 0:P // 2], pin=("q_proj", "k_proj"))
+        xq  = L1.multi_buffer(x_[tile_s, 0:PROJ_KB_E], pin="q_proj")
+        wq  = L1.multi_buffer(wq_[0:PROJ_KB_E, tile_hp], pin="q_proj")
 
         # Kt projection: tile (ii, jj) owns the block [tile_khp x tile_ks] of Kt, accumulated in the same way over
         # Wk^T [tile_khp x PROJ_KB_E] and X^T [PROJ_KB_E x tile_ks]
         tile_khp = ii.split(HKV * P)
         tile_ks  = jj.split(S)
+        yk = L1.single_buffer(kt_[tile_khp, tile_ks], pin=("k_proj", "v_proj"))
+        bk = L1.single_buffer(bk_[tile_khp], pin=("k_proj", "v_proj"))
+        ck = L1.single_buffer(cost_[0:P // 2, tile_ks], pin=("k_proj", "v_proj"))
+        sk = L1.single_buffer(sint_[0:P // 2, tile_ks], pin=("k_proj", "v_proj"))
         wk = L1.multi_buffer(wkt_[tile_khp, 0:PROJ_KB_E], pin="k_proj")
         xk = L1.multi_buffer(xt_[0:PROJ_KB_E, tile_ks], pin="k_proj")
-        yk = L1.single_buffer(kt_[tile_khp, tile_ks], pin="k_proj")
-        bk = L1.single_buffer(bk_[tile_khp], pin="k_proj")
-        ck = L1.single_buffer(cost_[0:P // 2, tile_ks], pin="k_proj")
-        sk = L1.single_buffer(sint_[0:P // 2, tile_ks], pin="k_proj")
+
+        # V projection: tile (ii, jj) owns the block [tile_s x tile_kvhp] of V, as the Q projection
+        yv = L1.single_buffer(v_[tile_s, tile_kvhp], pin="v_proj")
+        bv = L1.single_buffer(bv_[tile_kvhp], pin="v_proj")
+        xv = L1.multi_buffer(x_[tile_s, 0:PROJ_KB_E], pin="v_proj")
+        wv = L1.multi_buffer(wv_[0:PROJ_KB_E, tile_kvhp], pin="v_proj")
 
         # output projection: tile (ii, jj) owns the block [tile_s x tile_e] of Y, initialized with the residual and
         # accumulated over blocks of PROJ_KB_HP of the reduction dimension H * P
@@ -185,56 +195,34 @@ def main():
         sync(GLOBAL)
 
         """
-        STEP 1: Q = rope(X @ Wq + bq), V = X @ Wv + bv, block k of X, Wq, Wv loading while RedMulE accumulates
-        block k - 1
+        STEP 1: Q = X @ Wq, block k of X, Wq loading while RedMulE accumulates block k - 1 (as mm_os: the job of block
+        k is programmed while its operands load, committed once they have landed and waited one step later)
         """
 
-        # biases and RoPE tables, needed after the loop
+        # bias and RoPE tables of Q, needed after the loop
         ebq = idma.load(bq, bq_[tile_hp])
-        ebv = idma.load(bv, bv_[tile_kvhp])
         ecq = idma.load(cq, cos_[tile_s, 0:P // 2])
         esnq = idma.load(sq, sin_[tile_s, 0:P // 2])
-
-        # as mm_os: the jobs of block k are programmed while its operands load, committed once they have landed
-        # (stage 0) and waited one step later (stage 1). The RedMulE queue holds 2 jobs, so each job of block k is
-        # enqueued only once its counterpart of block k - 1 is done: Q(k) after Q(k - 1), V(k) after V(k - 1),
-        # and RedMulE runs Q(k - 1), V(k - 1), Q(k), V(k) back to back
         n_kb_e: u16 = E // PROJ_KB_E
-        ev_q = redmule.events()
-        ev_v = redmule.events()
-        for k in pipeline(n_kb_e, name="qv_proj"):
+        for k in pipeline(n_kb_e, name="q_proj"):
             with stage(0):
                 k0: u16 = k * PROJ_KB_E
-                ex  = idma.load(xqv[k], x_[tile_s, k0:k0 + PROJ_KB_E])
-                ewq = idma.load(wq[k], wq_[k0:k0 + PROJ_KB_E, tile_hp])
-                ewv = idma.load(wv[k], wv_[k0:k0 + PROJ_KB_E, tile_kvhp])
-            with stage(1):
-                ev_q[k].wait()
-            with stage(0):
-                redmule.enqueue(xqv[k], wq[k], yq, op=GEMM, event=ev_q[k], uninit=k == 0)
+                ex = idma.load(xq[k], x_[tile_s, k0:k0 + PROJ_KB_E])
+                ew = idma.load(wq[k], wq_[k0:k0 + PROJ_KB_E, tile_hp])
+                jq = redmule.enqueue(xq[k], wq[k], yq, op=GEMM, uninit=k == 0)
                 ex.wait()
-                ewq.wait()
-                ewv.wait()
+                ew.wait()
                 redmule.commit_start()
             with stage(1):
-                ev_v[k].wait()
-            with stage(0):
-                redmule.enqueue(xqv[k], wv[k], yv, op=GEMM, event=ev_v[k], uninit=k == 0)
-                redmule.commit_start()
-        # V + bias stored while Spatz adds the bias and the RoPE to Q
-        ebv.wait()
-        spatz_bias_v(yv, bv)
-        esv = idma.store(v_[tile_s, tile_kvhp], yv)
+                jq.wait()
         ebq.wait()
         ecq.wait()
         esnq.wait()
-        spatz_bias_rope_q(yq, bq, cq, sq)
-        esq = idma.store(q_[tile_s, tile_hp], yq)
-        esq.wait()
-        esv.wait()
+        # Q += bias, RoPE on Spatz, while RedMulE runs the Kt projection
+        spatz_bias_rope_q_start(yq, bq, cq, sq)
 
         """
-        STEP 2: Kt = rope(Wk^T @ X^T + bk), as step 1
+        STEP 2: Kt = Wk^T @ X^T, as step 1, then Q stored and Kt += bias, RoPE on Spatz
         """
 
         ebk = idma.load(bk, bk_[tile_khp])
@@ -251,17 +239,44 @@ def main():
                 redmule.commit_start()
             with stage(1):
                 jk.wait()
+        spatz_wait(yq)
+        esq = idma.store(q_[tile_s, tile_hp], yq)
         ebk.wait()
         eck.wait()
         esnk.wait()
-        spatz_bias_rope_kt(yk, bk, ck, sk)
-        idma.store(kt_[tile_khp, tile_ks], yk).wait()
+        # Kt += bias, RoPE on Spatz, while RedMulE runs the V projection
+        spatz_bias_rope_kt_start(yk, bk, ck, sk)
+        esq.wait()
+
+        """
+        STEP 3: V = X @ Wv, as step 1, then Kt stored and V += bias
+        """
+
+        ebv = idma.load(bv, bv_[tile_kvhp])
+        for k in pipeline(n_kb_e, name="v_proj"):
+            with stage(0):
+                k0: u16 = k * PROJ_KB_E
+                ex = idma.load(xv[k], x_[tile_s, k0:k0 + PROJ_KB_E])
+                ew = idma.load(wv[k], wv_[k0:k0 + PROJ_KB_E, tile_kvhp])
+                jv = redmule.enqueue(xv[k], wv[k], yv, op=GEMM, uninit=k == 0)
+                ex.wait()
+                ew.wait()
+                redmule.commit_start()
+            with stage(1):
+                jv.wait()
+        spatz_wait(yk)
+        esk = idma.store(kt_[tile_khp, tile_ks], yk)
+        ebv.wait()
+        spatz_bias_v(yv, bv)
+        esv = idma.store(v_[tile_s, tile_kvhp], yv)
+        esk.wait()
+        esv.wait()
 
         # Q, Kt, V complete in L2
         sync(GLOBAL)
 
         """
-        STEP 3: Flat-Attention of every Q head, O[:, h * P:(h + 1) * P] = softmax((Q_h @ Kt_g + M) / sqrt(P)) @ V_g
+        STEP 4: Flat-Attention of every Q head, O[:, h * P:(h + 1) * P] = softmax((Q_h @ Kt_g + M) / sqrt(P)) @ V_g
         """
 
         s_block_size_q:  u16 = S_BLOCK_SIZE_Q
@@ -444,7 +459,7 @@ def main():
         sync(GLOBAL)
 
         """
-        STEP 4: Y = R + O @ Wo, as step 1, accumulating on the residual
+        STEP 5: Y = R + O @ Wo, as step 1, accumulating on the residual
         """
 
         idma.load(yo, res_[tile_s, tile_e]).wait()

@@ -17,7 +17,8 @@ void MAGIA_bias_rope_t_fp16_spatz_l1(float16 *X,
                                      uint32_t rows,
                                      uint32_t cols,
                                      uint32_t row0,
-                                     uint32_t head_dim)
+                                     uint32_t head_dim,
+                                     uint32_t group)
 {
     volatile bias_rope_t_fp16_spatz_params_t params = {
         .shard_X  = (uintptr_t)X,
@@ -27,6 +28,7 @@ void MAGIA_bias_rope_t_fp16_spatz_l1(float16 *X,
         .dims     = rows | (cols << 16),
         .row0     = row0,
         .head_dim = head_dim,
+        .group    = group,
     };
     int ret;
 

@@ -7,7 +7,7 @@
 // L1 kernels called (synchronously, on the CV32 control core) by the
 // mgc-generated test.c. All pointer arguments are L1 addresses.
 // The softmax uses the merged kernels in ../kernels instead of the generic ones, the projection
-// epilogues (bias, RoPE) the bias_rope kernels in ../kernels.
+// epilogues (bias, RoPE) the bias_rope kernels in ../kernels, started asynchronously for Q and Kt.
 
 #include <stdint.h>
 
@@ -253,12 +253,21 @@ void l1_rowslice_sum_div_fp16_spatz(
 }
 
 /**
- * Q projection epilogue: x[r, c] += b[c] for this tile's block of Q [rows x cols], then the RoPE of
- * each row (token) on the interleaved channel pairs, with the angles c/s [rows x PROJ_SIZE / 2] of
- * the block's tokens. The block starts at column x_id * ceil(NUM_HEADS * PROJ_SIZE / MESH_X_TILES)
- * of Q (as the mgc tile split).
+ * Waits for the Spatz task started by an l1_*_start kernel, which writes x.
  */
-void l1_bias_rope_q_fp16_spatz(uint32_t x, uint32_t b, uint32_t c, uint32_t s, uint32_t rows, uint32_t cols)
+void l1_spatz_wait1(uint32_t x)
+{
+    eu_wait_events(EU_SPATZ_DONE_MASK, WFE, 0);
+}
+
+/**
+ * Q projection epilogue: starts x[r, c] += b[c] for this tile's block of Q [rows x cols], then the
+ * RoPE of each row (token) on the channel pairs of the ROPE_GROUP groups, with the angles
+ * c/s [rows x PROJ_SIZE / 2] of the block's tokens; l1_spatz_wait1() waits for it. The block starts
+ * at column x_id * ceil(NUM_HEADS * PROJ_SIZE / MESH_X_TILES) of Q (as the mgc tile split).
+ */
+void l1_bias_rope_q_start_fp16_spatz(
+    uint32_t x, uint32_t b, uint32_t c, uint32_t s, uint32_t rows, uint32_t cols)
 {
     bias_rope_fp16_spatz_params_t *p = &spatz_params.bias_rope_q;
     uint32_t c_max = (NUM_HEADS * PROJ_SIZE + MESH_X_TILES - 1) / MESH_X_TILES;
@@ -270,7 +279,8 @@ void l1_bias_rope_q_fp16_spatz(uint32_t x, uint32_t b, uint32_t c, uint32_t s, u
     p->dims     = rows | (cols << 16);
     p->col0     = GET_X_ID(get_hartid()) * c_max % PROJ_SIZE;
     p->head_dim = PROJ_SIZE;
-    spatz_offload(BIAS_ROPE_FP16_SPATZ_TASK, p);
+    p->group    = ROPE_GROUP;
+    spatz_launch(BIAS_ROPE_FP16_SPATZ_TASK, p);
 }
 
 /**
@@ -287,16 +297,19 @@ void l1_bias_v_fp16_spatz(uint32_t x, uint32_t b, uint32_t rows, uint32_t cols)
     p->dims     = rows | (cols << 16);
     p->col0     = 0;
     p->head_dim = PROJ_SIZE;
+    p->group    = ROPE_GROUP;
     spatz_offload(BIAS_ROPE_FP16_SPATZ_TASK, p);
 }
 
 /**
- * Kt projection epilogue: x[r, t] += b[r] for this tile's block of Kt [rows x cols], then the RoPE
- * of each column (token) on the interleaved channel pairs (pairs of rows), with the transposed
- * angles c/s [PROJ_SIZE / 2 x cols] of the block's tokens. The block starts at row
- * y_id * ceil(NUM_KV_HEADS * PROJ_SIZE / MESH_Y_TILES) of Kt (as the mgc tile split).
+ * Kt projection epilogue: starts x[r, t] += b[r] for this tile's block of Kt [rows x cols], then the
+ * RoPE of each column (token) on the channel pairs (pairs of rows) of the ROPE_GROUP groups, with the
+ * transposed angles c/s [PROJ_SIZE / 2 x cols] of the block's tokens; l1_spatz_wait1() waits for it.
+ * The block starts at row y_id * ceil(NUM_KV_HEADS * PROJ_SIZE / MESH_Y_TILES) of Kt (as the mgc tile
+ * split).
  */
-void l1_bias_rope_kt_fp16_spatz(uint32_t x, uint32_t b, uint32_t c, uint32_t s, uint32_t rows, uint32_t cols)
+void l1_bias_rope_kt_start_fp16_spatz(
+    uint32_t x, uint32_t b, uint32_t c, uint32_t s, uint32_t rows, uint32_t cols)
 {
     bias_rope_t_fp16_spatz_params_t *p = &spatz_params.bias_rope_kt;
     uint32_t r_max = (NUM_KV_HEADS * PROJ_SIZE + MESH_Y_TILES - 1) / MESH_Y_TILES;
@@ -308,5 +321,6 @@ void l1_bias_rope_kt_fp16_spatz(uint32_t x, uint32_t b, uint32_t c, uint32_t s, 
     p->dims     = rows | (cols << 16);
     p->row0     = GET_Y_ID(get_hartid()) * r_max % PROJ_SIZE;
     p->head_dim = PROJ_SIZE;
-    spatz_offload(BIAS_ROPE_T_FP16_SPATZ_TASK, p);
+    p->group    = ROPE_GROUP;
+    spatz_launch(BIAS_ROPE_T_FP16_SPATZ_TASK, p);
 }

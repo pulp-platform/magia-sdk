@@ -14,8 +14,11 @@ Q head h uses K/V head h // (H/Hkv), Q/K/V biases, RoPE, causal mask, residual):
 
 X is the input of the layer after the RMSNorm and R the residual stream. The weights are drawn in the Hugging
 Face layout (rotate-half RoPE: channel i of a head pairs with P/2 + i); the test gets Wq, Wk, bq, bk with the
-channels of every head interleaved (i -> 2i, P/2 + i -> 2i + 1), so that its RoPE rotates adjacent pairs. Q and K
-permuted the same way give the same scores, which the float64 reference (in the original layout) checks.
+channels of every head permuted in groups of G = ROPE_GROUP: pair i = g * G/2 + j (j < G/2) goes to channels
+g * G + j and g * G + G/2 + j, so that the RoPE of a projection block whose edges are multiples of G is unit-stride.
+G is the largest power of 2 (<= P) that divides the Q and Kt projection blocks of every mesh side (--rope_group
+overrides it). Q and K permuted the same way give the same scores, which the float64 reference (in the original
+layout) checks.
 
 The golden is bit-true: the projections are one RedMulE job per output element (FP16 FMA in k order), bias and
 RoPE as the Spatz kernels (fp16 add, exact fp32 products, fp32 then fp16 rounding), each head is the masked
@@ -47,6 +50,7 @@ parser.add_argument('--block_kv', type=int, default=512)  # S_BLOCK_SIZE_KV in t
 parser.add_argument('--tiles', type=int, nargs='+', default=[2, 4, 8, 16])
 parser.add_argument('--q_std', type=float, default=1.15)  # std of Q and K, as U(-2, 2) in flat_attn.py
 parser.add_argument('--theta', type=float, default=1e6)   # RoPE base (Qwen2.5: 1e6)
+parser.add_argument('--rope_group', type=int, default=None)  # ROPE_GROUP (default: the largest that fits)
 parser.add_argument('--seed', type=int, default=42)
 # place the L2 arrays in the .l2ext section (above the default gvsoc L2: run with l2_size >= 0x10000000), by
 # default only if they do not fit the 15 MiB of the default data region (with some room for the rest)
@@ -65,9 +69,20 @@ assert s_size % block == 0
 for mesh in args.tiles:
     assert mesh & (mesh - 1) == 0, "binary-tree multicasts assume a power-of-2 mesh"
     assert block % (mesh * mesh) == 0, "the rows of a Q block per tile must be a multiple of the mesh side"
-    # the RoPE pairs and the unit-stride Spatz accesses need even blocks in every projection
+    # the unit-stride Spatz accesses need even blocks in every projection
     for n in (hp_size, hkvp_size, s_size):
         assert n % (2 * mesh) == 0, "%d is not a multiple of 2 * %d" % (n, mesh)
+
+# RoPE group: divides P and the columns of the Q blocks / rows of the Kt blocks of every mesh side, at least 4
+# (G/2 even, for the 4-byte aligned vector accesses)
+rope_group = args.rope_group or max(g for g in (2 ** k for k in range(2, 16)) if p_size % g == 0 and all(
+    n % (mesh * g) == 0 for mesh in args.tiles for n in (hp_size, hkvp_size)))
+assert rope_group >= 4 and p_size % rope_group == 0
+for mesh in args.tiles:
+    for n in (hp_size, hkvp_size):
+        assert n % (mesh * rope_group) == 0, "the %d-wide projection blocks of a %dx%d mesh are not a multiple of " \
+            "ROPE_GROUP=%d" % (n, mesh, mesh, rope_group)
+print("ROPE_GROUP=%d" % rope_group)
 
 # X in [0, 1); Wq, Wk zero-mean, scaled so that Q and K have std ~q_std (peaked softmax); Wv, Wo, bv positive and
 # R in [0.5, 1.5), so that V ~ 0.5 and Y ~ 2 stay away from 0, where check(tol=...) is too strict
@@ -89,9 +104,11 @@ angles = np.arange(s_size, dtype=np.float64)[:, None] * inv_freq[None, :]
 cos_tab = np.cos(angles).astype(np.float16)  # [S x P/2]
 sin_tab = np.sin(angles).astype(np.float16)
 
-# interleave the channels of every head: new column 2i <- i, 2i + 1 <- P/2 + i
-perm_q = np.array([h * p_size + j + k * half for h in range(n_heads) for j in range(half) for k in (0, 1)])
-perm_k = np.array([h * p_size + j + k * half for h in range(n_kv_heads) for j in range(half) for k in (0, 1)])
+# permute the channels of every head: in group g, new columns g*G + j <- i, g*G + G/2 + j <- P/2 + i, i = g*G/2 + j
+gh = rope_group // 2
+perm_head = np.array([g * gh + j + k * half for g in range(p_size // rope_group) for k in (0, 1) for j in range(gh)])
+perm_q = np.concatenate([h * p_size + perm_head for h in range(n_heads)])
+perm_k = np.concatenate([h * p_size + perm_head for h in range(n_kv_heads)])
 Wq_i, bq_i = np.ascontiguousarray(Wq[:, perm_q]), bq[perm_q]
 Wk_i, bk_i = np.ascontiguousarray(Wk[:, perm_k]), bk[perm_k]
 Xt, Wkt_i = np.ascontiguousarray(X.T), np.ascontiguousarray(Wk_i.T)
@@ -129,12 +146,14 @@ def rope_pairs(xe, xo, c, s):
 
 
 def bias_rope_rows(x, b):
-    # x [S x n*P] + b, then the RoPE of every row on the interleaved pairs of every head
+    # x [S x n*P] + b, then the RoPE of every row on the permuted pairs of every head: columns a, a + G/2 of
+    # angle i, for a = g*G + j (g over the groups of all the heads)
     x = f16(x.astype(np.float64) + b[None, :])
-    f = (np.arange(0, x.shape[1], 2) % p_size) // 2
-    ye, yo = rope_pairs(x[:, 0::2], x[:, 1::2], cos_tab[:, f], sin_tab[:, f])
+    a = np.array([g * rope_group + j for g in range(x.shape[1] // rope_group) for j in range(gh)])
+    i = (a % p_size) // rope_group * gh + a % rope_group
+    ya, yb = rope_pairs(x[:, a], x[:, a + gh], cos_tab[:, i], sin_tab[:, i])
     y = np.empty_like(x)
-    y[:, 0::2], y[:, 1::2] = ye, yo
+    y[:, a], y[:, a + gh] = ya, yb
     return y
 
 
@@ -203,7 +222,7 @@ heads = [(slice(h * p_size, (h + 1) * p_size), slice(h // group * p_size, (h // 
          for h in range(n_heads)]
 
 # float64 reference in the original (rotate-half) layout with the exact exp, for information and as a check of
-# the channel interleaving
+# the channel permutation
 X64, c64, s64 = X.astype(np.float64), cos_tab.astype(np.float64), sin_tab.astype(np.float64)
 
 
@@ -253,8 +272,8 @@ with open(os.path.join(args.inc_dir, 'test.h'), 'w') as f:
             % (s_size, e_size, p_size))
     f.write('// Q = rope(X @ Wq + bq), Kt = rope(Wk^T @ X^T + bk), V = X @ Wv + bv, M causal, %d Q heads and %d K/V\n'
             % (n_heads, n_kv_heads))
-    f.write('// heads (g = h / %d) of size %d, channels of the Q/K heads interleaved (i -> 2i, P/2 + i -> 2i + 1)\n'
-            % (group, p_size))
+    f.write('// heads (g = h / %d) of size %d, channels of the Q/K heads permuted in groups of ROPE_GROUP = %d\n'
+            % (group, p_size, rope_group))
     f.write('\n')
     f.write('#ifndef _TEST_GQA_QWEN25_INCLUDE_GUARD_\n')
     f.write('#define _TEST_GQA_QWEN25_INCLUDE_GUARD_\n')
@@ -264,6 +283,7 @@ with open(os.path.join(args.inc_dir, 'test.h'), 'w') as f:
     f.write('#define PROJ_SIZE  (%d)\n' % p_size)
     f.write('#define NUM_HEADS  (%d)\n' % n_heads)
     f.write('#define NUM_KV_HEADS (%d)\n' % n_kv_heads)
+    f.write('#define ROPE_GROUP (%d)\n' % rope_group)
     f.write('\n')
     if l2ext:
         f.write('// %.1f MiB of L2 arrays: in .l2ext, above the default L2 (build and run gvsoc with\n' % (l2_bytes / 2**20))
