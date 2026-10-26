@@ -252,35 +252,34 @@ int main(void)
     }
 
     /**
-     * 5. Check results
+     * 5. Check results (WILL ONLY WORK IF THE DIMENSIONS ARE A PERFECT MULTIPLE OF THE MESH DIM)
      */
     fsync_sync_col();
 #if STALLING == 0
     eu_fsync_wait(WAIT_MODE);
 #endif
     uint32_t errors = 0;
-    if (y_id == MESH_Y_TILES - 1) {
-        uint16_t computed, expected, diff = 0;
-        for (uint8_t i = 0; i < M_SIZE; i++) {
-            for (uint8_t j = x_id * tile_w_max; j < x_id * tile_w_max + tile_w; j++) {
-                computed = *(volatile uint16_t *)(y_inp + (i * K_SIZE + j));
-                expected = *(volatile uint16_t *)(z_out + (i * K_SIZE + j));
-                diff     = (computed > expected) ? (computed - expected) : (expected - computed);
-                if (diff > 0x0011) {
+    uint16_t computed, expected, diff = 0;
+    for (int i = (y_id * (M_SIZE / MESH_Y_TILES)); i < ((y_id + 1) * (M_SIZE / MESH_Y_TILES));
+         i++) {
+        for (uint8_t j = x_id * tile_w_max; j < x_id * tile_w_max + tile_w; j++) {
+            computed = *(volatile uint16_t *)(y_inp + (i * K_SIZE + j));
+            expected = *(volatile uint16_t *)(z_out + (i * K_SIZE + j));
+            diff     = (computed > expected) ? (computed - expected) : (expected - computed);
+            if (diff > 0x0011) {
 #if EVAL == 1
-                    if (y_id == 0)
-                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x",
-                               i,
-                               j,
-                               *(volatile uint16_t *)(y_inp + (i * K_SIZE + j)),
-                               *(volatile uint16_t *)(z_out + (i * K_SIZE + j)));
+                if (y_id == 0)
+                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x",
+                           i,
+                           j,
+                           *(volatile uint16_t *)(y_inp + (i * K_SIZE + j)),
+                           *(volatile uint16_t *)(z_out + (i * K_SIZE + j)));
 #endif
-                    errors++;
-                }
+                errors++;
             }
         }
-        printf("Number of errors: %d\n", errors);
     }
+    printf("Number of errors: %d\n", errors);
 
     return errors;
 }
