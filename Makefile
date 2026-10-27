@@ -442,7 +442,7 @@ gvsoc_init:
 	git checkout $(GVSOC_COMMIT) && \
 	git submodule update --init --recursive && \
 	cd core && \
-	git fetch origin $(GVSOC_CORE_COMMIT) && \
+	git fetch $(GVSOC_CORE_REPO) $(GVSOC_CORE_COMMIT) && \
 	git checkout $(GVSOC_CORE_COMMIT) && \
 	cd ../pulp && \
 	git fetch $(GVSOC_PULP_REPO) $(GVSOC_PULP_COMMIT) && \
