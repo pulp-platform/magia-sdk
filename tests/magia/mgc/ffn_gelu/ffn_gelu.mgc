@@ -1,0 +1,123 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# ViT FFN layer (GELU MLP, no biases) with the residual: Y = R + gelu(X @ W1) @ W2.
+# X is the input after the LayerNorm, R the residual stream before it; the LayerNorm itself is not part of the test.
+# As ffn_qwen2.5 with a single up projection, two steps through L2, both output-static on RedMulE:
+# - H = gelu(X @ W1): tile (ii, jj) owns the block [tile_s x tile_i] of H, computed in chunks of FFN_CI columns
+#   (double-buffered in L1, accumulated over blocks of FFN_KB_E of E); the GELU of chunk c runs on Spatz, in place,
+#   while RedMulE computes chunk c + 1, and is stored while RedMulE runs the last jobs of chunk c + 1;
+# - Y = R + H @ W2: tile (ii, jj) owns the block [tile_s x tile_e] of Y, loaded with the residual and accumulated
+#   over blocks of FFN_KB_I of I.
+# FFN_CI, FFN_KB_E and FFN_KB_I are chosen per mesh side by gen_golden.py so that all the buffers fit L1.
+# Compile with
+#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/ffn_gelu/ffn_gelu.mgc \
+#       -o tests/magia/mgc/ffn_gelu/src/test.c
+
+from mgc import *
+
+S, E, I, CI, KB_E, KB_I = sizes("SEQ_LENGTH", "EMBED_SIZE", "FFN_SIZE", "FFN_CI", "FFN_KB_E", "FFN_KB_I")  # from include/test.h
+x_   = l2("x_inp",   (S, E), fp16)
+w1_  = l2("w1_inp",  (E, I), fp16)
+w2_  = l2("w2_inp",  (I, E), fp16)
+res_ = l2("res_inp", (S, E), fp16)  # residual
+h_   = l2("h_l2",    (S, I), fp16)  # intermediate
+y_   = l2("y_out",   (S, E), fp16)
+y_gold = l2("y_gold", (S, E), fp16)  # golden
+
+WAIT_MODE = define(WFE)
+
+# Implemented in src/kernels.c, on the tile's CV32 core:
+# spatz_gelu_start: starts x = gelu(x), element-wise, in place, on Spatz (kernels/gelu_fast: tanh form, Schraudolph
+# exp and division in FP16) and returns; spatz_wait(x) waits for it
+spatz_gelu_start = l1_kernel("l1_gelu_start_fp16_spatz", operands=("x:inout",), params=("x.size",), executor=CORE)
+spatz_wait = l1_kernel("l1_spatz_wait1", operands=("x:out",), params=(), executor=CORE)
+
+@test("test_ffn_gelu", authors=["Francesco Conti <francesco.conti@chips.it>"])
+def main():
+
+    """
+    ViT FFN with the residual, Y = R + gelu(X @ W1) @ W2, in two steps through L2: H = gelu(X @ W1) in chunks of
+    columns (output-static on RedMulE, the H chunk resident in L1 and blocks of E streamed, then GELU on Spatz
+    overlapped with the next chunk), Y = R + H @ W2 (output-static, accumulating on R).
+    """
+    for ii, jj in tiles():
+
+        tile_s = ii.split(S)
+        tile_i = jj.split(I)
+        tile_e = jj.split(E)
+
+        # step 1: chunk [tile_s x FFN_CI] of H, double-buffered across the chunks, accumulated over
+        # X [tile_s x FFN_KB_E], W1 [FFN_KB_E x FFN_CI] streamed
+        xu = L1.multi_buffer(x_[tile_s, 0:KB_E])
+        w1 = L1.multi_buffer(w1_[0:KB_E, 0:CI])
+        yu = L1.multi_buffer(h_[tile_s, 0:CI], depth=2)
+
+        # step 2: block [tile_s x tile_e] of Y, accumulated over H [tile_s x FFN_KB_I], W2 [FFN_KB_I x tile_e]
+        xd = L1.multi_buffer(h_[tile_s, 0:KB_I])
+        w2 = L1.multi_buffer(w2_[0:KB_I, tile_e])
+        yo = L1.single_buffer(y_[tile_s, tile_e])
+
+        sync(GLOBAL)
+
+        """
+        STEP 1: H = gelu(X @ W1), chunk by chunk of FFN_CI columns; in each chunk, block k of X, W1 loading while
+        RedMulE accumulates block k - 1. The GELU of chunk c - 1 runs on Spatz during chunk c, and its store is
+        issued once RedMulE has the last jobs of chunk c.
+        """
+
+        n_kb_e: u16 = E // KB_E
+        n_ci: u16 = tile_i.size // CI
+        ev_u = redmule.events()
+        for c in range(n_ci):
+            i0: u32 = tile_i.start + c * CI
+            for k in pipeline(n_kb_e):
+                with stage(0):
+                    k0: u16 = k * KB_E
+                    ex  = idma.load(xu[k], x_[tile_s, k0:k0 + KB_E])
+                    ew1 = idma.load(w1[k], w1_[k0:k0 + KB_E, i0:i0 + CI])
+                with stage(1):
+                    ev_u[k].wait()
+                with stage(0):
+                    redmule.enqueue(xu[k], w1[k], yu[c], op=GEMM, event=ev_u[k], uninit=k == 0)
+                    ex.wait()
+                    ew1.wait()
+                    redmule.commit_start()
+                    # H chunk c - 1, while RedMulE runs the last jobs of chunk c
+                    if k == n_kb_e - 1:
+                        if c > 0:
+                            spatz_wait(yu[c - 1])
+                            idma.store(h_[tile_s, i0 - CI:i0], yu[c - 1]).wait()
+            spatz_gelu_start(yu[c])
+            if c == n_ci - 1:
+                spatz_wait(yu[c])
+                idma.store(h_[tile_s, i0:i0 + CI], yu[c]).wait()
+
+        # H complete in L2
+        sync(GLOBAL)
+
+        """
+        STEP 2: Y = R + H @ W2, block k of H, W2 loading while RedMulE accumulates block k - 1
+        """
+
+        idma.load(yo, res_[tile_s, tile_e]).wait()
+        n_kb_i: u16 = I // KB_I
+        for k in pipeline(n_kb_i):
+            with stage(0):
+                k0: u16 = k * KB_I
+                ex = idma.load(xd[k], h_[tile_s, k0:k0 + KB_I])
+                ew = idma.load(w2[k], w2_[k0:k0 + KB_I, tile_e])
+                jd = redmule.enqueue(xd[k], w2[k], yo, op=GEMM)
+                ex.wait()
+                ew.wait()
+                redmule.commit_start()
+            with stage(1):
+                jd.wait()
+        idma.store(y_[tile_s, tile_e], yo).wait()
+
+        # check the whole output on tile (0, 0), once every tile has written its blocks
+        sync(GLOBAL)
+        if ii == 0:
+            if jj == 0:
+                check(y_[:, :], y_gold[:, :], tol=0x11)
