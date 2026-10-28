@@ -1,0 +1,96 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# 2-D convolution, CONV_K x CONV_K kernel (odd, default 3), stride 1, zero padding CONV_PAD = (CONV_K - 1) / 2
+# ("same"), no bias, as an im2col GEMM: Y[H*W x COUT] = im2col(X) [H*W x K*K*CIN] @ W [K*K*CIN x COUT].
+# X is HWC in L2, unpadded; W has its rows in (ky, kx, ci) order; Y is HWC.
+# Tile (ii, jj) owns the output rows tile_h of the image (mesh rows) and the output channels tile_c (mesh columns),
+# with its W block resident in L1. Its pixels go through a 4-stage pipeline, CONV_CP pixels of one output row at a
+# time (CONV_CP divides W, chosen by gen_golden.py so that the buffers fit L1):
+#   0. iDMA: the CONV_K input rows the output row needs, in one contiguous transfer; at the top and bottom of the
+#      image the window is clamped inside it, and the rows outside it are zeros in the im2col;
+#   1. Spatz: the im2col block [CONV_CP x K*K*CIN] of the pixels, with the zero padding;
+#   2. RedMulE: the output block [CONV_CP x tile_c] = im2col block @ W block (MATMUL);
+#   3. iDMA: the output block to L2.
+# All four run at once on consecutive blocks.
+# Compile with
+#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/conv_im2col/conv_im2col.mgc \
+#       -o tests/magia/mgc/conv_im2col/src/test.c
+
+from mgc import *
+
+H, W, CIN, COUT, KS, PAD = sizes("CONV_H", "CONV_W", "CONV_CIN", "CONV_COUT", "CONV_K", "CONV_PAD")  # from include/test.h
+ROW, KKC, HW, CP = sizes("CONV_ROW", "CONV_KKC", "CONV_HW", "CONV_CP")  # W * CIN, K * K * CIN, H * W, pixels per block
+x_ = l2("x_inp", (H, ROW), fp16)      # input, HWC
+w_ = l2("w_inp", (KKC, COUT), fp16)   # weights, rows in (ky, kx, ci) order
+y_ = l2("y_out", (HW, COUT), fp16)    # output, HWC
+y_gold = l2("y_gold", (HW, COUT), fp16)  # golden
+
+WAIT_MODE = define(WFE)
+
+# Implemented in src/kernels.c, on the tile's CV32 core:
+# im2col_start: starts the im2col of the CONV_CP pixels of output row `row` from column x0 on Spatz
+# (kernels/im2col), from the input rows that stage 0 loaded, and returns; spatz_wait(col) waits for it
+im2col_start = l1_kernel("l1_im2col_start_fp16_spatz", operands=("col:out", "x:in"), params=(), args=("row", "x0"),
+                         executor=CORE)
+spatz_wait = l1_kernel("l1_spatz_wait1", operands=("x:out",), params=(), executor=CORE)
+
+
+@test("test_conv_im2col", authors=["Francesco Conti <f.conti@unibo.it>"])
+def main():
+    """
+    CONV_K x CONV_K convolution ("same" padding, stride 1) as an im2col GEMM: per block of CONV_CP output pixels
+    of a row, the input rows loaded by iDMA, the im2col built by Spatz and the GEMM on RedMulE with the resident
+    weights, the output stored by iDMA, in a 4-stage pipeline.
+    """
+    for ii, jj in tiles():
+
+        tile_h = ii.split(H)
+        tile_c = jj.split(COUT)
+
+        w   = L1.single_buffer(w_[:, tile_c])        # weights of the tile's output channels
+        xin = L1.multi_buffer(x_[0:KS, :])           # the CONV_K input rows of a block
+        col = L1.multi_buffer((CP, KKC), fp16)       # im2col block
+        y   = L1.multi_buffer(y_[0:CP, tile_c])      # output block
+
+        n_ch: u32 = W // CP                          # blocks per output row
+        n_it: u32 = tile_h.size * n_ch
+
+        idma.load(w, w_[:, tile_c]).wait()
+
+        # y_out is in the shared .bss, which tile 0 clears in its crt0 while the other tiles may already run:
+        # no output store before every tile is in main
+        sync(GLOBAL)
+
+        """
+        Block i: output row tile_h.start + i / n_ch, columns (i % n_ch) * CONV_CP onwards. In every step the
+        transfers, the Spatz task and the RedMulE job of four consecutive blocks are started, then waited.
+        """
+        for i in pipeline(n_it):
+            with stage(0):
+                r: u32 = tile_h.start + i // n_ch
+                lo: u32 = 0
+                if r + PAD >= H:
+                    lo = H - KS
+                elif r >= PAD:
+                    lo = r - PAD
+                ex = idma.load(xin[i], x_[lo:lo + KS, :])
+            with stage(1):
+                im2col_start(col[i], xin[i], tile_h.start + i // n_ch, (i % n_ch) * CP)
+            with stage(2):
+                j = redmule.matmul(col[i], w, y[i])
+            with stage(3):
+                p0: u32 = (tile_h.start + i // n_ch) * W + (i % n_ch) * CP
+                es = idma.store(y_[p0:p0 + CP, tile_c], y[i])
+            with stage(0):
+                ex.wait()
+            with stage(1):
+                spatz_wait(col[i])
+            with stage(2):
+                j.wait()
+            with stage(3):
+                es.wait()
+
+        check(y_[tile_h.start * W:(tile_h.start + tile_h.size) * W, tile_c],
+              y_gold[tile_h.start * W:(tile_h.start + tile_h.size) * W, tile_c], tol=0x11)
