@@ -26,18 +26,30 @@
 #if MESH_X_TILES == 2
 #define CONV_NB (1)
 #define CONV_CB (64)
+#define CONV_WNB (1)
+#define CONV_WB (16)
+#define CONV_WIN (16)
 #define CONV_CP (16)
 #elif MESH_X_TILES == 4
 #define CONV_NB (1)
 #define CONV_CB (64)
+#define CONV_WNB (1)
+#define CONV_WB (16)
+#define CONV_WIN (16)
 #define CONV_CP (16)
 #elif MESH_X_TILES == 8
 #define CONV_NB (1)
 #define CONV_CB (64)
+#define CONV_WNB (1)
+#define CONV_WB (16)
+#define CONV_WIN (16)
 #define CONV_CP (16)
 #elif MESH_X_TILES == 16
 #define CONV_NB (1)
 #define CONV_CB (64)
+#define CONV_WNB (1)
+#define CONV_WB (16)
+#define CONV_WIN (16)
 #define CONV_CP (16)
 #else
 #error "no schedule for this MESH_X_TILES, regenerate with conv_im2col_opt/gen_golden.py --tiles"

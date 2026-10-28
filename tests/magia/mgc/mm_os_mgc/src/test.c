@@ -10,6 +10,7 @@
 #include "test.h"
 
 #include "tile.h"
+#include "fsync.h"
 #include "mg_idma.h"
 #include "mg_redmule.h"
 #include "mg_event.h"
@@ -30,16 +31,18 @@ int main(void)
 {
     /**
      * 0. Get the mesh-tile's hartid, mesh-tile coordinates and define its L1 base,
-     * also initialize the controllers for the idma and redmule.
+     * also initialize the controllers for the idma, redmule and fsync
      */
     uint32_t hartid = get_hartid();
 
+    fsync_init();
     idma_init();
     redmule_init();
 
     eu_init();
     eu_redmule_init(0);
     eu_idma_init(0);
+    eu_fsync_init(0);
 
     uint32_t y_id         = GET_Y_ID(hartid);
     uint32_t x_id         = GET_X_ID(hartid);
@@ -57,8 +60,6 @@ int main(void)
      * 0. Outer blocking: the rest of the test, on rows [mb * M_BLK, (mb + 1) * M_BLK) of the output
      * in turn.
      */
-    uint32_t errors = 0;
-
     for (int mb = 0; mb < M_NB; mb++) {
         /**
          * 1. Calculate the static output data-tile dimensions.
@@ -262,29 +263,38 @@ int main(void)
                               NULL);
             mg_idma_wait(1, WAIT_MODE, &idma_evt_y);
         }
+    }
 
-        /**
-         * 6. Check results
-         */
-        uint16_t computed, expected, diff = 0;
-        for (int i = (m0); i < (m0 + (m0 + tile_h - m0)); i++) {
-            for (int j = (tile_w_max * x_id); j < (tile_w_max * x_id + tile_w); j++) {
-                computed = *(volatile uint16_t *)(y_inp + (i * K_SIZE + j));
-                expected = *(volatile uint16_t *)(z_out + (i * K_SIZE + j));
-                diff     = (computed > expected) ? (computed - expected) : (expected - computed);
-                if (diff > 0x0011) {
+    /**
+     * 6. Check results: the whole output on tile (0, 0), once every tile has written its blocks
+     * (after the blocks, so that the check is not inside the measured window)
+     */
+    fsync_sync_global();
+    eu_fsync_wait(WAIT_MODE);
+    uint32_t errors = 0;
+
+    if (y_id == 0) {
+        if (x_id == 0) {
+            uint16_t computed, expected, diff = 0;
+            for (int i = 0; i < M_SIZE; i++) {
+                for (int j = 0; j < K_SIZE; j++) {
+                    computed = *(volatile uint16_t *)(y_inp + (i * K_SIZE + j));
+                    expected = *(volatile uint16_t *)(z_out + (i * K_SIZE + j));
+                    diff = (computed > expected) ? (computed - expected) : (expected - computed);
+                    if (diff > 0x0011) {
 #if EVAL == 1
-                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n",
-                           i,
-                           j,
-                           *(volatile uint16_t *)(y_inp + (i * K_SIZE + j)),
-                           *(volatile uint16_t *)(z_out + (i * K_SIZE + j)));
+                        printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n",
+                               i,
+                               j,
+                               *(volatile uint16_t *)(y_inp + (i * K_SIZE + j)),
+                               *(volatile uint16_t *)(z_out + (i * K_SIZE + j)));
 #endif
-                    errors++;
+                        errors++;
+                    }
                 }
             }
+            printf("TILE %d: Number of errors: %d\n", hartid, errors);
         }
-        printf("TILE %d: Number of errors: %d\n", hartid, errors);
     }
 
     return errors;

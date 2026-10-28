@@ -14,9 +14,10 @@ X is the input of the layer after the LayerNorm and R the residual stream. The g
 matrix products (one RedMulE job per output element, FP16 FMA in k order) and for the GELU of
 kernels/gelu_fast (tanh form, FP16 Schraudolph exp and division, one FP16 rounding per instruction); the
 error w.r.t. the exact (erf) GELU in float64 is printed. It does not depend on
-the mesh; the chunking of the test (FFN_CI columns of H per chunk, at least 2 chunks so that the GELU of a chunk
-overlaps the next one, reduction blocks FFN_KB_E and FFN_KB_I) is chosen per mesh side: the widest chunk, then
-the largest blocks whose buffers fit L1.
+the mesh; the blocking of the test (FFN_NB blocks of rows of the outer blocking loop, FFN_CI columns of H per
+chunk, at least 2 chunks so that the GELU of a chunk overlaps the next one, reduction blocks FFN_KB_E and
+FFN_KB_I) is chosen per mesh side: 1 block of rows, doubled until the rest fits L1, the widest chunk, then the
+largest blocks whose buffers fit L1.
 
 Usage:
   python3 tests/magia/mgc/ffn_gelu/gen_golden.py
@@ -30,7 +31,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'mesh', 'mm_generator'))
-from addr_map import l1_bytes  # noqa: E402
+from addr_map import l1_bytes, z_rows  # noqa: E402
 from bittrue import matrix_multiply_with_bittrue_fma, write_fp16_array  # noqa: E402
 
 L1_BYTES = l1_bytes() - 64  # L1_SIZE + 1, minus mgc's L1_MARGIN: the mgc buffers have all the rest of the L1
@@ -41,6 +42,7 @@ parser.add_argument('--e_size', type=int, default=128)   # EMBED_SIZE
 parser.add_argument('--i_size', type=int, default=512)   # FFN_SIZE (intermediate)
 parser.add_argument('--tiles', type=int, nargs='+', default=[2, 4, 8, 16])
 parser.add_argument('--ci', type=int, default=None)      # force FFN_CI (columns of H per chunk)
+parser.add_argument('--nb', type=int, default=None)      # force FFN_NB (blocks of rows, a divisor of SEQ_LENGTH)
 parser.add_argument('--seed', type=int, default=42)
 # place the L2 arrays in the .l2ext section (above the default gvsoc L2: run with l2_size >= 0x10000000), by
 # default only if they do not fit the 15 MiB of the default data region (with some room for the rest)
@@ -57,26 +59,35 @@ def ceil_div(a, b):
 
 
 def schedule(mesh):
-    """(FFN_CI, FFN_KB_E, FFN_KB_I) for a mesh side: the widest chunk of H with at least 2 chunks, then the
-    largest reduction blocks, whose buffers fit L1 (step 1: double-buffered X, W1 blocks and H chunks;
-    step 2: double-buffered H, W2 blocks and resident Y block; the two steps do not share L1)."""
+    """(FFN_NB, FFN_CI, FFN_KB_E, FFN_KB_I) for a mesh side: the blocks of rows of the outer blocking loop, 1
+    doubled until a schedule fits, then the widest chunk of H with at least 2 chunks, then the largest reduction
+    blocks, whose buffers fit L1 (step 1: double-buffered X, W1 blocks and H chunks; step 2: double-buffered H,
+    W2 blocks and resident Y block, of the rows of a block; the two steps do not share L1)."""
     assert i_size % mesh == 0, "FFN_SIZE must be a multiple of the mesh side"
-    ts, ti, te = ceil_div(s_size, mesh), i_size // mesh, ceil_div(e_size, mesh)
+    ti, te = i_size // mesh, ceil_div(e_size, mesh)
     cis = [args.ci] if args.ci else [c for c in range(ti // 2, 0, -2) if ti % c == 0]
-    for ci in cis:
-        assert ti % ci == 0 and ci % 2 == 0, "FFN_CI must be even and divide FFN_SIZE / mesh"
-        for kb_e in [k for k in (256, 128, 64) if e_size % k == 0]:
-            for kb_i in [k for k in (256, 128, 64) if i_size % k == 0]:
-                step1 = 2 * (2 * ts * kb_e + 2 * kb_e * ci + 2 * ts * ci)
-                step2 = 2 * (2 * ts * kb_i + 2 * kb_i * te + ts * te)
-                if step1 + step2 <= L1_BYTES:
-                    return ci, kb_e, kb_i
-    raise SystemExit("no FFN_CI / FFN_KB_E / FFN_KB_I fits L1 on a %dx%d mesh" % (mesh, mesh))
+    nbs = [args.nb] if args.nb else [1 << e for e in range(s_size.bit_length()) if s_size % (1 << e) == 0]
+    for nb in nbs:
+        assert s_size % nb == 0, "FFN_NB must divide SEQ_LENGTH"
+        sb = s_size // nb
+        ts = ceil_div(sb, mesh)
+        if sb - (mesh - 1) * ts < 1:  # a tile without rows
+            break
+        for ci in cis:
+            assert ti % ci == 0 and ci % 2 == 0, "FFN_CI must be even and divide FFN_SIZE / mesh"
+            for kb_e in [k for k in (256, 128, 64) if e_size % k == 0]:
+                for kb_i in [k for k in (256, 128, 64) if i_size % k == 0]:
+                    step1 = 2 * (2 * ts * kb_e + 2 * kb_e * ci + 2 * z_rows(ts) * ci)
+                    step2 = 2 * (2 * ts * kb_i + 2 * kb_i * te + z_rows(ts) * te)
+                    if step1 + step2 <= L1_BYTES:
+                        return nb, ci, kb_e, kb_i
+    raise SystemExit("no FFN_NB / FFN_CI / FFN_KB_E / FFN_KB_I fits L1 on a %dx%d mesh" % (mesh, mesh))
 
 
 sched = {mesh: schedule(mesh) for mesh in args.tiles}
-for mesh, (ci, kb_e, kb_i) in sched.items():
-    print("tiles=%d: FFN_CI=%d (%d chunk(s)), FFN_KB_E=%d, FFN_KB_I=%d" % (mesh, ci, i_size // mesh // ci, kb_e, kb_i))
+for mesh, (nb, ci, kb_e, kb_i) in sched.items():
+    print("tiles=%d: FFN_NB=%d (%d rows per block), FFN_CI=%d (%d chunk(s)), FFN_KB_E=%d, FFN_KB_I=%d"
+          % (mesh, nb, s_size // nb, ci, i_size // mesh // ci, kb_e, kb_i))
 
 # X in [0, 1); W1 zero-mean, X @ W1 with std ~2 (both branches of GELU, and its saturation); W2 positive and
 # R in [0.5, 1.5), so that Y stays away from 0, where check(tol=...) is too strict
@@ -164,9 +175,11 @@ with open(os.path.join(args.inc_dir, 'test.h'), 'w') as f:
     f.write('\n')
     for i, mesh in enumerate(args.tiles):
         f.write('#%s MESH_X_TILES == %d\n' % ('if' if i == 0 else 'elif', mesh))
-        f.write('#define FFN_CI   (%d)\n' % sched[mesh][0])
-        f.write('#define FFN_KB_E (%d)\n' % sched[mesh][1])
-        f.write('#define FFN_KB_I (%d)\n' % sched[mesh][2])
+        f.write('#define FFN_NB   (%d)\n' % sched[mesh][0])
+        f.write('#define FFN_SB   (%d)\n' % (s_size // sched[mesh][0]))
+        f.write('#define FFN_CI   (%d)\n' % sched[mesh][1])
+        f.write('#define FFN_KB_E (%d)\n' % sched[mesh][2])
+        f.write('#define FFN_KB_I (%d)\n' % sched[mesh][3])
     f.write('#else\n')
     f.write('#error "no schedule for this MESH_X_TILES, regenerate with ffn_gelu/gen_golden.py --tiles"\n')
     f.write('#endif\n')

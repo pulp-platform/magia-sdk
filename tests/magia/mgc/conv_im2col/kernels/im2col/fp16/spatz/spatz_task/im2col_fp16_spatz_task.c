@@ -28,14 +28,15 @@ static inline void copy_fp16(_Float16 *dst, const _Float16 *src, size_t n)
 /* im2col of `cp` output pixels of output row `row`, columns x0 .. x0 + cp - 1, of a ksize x ksize convolution
    with `pad` zeros on each side (stride 1): row p of dst is the patch of pixel (row, x0 + p),
      dst[p][(ky * ksize + kx) * cin + ci] = in[row - pad + ky][x0 + p - pad + kx][ci]  (0 outside the image),
-   with the input rows lo .. lo + ksize - 1 in src (HWC). In HWC the kx x cin values of a patch row are contiguous
+   with the input rows lo .. lo + ksize - 1, columns src_x .. src_x + src_w - 1, in src (HWC; the columns of
+   the patches inside the image must be among them). In HWC the kx x cin values of a patch row are contiguous
    in the input row: each (p, ky) is one copy of the columns inside the image and the zeros of the ones outside. */
 int im2col_fp16_spatz_task(void)
 {
     const im2col_fp16_spatz_params_t *params;
     const _Float16 *src;
     _Float16 *dst;
-    int32_t height, width, cin, ksize, pad, row, lo, x0, cp;
+    int32_t height, width, cin, ksize, pad, row, lo, x0, cp, src_w, src_x;
     int32_t seg, p, ky;
 
     params = (const im2col_fp16_spatz_params_t *)mmio32(SPATZ_DATA);
@@ -50,6 +51,8 @@ int im2col_fp16_spatz_task(void)
     lo     = params->lo;
     x0     = params->x0;
     cp     = params->cp;
+    src_w  = params->src_w;
+    src_x  = params->src_x;
     seg    = ksize * cin; /* one patch row: ksize columns x cin channels */
 
     for (p = 0; p < cp; p++) {
@@ -67,7 +70,7 @@ int im2col_fp16_spatz_task(void)
             }
             if (kx_lo > 0)
                 zero_fp16(d, kx_lo * cin);
-            copy_fp16(d + kx_lo * cin, src + ((iy - lo) * width + x - pad + kx_lo) * cin, (kx_hi - kx_lo) * cin);
+            copy_fp16(d + kx_lo * cin, src + ((iy - lo) * src_w + x - pad + kx_lo - src_x) * cin, (kx_hi - kx_lo) * cin);
             if (kx_hi < ksize)
                 zero_fp16(d + kx_hi * cin, (ksize - kx_hi) * cin);
         }

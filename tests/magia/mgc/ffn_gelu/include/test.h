@@ -15,18 +15,26 @@
 #include "addr_map/tile_config.h"
 
 #if MESH_X_TILES == 2
+#define FFN_NB   (1)
+#define FFN_SB   (512)
 #define FFN_CI   (128)
 #define FFN_KB_E (128)
 #define FFN_KB_I (256)
 #elif MESH_X_TILES == 4
+#define FFN_NB   (1)
+#define FFN_SB   (512)
 #define FFN_CI   (64)
 #define FFN_KB_E (128)
 #define FFN_KB_I (256)
 #elif MESH_X_TILES == 8
+#define FFN_NB   (1)
+#define FFN_SB   (512)
 #define FFN_CI   (32)
 #define FFN_KB_E (128)
 #define FFN_KB_I (256)
 #elif MESH_X_TILES == 16
+#define FFN_NB   (1)
+#define FFN_SB   (512)
 #define FFN_CI   (16)
 #define FFN_KB_E (128)
 #define FFN_KB_I (256)

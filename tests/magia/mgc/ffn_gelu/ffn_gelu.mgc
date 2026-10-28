@@ -10,7 +10,8 @@
 #   while RedMulE computes chunk c + 1, and is stored while RedMulE runs the last jobs of chunk c + 1;
 # - Y = R + H @ W2: tile (ii, jj) owns the block [tile_s x tile_e] of Y, loaded with the residual and accumulated
 #   over blocks of FFN_KB_I of I.
-# FFN_CI, FFN_KB_E and FFN_KB_I are chosen per mesh side by gen_golden.py so that all the buffers fit L1.
+# Outer blocking: the FFN runs on FFN_NB blocks of FFN_SB = S / FFN_NB rows in turn (1 if they all fit).
+# FFN_NB, FFN_CI, FFN_KB_E and FFN_KB_I are chosen per mesh side by gen_golden.py so that all the buffers fit L1.
 # Compile with
 #   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/ffn_gelu/ffn_gelu.mgc \
 #       -o tests/magia/mgc/ffn_gelu/src/test.c
@@ -18,6 +19,7 @@
 from mgc import *
 
 S, E, I, CI, KB_E, KB_I = sizes("SEQ_LENGTH", "EMBED_SIZE", "FFN_SIZE", "FFN_CI", "FFN_KB_E", "FFN_KB_I")  # from include/test.h
+NB, SB = sizes("FFN_NB", "FFN_SB")  # blocks of rows of the outer blocking loop, rows per block
 x_   = l2("x_inp",   (S, E), fp16)
 w1_  = l2("w1_inp",  (E, I), fp16)
 w2_  = l2("w2_inp",  (I, E), fp16)
@@ -43,78 +45,81 @@ def main():
     overlapped with the next chunk), Y = R + H @ W2 (output-static, accumulating on R).
     """
     for ii, jj in tiles():
+        # outer blocking: the rest of the FFN, on rows [sb * FFN_SB, (sb + 1) * FFN_SB) in turn
+        for sb in range(NB):
+            tile_s = ii.split(SB)
+            tile_i = jj.split(I)
+            tile_e = jj.split(E)
+            # first row of this tile in the block
+            s0: u32 = sb * SB + tile_s.start
 
-        tile_s = ii.split(S)
-        tile_i = jj.split(I)
-        tile_e = jj.split(E)
+            # step 1: chunk [tile_s x FFN_CI] of H, double-buffered across the chunks, accumulated over
+            # X [tile_s x FFN_KB_E], W1 [FFN_KB_E x FFN_CI] streamed
+            xu = L1.multi_buffer(x_[tile_s, 0:KB_E])
+            w1 = L1.multi_buffer(w1_[0:KB_E, 0:CI])
+            yu = L1.multi_buffer(h_[tile_s, 0:CI], depth=2)
 
-        # step 1: chunk [tile_s x FFN_CI] of H, double-buffered across the chunks, accumulated over
-        # X [tile_s x FFN_KB_E], W1 [FFN_KB_E x FFN_CI] streamed
-        xu = L1.multi_buffer(x_[tile_s, 0:KB_E])
-        w1 = L1.multi_buffer(w1_[0:KB_E, 0:CI])
-        yu = L1.multi_buffer(h_[tile_s, 0:CI], depth=2)
+            # step 2: block [tile_s x tile_e] of Y, accumulated over H [tile_s x FFN_KB_I], W2 [FFN_KB_I x tile_e]
+            xd = L1.multi_buffer(h_[tile_s, 0:KB_I])
+            w2 = L1.multi_buffer(w2_[0:KB_I, tile_e])
+            yo = L1.single_buffer(y_[tile_s, tile_e])
 
-        # step 2: block [tile_s x tile_e] of Y, accumulated over H [tile_s x FFN_KB_I], W2 [FFN_KB_I x tile_e]
-        xd = L1.multi_buffer(h_[tile_s, 0:KB_I])
-        w2 = L1.multi_buffer(w2_[0:KB_I, tile_e])
-        yo = L1.single_buffer(y_[tile_s, tile_e])
+            sync(GLOBAL)
 
-        sync(GLOBAL)
+            """
+            STEP 1: H = gelu(X @ W1), chunk by chunk of FFN_CI columns; in each chunk, block k of X, W1 loading while
+            RedMulE accumulates block k - 1. The GELU of chunk c - 1 runs on Spatz during chunk c, and its store is
+            issued once RedMulE has the last jobs of chunk c.
+            """
 
-        """
-        STEP 1: H = gelu(X @ W1), chunk by chunk of FFN_CI columns; in each chunk, block k of X, W1 loading while
-        RedMulE accumulates block k - 1. The GELU of chunk c - 1 runs on Spatz during chunk c, and its store is
-        issued once RedMulE has the last jobs of chunk c.
-        """
+            n_kb_e: u16 = E // KB_E
+            n_ci: u16 = tile_i.size // CI
+            ev_u = redmule.events()
+            for c in range(n_ci):
+                i0: u32 = tile_i.start + c * CI
+                for k in pipeline(n_kb_e):
+                    with stage(0):
+                        k0: u16 = k * KB_E
+                        ex  = idma.load(xu[k], x_[s0:s0 + tile_s.size, k0:k0 + KB_E])
+                        ew1 = idma.load(w1[k], w1_[k0:k0 + KB_E, i0:i0 + CI])
+                    with stage(1):
+                        ev_u[k].wait()
+                    with stage(0):
+                        redmule.enqueue(xu[k], w1[k], yu[c], op=GEMM, event=ev_u[k], uninit=k == 0)
+                        ex.wait()
+                        ew1.wait()
+                        redmule.commit_start()
+                        # H chunk c - 1, while RedMulE runs the last jobs of chunk c
+                        if k == n_kb_e - 1:
+                            if c > 0:
+                                spatz_wait(yu[c - 1])
+                                idma.store(h_[s0:s0 + tile_s.size, i0 - CI:i0], yu[c - 1]).wait()
+                spatz_gelu_start(yu[c])
+                if c == n_ci - 1:
+                    spatz_wait(yu[c])
+                    idma.store(h_[s0:s0 + tile_s.size, i0:i0 + CI], yu[c]).wait()
 
-        n_kb_e: u16 = E // KB_E
-        n_ci: u16 = tile_i.size // CI
-        ev_u = redmule.events()
-        for c in range(n_ci):
-            i0: u32 = tile_i.start + c * CI
-            for k in pipeline(n_kb_e):
+            # H complete in L2
+            sync(GLOBAL)
+
+            """
+            STEP 2: Y = R + H @ W2, block k of H, W2 loading while RedMulE accumulates block k - 1
+            """
+
+            idma.load(yo, res_[s0:s0 + tile_s.size, tile_e]).wait()
+            n_kb_i: u16 = I // KB_I
+            for k in pipeline(n_kb_i):
                 with stage(0):
-                    k0: u16 = k * KB_E
-                    ex  = idma.load(xu[k], x_[tile_s, k0:k0 + KB_E])
-                    ew1 = idma.load(w1[k], w1_[k0:k0 + KB_E, i0:i0 + CI])
-                with stage(1):
-                    ev_u[k].wait()
-                with stage(0):
-                    redmule.enqueue(xu[k], w1[k], yu[c], op=GEMM, event=ev_u[k], uninit=k == 0)
+                    k0: u16 = k * KB_I
+                    ex = idma.load(xd[k], h_[s0:s0 + tile_s.size, k0:k0 + KB_I])
+                    ew = idma.load(w2[k], w2_[k0:k0 + KB_I, tile_e])
+                    jd = redmule.enqueue(xd[k], w2[k], yo, op=GEMM)
                     ex.wait()
-                    ew1.wait()
+                    ew.wait()
                     redmule.commit_start()
-                    # H chunk c - 1, while RedMulE runs the last jobs of chunk c
-                    if k == n_kb_e - 1:
-                        if c > 0:
-                            spatz_wait(yu[c - 1])
-                            idma.store(h_[tile_s, i0 - CI:i0], yu[c - 1]).wait()
-            spatz_gelu_start(yu[c])
-            if c == n_ci - 1:
-                spatz_wait(yu[c])
-                idma.store(h_[tile_s, i0:i0 + CI], yu[c]).wait()
-
-        # H complete in L2
-        sync(GLOBAL)
-
-        """
-        STEP 2: Y = R + H @ W2, block k of H, W2 loading while RedMulE accumulates block k - 1
-        """
-
-        idma.load(yo, res_[tile_s, tile_e]).wait()
-        n_kb_i: u16 = I // KB_I
-        for k in pipeline(n_kb_i):
-            with stage(0):
-                k0: u16 = k * KB_I
-                ex = idma.load(xd[k], h_[tile_s, k0:k0 + KB_I])
-                ew = idma.load(w2[k], w2_[k0:k0 + KB_I, tile_e])
-                jd = redmule.enqueue(xd[k], w2[k], yo, op=GEMM)
-                ex.wait()
-                ew.wait()
-                redmule.commit_start()
-            with stage(1):
-                jd.wait()
-        idma.store(y_[tile_s, tile_e], yo).wait()
+                with stage(1):
+                    jd.wait()
+            idma.store(y_[s0:s0 + tile_s.size, tile_e], yo).wait()
 
         # check the whole output on tile (0, 0), once every tile has written its blocks
         sync(GLOBAL)

@@ -7,7 +7,8 @@
 # X is HWC in L2, unpadded; W has its rows in (ky, kx, ci) order; Y is HWC.
 # Tile (ii, jj) owns the output rows tile_h of the image (mesh rows) and the output channels tile_c (mesh columns),
 # with its W block resident in L1. Its pixels go through a 4-stage pipeline, CONV_CP pixels of one output row at a
-# time (CONV_CP divides W, chosen by gen_golden.py so that the buffers fit L1):
+# time (the last block of a row of a column block of CONV_WB columns may be partial: built and multiplied whole, only
+# its pixels inside the column block stored; chosen by gen_golden.py so that the buffers fit L1):
 #   0. iDMA: the CONV_K input rows the output row needs, in one contiguous transfer; at the top and bottom of the
 #      image the window is clamped inside it, and the rows outside it are zeros in the im2col;
 #   1. Spatz: the im2col block [CONV_CP x K*K*CIN] of the pixels, with the zero padding;
@@ -30,6 +31,10 @@ ROW, KKC, HW, CP = sizes("CONV_ROW", "CONV_KKC", "CONV_HW", "CONV_CP")  # W * CI
 # the weights resident in L1 are those of the tile's channels of a block (CONV_NB chosen by gen_golden.py, 1 if all
 # the weights fit)
 NB, CB = sizes("CONV_NB", "CONV_CB")
+# blocking of the output columns: within a block of channels, CONV_WNB blocks of CONV_WB = W / CONV_WNB columns in
+# turn, each with only its input window in L1 (CONV_WIN = min(CONV_WB + CONV_K - 1, W) columns of the CONV_K input
+# rows, clamped inside the image); chosen by gen_golden.py before CONV_NB (1 if the whole rows fit)
+WNB, WB, WIN = sizes("CONV_WNB", "CONV_WB", "CONV_WIN")
 x_ = l2("x_inp", (H, ROW), fp16)      # input, HWC
 w_ = l2("w_inp", (KKC, COUT), fp16)   # weights, rows in (ky, kx, ci) order
 y_ = l2("y_out", (HW, COUT), fp16)    # output, HWC
@@ -62,11 +67,11 @@ def main():
             c0: u32 = cb * CB + tile_c.start
 
             col = L1.multi_buffer((CP, KKC), fp16)       # im2col block, first: the same L1 offset on every tile
-            xin = L1.multi_buffer(x_[0:KS, :])           # the CONV_K input rows of a block
+            xin = L1.multi_buffer(x_[0:KS, 0:WIN * CIN]) # the input window of a block: CONV_K rows, CONV_WIN columns
             w   = L1.single_buffer(w_[:, tile_c])        # weights of the tile's output channels
             y   = L1.multi_buffer(y_[0:CP, tile_c])      # output block
 
-            n_ch: u32 = W // CP                          # blocks per output row
+            n_ch: u32 = (WB + CP - 1) // CP              # blocks per output row of a W block, the last one partial
             n_it: u32 = tile_h.size * n_ch
 
             idma.load(w, w_[:, c0:c0 + tile_c.size]).wait()
@@ -75,34 +80,51 @@ def main():
             # no output store before every tile is in main
             sync(GLOBAL)
 
-            """
-            Block i: output row tile_h.start + i / n_ch, columns (i % n_ch) * CONV_CP onwards. In every step the
-            transfers, the Spatz task and the RedMulE job of four consecutive blocks are started, then waited.
-            """
-            for i in pipeline(n_it, sync=ROW):
-                with stage(0):
-                    r: u32 = tile_h.start + i // n_ch
-                    lo: u32 = 0
-                    if r + PAD >= H:
-                        lo = H - KS
-                    elif r >= PAD:
-                        lo = r - PAD
-                    ex = idma.load(xin[i], x_[lo:lo + KS, :])
-                with stage(1):
-                    im2col_start(col[i], xin[i], tile_h.start + i // n_ch, (i % n_ch) * CP)
-                with stage(2):
-                    j = redmule.matmul(col[i], w, y[i])
-                with stage(3):
-                    p0: u32 = (tile_h.start + i // n_ch) * W + (i % n_ch) * CP
-                    es = idma.store(y_[p0:p0 + CP, c0:c0 + tile_c.size], y[i])
-                with stage(0):
-                    ex.wait()
-                with stage(1):
-                    im2col_wait(col[i])
-                with stage(2):
-                    j.wait()
-                with stage(3):
-                    es.wait()
+            for wb in range(WNB):
+                # first output column of the W block, and first column of its input window (clamped as the rows)
+                wx: u32 = wb * WB
+                left: u32 = 0
+                if wx >= PAD:
+                    left = wx - PAD
+                if left + WIN > W:
+                    left = W - WIN
 
-            check(y_[tile_h.start * W:(tile_h.start + tile_h.size) * W, c0:c0 + tile_c.size],
-                  y_gold[tile_h.start * W:(tile_h.start + tile_h.size) * W, c0:c0 + tile_c.size], tol=0x11)
+                """
+                Block i of W block wb: output row tile_h.start + i / n_ch, columns wx + (i % n_ch) * CONV_CP onwards. In every step the
+                transfers, the Spatz task and the RedMulE job of four consecutive blocks are started, then waited.
+                """
+                for i in pipeline(n_it, sync=ROW):
+                    with stage(0):
+                        r: u32 = tile_h.start + i // n_ch
+                        lo: u32 = 0
+                        if r + PAD >= H:
+                            lo = H - KS
+                        elif r >= PAD:
+                            lo = r - PAD
+                        ex = idma.load(xin[i], x_[lo:lo + KS, left * CIN:left * CIN + WIN * CIN])
+                    with stage(1):
+                        im2col_start(col[i], xin[i], tile_h.start + i // n_ch, wx + (i % n_ch) * CP)
+                    with stage(2):
+                        j = redmule.matmul(col[i], w, y[i])
+                    with stage(3):
+                        # the pixels of the block inside the W block (the last block of a row may have fewer)
+                        nv: u32 = WB - (i % n_ch) * CP
+                        if nv > CP:
+                            nv = CP
+                        p0: u32 = (tile_h.start + i // n_ch) * W + wx + (i % n_ch) * CP
+                        es = idma.store(y_[p0:p0 + nv, c0:c0 + tile_c.size], y[i][0:nv, :])
+                    with stage(0):
+                        ex.wait()
+                    with stage(1):
+                        im2col_wait(col[i])
+                    with stage(2):
+                        j.wait()
+                    with stage(3):
+                        es.wait()
+
+        # check the whole output on tile (0, 0), once every tile has written its blocks (after the blocks, so that the
+        # check is not inside the measured window)
+        sync(GLOBAL)
+        if ii == 0:
+            if jj == 0:
+                check(y_[:, :], y_gold[:, :], tol=0x11)

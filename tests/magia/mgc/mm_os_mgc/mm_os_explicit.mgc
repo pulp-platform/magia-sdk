@@ -125,7 +125,11 @@ def main():
                 """
                 idma.store(Y[m0:m0 + tile_h.size, tile_w], y).wait()
 
-            """
-            6. Check results
-            """
-            check(Y[m0:m0 + tile_h.size, tile_w], Z[m0:m0 + tile_h.size, tile_w], tol=0x11)
+        """
+        6. Check results: the whole output on tile (0, 0), once every tile has written its blocks (after the blocks, so
+        that the check is not inside the measured window)
+        """
+        sync(GLOBAL)
+        if y_id == 0:
+            if x_id == 0:
+                check(Y[:, :], Z[:, :], tol=0x11)

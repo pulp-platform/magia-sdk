@@ -29,7 +29,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'mesh', 'mm_generator'))
-from addr_map import l1_bytes  # noqa: E402
+from addr_map import l1_bytes, z_rows  # noqa: E402
 from bittrue import matrix_multiply_with_bittrue_fma, write_fp16_array  # noqa: E402
 
 L1_BYTES = l1_bytes() - 64  # L1_SIZE + 1, minus mgc's L1_MARGIN: the mgc buffers have all the rest of the L1
@@ -66,8 +66,8 @@ def schedule(mesh):
         assert ti % ci == 0 and ci % 2 == 0, "FFN_CI must be even and divide FFN_SIZE / mesh"
         for kb_e in [k for k in (256, 128, 64) if e_size % k == 0]:
             for kb_i in [k for k in (256, 128, 64) if i_size % k == 0]:
-                step1 = 2 * (2 * ts * kb_e + 2 * 2 * kb_e * ci + 2 * 2 * ts * ci)
-                step2 = 2 * (2 * ts * kb_i + 2 * kb_i * te + ts * te)
+                step1 = 2 * (2 * ts * kb_e + 2 * 2 * kb_e * ci + 2 * 2 * z_rows(ts) * ci)
+                step2 = 2 * (2 * ts * kb_i + 2 * kb_i * te + z_rows(ts) * te)
                 if step1 + step2 <= L1_BYTES:
                     return ci, kb_e, kb_i
     raise SystemExit("no FFN_CI / FFN_KB_E / FFN_KB_I fits L1 on a %dx%d mesh" % (mesh, mesh))

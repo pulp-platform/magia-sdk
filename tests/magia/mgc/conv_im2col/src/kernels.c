@@ -48,13 +48,21 @@ static inline void spatz_launch(uint32_t task, void *params)
 /**
  * Starts the im2col of the CONV_CP output pixels of output row `row`, columns x0 .. x0 + CONV_CP - 1, into `col`
  * [CONV_CP x CONV_KKC] on this tile's Spatz; `x` holds the CONV_K input rows lo .. lo + CONV_K - 1 that the row needs,
- * the window that the test loads (clamped to the image, as below). l1_spatz_wait1(col) waits for it. The parameter
+ * columns left .. left + CONV_WIN - 1 of them, the window of the W block that the test loads (clamped to the image,
+ * as below). l1_spatz_wait1(col) waits for it. The parameter
  * block is rewritten at every start: Spatz reads it only when the task starts, after the previous one is waited.
  */
 void l1_im2col_start_fp16_spatz(uint32_t col, uint32_t x, uint32_t row, uint32_t x0)
 {
     im2col_fp16_spatz_params_t *p = &spatz_params.im2col;
-    uint32_t lo;
+    uint32_t lo, wx, left;
+
+    /* the input window of the W block of x0 (CONV_WB output columns): its columns, CONV_PAD more on each side,
+       CONV_WIN in all, clamped inside the image as the rows */
+    wx = x0 - x0 % CONV_WB;
+    left = wx >= CONV_PAD ? wx - CONV_PAD : 0;
+    if (left + CONV_WIN > CONV_W)
+        left = CONV_W - CONV_WIN;
 
     if (row + CONV_PAD >= CONV_H)
         lo = CONV_H - CONV_K;
@@ -73,7 +81,10 @@ void l1_im2col_start_fp16_spatz(uint32_t col, uint32_t x, uint32_t row, uint32_t
     p->row    = row;
     p->lo     = lo;
     p->x0     = x0;
-    p->cp     = CONV_CP;
+    /* the last block of a row of a W block may be partial: only its pixels inside the W block */
+    p->cp     = wx + CONV_WB - x0 < CONV_CP ? wx + CONV_WB - x0 : CONV_CP;
+    p->src_w  = CONV_WIN;
+    p->src_x  = left;
     spatz_launch(IM2COL_FP16_SPATZ_TASK, p);
 }
 
