@@ -30,9 +30,10 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'mesh', 'mm_generator'))
+from addr_map import l1_bytes  # noqa: E402
 from bittrue import matrix_multiply_with_bittrue_fma, write_fp16_array  # noqa: E402
 
-L1_BYTES = 0xE0000  # L1_SIZE + 1: the mgc buffers have all the L1 (stack and .tile_bss are below L1_BASE)
+L1_BYTES = l1_bytes() - 64  # L1_SIZE + 1, minus mgc's L1_MARGIN: the mgc buffers have all the rest of the L1
 
 parser = argparse.ArgumentParser("ViT FFN layer test")
 parser.add_argument('--s_size', type=int, default=512)   # SEQ_LENGTH

@@ -16,6 +16,8 @@
 
 #define N_ITERATIONS 1
 #define T_SIZE       64
+#define M_NB         1
+#define M_BLK        (M_SIZE / M_NB)
 #define WAIT_MODE    WFE
 
 /**
@@ -43,74 +45,6 @@ int main(void)
     uint32_t x_id         = GET_X_ID(hartid);
     uint32_t l1_tile_base = get_l1_base(hartid);
 
-    /**
-     * 1. Calculate the static output data-tile dimensions.
-     * If M and K are perfect multiples of the number of mesh-tiles in their respective axis,
-     * tile_h and tile_w will be the same for each mesh-tile.
-     * Otherwise, these dimensions will be smaller for the mesh-tiles closer to the right and lower
-     * border of the mesh.
-     */
-    uint32_t tile_h_max = ((M_SIZE + MESH_Y_TILES - 1) / MESH_Y_TILES);
-    uint32_t tile_w_max = ((K_SIZE + MESH_X_TILES - 1) / MESH_X_TILES);
-    int32_t tile_h;
-    int32_t tile_w;
-
-    if (((tile_h_max * y_id) + tile_h_max) > M_SIZE) {
-        tile_h = M_SIZE - (tile_h_max * y_id);
-    } else {
-        tile_h = tile_h_max;
-    }
-
-    if (((tile_w_max * x_id) + tile_w_max) > K_SIZE) {
-        tile_w = K_SIZE - (tile_w_max * x_id);
-    } else {
-        tile_w = tile_w_max;
-    }
-
-    if (tile_h < 1 || tile_w < 1) {
-        return 0;
-    }
-
-    /**
-     * 1a. Set the t_size, the size of the timeslots we divide the temporal dimension into.
-     * The final L1 memory requirement will be:
-     * Input data-tile: (tile_h x t_size) * data_dim
-     * Weight data-tile: (t_size x tile_w) * data_dim
-     * Output data-tile: ((tile_h x tile_w) * data_dim)
-     */
-    uint16_t t_size    = T_SIZE;
-    uint16_t timeslots = N_SIZE / t_size;
-
-    /**
-     * 2. Static output data-tile, resident in L1 for the whole test.
-     */
-    uint32_t len_y     = tile_w * 2;
-    uint32_t std_y     = K_SIZE * 2;
-    uint32_t reps_y    = (uint32_t)tile_h;
-    uint32_t l1_addr_y = (l1_tile_base);
-    uint32_t l2_addr_y =
-        (uint32_t)y_inp + (tile_h_max * y_id * K_SIZE * 2) + (tile_w_max * x_id * 2);
-
-    /**
-     * 2a. Input data-tile multi-buffer (double buffered over the timeslots).
-     */
-    uint32_t len_x       = t_size * 2;
-    uint32_t std_x       = N_SIZE * 2;
-    uint32_t reps_x      = (uint32_t)tile_h;
-    uint32_t l1_addr_x_0 = l1_addr_y + (tile_h * tile_w * 2);
-    uint32_t l1_addr_x_1 = l1_addr_x_0 + (tile_h * t_size * 2);
-    uint32_t l2_addr_x   = (uint32_t)x_inp + (tile_h_max * y_id * N_SIZE * 2);
-
-    /**
-     * 2b. Weight data-tile multi-buffer (double buffered over the timeslots).
-     */
-    uint32_t len_w       = tile_w * 2;
-    uint32_t std_w       = K_SIZE * 2;
-    uint32_t reps_w      = (uint32_t)t_size;
-    uint32_t l1_addr_w_0 = l1_addr_x_1 + (tile_h * t_size * 2);
-    uint32_t l1_addr_w_1 = l1_addr_w_0 + (t_size * tile_w * 2);
-    uint32_t l2_addr_w   = (uint32_t)w_inp + (tile_w_max * x_id * 2);
-
     volatile uint32_t x_pt;
     volatile uint32_t w_pt;
     volatile uint32_t x_pt_next;
@@ -119,141 +53,239 @@ int main(void)
     mg_event_t idma_evt_y, idma_evt_x, idma_evt_w;
     mg_event_t redmule_evt_0, redmule_evt_1;
     mg_event_t *redmule_evt_next, *redmule_evt_curr;
-
     /**
-     * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
-     */
-    for (int z = 0; z < N_ITERATIONS; z++) {
-        /**
-         * 3. Load the static output tile, then run the timeslots as a software pipeline:
-         * the operands of timeslot i+1 are prefetched while RedMulE computes timeslot i.
-         */
-        mg_idma_memcpy_2d(
-            WAIT_MODE, 0, l2_addr_y, l1_addr_y, len_y, std_y, reps_y, &idma_evt_y, NULL);
-
-        mg_idma_memcpy_2d(
-            WAIT_MODE, 0, l2_addr_x, l1_addr_x_0, len_x, std_x, reps_x, &idma_evt_x, NULL);
-
-        mg_idma_memcpy_2d(
-            WAIT_MODE, 0, l2_addr_w, l1_addr_w_0, len_w, std_w, reps_w, &idma_evt_w, NULL);
-
-        mg_redmule_gemm_enqueue(WAIT_MODE,
-                                l1_addr_x_0,
-                                l1_addr_w_0,
-                                l1_addr_y,
-                                (uint16_t)tile_h,
-                                (uint16_t)t_size,
-                                (uint16_t)tile_w,
-                                &redmule_evt_0,
-                                NULL);
-        mg_idma_wait(0, WAIT_MODE, &idma_evt_x);
-        mg_idma_wait(0, WAIT_MODE, &idma_evt_w);
-        mg_idma_wait(0, WAIT_MODE, &idma_evt_y);
-        mg_redmule_gemm_commit_start();
-
-        /**
-         * 4. Cycle over the timeslots.
-         * For each timeslot, the mesh-tile will:
-         * a - Load the weight and input data-tile for the next timeslot (if there is one)
-         * b - Multiply and add
-         * Synchronization is not required.
-         * We parallelize the IDMA with Redmule: the job is programmed while its operands
-         * are loaded, committed once they have landed (stage 0), and waited one step
-         * later (stage 1), while the next timeslot loads.
-         */
-        /**
-         * pipeline: 2 stages; step i runs stage k on iteration i + 1 - k
-         * x            stages 0..1  depth 2
-         * w            stages 0..1  depth 2
-         * redmule_evt  stages 0..1  depth 2
-         */
-        for (int i = 0; i < timeslots; i++) {
-            if (i % 2) {
-                x_pt             = l1_addr_x_1;
-                x_pt_next        = l1_addr_x_0;
-                w_pt             = l1_addr_w_1;
-                w_pt_next        = l1_addr_w_0;
-                redmule_evt_curr = &redmule_evt_1;
-                redmule_evt_next = &redmule_evt_0;
-            } else {
-                x_pt             = l1_addr_x_0;
-                x_pt_next        = l1_addr_x_1;
-                w_pt             = l1_addr_w_0;
-                w_pt_next        = l1_addr_w_1;
-                redmule_evt_curr = &redmule_evt_0;
-                redmule_evt_next = &redmule_evt_1;
-            }
-
-            if (i < (timeslots - 1)) {
-                mg_idma_memcpy_2d(WAIT_MODE,
-                                  0,
-                                  l2_addr_x + ((i + 1) * t_size * 2),
-                                  x_pt_next,
-                                  len_x,
-                                  std_x,
-                                  reps_x,
-                                  &idma_evt_x,
-                                  NULL);
-
-                mg_idma_memcpy_2d(WAIT_MODE,
-                                  0,
-                                  l2_addr_w + ((i + 1) * t_size * K_SIZE * 2),
-                                  w_pt_next,
-                                  len_w,
-                                  std_w,
-                                  reps_w,
-                                  &idma_evt_w,
-                                  NULL);
-
-                mg_redmule_gemm_enqueue(WAIT_MODE,
-                                        x_pt_next,
-                                        w_pt_next,
-                                        l1_addr_y,
-                                        (uint16_t)tile_h,
-                                        (uint16_t)t_size,
-                                        (uint16_t)tile_w,
-                                        redmule_evt_next,
-                                        NULL);
-                mg_idma_wait(0, WAIT_MODE, &idma_evt_x);
-                mg_idma_wait(0, WAIT_MODE, &idma_evt_w);
-                mg_redmule_gemm_commit_start();
-                mg_redmule_wait(WAIT_MODE, redmule_evt_curr);
-            } else {
-                mg_redmule_wait(WAIT_MODE, redmule_evt_curr);
-            }
-        }
-
-        /**
-         * 5. Store the output data-tile back to L2
-         */
-        mg_idma_memcpy_2d(
-            WAIT_MODE, 1, l2_addr_y, l1_addr_y, len_y, std_y, reps_y, &idma_evt_y, NULL);
-        mg_idma_wait(1, WAIT_MODE, &idma_evt_y);
-    }
-
-    /**
-     * 6. Check results
+     * 0. Outer blocking: the rest of the test, on rows [mb * M_BLK, (mb + 1) * M_BLK) of the output
+     * in turn.
      */
     uint32_t errors = 0;
-    uint16_t computed, expected, diff = 0;
-    for (int i = (tile_h_max * y_id); i < (tile_h_max * y_id + tile_h); i++) {
-        for (int j = (tile_w_max * x_id); j < (tile_w_max * x_id + tile_w); j++) {
-            computed = *(volatile uint16_t *)(y_inp + (i * K_SIZE + j));
-            expected = *(volatile uint16_t *)(z_out + (i * K_SIZE + j));
-            diff     = (computed > expected) ? (computed - expected) : (expected - computed);
-            if (diff > 0x0011) {
+
+    for (int mb = 0; mb < M_NB; mb++) {
+        /**
+         * 1. Calculate the static output data-tile dimensions.
+         * If M_BLK and K are perfect multiples of the number of mesh-tiles in their respective
+         * axis, tile_h and tile_w will be the same for each mesh-tile. Otherwise, these dimensions
+         * will be smaller for the mesh-tiles closer to the right and lower border of the mesh.
+         */
+        uint32_t tile_h_max = ((M_BLK + MESH_Y_TILES - 1) / MESH_Y_TILES);
+        uint32_t tile_w_max = ((K_SIZE + MESH_X_TILES - 1) / MESH_X_TILES);
+        int32_t tile_h;
+        int32_t tile_w;
+
+        if (((tile_h_max * y_id) + tile_h_max) > M_BLK) {
+            tile_h = M_BLK - (tile_h_max * y_id);
+        } else {
+            tile_h = tile_h_max;
+        }
+
+        if (((tile_w_max * x_id) + tile_w_max) > K_SIZE) {
+            tile_w = K_SIZE - (tile_w_max * x_id);
+        } else {
+            tile_w = tile_w_max;
+        }
+
+        if (tile_h < 1 || tile_w < 1) {
+            return 0;
+        }
+
+        // first output row of this tile in the block
+        uint32_t m0 = mb * M_BLK + tile_h_max * y_id;
+
+        /**
+         * 1a. Set the t_size, the size of the timeslots we divide the temporal dimension into.
+         * The final L1 memory requirement will be:
+         * Input data-tile: (tile_h x t_size) * data_dim
+         * Weight data-tile: (t_size x tile_w) * data_dim
+         * Output data-tile: ((tile_h x tile_w) * data_dim)
+         */
+        uint16_t t_size    = T_SIZE;
+        uint16_t timeslots = N_SIZE / t_size;
+
+        /**
+         * 2. Static output data-tile, resident in L1 for the whole block.
+         */
+        uint32_t len_y     = tile_w * 2;
+        uint32_t std_y     = K_SIZE * 2;
+        uint32_t reps_y    = (uint32_t)tile_h;
+        uint32_t l1_addr_y = (l1_tile_base);
+        uint32_t l2_addr_y =
+            (uint32_t)y_inp + (tile_h_max * y_id * K_SIZE * 2) + (tile_w_max * x_id * 2);
+
+        /**
+         * 2a. Input data-tile multi-buffer (double buffered over the timeslots).
+         */
+        uint32_t len_x       = t_size * 2;
+        uint32_t std_x       = N_SIZE * 2;
+        uint32_t reps_x      = (uint32_t)tile_h;
+        uint32_t l1_addr_x_0 = l1_addr_y + ((tile_h + 15) / 16 * 16 * tile_w * 2);
+        uint32_t l1_addr_x_1 = l1_addr_x_0 + (tile_h * t_size * 2);
+        uint32_t l2_addr_x   = (uint32_t)x_inp + (tile_h_max * y_id * N_SIZE * 2);
+
+        /**
+         * 2b. Weight data-tile multi-buffer (double buffered over the timeslots).
+         */
+        uint32_t len_w       = tile_w * 2;
+        uint32_t std_w       = K_SIZE * 2;
+        uint32_t reps_w      = (uint32_t)t_size;
+        uint32_t l1_addr_w_0 = l1_addr_x_1 + (tile_h * t_size * 2);
+        uint32_t l1_addr_w_1 = l1_addr_w_0 + (t_size * tile_w * 2);
+        uint32_t l2_addr_w   = (uint32_t)w_inp + (tile_w_max * x_id * 2);
+
+        /**
+         * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+         */
+        for (int z = 0; z < N_ITERATIONS; z++) {
+            /**
+             * 3. Load the static output tile, then run the timeslots as a software pipeline:
+             * the operands of timeslot i+1 are prefetched while RedMulE computes timeslot i.
+             */
+            mg_idma_memcpy_2d(WAIT_MODE,
+                              0,
+                              l2_addr_y + ((m0 - tile_h_max * y_id) * K_SIZE * 2),
+                              l1_addr_y,
+                              len_y,
+                              std_y,
+                              reps_y,
+                              &idma_evt_y,
+                              NULL);
+
+            mg_idma_memcpy_2d(WAIT_MODE,
+                              0,
+                              l2_addr_x + ((m0 - tile_h_max * y_id) * N_SIZE * 2),
+                              l1_addr_x_0,
+                              len_x,
+                              std_x,
+                              reps_x,
+                              &idma_evt_x,
+                              NULL);
+
+            mg_idma_memcpy_2d(
+                WAIT_MODE, 0, l2_addr_w, l1_addr_w_0, len_w, std_w, reps_w, &idma_evt_w, NULL);
+
+            mg_redmule_gemm_enqueue(WAIT_MODE,
+                                    l1_addr_x_0,
+                                    l1_addr_w_0,
+                                    l1_addr_y,
+                                    (uint16_t)tile_h,
+                                    (uint16_t)t_size,
+                                    (uint16_t)tile_w,
+                                    &redmule_evt_0,
+                                    NULL);
+            mg_idma_wait(0, WAIT_MODE, &idma_evt_x);
+            mg_idma_wait(0, WAIT_MODE, &idma_evt_w);
+            mg_idma_wait(0, WAIT_MODE, &idma_evt_y);
+            mg_redmule_gemm_commit_start();
+
+            /**
+             * 4. Cycle over the timeslots.
+             * For each timeslot, the mesh-tile will:
+             * a - Load the weight and input data-tile for the next timeslot (if there is one)
+             * b - Multiply and add
+             * Synchronization is not required.
+             * We parallelize the IDMA with Redmule: the job is programmed while its operands
+             * are loaded, committed once they have landed (stage 0), and waited one step
+             * later (stage 1), while the next timeslot loads.
+             */
+            /**
+             * pipeline: 2 stages; step i runs stage k on iteration i + 1 - k
+             * x            stages 0..1  depth 2
+             * w            stages 0..1  depth 2
+             * redmule_evt  stages 0..1  depth 2
+             */
+            for (int i = 0; i < timeslots; i++) {
+                if (i % 2) {
+                    x_pt             = l1_addr_x_1;
+                    x_pt_next        = l1_addr_x_0;
+                    w_pt             = l1_addr_w_1;
+                    w_pt_next        = l1_addr_w_0;
+                    redmule_evt_curr = &redmule_evt_1;
+                    redmule_evt_next = &redmule_evt_0;
+                } else {
+                    x_pt             = l1_addr_x_0;
+                    x_pt_next        = l1_addr_x_1;
+                    w_pt             = l1_addr_w_0;
+                    w_pt_next        = l1_addr_w_1;
+                    redmule_evt_curr = &redmule_evt_0;
+                    redmule_evt_next = &redmule_evt_1;
+                }
+
+                if (i < (timeslots - 1)) {
+                    mg_idma_memcpy_2d(WAIT_MODE,
+                                      0,
+                                      l2_addr_x + ((m0 - tile_h_max * y_id) * N_SIZE * 2) +
+                                          ((i + 1) * t_size * 2),
+                                      x_pt_next,
+                                      len_x,
+                                      std_x,
+                                      reps_x,
+                                      &idma_evt_x,
+                                      NULL);
+
+                    mg_idma_memcpy_2d(WAIT_MODE,
+                                      0,
+                                      l2_addr_w + ((i + 1) * t_size * K_SIZE * 2),
+                                      w_pt_next,
+                                      len_w,
+                                      std_w,
+                                      reps_w,
+                                      &idma_evt_w,
+                                      NULL);
+
+                    mg_redmule_gemm_enqueue(WAIT_MODE,
+                                            x_pt_next,
+                                            w_pt_next,
+                                            l1_addr_y,
+                                            (uint16_t)tile_h,
+                                            (uint16_t)t_size,
+                                            (uint16_t)tile_w,
+                                            redmule_evt_next,
+                                            NULL);
+                    mg_idma_wait(0, WAIT_MODE, &idma_evt_x);
+                    mg_idma_wait(0, WAIT_MODE, &idma_evt_w);
+                    mg_redmule_gemm_commit_start();
+                    mg_redmule_wait(WAIT_MODE, redmule_evt_curr);
+                } else {
+                    mg_redmule_wait(WAIT_MODE, redmule_evt_curr);
+                }
+            }
+
+            /**
+             * 5. Store the output data-tile back to L2
+             */
+            mg_idma_memcpy_2d(WAIT_MODE,
+                              1,
+                              l2_addr_y + ((m0 - tile_h_max * y_id) * K_SIZE * 2),
+                              l1_addr_y,
+                              len_y,
+                              std_y,
+                              reps_y,
+                              &idma_evt_y,
+                              NULL);
+            mg_idma_wait(1, WAIT_MODE, &idma_evt_y);
+        }
+
+        /**
+         * 6. Check results
+         */
+        uint16_t computed, expected, diff = 0;
+        for (int i = (m0); i < (m0 + (m0 + tile_h - m0)); i++) {
+            for (int j = (tile_w_max * x_id); j < (tile_w_max * x_id + tile_w); j++) {
+                computed = *(volatile uint16_t *)(y_inp + (i * K_SIZE + j));
+                expected = *(volatile uint16_t *)(z_out + (i * K_SIZE + j));
+                diff     = (computed > expected) ? (computed - expected) : (expected - computed);
+                if (diff > 0x0011) {
 #if EVAL == 1
-                printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n",
-                       i,
-                       j,
-                       *(volatile uint16_t *)(y_inp + (i * K_SIZE + j)),
-                       *(volatile uint16_t *)(z_out + (i * K_SIZE + j)));
+                    printf("Error detected at coordinates[%d][%d]: Y=%x Z=%x\n",
+                           i,
+                           j,
+                           *(volatile uint16_t *)(y_inp + (i * K_SIZE + j)),
+                           *(volatile uint16_t *)(z_out + (i * K_SIZE + j)));
 #endif
-                errors++;
+                    errors++;
+                }
             }
         }
+        printf("TILE %d: Number of errors: %d\n", hartid, errors);
     }
-    printf("TILE %d: Number of errors: %d\n", hartid, errors);
 
     return errors;
 }

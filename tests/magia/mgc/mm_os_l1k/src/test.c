@@ -74,7 +74,7 @@ int main(void)
     uint32_t len_x_raw       = t_size * 2;
     uint32_t std_x_raw       = N_SIZE * 2;
     uint32_t reps_x_raw      = (uint32_t)tile_h;
-    uint32_t l1_addr_x_raw_0 = l1_addr_y + (tile_h * tile_w * 2);
+    uint32_t l1_addr_x_raw_0 = l1_addr_y + ((tile_h + 15) / 16 * 16 * tile_w * 2);
     uint32_t l1_addr_x_raw_1 = l1_addr_x_raw_0 + (tile_h * t_size * 2);
     uint32_t l2_addr_x_raw   = (uint32_t)x_inp + (tile_h_max * y_id * N_SIZE * 2);
     uint32_t len_x           = t_size * 2;

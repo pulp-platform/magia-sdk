@@ -16,6 +16,10 @@ Z = l2("z_out", (M, K), fp16)  # golden
 
 N_ITERATIONS = define(1)
 T_SIZE = define(64)  # reduction (N) rows per timeslot, N_SIZE / T_SIZE timeslots
+# outer blocking: the test runs on M_NB blocks of M_BLK rows of the output in turn (M_NB divides M_SIZE), so that the
+# output block of a tile, resident in L1, is M_BLK / MESH_Y_TILES rows (1: the whole output at once)
+M_NB = define(1)
+M_BLK = define("(M_SIZE / M_NB)")
 WAIT_MODE = define(WFE)
 
 
@@ -29,77 +33,83 @@ def main():
     """
     for y_id, x_id in tiles():
         """
-        1. Calculate the static output data-tile dimensions.
-        If M and K are perfect multiples of the number of mesh-tiles in their respective axis,
-        tile_h and tile_w will be the same for each mesh-tile.
-        Otherwise, these dimensions will be smaller for the mesh-tiles closer to the right and lower
-        border of the mesh.
+        0. Outer blocking: the rest of the test, on rows [mb * M_BLK, (mb + 1) * M_BLK) of the output in turn.
         """
-        tile_h = y_id.split(M)
-        tile_w = x_id.split(K)
-
-        """
-        1a. Set the t_size, the size of the timeslots we divide the temporal dimension into.
-        The final L1 memory requirement will be:
-        Input data-tile: (tile_h x t_size) * data_dim
-        Weight data-tile: (t_size x tile_w) * data_dim
-        Output data-tile: ((tile_h x tile_w) * data_dim)
-        """
-        t_size: u16 = T_SIZE
-        timeslots: u16 = N // t_size
-
-        """
-        2. Static output data-tile, resident in L1 for the whole test.
-        """
-        y = L1.single_buffer(Y[tile_h, tile_w])
-
-        """
-        2a. Input data-tile multi-buffer (double buffered over the timeslots).
-        """
-        x = L1.multi_buffer(X[tile_h, 0:t_size], depth=2)
-
-        """
-        2b. Weight data-tile multi-buffer (double buffered over the timeslots).
-        """
-        w = L1.multi_buffer(W[0:t_size, tile_w], depth=2)
-        redmule_evt = redmule.events(2)
-
-        """
-        TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
-        """
-        for z in range(N_ITERATIONS):
+        for mb in range(M_NB):
             """
-            3. Load the static output tile, then run the timeslots as a software pipeline:
-            the operands of timeslot i+1 are prefetched while RedMulE computes timeslot i.
+            1. Calculate the static output data-tile dimensions.
+            If M_BLK and K are perfect multiples of the number of mesh-tiles in their respective axis,
+            tile_h and tile_w will be the same for each mesh-tile.
+            Otherwise, these dimensions will be smaller for the mesh-tiles closer to the right and lower
+            border of the mesh.
             """
-            ey = idma.load(y, Y[tile_h, tile_w])
-            for i in pipeline(timeslots):
+            tile_h = y_id.split(M_BLK)
+            tile_w = x_id.split(K)
+            # first output row of this tile in the block
+            m0: u32 = mb * M_BLK + tile_h.start
+
+            """
+            1a. Set the t_size, the size of the timeslots we divide the temporal dimension into.
+            The final L1 memory requirement will be:
+            Input data-tile: (tile_h x t_size) * data_dim
+            Weight data-tile: (t_size x tile_w) * data_dim
+            Output data-tile: ((tile_h x tile_w) * data_dim)
+            """
+            t_size: u16 = T_SIZE
+            timeslots: u16 = N // t_size
+
+            """
+            2. Static output data-tile, resident in L1 for the whole block.
+            """
+            y = L1.single_buffer(Y[tile_h, tile_w])
+
+            """
+            2a. Input data-tile multi-buffer (double buffered over the timeslots).
+            """
+            x = L1.multi_buffer(X[tile_h, 0:t_size], depth=2)
+
+            """
+            2b. Weight data-tile multi-buffer (double buffered over the timeslots).
+            """
+            w = L1.multi_buffer(W[0:t_size, tile_w], depth=2)
+            redmule_evt = redmule.events(2)
+
+            """
+            TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+            """
+            for z in range(N_ITERATIONS):
                 """
-                4. Cycle over the timeslots.
-                For each timeslot, the mesh-tile will:
-                a - Load the weight and input data-tile for the next timeslot (if there is one)
-                b - Multiply and add
-                Synchronization is not required.
-                We parallelize the IDMA with Redmule: the job is programmed while its operands
-                are loaded, committed once they have landed (stage 0), and waited one step
-                later (stage 1), while the next timeslot loads.
+                3. Load the static output tile, then run the timeslots as a software pipeline:
+                the operands of timeslot i+1 are prefetched while RedMulE computes timeslot i.
                 """
-                with stage(0):
-                    ex = idma.load(x[i], X[tile_h, i * t_size:(i + 1) * t_size])
-                    ew = idma.load(w[i], W[i * t_size:(i + 1) * t_size, tile_w])
-                    redmule.enqueue(x[i], w[i], y, op=GEMM, event=redmule_evt[i])
-                    ex.wait()
-                    ew.wait()
-                    redmule.commit_start()
-                with stage(1):
-                    redmule_evt[i].wait()
+                ey = idma.load(y, Y[m0:m0 + tile_h.size, tile_w])
+                for i in pipeline(timeslots):
+                    """
+                    4. Cycle over the timeslots.
+                    For each timeslot, the mesh-tile will:
+                    a - Load the weight and input data-tile for the next timeslot (if there is one)
+                    b - Multiply and add
+                    Synchronization is not required.
+                    We parallelize the IDMA with Redmule: the job is programmed while its operands
+                    are loaded, committed once they have landed (stage 0), and waited one step
+                    later (stage 1), while the next timeslot loads.
+                    """
+                    with stage(0):
+                        ex = idma.load(x[i], X[m0:m0 + tile_h.size, i * t_size:(i + 1) * t_size])
+                        ew = idma.load(w[i], W[i * t_size:(i + 1) * t_size, tile_w])
+                        redmule.enqueue(x[i], w[i], y, op=GEMM, event=redmule_evt[i])
+                        ex.wait()
+                        ew.wait()
+                        redmule.commit_start()
+                    with stage(1):
+                        redmule_evt[i].wait()
+
+                """
+                5. Store the output data-tile back to L2
+                """
+                idma.store(Y[m0:m0 + tile_h.size, tile_w], y).wait()
 
             """
-            5. Store the output data-tile back to L2
+            6. Check results
             """
-            idma.store(Y[tile_h, tile_w], y).wait()
-
-        """
-        6. Check results
-        """
-        check(Y[tile_h, tile_w], Z[tile_h, tile_w], tol=0x11)
+            check(Y[m0:m0 + tile_h.size, tile_w], Z[m0:m0 + tile_h.size, tile_w], tol=0x11)

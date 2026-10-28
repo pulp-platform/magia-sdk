@@ -49,47 +49,6 @@ int main(void)
     uint32_t jj           = GET_X_ID(hartid);
     uint32_t l1_tile_base = get_l1_base(hartid);
 
-    uint32_t tile_h_max = ((CONV_H + MESH_Y_TILES - 1) / MESH_Y_TILES);
-    uint32_t tile_c_max = ((CONV_COUT + MESH_X_TILES - 1) / MESH_X_TILES);
-    int32_t tile_h;
-    int32_t tile_c;
-
-    if (((tile_h_max * ii) + tile_h_max) > CONV_H) {
-        tile_h = CONV_H - (tile_h_max * ii);
-    } else {
-        tile_h = tile_h_max;
-    }
-
-    if (((tile_c_max * jj) + tile_c_max) > CONV_COUT) {
-        tile_c = CONV_COUT - (tile_c_max * jj);
-    } else {
-        tile_c = tile_c_max;
-    }
-
-    if (tile_h < 1 || tile_c < 1) {
-        return 0;
-    }
-    uint32_t len_col       = CONV_CP * CONV_KKC * 2;
-    uint32_t l1_addr_col_0 = (l1_tile_base);
-    uint32_t l1_addr_col_1 = l1_addr_col_0 + (CONV_CP * CONV_KKC * 2);
-    uint32_t len_xin       = CONV_K * CONV_ROW * 2;
-    uint32_t l1_addr_xin_0 = l1_addr_col_1 + (CONV_CP * CONV_KKC * 2);
-    uint32_t l1_addr_xin_1 = l1_addr_xin_0 + (CONV_K * CONV_ROW * 2);
-    uint32_t l2_addr_xin   = (uint32_t)x_inp;
-    uint32_t len_w         = tile_c * 2;
-    uint32_t std_w         = CONV_COUT * 2;
-    uint32_t reps_w        = (uint32_t)CONV_KKC;
-    uint32_t l1_addr_w     = l1_addr_xin_1 + (CONV_K * CONV_ROW * 2);
-    uint32_t l2_addr_w     = (uint32_t)w_inp + (tile_c_max * jj * 2);
-    uint32_t len_y         = tile_c * 2;
-    uint32_t std_y         = CONV_COUT * 2;
-    uint32_t reps_y        = (uint32_t)CONV_CP;
-    uint32_t l1_addr_y_0   = l1_addr_w + (CONV_KKC * tile_c * 2);
-    uint32_t l1_addr_y_1   = l1_addr_y_0 + (CONV_CP * tile_c * 2);
-    uint32_t l2_addr_y     = (uint32_t)y_out + (tile_c_max * jj * 2);
-    uint32_t n_ch          = CONV_W / CONV_CP;
-    uint32_t n_it          = tile_h * n_ch;
-
     volatile uint32_t col_pt;
     volatile uint32_t xin_pt;
     volatile uint32_t y_pt;
@@ -99,155 +58,212 @@ int main(void)
 
     mg_event_t idma_evt_xin, idma_evt_w, idma_evt_y;
     mg_event_t redmule_evt;
+    // outer blocking: the rest of the test, on output channels [cb * CONV_CB, (cb + 1) * CONV_CB)
+    // in turn
+    uint32_t errors = 0;
 
-    mg_idma_memcpy_2d(WAIT_MODE, 0, l2_addr_w, l1_addr_w, len_w, std_w, reps_w, &idma_evt_w, NULL);
-    mg_idma_wait(0, WAIT_MODE, &idma_evt_w);
+    for (int cb = 0; cb < CONV_NB; cb++) {
+        uint32_t tile_h_max = ((CONV_H + MESH_Y_TILES - 1) / MESH_Y_TILES);
+        uint32_t tile_c_max = ((CONV_CB + MESH_X_TILES - 1) / MESH_X_TILES);
+        int32_t tile_h;
+        int32_t tile_c;
 
-    // y_out is in the shared .bss, which tile 0 clears in its crt0 while the other tiles may
-    // already run: no output store before every tile is in main
-    fsync_sync_global();
-    eu_fsync_wait(WAIT_MODE);
-
-    /**
-     * Block i: output row tile_h.start + i / n_ch, columns (i % n_ch) * CONV_CP onwards. In every
-     * step the transfers, the Spatz task and the RedMulE job of four consecutive blocks are
-     * started, then waited.
-     */
-    uint32_t r  = tile_h_max * ii + 0 / n_ch;
-    uint32_t lo = 0;
-
-    if ((r + CONV_PAD) >= CONV_H) {
-        lo = CONV_H - CONV_K;
-    } else if (r >= CONV_PAD) {
-        lo = r - CONV_PAD;
-    }
-
-    mg_idma_memcpy_1d(WAIT_MODE,
-                      0,
-                      l2_addr_xin + (lo * CONV_ROW * 2),
-                      l1_addr_xin_0,
-                      len_xin,
-                      &idma_evt_xin,
-                      NULL);
-    mg_idma_wait(0, WAIT_MODE, &idma_evt_xin);
-    fsync_sync_row();
-    eu_fsync_wait(WAIT_MODE);
-
-    /**
-     * pipeline: 4 stages; step i runs stage k on iteration i + 1 - k
-     * xin  stages 0..1  depth 2
-     * col  stages 1..2  depth 2
-     * y    stages 2..3  depth 2
-     */
-    for (int i = 0; i < n_it + 2; i++) {
-        if (i % 2) {
-            col_pt      = l1_addr_col_1;
-            col_pt_prev = l1_addr_col_0;
-            xin_pt      = l1_addr_xin_1;
-            xin_pt_next = l1_addr_xin_0;
-            y_pt        = l1_addr_y_1;
-            y_pt_prev   = l1_addr_y_0;
+        if (((tile_h_max * ii) + tile_h_max) > CONV_H) {
+            tile_h = CONV_H - (tile_h_max * ii);
         } else {
-            col_pt      = l1_addr_col_0;
-            col_pt_prev = l1_addr_col_1;
-            xin_pt      = l1_addr_xin_0;
-            xin_pt_next = l1_addr_xin_1;
-            y_pt        = l1_addr_y_0;
-            y_pt_prev   = l1_addr_y_1;
+            tile_h = tile_h_max;
         }
 
-        if (i < (n_it - 1)) {
-            uint32_t r  = tile_h_max * ii + (i + 1) / n_ch;
-            uint32_t lo = 0;
-
-            if ((r + CONV_PAD) >= CONV_H) {
-                lo = CONV_H - CONV_K;
-            } else if (r >= CONV_PAD) {
-                lo = r - CONV_PAD;
-            }
-
-            mg_idma_memcpy_1d(WAIT_MODE,
-                              0,
-                              l2_addr_xin + (lo * CONV_ROW * 2),
-                              xin_pt_next,
-                              len_xin,
-                              &idma_evt_xin,
-                              NULL);
+        if (((tile_c_max * jj) + tile_c_max) > CONV_CB) {
+            tile_c = CONV_CB - (tile_c_max * jj);
+        } else {
+            tile_c = tile_c_max;
         }
 
-        if (i < n_it) {
-            l1_im2col_start_fp16_spatz(
-                col_pt, xin_pt, tile_h_max * ii + i / n_ch, i % n_ch * CONV_CP);
+        if (tile_h < 1 || tile_c < 1) {
+            return 0;
         }
 
-        if (i > 0 && i < (n_it + 1)) {
-            mg_redmule_matmul(WAIT_MODE,
-                              col_pt_prev,
-                              l1_addr_w,
-                              y_pt_prev,
-                              (uint16_t)CONV_CP,
-                              (uint16_t)CONV_KKC,
-                              (uint16_t)tile_c,
-                              &redmule_evt,
-                              NULL);
+        // first output channel of this tile in the block
+        uint32_t c0            = cb * CONV_CB + tile_c_max * jj;
+        uint32_t len_col       = CONV_CP * CONV_KKC * 2;
+        uint32_t l1_addr_col_0 = (l1_tile_base);
+        uint32_t l1_addr_col_1 = l1_addr_col_0 + (CONV_CP * CONV_KKC * 2);
+        uint32_t len_xin       = CONV_K * CONV_ROW * 2;
+        uint32_t l1_addr_xin_0 = l1_addr_col_1 + (CONV_CP * CONV_KKC * 2);
+        uint32_t l1_addr_xin_1 = l1_addr_xin_0 + (CONV_K * CONV_ROW * 2);
+        uint32_t l2_addr_xin   = (uint32_t)x_inp;
+        uint32_t len_w         = tile_c * 2;
+        uint32_t std_w         = CONV_COUT * 2;
+        uint32_t reps_w        = (uint32_t)CONV_KKC;
+        uint32_t l1_addr_w     = l1_addr_xin_1 + (CONV_K * CONV_ROW * 2);
+        uint32_t l2_addr_w     = (uint32_t)w_inp + (tile_c_max * jj * 2);
+        uint32_t len_y         = tile_c * 2;
+        uint32_t std_y         = CONV_COUT * 2;
+        uint32_t reps_y        = (uint32_t)CONV_CP;
+        uint32_t l1_addr_y_0   = l1_addr_w + (CONV_KKC * tile_c * 2);
+        uint32_t l1_addr_y_1   = l1_addr_y_0 + ((CONV_CP + 15) / 16 * 16 * tile_c * 2);
+        uint32_t l2_addr_y     = (uint32_t)y_out + (tile_c_max * jj * 2);
+        uint32_t n_ch          = CONV_W / CONV_CP;
+        uint32_t n_it          = tile_h * n_ch;
+
+        mg_idma_memcpy_2d(WAIT_MODE,
+                          0,
+                          l2_addr_w + ((c0 - tile_c_max * jj) * 2),
+                          l1_addr_w,
+                          len_w,
+                          std_w,
+                          reps_w,
+                          &idma_evt_w,
+                          NULL);
+        mg_idma_wait(0, WAIT_MODE, &idma_evt_w);
+
+        // y_out is in the shared .bss, which tile 0 clears in its crt0 while the other tiles may
+        // already run: no output store before every tile is in main
+        fsync_sync_global();
+        eu_fsync_wait(WAIT_MODE);
+
+        /**
+         * Block i: output row tile_h.start + i / n_ch, columns (i % n_ch) * CONV_CP onwards. In
+         * every step the transfers, the Spatz task and the RedMulE job of four consecutive blocks
+         * are started, then waited.
+         */
+        uint32_t r  = tile_h_max * ii + 0 / n_ch;
+        uint32_t lo = 0;
+
+        if ((r + CONV_PAD) >= CONV_H) {
+            lo = CONV_H - CONV_K;
+        } else if (r >= CONV_PAD) {
+            lo = r - CONV_PAD;
         }
 
-        if (i > 1) {
-            uint32_t p0 = (tile_h_max * ii + (i - 2) / n_ch) * CONV_W + (i - 2) % n_ch * CONV_CP;
-
-            mg_idma_memcpy_2d(WAIT_MODE,
-                              1,
-                              l2_addr_y + (p0 * CONV_COUT * 2),
-                              y_pt,
-                              len_y,
-                              std_y,
-                              reps_y,
-                              &idma_evt_y,
-                              NULL);
-        }
-
-        if (i < (n_it - 1)) {
-            mg_idma_wait(0, WAIT_MODE, &idma_evt_xin);
-        }
-
-        if (i < n_it) {
-            l1_im2col_wait(col_pt);
-        }
-
-        if (i > 0 && i < (n_it + 1)) {
-            mg_redmule_wait(WAIT_MODE, &redmule_evt);
-        }
-
-        if (i > 1) {
-            mg_idma_wait(1, WAIT_MODE, &idma_evt_y);
-        }
+        mg_idma_memcpy_1d(WAIT_MODE,
+                          0,
+                          l2_addr_xin + (lo * CONV_ROW * 2),
+                          l1_addr_xin_0,
+                          len_xin,
+                          &idma_evt_xin,
+                          NULL);
+        mg_idma_wait(0, WAIT_MODE, &idma_evt_xin);
         fsync_sync_row();
         eu_fsync_wait(WAIT_MODE);
-    }
-    int i_last      = n_it - 1;
-    uint32_t errors = 0;
-    uint16_t computed, expected, diff = 0;
-    for (int i = (tile_h_max * ii * CONV_W);
-         i < (tile_h_max * ii * CONV_W +
-              ((tile_h_max * ii + tile_h) * CONV_W - tile_h_max * ii * CONV_W));
-         i++) {
-        for (int j = (tile_c_max * jj); j < (tile_c_max * jj + tile_c); j++) {
-            computed = *(volatile uint16_t *)(y_out + (i * CONV_COUT + j));
-            expected = *(volatile uint16_t *)(y_gold + (i * CONV_COUT + j));
-            diff     = (computed > expected) ? (computed - expected) : (expected - computed);
-            if (diff > 0x0011) {
+
+        /**
+         * pipeline: 4 stages; step i runs stage k on iteration i + 1 - k
+         * xin  stages 0..1  depth 2
+         * col  stages 1..2  depth 2
+         * y    stages 2..3  depth 2
+         */
+        for (int i = 0; i < n_it + 2; i++) {
+            if (i % 2) {
+                col_pt      = l1_addr_col_1;
+                col_pt_prev = l1_addr_col_0;
+                xin_pt      = l1_addr_xin_1;
+                xin_pt_next = l1_addr_xin_0;
+                y_pt        = l1_addr_y_1;
+                y_pt_prev   = l1_addr_y_0;
+            } else {
+                col_pt      = l1_addr_col_0;
+                col_pt_prev = l1_addr_col_1;
+                xin_pt      = l1_addr_xin_0;
+                xin_pt_next = l1_addr_xin_1;
+                y_pt        = l1_addr_y_0;
+                y_pt_prev   = l1_addr_y_1;
+            }
+
+            if (i < (n_it - 1)) {
+                uint32_t r  = tile_h_max * ii + (i + 1) / n_ch;
+                uint32_t lo = 0;
+
+                if ((r + CONV_PAD) >= CONV_H) {
+                    lo = CONV_H - CONV_K;
+                } else if (r >= CONV_PAD) {
+                    lo = r - CONV_PAD;
+                }
+
+                mg_idma_memcpy_1d(WAIT_MODE,
+                                  0,
+                                  l2_addr_xin + (lo * CONV_ROW * 2),
+                                  xin_pt_next,
+                                  len_xin,
+                                  &idma_evt_xin,
+                                  NULL);
+            }
+
+            if (i < n_it) {
+                l1_im2col_start_fp16_spatz(
+                    col_pt, xin_pt, tile_h_max * ii + i / n_ch, i % n_ch * CONV_CP);
+            }
+
+            if (i > 0 && i < (n_it + 1)) {
+                mg_redmule_matmul(WAIT_MODE,
+                                  col_pt_prev,
+                                  l1_addr_w,
+                                  y_pt_prev,
+                                  (uint16_t)CONV_CP,
+                                  (uint16_t)CONV_KKC,
+                                  (uint16_t)tile_c,
+                                  &redmule_evt,
+                                  NULL);
+            }
+
+            if (i > 1) {
+                uint32_t p0 =
+                    (tile_h_max * ii + (i - 2) / n_ch) * CONV_W + (i - 2) % n_ch * CONV_CP;
+
+                mg_idma_memcpy_2d(WAIT_MODE,
+                                  1,
+                                  l2_addr_y + (p0 * CONV_COUT * 2) + ((c0 - tile_c_max * jj) * 2),
+                                  y_pt,
+                                  len_y,
+                                  std_y,
+                                  reps_y,
+                                  &idma_evt_y,
+                                  NULL);
+            }
+
+            if (i < (n_it - 1)) {
+                mg_idma_wait(0, WAIT_MODE, &idma_evt_xin);
+            }
+
+            if (i < n_it) {
+                l1_im2col_wait(col_pt);
+            }
+
+            if (i > 0 && i < (n_it + 1)) {
+                mg_redmule_wait(WAIT_MODE, &redmule_evt);
+            }
+
+            if (i > 1) {
+                mg_idma_wait(1, WAIT_MODE, &idma_evt_y);
+            }
+            fsync_sync_row();
+            eu_fsync_wait(WAIT_MODE);
+        }
+        int i_last = n_it - 1;
+        uint16_t computed, expected, diff = 0;
+        for (int i = (tile_h_max * ii * CONV_W);
+             i < (tile_h_max * ii * CONV_W +
+                  ((tile_h_max * ii + tile_h) * CONV_W - tile_h_max * ii * CONV_W));
+             i++) {
+            for (int j = (c0); j < (c0 + (c0 + tile_c - c0)); j++) {
+                computed = *(volatile uint16_t *)(y_out + (i * CONV_COUT + j));
+                expected = *(volatile uint16_t *)(y_gold + (i * CONV_COUT + j));
+                diff     = (computed > expected) ? (computed - expected) : (expected - computed);
+                if (diff > 0x0011) {
 #if EVAL == 1
-                printf("Error detected at coordinates[%d][%d]: y_=%x y_gold=%x\n",
-                       i,
-                       j,
-                       *(volatile uint16_t *)(y_out + (i * CONV_COUT + j)),
-                       *(volatile uint16_t *)(y_gold + (i * CONV_COUT + j)));
+                    printf("Error detected at coordinates[%d][%d]: y_=%x y_gold=%x\n",
+                           i,
+                           j,
+                           *(volatile uint16_t *)(y_out + (i * CONV_COUT + j)),
+                           *(volatile uint16_t *)(y_gold + (i * CONV_COUT + j)));
 #endif
-                errors++;
+                    errors++;
+                }
             }
         }
+        printf("TILE %d: Number of errors: %d\n", hartid, errors);
     }
-    printf("TILE %d: Number of errors: %d\n", hartid, errors);
 
     return errors;
 }

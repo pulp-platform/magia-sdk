@@ -97,7 +97,7 @@ int main(void)
     uint32_t std_yu       = FFN_SIZE * 2;
     uint32_t reps_yu      = (uint32_t)tile_s;
     uint32_t l1_addr_yu_0 = l1_addr_w1_1 + (FFN_KB_E * FFN_CI * 2);
-    uint32_t l1_addr_yu_1 = l1_addr_yu_0 + (tile_s * FFN_CI * 2);
+    uint32_t l1_addr_yu_1 = l1_addr_yu_0 + ((tile_s + 15) / 16 * 16 * FFN_CI * 2);
     uint32_t l2_addr_yu   = (uint32_t)h_l2 + (tile_s_max * ii * FFN_SIZE * 2);
 
     // step 2: block [tile_s x tile_e] of Y, accumulated over H [tile_s x FFN_KB_I], W2 [FFN_KB_I x
@@ -105,7 +105,7 @@ int main(void)
     uint32_t len_xd       = FFN_KB_I * 2;
     uint32_t std_xd       = FFN_SIZE * 2;
     uint32_t reps_xd      = (uint32_t)tile_s;
-    uint32_t l1_addr_xd_0 = l1_addr_yu_1 + (tile_s * FFN_CI * 2);
+    uint32_t l1_addr_xd_0 = l1_addr_yu_1 + ((tile_s + 15) / 16 * 16 * FFN_CI * 2);
     uint32_t l1_addr_xd_1 = l1_addr_xd_0 + (tile_s * FFN_KB_I * 2);
     uint32_t l2_addr_xd   = (uint32_t)h_l2 + (tile_s_max * ii * FFN_SIZE * 2);
     uint32_t len_w2       = tile_e * 2;

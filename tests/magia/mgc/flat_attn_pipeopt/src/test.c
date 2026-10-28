@@ -124,11 +124,11 @@ int main(void)
     uint32_t l1_addr_o         = l1_addr_v_3 + (tiles_j_max * PROJ_SIZE * 2);
     uint32_t l2_addr_o         = (uint32_t)o_out + (tiles_i_max * ii * PROJ_SIZE * 2);
     uint32_t len_attn          = tiles_i * tiles_j * 2;
-    uint32_t l1_addr_attn_0    = l1_addr_o + (tiles_i_max * PROJ_SIZE * 2);
-    uint32_t l1_addr_attn_1    = l1_addr_attn_0 + (tiles_i_max * tiles_j_max * 2);
-    uint32_t l1_addr_attn_2    = l1_addr_attn_1 + (tiles_i_max * tiles_j_max * 2);
+    uint32_t l1_addr_attn_0    = l1_addr_o + ((tiles_i_max + 15) / 16 * 16 * PROJ_SIZE * 2);
+    uint32_t l1_addr_attn_1    = l1_addr_attn_0 + ((tiles_i_max + 15) / 16 * 16 * tiles_j_max * 2);
+    uint32_t l1_addr_attn_2    = l1_addr_attn_1 + ((tiles_i_max + 15) / 16 * 16 * tiles_j_max * 2);
     uint32_t len_row_max       = tiles_i * 2;
-    uint32_t l1_addr_row_max_0 = l1_addr_attn_2 + (tiles_i_max * tiles_j_max * 2);
+    uint32_t l1_addr_row_max_0 = l1_addr_attn_2 + ((tiles_i_max + 15) / 16 * 16 * tiles_j_max * 2);
     uint32_t l1_addr_row_max_1 = l1_addr_row_max_0 + (tiles_i_max * 2);
     uint32_t l1_addr_row_max_2 = l1_addr_row_max_1 + (tiles_i_max * 2);
     uint32_t len_row_sum       = tiles_i * 2;
@@ -180,17 +180,8 @@ int main(void)
                               NULL);
             mg_idma_wait(0, WAIT_MODE, &idma_evt_q);
 
-            for (uint32_t mcast_q = 0; mcast_q < MESH_X_TILES; mcast_q++) {
-                if (mcast_q != jj) {
-                    mg_idma_memcpy_1d(WAIT_MODE,
-                                      1,
-                                      get_l1_base(GET_ID(ii, mcast_q)) + (l1_addr_q - l1_tile_base),
-                                      l1_addr_q,
-                                      tiles_i * PROJ_SIZE * 2,
-                                      &idma_evt_q,
-                                      NULL);
-                }
-            }
+            mg_idma_mcast_row(
+                WAIT_MODE, 1, l1_addr_q, l1_addr_q, tiles_i * PROJ_SIZE * 2, &idma_evt_q, NULL);
             mg_idma_wait(1, WAIT_MODE, &idma_evt_q);
         }
 
@@ -221,18 +212,13 @@ int main(void)
         if (ii == 0) {
             mg_idma_wait(0, WAIT_MODE, &idma_evt_kt_in);
 
-            for (uint32_t mcast_kt = 0; mcast_kt < MESH_Y_TILES; mcast_kt++) {
-                if (mcast_kt != ii) {
-                    mg_idma_memcpy_1d(WAIT_MODE,
-                                      1,
-                                      get_l1_base(GET_ID(mcast_kt, jj)) +
-                                          (l1_addr_kt_0 - l1_tile_base),
-                                      l1_addr_kt_0,
-                                      PROJ_SIZE * tiles_j * 2,
-                                      &idma_evt_kt_out,
-                                      NULL);
-                }
-            }
+            mg_idma_mcast_col(WAIT_MODE,
+                              1,
+                              l1_addr_kt_0,
+                              l1_addr_kt_0,
+                              PROJ_SIZE * tiles_j * 2,
+                              &idma_evt_kt_out,
+                              NULL);
 
             mg_idma_memcpy_1d(WAIT_MODE,
                               0,
@@ -246,18 +232,13 @@ int main(void)
         if (ii == 0) {
             mg_idma_wait(0, WAIT_MODE, &idma_evt_v_in);
 
-            for (uint32_t mcast_v = 0; mcast_v < MESH_Y_TILES; mcast_v++) {
-                if (mcast_v != ii) {
-                    mg_idma_memcpy_1d(WAIT_MODE,
-                                      1,
-                                      get_l1_base(GET_ID(mcast_v, jj)) +
-                                          (l1_addr_v_0 - l1_tile_base),
-                                      l1_addr_v_0,
-                                      tiles_j * PROJ_SIZE * 2,
-                                      &idma_evt_v_out,
-                                      NULL);
-                }
-            }
+            mg_idma_mcast_col(WAIT_MODE,
+                              1,
+                              l1_addr_v_0,
+                              l1_addr_v_0,
+                              tiles_j * PROJ_SIZE * 2,
+                              &idma_evt_v_out,
+                              NULL);
         }
 
         if (ii == 0) {
@@ -395,18 +376,13 @@ int main(void)
                 if (ii == 0) {
                     mg_idma_wait(0, WAIT_MODE, &idma_evt_kt_in);
 
-                    for (uint32_t mcast_kt = 0; mcast_kt < MESH_Y_TILES; mcast_kt++) {
-                        if (mcast_kt != ii) {
-                            mg_idma_memcpy_1d(WAIT_MODE,
-                                              1,
-                                              get_l1_base(GET_ID(mcast_kt, jj)) +
-                                                  (kt_pt_next - l1_tile_base),
-                                              kt_pt_next,
-                                              PROJ_SIZE * tiles_j * 2,
-                                              &idma_evt_kt_out,
-                                              NULL);
-                        }
-                    }
+                    mg_idma_mcast_col(WAIT_MODE,
+                                      1,
+                                      kt_pt_next,
+                                      kt_pt_next,
+                                      PROJ_SIZE * tiles_j * 2,
+                                      &idma_evt_kt_out,
+                                      NULL);
 
                     mg_idma_memcpy_1d(WAIT_MODE,
                                       0,
@@ -430,18 +406,13 @@ int main(void)
                 if (ii == 0) {
                     mg_idma_wait(0, WAIT_MODE, &idma_evt_v_in);
 
-                    for (uint32_t mcast_v = 0; mcast_v < MESH_Y_TILES; mcast_v++) {
-                        if (mcast_v != ii) {
-                            mg_idma_memcpy_1d(WAIT_MODE,
-                                              1,
-                                              get_l1_base(GET_ID(mcast_v, jj)) +
-                                                  (v_pt_next - l1_tile_base),
-                                              v_pt_next,
-                                              tiles_j * PROJ_SIZE * 2,
-                                              &idma_evt_v_out,
-                                              NULL);
-                        }
-                    }
+                    mg_idma_mcast_col(WAIT_MODE,
+                                      1,
+                                      v_pt_next,
+                                      v_pt_next,
+                                      tiles_j * PROJ_SIZE * 2,
+                                      &idma_evt_v_out,
+                                      NULL);
                 }
             }
 
@@ -481,19 +452,13 @@ int main(void)
                     l1_colmax_fp16_spatz(
                         row_max_pt_prev, l1_addr_row_gather_buf, MESH_X_TILES, tiles_i);
 
-                    for (uint32_t mcast_row_max = 0; mcast_row_max < MESH_X_TILES;
-                         mcast_row_max++) {
-                        if (mcast_row_max != jj) {
-                            mg_idma_memcpy_1d(WAIT_MODE,
-                                              1,
-                                              get_l1_base(GET_ID(ii, mcast_row_max)) +
-                                                  (row_max_pt_prev - l1_tile_base),
-                                              row_max_pt_prev,
-                                              tiles_i * 2,
-                                              &idma_evt_row_max,
-                                              NULL);
-                        }
-                    }
+                    mg_idma_mcast_row(WAIT_MODE,
+                                      1,
+                                      row_max_pt_prev,
+                                      row_max_pt_prev,
+                                      tiles_i * 2,
+                                      &idma_evt_row_max,
+                                      NULL);
                     mg_idma_wait(1, WAIT_MODE, &idma_evt_row_max);
                 }
                 fsync_sync_row();
@@ -555,19 +520,13 @@ int main(void)
                             row_sum_pt_prev, l1_addr_row_gather_buf, MESH_X_TILES, tiles_i);
                     }
 
-                    for (uint32_t mcast_row_sum = 0; mcast_row_sum < MESH_X_TILES;
-                         mcast_row_sum++) {
-                        if (mcast_row_sum != jj) {
-                            mg_idma_memcpy_1d(WAIT_MODE,
-                                              1,
-                                              get_l1_base(GET_ID(ii, mcast_row_sum)) +
-                                                  (row_sum_pt_prev - l1_tile_base),
-                                              row_sum_pt_prev,
-                                              tiles_i * 2,
-                                              &idma_evt_row_sum,
-                                              NULL);
-                        }
-                    }
+                    mg_idma_mcast_row(WAIT_MODE,
+                                      1,
+                                      row_sum_pt_prev,
+                                      row_sum_pt_prev,
+                                      tiles_i * 2,
+                                      &idma_evt_row_sum,
+                                      NULL);
                     mg_idma_wait(1, WAIT_MODE, &idma_evt_row_sum);
                 }
                 fsync_sync_row();

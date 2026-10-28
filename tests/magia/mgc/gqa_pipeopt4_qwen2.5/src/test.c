@@ -185,14 +185,14 @@ int main(void)
     uint32_t len_attn       = tiles_j * 2;
     uint32_t std_attn       = SEQ_LENGTH * 2;
     uint32_t reps_attn      = (uint32_t)tiles_i;
-    uint32_t l1_addr_attn_0 = l1_addr_o + (tiles_i_max * PROJ_SIZE * 2);
-    uint32_t l1_addr_attn_1 = l1_addr_attn_0 + (tiles_i_max * tiles_j_max * 2);
-    uint32_t l1_addr_attn_2 = l1_addr_attn_1 + (tiles_i_max * tiles_j_max * 2);
-    uint32_t l1_addr_attn_3 = l1_addr_attn_2 + (tiles_i_max * tiles_j_max * 2);
+    uint32_t l1_addr_attn_0 = l1_addr_o + ((tiles_i_max + 15) / 16 * 16 * PROJ_SIZE * 2);
+    uint32_t l1_addr_attn_1 = l1_addr_attn_0 + ((tiles_i_max + 15) / 16 * 16 * tiles_j_max * 2);
+    uint32_t l1_addr_attn_2 = l1_addr_attn_1 + ((tiles_i_max + 15) / 16 * 16 * tiles_j_max * 2);
+    uint32_t l1_addr_attn_3 = l1_addr_attn_2 + ((tiles_i_max + 15) / 16 * 16 * tiles_j_max * 2);
     uint32_t l2_addr_attn =
         (uint32_t)mask_inp + (tiles_i_max * ii * SEQ_LENGTH * 2) + (tiles_j_max * jj * 2);
     uint32_t len_row_max       = tiles_i * 2;
-    uint32_t l1_addr_row_max_0 = l1_addr_attn_3 + (tiles_i_max * tiles_j_max * 2);
+    uint32_t l1_addr_row_max_0 = l1_addr_attn_3 + ((tiles_i_max + 15) / 16 * 16 * tiles_j_max * 2);
     uint32_t l1_addr_row_max_1 = l1_addr_row_max_0 + (tiles_i_max * 2);
     uint32_t l1_addr_row_max_2 = l1_addr_row_max_1 + (tiles_i_max * 2);
     uint32_t len_row_sum       = tiles_i * 2;
@@ -258,7 +258,7 @@ int main(void)
     uint32_t l2_addr_yq =
         (uint32_t)q_l2 + (tile_s_max * ii * NUM_HEADS * PROJ_SIZE * 2) + (tile_hp_max * jj * 2);
     uint32_t len_bq       = tile_hp * 2;
-    uint32_t l1_addr_bq   = l1_addr_yq + (tile_s_max * tile_hp_max * 2);
+    uint32_t l1_addr_bq   = l1_addr_yq + ((tile_s_max + 15) / 16 * 16 * tile_hp_max * 2);
     uint32_t l2_addr_bq   = (uint32_t)bq_inp + (tile_hp_max * jj * 2);
     uint32_t len_cq       = tile_s * (PROJ_SIZE / 2) * 2;
     uint32_t l1_addr_cq   = l1_addr_bq + (tile_hp_max * 2);
@@ -308,7 +308,7 @@ int main(void)
     uint32_t l2_addr_yk =
         (uint32_t)kt_l2 + (tile_khp_max * ii * SEQ_LENGTH * 2) + (tile_ks_max * jj * 2);
     uint32_t len_bk       = tile_khp * 2;
-    uint32_t l1_addr_bk   = l1_addr_yk + (tile_khp_max * tile_ks_max * 2);
+    uint32_t l1_addr_bk   = l1_addr_yk + ((tile_khp_max + 15) / 16 * 16 * tile_ks_max * 2);
     uint32_t l2_addr_bk   = (uint32_t)bk_inp + (tile_khp_max * ii * 2);
     uint32_t len_ck       = tile_ks * 2;
     uint32_t std_ck       = SEQ_LENGTH * 2;
@@ -341,7 +341,7 @@ int main(void)
     uint32_t l2_addr_yv = (uint32_t)v_l2 + (tile_s_max * ii * NUM_KV_HEADS * PROJ_SIZE * 2) +
                           (tile_kvhp_max * jj * 2);
     uint32_t len_bv       = tile_kvhp * 2;
-    uint32_t l1_addr_bv   = l1_addr_yv + (tile_s_max * tile_kvhp_max * 2);
+    uint32_t l1_addr_bv   = l1_addr_yv + ((tile_s_max + 15) / 16 * 16 * tile_kvhp_max * 2);
     uint32_t l2_addr_bv   = (uint32_t)bv_inp + (tile_kvhp_max * jj * 2);
     uint32_t len_xv       = PROJ_KB_E * 2;
     uint32_t std_xv       = EMBED_SIZE * 2;

@@ -79,8 +79,8 @@ int main(void)
     if (tile_h < 1 || tile_w < 1 || tile_w_p < 1) {
         return 0;
     }
-    uint8_t t_qk     = PROJ_SIZE / QK_TIMESLOTS;
-    uint8_t t_pv     = SEQ_LENGTH / PV_TIMESLOTS;
+    uint16_t t_qk    = PROJ_SIZE / QK_TIMESLOTS;
+    uint16_t t_pv    = SEQ_LENGTH / PV_TIMESLOTS;
     uint32_t sm_rows = SEQ_LENGTH / (MESH_X_TILES * MESH_Y_TILES);
     uint32_t sm_row0 = (y_id * MESH_X_TILES + x_id) * sm_rows;
 
@@ -96,7 +96,7 @@ int main(void)
     uint32_t len_xq       = t_qk * 2;
     uint32_t std_xq       = PROJ_SIZE * 2;
     uint32_t reps_xq      = (uint32_t)tile_h;
-    uint32_t l1_addr_xq_0 = l1_addr_a + (tile_h * tile_w * 2);
+    uint32_t l1_addr_xq_0 = l1_addr_a + ((tile_h + 15) / 16 * 16 * tile_w * 2);
     uint32_t l1_addr_xq_1 = l1_addr_xq_0 + (tile_h * t_qk * 2);
     uint32_t l2_addr_xq   = (uint32_t)q_inp + (tile_h_max * y_id * PROJ_SIZE * 2);
     uint32_t len_wk       = tile_w * 2;
@@ -124,7 +124,7 @@ int main(void)
     uint32_t len_xp       = t_pv * 2;
     uint32_t std_xp       = SEQ_LENGTH * 2;
     uint32_t reps_xp      = (uint32_t)tile_h;
-    uint32_t l1_addr_xp_0 = l1_addr_o + (tile_h * tile_w_p * 2);
+    uint32_t l1_addr_xp_0 = l1_addr_o + ((tile_h + 15) / 16 * 16 * tile_w_p * 2);
     uint32_t l1_addr_xp_1 = l1_addr_xp_0 + (tile_h * t_pv * 2);
     uint32_t l2_addr_xp   = (uint32_t)attn_l2 + (tile_h_max * y_id * SEQ_LENGTH * 2);
     uint32_t len_wv       = tile_w_p * 2;

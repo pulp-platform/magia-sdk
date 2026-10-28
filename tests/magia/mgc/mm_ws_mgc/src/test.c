@@ -95,8 +95,8 @@ int main(void)
     uint32_t std_y       = K_SIZE * 2;
     uint32_t reps_y      = (uint32_t)t_size;
     uint32_t l1_addr_y_0 = l1_addr_x_1 + (t_size * tile_h_max * 2);
-    uint32_t l1_addr_y_1 = l1_addr_y_0 + (t_size * tile_w_max * 2);
-    uint32_t l1_addr_y_2 = l1_addr_y_1 + (t_size * tile_w_max * 2);
+    uint32_t l1_addr_y_1 = l1_addr_y_0 + ((t_size + 15) / 16 * 16 * tile_w_max * 2);
+    uint32_t l1_addr_y_2 = l1_addr_y_1 + ((t_size + 15) / 16 * 16 * tile_w_max * 2);
     uint32_t l2_addr_y   = (uint32_t)y_inp + (tile_w_max * x_id * 2);
 
     volatile uint32_t x_pt;

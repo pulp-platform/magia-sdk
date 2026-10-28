@@ -22,6 +22,10 @@ from mgc import *
 
 H, W, CIN, COUT, KS, PAD = sizes("CONV_H", "CONV_W", "CONV_CIN", "CONV_COUT", "CONV_K", "CONV_PAD")  # from include/test.h
 ROW, KKC, HW, CP = sizes("CONV_ROW", "CONV_KKC", "CONV_HW", "CONV_CP")  # W * CIN, K * K * CIN, H * W, pixels per block
+# outer blocking: the convolution runs on CONV_NB blocks of CONV_CB = COUT / CONV_NB output channels in turn, so that
+# the weights resident in L1 are those of the tile's channels of a block (CONV_NB chosen by gen_golden.py, 1 if all
+# the weights fit)
+NB, CB = sizes("CONV_NB", "CONV_CB")
 x_ = l2("x_inp", (H, ROW), fp16)      # input, HWC
 w_ = l2("w_inp", (KKC, COUT), fp16)   # weights, rows in (ky, kx, ci) order
 y_ = l2("y_out", (HW, COUT), fp16)    # output, HWC
@@ -45,52 +49,55 @@ def main():
     weights, the output stored by iDMA, in a 4-stage pipeline.
     """
     for ii, jj in tiles():
+        # outer blocking: the rest of the test, on output channels [cb * CONV_CB, (cb + 1) * CONV_CB) in turn
+        for cb in range(NB):
+            tile_h = ii.split(H)
+            tile_c = jj.split(CB)
+            # first output channel of this tile in the block
+            c0: u32 = cb * CB + tile_c.start
 
-        tile_h = ii.split(H)
-        tile_c = jj.split(COUT)
+            w   = L1.single_buffer(w_[:, tile_c])        # weights of the tile's output channels
+            xin = L1.multi_buffer(x_[0:KS, :])           # the CONV_K input rows of a block
+            col = L1.multi_buffer((CP, KKC), fp16)       # im2col block
+            y   = L1.multi_buffer(y_[0:CP, tile_c])      # output block
 
-        w   = L1.single_buffer(w_[:, tile_c])        # weights of the tile's output channels
-        xin = L1.multi_buffer(x_[0:KS, :])           # the CONV_K input rows of a block
-        col = L1.multi_buffer((CP, KKC), fp16)       # im2col block
-        y   = L1.multi_buffer(y_[0:CP, tile_c])      # output block
+            n_ch: u32 = W // CP                          # blocks per output row
+            n_it: u32 = tile_h.size * n_ch
 
-        n_ch: u32 = W // CP                          # blocks per output row
-        n_it: u32 = tile_h.size * n_ch
+            idma.load(w, w_[:, c0:c0 + tile_c.size]).wait()
 
-        idma.load(w, w_[:, tile_c]).wait()
+            # y_out is in the shared .bss, which tile 0 clears in its crt0 while the other tiles may already run:
+            # no output store before every tile is in main
+            sync(GLOBAL)
 
-        # y_out is in the shared .bss, which tile 0 clears in its crt0 while the other tiles may already run:
-        # no output store before every tile is in main
-        sync(GLOBAL)
+            """
+            Block i: output row tile_h.start + i / n_ch, columns (i % n_ch) * CONV_CP onwards. In every step the
+            transfers, the Spatz task and the RedMulE job of four consecutive blocks are started, then waited.
+            """
+            for i in pipeline(n_it):
+                with stage(0):
+                    r: u32 = tile_h.start + i // n_ch
+                    lo: u32 = 0
+                    if r + PAD >= H:
+                        lo = H - KS
+                    elif r >= PAD:
+                        lo = r - PAD
+                    ex = idma.load(xin[i], x_[lo:lo + KS, :])
+                with stage(1):
+                    im2col_start(col[i], xin[i], tile_h.start + i // n_ch, (i % n_ch) * CP)
+                with stage(2):
+                    j = redmule.matmul(col[i], w, y[i])
+                with stage(3):
+                    p0: u32 = (tile_h.start + i // n_ch) * W + (i % n_ch) * CP
+                    es = idma.store(y_[p0:p0 + CP, c0:c0 + tile_c.size], y[i])
+                with stage(0):
+                    ex.wait()
+                with stage(1):
+                    spatz_wait(col[i])
+                with stage(2):
+                    j.wait()
+                with stage(3):
+                    es.wait()
 
-        """
-        Block i: output row tile_h.start + i / n_ch, columns (i % n_ch) * CONV_CP onwards. In every step the
-        transfers, the Spatz task and the RedMulE job of four consecutive blocks are started, then waited.
-        """
-        for i in pipeline(n_it):
-            with stage(0):
-                r: u32 = tile_h.start + i // n_ch
-                lo: u32 = 0
-                if r + PAD >= H:
-                    lo = H - KS
-                elif r >= PAD:
-                    lo = r - PAD
-                ex = idma.load(xin[i], x_[lo:lo + KS, :])
-            with stage(1):
-                im2col_start(col[i], xin[i], tile_h.start + i // n_ch, (i % n_ch) * CP)
-            with stage(2):
-                j = redmule.matmul(col[i], w, y[i])
-            with stage(3):
-                p0: u32 = (tile_h.start + i // n_ch) * W + (i % n_ch) * CP
-                es = idma.store(y_[p0:p0 + CP, tile_c], y[i])
-            with stage(0):
-                ex.wait()
-            with stage(1):
-                spatz_wait(col[i])
-            with stage(2):
-                j.wait()
-            with stage(3):
-                es.wait()
-
-        check(y_[tile_h.start * W:(tile_h.start + tile_h.size) * W, tile_c],
-              y_gold[tile_h.start * W:(tile_h.start + tile_h.size) * W, tile_c], tol=0x11)
+            check(y_[tile_h.start * W:(tile_h.start + tile_h.size) * W, c0:c0 + tile_c.size],
+                  y_gold[tile_h.start * W:(tile_h.start + tile_h.size) * W, c0:c0 + tile_c.size], tol=0x11)

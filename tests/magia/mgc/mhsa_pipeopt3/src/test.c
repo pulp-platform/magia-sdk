@@ -162,11 +162,11 @@ int main(void)
     uint32_t l1_addr_o         = l1_addr_v_3 + (tiles_j_max * PROJ_SIZE * 2);
     uint32_t l2_addr_o         = (uint32_t)o_l2 + (tiles_i_max * ii * NUM_HEADS * PROJ_SIZE * 2);
     uint32_t len_attn          = tiles_i * tiles_j * 2;
-    uint32_t l1_addr_attn_0    = l1_addr_o + (tiles_i_max * PROJ_SIZE * 2);
-    uint32_t l1_addr_attn_1    = l1_addr_attn_0 + (tiles_i_max * tiles_j_max * 2);
-    uint32_t l1_addr_attn_2    = l1_addr_attn_1 + (tiles_i_max * tiles_j_max * 2);
+    uint32_t l1_addr_attn_0    = l1_addr_o + ((tiles_i_max + 15) / 16 * 16 * PROJ_SIZE * 2);
+    uint32_t l1_addr_attn_1    = l1_addr_attn_0 + ((tiles_i_max + 15) / 16 * 16 * tiles_j_max * 2);
+    uint32_t l1_addr_attn_2    = l1_addr_attn_1 + ((tiles_i_max + 15) / 16 * 16 * tiles_j_max * 2);
     uint32_t len_row_max       = tiles_i * 2;
-    uint32_t l1_addr_row_max_0 = l1_addr_attn_2 + (tiles_i_max * tiles_j_max * 2);
+    uint32_t l1_addr_row_max_0 = l1_addr_attn_2 + ((tiles_i_max + 15) / 16 * 16 * tiles_j_max * 2);
     uint32_t l1_addr_row_max_1 = l1_addr_row_max_0 + (tiles_i_max * 2);
     uint32_t l1_addr_row_max_2 = l1_addr_row_max_1 + (tiles_i_max * 2);
     uint32_t len_row_sum       = tiles_i * 2;
@@ -235,7 +235,7 @@ int main(void)
     uint32_t len_yv     = tile_hp * 2;
     uint32_t std_yv     = NUM_HEADS * PROJ_SIZE * 2;
     uint32_t reps_yv    = (uint32_t)tile_s;
-    uint32_t l1_addr_yv = l1_addr_yq + (tile_s_max * tile_hp_max * 2);
+    uint32_t l1_addr_yv = l1_addr_yq + ((tile_s_max + 15) / 16 * 16 * tile_hp_max * 2);
     uint32_t l2_addr_yv =
         (uint32_t)v_l2 + (tile_s_max * ii * NUM_HEADS * PROJ_SIZE * 2) + (tile_hp_max * jj * 2);
 
