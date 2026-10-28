@@ -99,9 +99,12 @@ static inline __ALWAYS_INLINE_ void mg_redmule_wait(eu_wait_mode_t mode, mg_even
 
     while (!mg_seq_ge(mg_redmule_completed, target)) {
         if (eu32_redmule_wait(mode)) {
-            uint32_t job_id = (uint32_t)HWPE_READ(REDMULE_REG_OFFS + REDMULE_RUNNING_JOB);
-            mg_redmule_completed =
-                (mg_redmule_completed + 1) > job_id ? (mg_redmule_completed + 1) : job_id;
+            // a pulse retires at least one job; RUNNING_JOB (8 bits, wrapping like the job ids)
+            // may be further ahead when several completions merged into one pulse: take the later
+            // of the two, compared modulo 256 (a plain max loses a merged completion at the wrap)
+            uint8_t next = (uint8_t)(mg_redmule_completed + 1);
+            uint8_t hw   = (uint8_t)HWPE_READ(REDMULE_REG_OFFS + REDMULE_RUNNING_JOB);
+            mg_redmule_completed = mg_seq_ge(hw, next) ? hw : next;
         }
     }
 

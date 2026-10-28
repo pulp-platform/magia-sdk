@@ -43,9 +43,9 @@ PRJ_THP  = define("((NUM_HEADS * PROJ_SIZE + MESH_X_TILES - 1) / MESH_X_TILES)")
 PRJ_TKHP = define("((NUM_HEADS * PROJ_SIZE + MESH_Y_TILES - 1) / MESH_Y_TILES)")
 PRJ_TKS  = define("((SEQ_LENGTH + MESH_X_TILES - 1) / MESH_X_TILES)")
 PRJ_TE   = define("((EMBED_SIZE + MESH_X_TILES - 1) / MESH_X_TILES)")
-# L1 bytes of the projection buffers: all the L1, as every buffer is pinned to its loop (the Flat-Attention ones
-# too, so the projections share L1 with them)
-PRJ_L1   = define("(L1_SIZE + 1)")
+# L1 bytes of the projection buffers: all the L1 but the L1_MARGIN (mgc's, 64 bytes) at its end, as every buffer
+# is pinned to its loop (the Flat-Attention ones too, so the projections share L1 with them)
+PRJ_L1   = define("(L1_SIZE + 1 - L1_MARGIN)")
 # reduction block of the projections (output-static, one RedMulE job per block): over EMBED_SIZE for Q/Kt/V,
 # over NUM_HEADS * PROJ_SIZE for the output projection; the largest of 256/128/64 that divides it and whose
 # buffers (double-buffered input blocks, resident output block) fit PRJ_L1 (64 is not checked: the output

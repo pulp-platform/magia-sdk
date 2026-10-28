@@ -15,6 +15,7 @@
 #include "mg_redmule.h"
 #include "mg_event.h"
 
+#define L1_MARGIN       (64)
 #define WAIT_MODE       WFE
 #define S_BLOCK_SIZE_Q  512
 #define S_BLOCK_SIZE_KV 512
@@ -27,7 +28,7 @@
 #define PRJ_TKHP        ((NUM_KV_HEADS * PROJ_SIZE + MESH_Y_TILES - 1) / MESH_Y_TILES)
 #define PRJ_TKS         ((SEQ_LENGTH + MESH_X_TILES - 1) / MESH_X_TILES)
 #define PRJ_TE          ((EMBED_SIZE + MESH_X_TILES - 1) / MESH_X_TILES)
-#define PRJ_L1          (L1_SIZE + 1)
+#define PRJ_L1          (L1_SIZE + 1 - L1_MARGIN)
 #define PROJ_KB_E                                                                                  \
     (EMBED_SIZE % 256 == 0 &&                                                                      \
              2 * (2 * PRJ_TS * 256 + 2 * 256 * (PRJ_THP + PRJ_TKVHP) +                             \
