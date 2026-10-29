@@ -69,9 +69,9 @@ static inline void spatz_launch(uint32_t task, void *params)
 
 /**
  * Starts the im2col of the CONV_CP output pixels of output row `row`, columns x0 .. x0 + CONV_CP - 1, into `col`
- * [CONV_CP x CONV_KKC] on this tile's Spatz; `x` holds the CONV_K input rows lo .. lo + CONV_K - 1 that the row needs,
- * columns left .. left + CONV_WIN - 1 of them, the window of the W block that the test loads (clamped to the image,
- * as below). l1_im2col_wait(col) waits for it. With the share
+ * [CONV_CP x CONV_KKC] on this tile's Spatz; `x` holds the CONV_K input rows lo .. lo + CONV_K - 1 that the row needs
+ * (from row * CONV_S - CONV_PAD), columns left .. left + CONV_WIN - 1 of them, the window of the W block that the
+ * test loads (clamped to the image, as below). l1_im2col_wait(col) waits for it. With the share
  * option, this tile builds only its part of the block, pixels x_id * SHARE_CP onwards. The parameter block is
  * rewritten at every start: Spatz reads it only when the task starts, after the previous one is waited.
  */
@@ -80,17 +80,17 @@ void l1_im2col_start_fp16_spatz(uint32_t col, uint32_t x, uint32_t row, uint32_t
     im2col_fp16_spatz_params_t *p = &spatz_params.im2col;
     uint32_t lo, wx, left;
 
-    /* the input window of the W block of x0 (CONV_WB output columns): its columns, CONV_PAD more on each side,
-       CONV_WIN in all, clamped inside the image as the rows */
+    /* the input window of the W block of x0 (CONV_WB output columns): the input columns of their patches, from
+       wx * CONV_S - CONV_PAD, CONV_WIN in all, clamped inside the image as the rows */
     wx = x0 - x0 % CONV_WB;
-    left = wx >= CONV_PAD ? wx - CONV_PAD : 0;
+    left = wx * CONV_S >= CONV_PAD ? wx * CONV_S - CONV_PAD : 0;
     if (left + CONV_WIN > CONV_W)
         left = CONV_W - CONV_WIN;
 
-    if (row + CONV_PAD >= CONV_H)
+    if (row * CONV_S + CONV_PAD >= CONV_H)
         lo = CONV_H - CONV_K;
-    else if (row >= CONV_PAD)
-        lo = row - CONV_PAD;
+    else if (row * CONV_S >= CONV_PAD)
+        lo = row * CONV_S - CONV_PAD;
     else
         lo = 0;
 
@@ -100,6 +100,7 @@ void l1_im2col_start_fp16_spatz(uint32_t col, uint32_t x, uint32_t row, uint32_t
     p->width  = CONV_W;
     p->cin    = CONV_CIN;
     p->ksize  = CONV_K;
+    p->stride = CONV_S;
     p->pad    = CONV_PAD;
     p->row    = row;
     p->lo     = lo;

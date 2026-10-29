@@ -24,9 +24,10 @@ extern void l1_im2col_start_fp16_spatz(uint32_t col, uint32_t x, uint32_t row, u
 extern void l1_im2col_wait(uint32_t col);
 
 /**
- * CONV_K x CONV_K convolution ("same" padding, stride 1) as an im2col GEMM: per block of CONV_CP
- * output pixels of a row, the input rows loaded by iDMA, the im2col built by Spatz and the GEMM on
- * RedMulE with the resident weights, the output stored by iDMA, in a 4-stage pipeline.
+ * CONV_K x CONV_K convolution (padding (CONV_K - 1) / 2, stride CONV_S) as an im2col GEMM: per
+ * block of CONV_CP output pixels of a row, the input rows loaded by iDMA, the im2col built by Spatz
+ * and the GEMM on RedMulE with the resident weights, the output stored by iDMA, in a 4-stage
+ * pipeline.
  */
 int main(void)
 {
@@ -61,13 +62,13 @@ int main(void)
     // outer blocking: the rest of the test, on output channels [cb * CONV_CB, (cb + 1) * CONV_CB)
     // in turn
     for (int cb = 0; cb < CONV_NB; cb++) {
-        uint32_t tile_h_max = ((CONV_H + MESH_Y_TILES - 1) / MESH_Y_TILES);
+        uint32_t tile_h_max = ((CONV_OH + MESH_Y_TILES - 1) / MESH_Y_TILES);
         uint32_t tile_c_max = ((CONV_CB + MESH_X_TILES - 1) / MESH_X_TILES);
         int32_t tile_h;
         int32_t tile_c;
 
-        if (((tile_h_max * ii) + tile_h_max) > CONV_H) {
-            tile_h = CONV_H - (tile_h_max * ii);
+        if (((tile_h_max * ii) + tile_h_max) > CONV_OH) {
+            tile_h = CONV_OH - (tile_h_max * ii);
         } else {
             tile_h = tile_h_max;
         }
@@ -129,8 +130,8 @@ int main(void)
             uint32_t wx   = wb * CONV_WB;
             uint32_t left = 0;
 
-            if (wx >= CONV_PAD) {
-                left = wx - CONV_PAD;
+            if ((wx * CONV_S) >= CONV_PAD) {
+                left = wx * CONV_S - CONV_PAD;
             }
 
             if ((left + CONV_WIN) > CONV_W) {
@@ -142,7 +143,7 @@ int main(void)
              * CONV_CP onwards. In every step the transfers, the Spatz task and the RedMulE job of
              * four consecutive blocks are started, then waited.
              */
-            uint32_t r  = tile_h_max * ii + 0 / n_ch;
+            uint32_t r  = (tile_h_max * ii + 0 / n_ch) * CONV_S;
             uint32_t lo = 0;
 
             if ((r + CONV_PAD) >= CONV_H) {
@@ -188,7 +189,7 @@ int main(void)
                 }
 
                 if (i < (n_it - 1)) {
-                    uint32_t r  = tile_h_max * ii + (i + 1) / n_ch;
+                    uint32_t r  = (tile_h_max * ii + (i + 1) / n_ch) * CONV_S;
                     uint32_t lo = 0;
 
                     if ((r + CONV_PAD) >= CONV_H) {
@@ -233,8 +234,8 @@ int main(void)
                     if (nv > CONV_CP) {
                         nv = CONV_CP;
                     }
-                    uint32_t p0 =
-                        (tile_h_max * ii + (i - 2) / n_ch) * CONV_W + wx + (i - 2) % n_ch * CONV_CP;
+                    uint32_t p0 = (tile_h_max * ii + (i - 2) / n_ch) * CONV_OW + wx +
+                                  (i - 2) % n_ch * CONV_CP;
 
                     mg_idma_memcpy_2d(WAIT_MODE,
                                       1,
