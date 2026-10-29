@@ -73,22 +73,18 @@ extern void mg_redmule_gemm_start();
 extern void mg_redmule_gemm_commit();
 
 /**
- * Completion counter. Defined in mg_redmule.c and advanced from both the
- * acquire/backpressure path (mg_redmule_gemm/enqueue) and mg_redmule_wait()
- * below; shared so both observe a single instance. Only the low 8 bits are
- * significant (see mg_seq_ge()).
- */
-extern uint8_t mg_redmule_completed;
-
-/**
  * Block (per `mode`) until `event` (as produced by mg_redmule_gemm) has
  * completed, then run its callback if set.
  *
- * RedMulE jobs complete strictly in issue order, so this consumes hardware
- * completion pulses one at a time - advancing a completion counter - until
- * that counter has caught up with `event`'s id. That may happen immediately,
- * if the job already completed while waiting on a later event, or only after
- * spinning on new pulses.
+ * RedMulE jobs complete strictly in issue order, so the job is done once
+ * RUNNING_JOB (the count of finished jobs) has caught up with `event`'s id.
+ * That may hold immediately, if the job already completed while waiting on a
+ * later event; otherwise this sleeps on the completion event and reads
+ * RUNNING_JOB again. Completions are counted
+ * only from RUNNING_JOB, never from the pulses: a pulse left latched by a job
+ * already counted would otherwise count a job still running. A stale pulse
+ * only costs one more read, and a completion between the read and the sleep
+ * leaves its pulse latched, so it is not lost.
  *
  * Defined here as a static inline (rather than out-of-line in mg_redmule.c) so
  * it folds into its call sites under -O/-flto.
@@ -97,16 +93,9 @@ static inline __ALWAYS_INLINE_ void mg_redmule_wait(eu_wait_mode_t mode, mg_even
 {
     uint8_t target = (uint8_t)(event->id + 1);
 
-    while (!mg_seq_ge(mg_redmule_completed, target)) {
-        if (eu32_redmule_wait(mode)) {
-            // a pulse retires at least one job; RUNNING_JOB (8 bits, wrapping like the job ids)
-            // may be further ahead when several completions merged into one pulse: take the later
-            // of the two, compared modulo 256 (a plain max loses a merged completion at the wrap)
-            uint8_t next = (uint8_t)(mg_redmule_completed + 1);
-            uint8_t hw   = (uint8_t)HWPE_READ(REDMULE_REG_OFFS + REDMULE_RUNNING_JOB);
-            mg_redmule_completed = mg_seq_ge(hw, next) ? hw : next;
-        }
-    }
+    // RUNNING_JOB and the job ids wrap at 8 bits: compared modulo 256 (see mg_seq_ge())
+    while (!mg_seq_ge((uint8_t)HWPE_READ(REDMULE_REG_OFFS + REDMULE_RUNNING_JOB), target))
+        eu32_redmule_wait(mode);
 
     mg_event_trigger(event);
 }

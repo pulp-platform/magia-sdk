@@ -9,27 +9,8 @@
 #include "redmule16.h" // static inline redmule16_gemm_enqueue/_commit/_start
 
 /**
- * Completion counter. Only the low 8 bits are significant (see mg_seq_ge()
- * in mg_event.h): the number of RedMulE jobs ever in flight at once is
- * always far below 256, so wrapping is safe.
- *
- * Advanced from two places: mg_redmule_gemm()'s backpressure spin (below)
- * and mg_redmule_wait(). That is safe because RedMulE jobs retire strictly
- * in FIFO order regardless of which call site happens to observe a given
- * completion pulse.
- *
- * Per-tile completion bookkeeping, so it lives in per-tile-aliased .tile_bss
- * (private per tile, zeroed by every hart in crt0) rather than the shared-L2
- * .bss where all tiles would collide on one copy - hence no initializer here.
- */
-// External linkage (declared in mg_redmule.h): shared with the now-inlined
-// mg_redmule_wait() so both the acquire/backpressure path (here) and the wait
-// path observe a single completion counter.
-uint8_t mg_redmule_completed __attribute__((section(".tile_bss")));
-
-/**
  * Acquire a hardware job id for the next job and stamp `event` with it. If the
- * hardware queue (depth 2) is full, drain one completion pulse to free a slot
+ * hardware queue (depth 2) is full, wait for a completion pulse to free a slot
  * before retrying the acquire.
  *
  * Shared by all the job-issuing calls below; always inlined, so each of them
@@ -40,9 +21,7 @@ mg_redmule_acquire_event(eu_wait_mode_t mode, mg_event_t *event, mg_event_callba
 {
     int32_t id;
     while ((id = redmule_acquire()) < 0) {
-        if (eu32_redmule_wait(mode)) {
-            mg_redmule_completed++;
-        }
+        eu32_redmule_wait(mode);
     }
     mg_event_init(event, id, callback);
 }
