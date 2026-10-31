@@ -1,0 +1,111 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# 2-D convolution, CONV_K x CONV_K kernel (odd, default 3), stride CONV_S (default 1), zero padding
+# CONV_PAD = (CONV_K - 1) / 2, no bias, with a partial im2col: the im2col expanded along kx only, once per input row.
+# X is HWC, so for an input row iy the patch row of output pixel x, K pixels x CIN channels from column
+# x * CONV_S - CONV_PAD, is contiguous: the expanded row E_iy [CONV_CP x CONV_KC] (CONV_KC = K * CIN) of a block of
+# CONV_CP output columns is a single 2-D iDMA transfer from L2 (rows CONV_S * CIN apart in L2, overlapping), and
+#   Y[output row r, block] = sum over ky of E_(r * S - PAD + ky) [CONV_CP x K*CIN] @ W[ky rows] [K*CIN x tile_c],
+# CONV_K RedMulE jobs accumulating in the output block (the first one a MATMUL), in the order of the reduction of
+# the im2col GEMM (bit-identical to it). An expanded input row serves the CONV_K output rows that need it: the tile
+# keeps the last CONV_NSLOT = CONV_K + CONV_S of them in a ring in L1 (src/kernels.c), and each output row loads only
+# the CONV_S new ones.
+# Tile (ii, jj) owns the output rows tile_h (mesh rows) and the output channels tile_c (mesh columns), with its W block
+# resident in L1. In each of the CONV_WNB blocks of CONV_CP output columns, its output rows go through a 3-stage
+# pipeline:
+#   0. iDMA: the expanded input rows that the output row needs and the previous one did not (all of them for the first
+#      row), in the ring; the parts of the patches outside the image are set to zero once they have landed;
+#   1. RedMulE: the CONV_K jobs of the row (the ones of the input rows outside the image are skipped);
+#   2. iDMA: the output block to L2.
+# The tiles exchange nothing, so the pipeline needs no barrier.
+# Compile with
+#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/conv_im2col_partial/conv_im2col_partial.mgc \
+#       -o tests/magia/mgc/conv_im2col_partial/src/test.c
+
+from mgc import *
+
+H, W, CIN, COUT, KS, PAD = sizes("CONV_H", "CONV_W", "CONV_CIN", "CONV_COUT", "CONV_K", "CONV_PAD")  # from include/test.h
+S, OH, OW = sizes("CONV_S", "CONV_OH", "CONV_OW")  # stride, output rows and columns
+ROW, KKC, HW, KC = sizes("CONV_ROW", "CONV_KKC", "CONV_HW", "CONV_KC")  # W * CIN, K * K * CIN, OH * OW, K * CIN
+# output columns per block (CONV_OW / CONV_WNB), rounded up to the RedMulE M tile (rows of the output block); slots
+# of the ring of expanded input rows (CONV_K + CONV_S)
+CP, ZR, NSLOT = sizes("CONV_CP", "CONV_ZR", "CONV_NSLOT")
+# outer blocking: CONV_NB blocks of CONV_CB = COUT / CONV_NB output channels in turn (the weights resident in L1 are
+# those of the tile's channels of a block), each in CONV_WNB blocks of CONV_CP output columns (chosen by gen_golden.py,
+# 1 and 1 if everything fits)
+NB, CB, WNB = sizes("CONV_NB", "CONV_CB", "CONV_WNB")
+x_ = l2("x_inp", (H, ROW), fp16)      # input, HWC
+w_ = l2("w_inp", (KKC, COUT), fp16)   # weights, rows in (ky, kx, ci) order
+y_ = l2("y_out", (HW, COUT), fp16)    # output, HWC
+y_gold = l2("y_gold", (HW, COUT), fp16)  # golden
+
+WAIT_MODE = define(WFE)
+
+# Implemented in src/kernels.c, on the tile's CV32 core:
+# e_load starts the loads into the ring of the expanded input rows of output row `row` (the first output row of the
+# pipeline, r0, loads all of them), columns x0 .. x0 + CONV_CP - 1, and e_load_wait waits for them and zeroes their
+# parts outside the image; e_gemm runs the RedMulE jobs of output row `row` into y, with the weights w of `tc` output
+# channels, and waits for them.
+# The ring is written by e_load and read by e_gemm in the next step, which the slots keep apart (CONV_K + CONV_S
+# slots: the rows loaded for row + 1 never overwrite those of row): it is declared `in` in both, as a read-only buffer
+# for mgc, which would otherwise require a single buffer written in a pipeline to be used in one stage only.
+e_load = l1_kernel("l1_e_load", operands=("ring:in",), params=(), args=("row", "r0", "x0"), executor=CORE)
+e_load_wait = l1_kernel("l1_e_load_wait", operands=("ring:in",), params=(), executor=CORE)
+e_gemm = l1_kernel("l1_e_gemm", operands=("y:out", "ring:in", "w:in"), params=(), args=("row", "tc"),
+                   executor=CORE)
+
+
+@test("test_conv_im2col_partial", authors=["Francesco Conti <f.conti@unibo.it>"])
+def main():
+    """
+    CONV_K x CONV_K convolution (padding (CONV_K - 1) / 2, stride CONV_S) with a partial im2col: per output row, the
+    input rows expanded along kx loaded by iDMA into a ring, one RedMulE job per kernel row accumulating in the output
+    block with the resident weights, the output stored by iDMA, in a 3-stage pipeline.
+    """
+    for ii, jj in tiles():
+        # outer blocking: the rest of the test, on output channels [cb * CONV_CB, (cb + 1) * CONV_CB) in turn
+        for cb in range(NB):
+            tile_h = ii.split(OH)
+            tile_c = jj.split(CB)
+            # first output channel of this tile in the block
+            c0: u32 = cb * CB + tile_c.start
+
+            ring = L1.single_buffer((NSLOT * CP, KC), fp16)  # the expanded input rows, CONV_NSLOT slots
+            w    = L1.single_buffer(w_[:, tile_c])           # weights of the tile's output channels
+            y    = L1.multi_buffer(y_[0:ZR, tile_c])         # output block (RedMulE writes whole M tiles)
+
+            idma.load(w, w_[:, c0:c0 + tile_c.size]).wait()
+
+            # y_out is in the shared .bss, which tile 0 clears in its crt0 while the other tiles may already run:
+            # no output store before every tile is in main
+            sync(GLOBAL)
+
+            for wb in range(WNB):
+                x0: u32 = wb * CP  # first output column of the block
+
+                """
+                Iteration i: output row tile_h.start + i of the block of columns. In every step the loads, the RedMulE
+                jobs and the store of three consecutive rows: the transfers are started first, as the core issues the
+                jobs and waits for them.
+                """
+                for i in pipeline(tile_h.size):
+                    with stage(0):
+                        e_load(ring, tile_h.start + i, tile_h.start, x0)
+                    with stage(2):
+                        p0: u32 = (tile_h.start + i) * OW + x0
+                        es = idma.store(y_[p0:p0 + CP, c0:c0 + tile_c.size], y[i][0:CP, :])
+                    with stage(1):
+                        e_gemm(y[i], ring, w, tile_h.start + i, tile_c.size)
+                    with stage(0):
+                        e_load_wait(ring)
+                    with stage(2):
+                        es.wait()
+
+        # check the whole output on tile (0, 0), once every tile has written its blocks (after the blocks, so that the
+        # check is not inside the measured window)
+        sync(GLOBAL)
+        if ii == 0:
+            if jj == 0:
+                check(y_[:, :], y_gold[:, :], tol=0x11)
