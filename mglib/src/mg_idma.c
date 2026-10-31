@@ -38,6 +38,23 @@ void mg_idma_memcpy_2d(eu_wait_mode_t mode,
     mg_event_init(event, idma_memcpy_2d(dir, axi_addr, obi_addr, len, std, reps), callback);
 }
 
+void mg_idma_memcpy_2d_strided(eu_wait_mode_t mode,
+                               uint8_t dir,
+                               uint32_t axi_addr,
+                               uint32_t obi_addr,
+                               uint32_t len,
+                               uint32_t axi_std,
+                               uint32_t obi_std,
+                               uint32_t reps,
+                               mg_event_t *event,
+                               mg_event_callback_t callback)
+{
+    (void)mode;
+    mg_event_init(event,
+                  idma_memcpy_2d_strided(dir, axi_addr, obi_addr, len, axi_std, obi_std, reps),
+                  callback);
+}
+
 // Push one L1 block to the `n` tiles (of this tile's row or column) at mesh
 // positions 0..n-1 except `me`, which are `tile_std` bytes of L1 apart starting
 // at `first`: one 2D job for the tiles before `me` and one for those after it.

@@ -46,6 +46,22 @@ extern void mg_idma_memcpy_2d(eu_wait_mode_t mode,
                               mg_event_callback_t callback);
 
 /**
+ * As mg_idma_memcpy_2d, with a stride on both sides: after each block of `len`
+ * bytes the AXI address advances by `axi_std` and the L1 address by `obi_std`,
+ * e.g. rows loaded into an L1 buffer with wider rows (zero padding around them).
+ */
+extern void mg_idma_memcpy_2d_strided(eu_wait_mode_t mode,
+                                      uint8_t dir,
+                                      uint32_t axi_addr,
+                                      uint32_t obi_addr,
+                                      uint32_t len,
+                                      uint32_t axi_std,
+                                      uint32_t obi_std,
+                                      uint32_t reps,
+                                      mg_event_t *event,
+                                      mg_event_callback_t callback);
+
+/**
  * Native row / column multicast: copy `len` bytes from this tile's L1 at
  * `obi_addr` to the same L1 offset as `dst_addr` (an address in this tile's
  * L1) on every other tile of this tile's row / column. Each contiguous run of
