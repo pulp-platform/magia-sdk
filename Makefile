@@ -103,12 +103,12 @@ CMAKE ?= cmake
 GVSOC_WORK_DIR ?= ./gvsoc_work
 
 ifeq ($(target_platform), magia)
-GVRUN_TARGET		:= $(target_platform)_v3:n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores)
+GVRUN_TARGET		:= $(target_platform)_v4:n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores)
 else
-GVRUN_TARGET		:= $(target_platform)_v3
+GVRUN_TARGET		:= $(target_platform)_v4
 endif
 
-GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)_v3/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace --trace=kill-module
+GVRUN_COMMON_ARGS ?= --work-dir $(GVSOC_WORK_DIR) --attr $(target_platform)_v4/spatz_romfile=$(BIN_ABS_PATH)/bootrom/spatz_init.bin --trace-level=trace --trace=kill-module
 GVRUN_ARGS ?= $(GVRUN_COMMON_ARGS) run
 GVRUN_PROFILE_ARGS ?= $(GVRUN_COMMON_ARGS) --vcd --event=.* run
 # ID of the specific tile you want to write traces of, currently writes the memory mapped idma-ctrl
@@ -376,13 +376,13 @@ endif
 
 gvsoc:
 ifeq ($(spatz), 1)
-	$(SED_INPLACE) 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)False/\1True/' $(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py
+	$(SED_INPLACE) 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)False/\1True/' $(GVSOC_DIR)/pulp/pulp/chips/magia_v4/arch.py
 else
-	$(SED_INPLACE) 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)True/\1False/' "$(GVSOC_DIR)/pulp/pulp/chips/magia_v3/arch.py"
+	$(SED_INPLACE) 's/^\([[:space:]]*SPATZ_ENABLE[[:space:]]*=[[:space:]]*\)True/\1False/' "$(GVSOC_DIR)/pulp/pulp/chips/magia_v4/arch.py"
 endif
 ifeq ($(target_platform), magia)
 	cd $(GVSOC_DIR)	&& \
-	make build TARGETS="magia_v3:n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores)"
+	make build TARGETS="magia_v4:n_tiles_x=$(tiles),n_tiles_y=$(tiles),nb_pulp_cores=$(pulp_cores)"
 else
 	$(error unrecognized platform (acceptable platforms: magia).)
 endif
