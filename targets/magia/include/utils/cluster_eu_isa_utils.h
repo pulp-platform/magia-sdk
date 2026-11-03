@@ -41,12 +41,17 @@ static inline uint32_t cl_core_id(void)
 {
     uint32_t hartid;
     asm volatile("csrr %0, mhartid" : "=r"(hartid));
-    return (hartid - PULP_HARTID_BASE) % PULP_CORE_COUNT;
+    if(!MESH_2_POWER)
+        return (hartid % PULP_CORE_COUNT);
+    else
+        return (hartid - PULP_HARTID_BASE) % PULP_CORE_COUNT;
 }
 
 // The ID of the Control Core connected to the current Cluster
 static inline uint32_t cl_tile_id(void)
 {
+    if(!MESH_2_POWER)
+        return 0;
     uint32_t hartid;
     asm volatile("csrr %0, mhartid" : "=r"(hartid));
     return (hartid - PULP_HARTID_BASE) / PULP_CORE_COUNT;
