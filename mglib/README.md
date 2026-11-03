@@ -75,7 +75,7 @@ Supported WAIT_MODEs are WFE and POLLING.
 
 # IDMA Programming model
 
-Unlike RedMule, the IDMA doesn't support in hardware enqueueing multiple transfers on the same channel. Therefore, a workaround SW-based 1-depth queue has been implemented.
+Like RedMule, the IDMA queues jobs in hardware: each direction (AXI -> OBI and OBI -> AXI) holds up to 16 launched transfers. Each transfer gets the job id issued by the hardware, and waiting on it checks the direction's DONE_ID register (the id of the last completed transfer). If the queue of a direction is full, launching a new transfer stalls until a slot frees. This requires the memory-mapped iDMA registers (`IDMA_MM=1`, the default).
 
 It is necessary to include the Magia IDMA library:
 
@@ -111,6 +111,6 @@ Other parameters:
 - std: len + gap size between each block (stride)
 - reps: number of blocks to be transfered
 
-The IDMA call is run ASAP in a non-blocking fashion. To verify it's execution, you can wait on its corresponding event:
+The IDMA call is run ASAP in a non-blocking fashion. To verify its execution, you can wait on its corresponding event (transfers of the same direction complete in issue order, so they can be waited in any order):
 
 `mg_idma_wait(0, WAIT_MODE, &idma_evt);`

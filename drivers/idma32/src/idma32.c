@@ -66,7 +66,7 @@ int idma32_memcpy_1d(uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t
     }
     idma_mm_set_std2_rep2(dir, 0, 0, 1);
     idma_mm_set_std3_rep3(dir, 0, 0, 1);
-    idma_mm_start(dir);
+    return (int)idma_mm_start(dir);
 #endif
 }
 
@@ -112,7 +112,7 @@ int idma32_memcpy_2d(
         idma_mm_set_std2_rep2(dir, len, std, reps);
     }
     idma_mm_set_std3_rep3(dir, 0, 0, 1);
-    idma_mm_start(dir);
+    return (int)idma_mm_start(dir);
 #endif
     return 0;
 }
@@ -136,8 +136,16 @@ int idma32_collective_1d(
     idma_mm_set_std3_rep3(dir, 0, 0, 1);
     idma_mm_set_multicast_mask(dir, mask);
     idma_mm_set_collective_sel(dir, coll_op);
-    idma_mm_start(dir);
-    return 0;
+    return (int)idma_mm_start(dir);
+}
+
+/**
+ * Reads the DONE_ID register of the channel of `dir`: the id of the last job
+ * it has completed.
+ */
+uint32_t idma32_done_id(uint8_t dir)
+{
+    return mmio32(IDMA_DONE_ID_ADDR(dir, 0));
 }
 
 extern int idma_init() __attribute__((alias("idma32_init"), used, visibility("default")));
@@ -149,3 +157,5 @@ extern int idma_memcpy_2d(
 extern int idma_collective_1d(
     uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t mask, uint32_t coll_op)
     __attribute__((alias("idma32_collective_1d"), used, visibility("default")));
+extern uint32_t idma_done_id(uint8_t dir)
+    __attribute__((alias("idma32_done_id"), used, visibility("default")));

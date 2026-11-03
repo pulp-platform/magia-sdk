@@ -19,7 +19,17 @@ extern int idma_init();
 /* extern void idma_wait(); */
 
 /**
+ * The memcpy/collective calls below launch one job on the channel of `dir` by
+ * reading its NEXT_ID register, and return the job id issued by the hardware
+ * (0 when built with IDMA_MM=0, which has no job ids). Each channel queues the
+ * launched jobs in hardware (iDMA_JobFifoDepth = 16); with the queue full, the
+ * NEXT_ID read - and so the call - stalls until a slot frees.
+ */
+
+/**
  * Start 1-dimensional memory copy.
+ *
+ * @return the hardware job id of the transfer.
  */
 extern int idma_memcpy_1d(uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len);
 
@@ -37,12 +47,19 @@ extern int idma_memcpy_1d(uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uin
  * L1->L2).
  * @param reps  Number of rows (repetitions).
  *
- * @return 0 on successful dispatch.
+ * @return the hardware job id of the transfer.
  */
 extern int idma_memcpy_2d(
     uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps);
 
 extern int idma_collective_1d(
     uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t mask, uint32_t coll_op);
+
+/**
+ * Reads the DONE_ID register of the channel of `dir`: the id of the last job
+ * the channel has completed. Jobs on one channel complete in issue order, so
+ * job `id` is done once DONE_ID has reached it.
+ */
+extern uint32_t idma_done_id(uint8_t dir);
 
 #endif // HAL_IDMA_H

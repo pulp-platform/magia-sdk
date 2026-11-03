@@ -9,17 +9,18 @@
 #include <stdint.h>
 #include "eventunit32.h"
 #include "idma.h"
+#include "addr_map/tile_addr_map.h"
+#include "regs/tile_ctrl.h"
 #include "mg_event.h"
 
 /**
  * Issue an asynchronous 1D iDMA transfer and stamp `event` with the id needed
  * to later wait for its completion via mg_idma_wait().
  *
- * WORKAROUND: the current iDMA HW holds only one in-flight transfer per
- * direction, so this may block (per `mode`, draining `eu` completion pulses)
- * until a previously issued same-direction transfer has drained before it can
- * issue - a software-emulated depth-1 job queue. See MG_IDMA_HW_QUEUE_DEPTH in
- * mg_idma.c.
+ * The event id is the real hardware-issued job id, returned by the NEXT_ID read
+ * that launches the transfer. Each direction queues its jobs in hardware
+ * (depth 16): if that queue is full, the launch stalls until a slot frees.
+ * `mode` is unused here, and kept for symmetry with mg_idma_wait().
  */
 extern void mg_idma_memcpy_1d(eu_wait_mode_t mode,
                               uint8_t dir,
@@ -31,11 +32,8 @@ extern void mg_idma_memcpy_1d(eu_wait_mode_t mode,
 
 /**
  * Issue an asynchronous 2D iDMA transfer and stamp `event` with the id needed
- * to later wait for its completion via mg_idma_wait().
- *
- * WORKAROUND: as for mg_idma_memcpy_1d(), this may block (per `mode`, draining
- * `eu` completion pulses) until a previously issued same-direction transfer has
- * drained before it can issue - a software-emulated depth-1 job queue.
+ * to later wait for its completion via mg_idma_wait(). Queued in hardware as
+ * mg_idma_memcpy_1d().
  */
 extern void mg_idma_memcpy_2d(eu_wait_mode_t mode,
                               uint8_t dir,
@@ -48,22 +46,18 @@ extern void mg_idma_memcpy_2d(eu_wait_mode_t mode,
                               mg_event_callback_t callback);
 
 /**
- * Per-direction completion counter (index 0 = A2O/L2->L1, 1 = O2A/L1->L2).
- * Defined in mg_idma.c and advanced from both the issue path (mg_idma_issue)
- * and mg_idma_wait() below; shared so both observe a single instance.
- */
-extern uint8_t mg_idma_completed[2];
-
-/**
  * Block (per `mode`) until `event` (as produced by mg_idma_memcpy_1d/2d for
  * direction `dir`) has completed, then run its callback if set.
  *
  * iDMA transfers on the same direction complete strictly in issue order, so
- * this consumes hardware completion pulses one at a time - advancing a
- * per-direction completion counter - until that counter has caught up with
- * `event`'s id. That may happen immediately, if the transfer already
- * completed while waiting on a later event, or only after spinning on new
- * pulses.
+ * the transfer is done once the channel's DONE_ID (the id of the last
+ * completed job) has caught up with `event`'s id. That may hold immediately,
+ * if the transfer already completed while waiting on a later event; otherwise
+ * this sleeps on the direction's completion event and reads DONE_ID again.
+ * Completions are counted only from DONE_ID, never from the pulses: a pulse
+ * left latched by a transfer already counted would otherwise count one still
+ * running. A stale pulse only costs one more read, and a completion between
+ * the read and the sleep leaves its pulse latched, so it is not lost.
  *
  * Defined here as a static inline (rather than out-of-line in mg_idma.c) so it
  * folds into its call sites under -O/-flto.
@@ -71,28 +65,16 @@ extern uint8_t mg_idma_completed[2];
 static inline __ALWAYS_INLINE_ void
 mg_idma_wait(uint8_t dir, eu_wait_mode_t mode, mg_event_t *event)
 {
-    uint8_t idx    = dir ? 1 : 0;
-    uint8_t target = (uint8_t)(event->id + 1);
+    uint32_t target = (uint32_t)event->id;
 
-    // the event may already be done - e.g. its completion pulse was
-    // consumed while waiting on a later id - in which case we must not
-    // wait on the hardware at all.
-    while (!mg_seq_ge(mg_idma_completed[idx], target)) {
-        // dnot yet the right one: spin back into the hardware wait.
-        uint32_t done;
+    // DONE_ID and the job ids wrap at 32 bits: compared modulo 2^32 (see mg_seq_ge32())
+    while (!mg_seq_ge32(*(volatile uint32_t *)IDMA_DONE_ID_ADDR(dir, 0), target)) {
         if (dir) {
-            done = eu32_idma_wait_o2a(mode);
+            eu32_idma_wait_o2a(mode);
         } else {
-            done = eu32_idma_wait_a2o(mode);
-        }
-        if (done) {
-            // update the completion counter whenever a pulse was seen: it
-            // always retires exactly one FIFO-ordered transfer, whether or
-            // not it is the one we are waiting for.
-            mg_idma_completed[idx]++;
+            eu32_idma_wait_a2o(mode);
         }
     }
 
-    // our event is the one that just completed (or had already completed).
     mg_event_trigger(event);
 }
