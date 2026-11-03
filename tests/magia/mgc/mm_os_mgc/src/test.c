@@ -53,9 +53,13 @@ int main(void)
     volatile uint32_t x_pt_next;
     volatile uint32_t w_pt_next;
 
-    mg_event_t idma_evt_y, idma_evt_x, idma_evt_w;
+    mg_event_t idma_evt_y;
     mg_event_t redmule_evt_0, redmule_evt_1;
-    mg_event_t *redmule_evt_next, *redmule_evt_curr;
+    mg_event_t *redmule_evt_prev, *redmule_evt_curr;
+    mg_event_t idma_evts_x_in_0, idma_evts_x_in_1;
+    mg_event_t *idma_evts_x_in_next, *idma_evts_x_in_curr;
+    mg_event_t idma_evts_w_in_0, idma_evts_w_in_1;
+    mg_event_t *idma_evts_w_in_next, *idma_evts_w_in_curr;
     /**
      * 0. Outer blocking: the rest of the test, on rows [mb * M_BLK, (mb + 1) * M_BLK) of the output
      * in turn.
@@ -112,23 +116,25 @@ int main(void)
             (uint32_t)y_inp + (tile_h_max * y_id * K_SIZE * 2) + (tile_w_max * x_id * 2);
 
         /**
-         * 2a. Input data-tile multi-buffer (double buffered over the timeslots).
+         * 2a. Input data-tile multi-buffer (triple buffered over the timeslots).
          */
         uint32_t len_x       = t_size * 2;
         uint32_t std_x       = N_SIZE * 2;
         uint32_t reps_x      = (uint32_t)tile_h;
         uint32_t l1_addr_x_0 = l1_addr_y + ((tile_h + 15) / 16 * 16 * tile_w * 2);
         uint32_t l1_addr_x_1 = l1_addr_x_0 + (tile_h * t_size * 2);
+        uint32_t l1_addr_x_2 = l1_addr_x_1 + (tile_h * t_size * 2);
         uint32_t l2_addr_x   = (uint32_t)x_inp + (tile_h_max * y_id * N_SIZE * 2);
 
         /**
-         * 2b. Weight data-tile multi-buffer (double buffered over the timeslots).
+         * 2b. Weight data-tile multi-buffer (triple buffered over the timeslots).
          */
         uint32_t len_w       = tile_w * 2;
         uint32_t std_w       = K_SIZE * 2;
         uint32_t reps_w      = (uint32_t)t_size;
-        uint32_t l1_addr_w_0 = l1_addr_x_1 + (tile_h * t_size * 2);
+        uint32_t l1_addr_w_0 = l1_addr_x_2 + (tile_h * t_size * 2);
         uint32_t l1_addr_w_1 = l1_addr_w_0 + (t_size * tile_w * 2);
+        uint32_t l1_addr_w_2 = l1_addr_w_1 + (t_size * tile_w * 2);
         uint32_t l2_addr_w   = (uint32_t)w_inp + (tile_w_max * x_id * 2);
 
         /**
@@ -156,25 +162,19 @@ int main(void)
                               len_x,
                               std_x,
                               reps_x,
-                              &idma_evt_x,
+                              &idma_evts_x_in_0,
                               NULL);
 
-            mg_idma_memcpy_2d(
-                WAIT_MODE, 0, l2_addr_w, l1_addr_w_0, len_w, std_w, reps_w, &idma_evt_w, NULL);
-
-            mg_redmule_gemm_enqueue(WAIT_MODE,
-                                    l1_addr_x_0,
-                                    l1_addr_w_0,
-                                    l1_addr_y,
-                                    (uint16_t)tile_h,
-                                    (uint16_t)t_size,
-                                    (uint16_t)tile_w,
-                                    &redmule_evt_0,
-                                    NULL);
-            mg_idma_wait(0, WAIT_MODE, &idma_evt_x);
-            mg_idma_wait(0, WAIT_MODE, &idma_evt_w);
+            mg_idma_memcpy_2d(WAIT_MODE,
+                              0,
+                              l2_addr_w,
+                              l1_addr_w_0,
+                              len_w,
+                              std_w,
+                              reps_w,
+                              &idma_evts_w_in_0,
+                              NULL);
             mg_idma_wait(0, WAIT_MODE, &idma_evt_y);
-            mg_redmule_gemm_commit_start();
 
             /**
              * 4. Cycle over the timeslots.
@@ -182,31 +182,54 @@ int main(void)
              * a - Load the weight and input data-tile for the next timeslot (if there is one)
              * b - Multiply and add
              * Synchronization is not required.
-             * We parallelize the IDMA with Redmule: the job is programmed while its operands
-             * are loaded, committed once they have landed (stage 0), and waited one step
-             * later (stage 1), while the next timeslot loads.
+             * We parallelize the IDMA with Redmule: the operands are loaded one step ahead
+             * (stage 0), queued in the iDMA while the previous jobs run; the job is programmed,
+             * committed once they have landed (stage 1), and waited one step later (stage 2).
              */
             /**
-             * pipeline: 2 stages; step i runs stage k on iteration i + 1 - k
-             * x            stages 0..1  depth 2
-             * w            stages 0..1  depth 2
-             * redmule_evt  stages 0..1  depth 2
+             * pipeline: 3 stages; step i runs stage k on iteration i + 1 - k
+             * x               stages 0..2  depth 3
+             * w               stages 0..2  depth 3
+             * idma_evts_x_in  stages 0..1  depth 2
+             * idma_evts_w_in  stages 0..1  depth 2
+             * redmule_evt     stages 1..2  depth 2
              */
-            for (int i = 0; i < timeslots; i++) {
+            for (int i = 0; i < timeslots + 1; i++) {
                 if (i % 2) {
-                    x_pt             = l1_addr_x_1;
-                    x_pt_next        = l1_addr_x_0;
-                    w_pt             = l1_addr_w_1;
-                    w_pt_next        = l1_addr_w_0;
-                    redmule_evt_curr = &redmule_evt_1;
-                    redmule_evt_next = &redmule_evt_0;
+                    idma_evts_w_in_curr = &idma_evts_w_in_1;
+                    idma_evts_w_in_next = &idma_evts_w_in_0;
+                    idma_evts_x_in_curr = &idma_evts_x_in_1;
+                    idma_evts_x_in_next = &idma_evts_x_in_0;
+                    redmule_evt_curr    = &redmule_evt_1;
+                    redmule_evt_prev    = &redmule_evt_0;
                 } else {
-                    x_pt             = l1_addr_x_0;
-                    x_pt_next        = l1_addr_x_1;
-                    w_pt             = l1_addr_w_0;
-                    w_pt_next        = l1_addr_w_1;
-                    redmule_evt_curr = &redmule_evt_0;
-                    redmule_evt_next = &redmule_evt_1;
+                    idma_evts_w_in_curr = &idma_evts_w_in_0;
+                    idma_evts_w_in_next = &idma_evts_w_in_1;
+                    idma_evts_x_in_curr = &idma_evts_x_in_0;
+                    idma_evts_x_in_next = &idma_evts_x_in_1;
+                    redmule_evt_curr    = &redmule_evt_0;
+                    redmule_evt_prev    = &redmule_evt_1;
+                }
+
+                switch (i % 3) {
+                case 0:
+                    x_pt      = l1_addr_x_0;
+                    x_pt_next = l1_addr_x_1;
+                    w_pt      = l1_addr_w_0;
+                    w_pt_next = l1_addr_w_1;
+                    break;
+                case 1:
+                    x_pt      = l1_addr_x_1;
+                    x_pt_next = l1_addr_x_2;
+                    w_pt      = l1_addr_w_1;
+                    w_pt_next = l1_addr_w_2;
+                    break;
+                case 2:
+                    x_pt      = l1_addr_x_2;
+                    x_pt_next = l1_addr_x_0;
+                    w_pt      = l1_addr_w_2;
+                    w_pt_next = l1_addr_w_0;
+                    break;
                 }
 
                 if (i < (timeslots - 1)) {
@@ -218,7 +241,7 @@ int main(void)
                                       len_x,
                                       std_x,
                                       reps_x,
-                                      &idma_evt_x,
+                                      idma_evts_x_in_next,
                                       NULL);
 
                     mg_idma_memcpy_2d(WAIT_MODE,
@@ -228,24 +251,27 @@ int main(void)
                                       len_w,
                                       std_w,
                                       reps_w,
-                                      &idma_evt_w,
+                                      idma_evts_w_in_next,
                                       NULL);
+                }
 
+                if (i < timeslots) {
                     mg_redmule_gemm_enqueue(WAIT_MODE,
-                                            x_pt_next,
-                                            w_pt_next,
+                                            x_pt,
+                                            w_pt,
                                             l1_addr_y,
                                             (uint16_t)tile_h,
                                             (uint16_t)t_size,
                                             (uint16_t)tile_w,
-                                            redmule_evt_next,
+                                            redmule_evt_curr,
                                             NULL);
-                    mg_idma_wait(0, WAIT_MODE, &idma_evt_x);
-                    mg_idma_wait(0, WAIT_MODE, &idma_evt_w);
+                    mg_idma_wait(0, WAIT_MODE, idma_evts_x_in_curr);
+                    mg_idma_wait(0, WAIT_MODE, idma_evts_w_in_curr);
                     mg_redmule_gemm_commit_start();
-                    mg_redmule_wait(WAIT_MODE, redmule_evt_curr);
-                } else {
-                    mg_redmule_wait(WAIT_MODE, redmule_evt_curr);
+                }
+
+                if (i > 0) {
+                    mg_redmule_wait(WAIT_MODE, redmule_evt_prev);
                 }
             }
 

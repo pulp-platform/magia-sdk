@@ -61,7 +61,7 @@ def main():
             (the right column stores it to L2). A row barrier closes every time step.
             """
             for pt in systolic(timeslots, skew=t_start, sync=ROW):
-                # stage 0: load the blocks of timeslot pt
+                # stage 0: load the blocks of timeslot pt, waited one step later
                 with stage(0):
                     if x_id == 0:
                         ey = idma.load(y[pt], Y[tile_h, pt * t_size:(pt + 1) * t_size])
@@ -72,15 +72,14 @@ def main():
                         es = idma.store(Y[tile_h, pt * t_size:(pt + 1) * t_size], y[pt])
                     else:
                         es = idma.store(y.at_rel(0, 1)[pt], y[pt])
-                # stage 1: accumulate the block of timeslot pt
+                # stage 1: wait for the blocks of timeslot pt, then accumulate it
                 with stage(1):
-                    j = redmule.enqueue(x, w[pt], y[pt], op=GEMM)
-                    redmule.commit_start()
-                # end of the step: wait for the transfers and the job issued above
-                with stage(0):
                     if x_id == 0:
                         ey.wait()
                     ew.wait()
+                    j = redmule.enqueue(x, w[pt], y[pt], op=GEMM)
+                    redmule.commit_start()
+                # end of the step: wait for the store and the job issued above
                 with stage(2):
                     es.wait()
                 with stage(1):

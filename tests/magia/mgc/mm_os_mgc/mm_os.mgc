@@ -64,14 +64,14 @@ def main():
             y = L1.single_buffer(Y[tile_h, tile_w])
 
             """
-            2a. Input data-tile multi-buffer (double buffered over the timeslots).
+            2a. Input data-tile multi-buffer (triple buffered over the timeslots).
             """
-            x = L1.multi_buffer(X[tile_h, 0:t_size], depth=2)
+            x = L1.multi_buffer(X[tile_h, 0:t_size], depth=3)
 
             """
-            2b. Weight data-tile multi-buffer (double buffered over the timeslots).
+            2b. Weight data-tile multi-buffer (triple buffered over the timeslots).
             """
-            w = L1.multi_buffer(W[0:t_size, tile_w], depth=2)
+            w = L1.multi_buffer(W[0:t_size, tile_w], depth=3)
             redmule_evt = redmule.events(2)
 
             """
@@ -90,18 +90,19 @@ def main():
                     a - Load the weight and input data-tile for the next timeslot (if there is one)
                     b - Multiply and add
                     Synchronization is not required.
-                    We parallelize the IDMA with Redmule: the job is programmed while its operands
-                    are loaded, committed once they have landed (stage 0), and waited one step
-                    later (stage 1), while the next timeslot loads.
+                    We parallelize the IDMA with Redmule: the operands are loaded one step ahead
+                    (stage 0), queued in the iDMA while the previous jobs run; the job is programmed,
+                    committed once they have landed (stage 1), and waited one step later (stage 2).
                     """
                     with stage(0):
                         ex = idma.load(x[i], X[m0:m0 + tile_h.size, i * t_size:(i + 1) * t_size])
                         ew = idma.load(w[i], W[i * t_size:(i + 1) * t_size, tile_w])
+                    with stage(1):
                         redmule.enqueue(x[i], w[i], y, op=GEMM, event=redmule_evt[i])
                         ex.wait()
                         ew.wait()
                         redmule.commit_start()
-                    with stage(1):
+                    with stage(2):
                         redmule_evt[i].wait()
 
                 """

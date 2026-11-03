@@ -105,8 +105,12 @@ int main(void)
     volatile uint32_t x_pt_next;
     volatile uint32_t y_pt_next;
 
-    mg_event_t idma_evt_w, idma_evt_x, idma_evt_y_in, idma_evt_y_out;
+    mg_event_t idma_evt_w, idma_evt_y;
     mg_event_t redmule_evt;
+    mg_event_t idma_evts_y_in_0, idma_evts_y_in_1;
+    mg_event_t *idma_evts_y_in_next, *idma_evts_y_in_curr;
+    mg_event_t idma_evts_x_in_0, idma_evts_x_in_1;
+    mg_event_t *idma_evts_x_in_next, *idma_evts_x_in_curr;
     uint32_t l1_base_s = get_l1_base(hartid + MESH_X_TILES);
 
     /**
@@ -122,38 +126,49 @@ int main(void)
          * row, the bias block), accumulate, then pass the block to the tile below (the bottom
          * row stores it to L2). A global barrier closes every time step.
          */
-        // stage 0: load the blocks of timeslot pt
+        // stage 0: load the blocks of timeslot pt, waited one step later
         if (y_id == 0) {
-            mg_idma_memcpy_2d(
-                WAIT_MODE, 0, l2_addr_y, l1_addr_y_0, len_y, std_y, reps_y, &idma_evt_y_in, NULL);
+            mg_idma_memcpy_2d(WAIT_MODE,
+                              0,
+                              l2_addr_y,
+                              l1_addr_y_0,
+                              len_y,
+                              std_y,
+                              reps_y,
+                              &idma_evts_y_in_0,
+                              NULL);
         }
 
         mg_idma_memcpy_2d(
-            WAIT_MODE, 0, l2_addr_x, l1_addr_x_0, len_x, std_x, reps_x, &idma_evt_x, NULL);
-
-        // end of the step: wait for the transfers and the job issued above
-        if (y_id == 0) {
-            mg_idma_wait(0, WAIT_MODE, &idma_evt_y_in);
-        }
-        mg_idma_wait(0, WAIT_MODE, &idma_evt_x);
+            WAIT_MODE, 0, l2_addr_x, l1_addr_x_0, len_x, std_x, reps_x, &idma_evts_x_in_0, NULL);
         fsync_sync_global();
         eu_fsync_wait(WAIT_MODE);
 
         /**
          * systolic: 3 stages; step pt runs stage k on iteration pt + 1 - k
-         * y  stages 0..2  depth 3
-         * x  stages 0..1  depth 2
+         * y               stages 0..2  depth 3
+         * x               stages 0..1  depth 2
+         * idma_evts_y_in  stages 0..1  depth 2
+         * idma_evts_x_in  stages 0..1  depth 2
          */
         for (int t = 0; t < (MESH_Y_TILES - 1) * 2 + timeslots + 1; t++) {
             int pt = t - t_start;
 
             if (pt >= 0 && pt <= timeslots) {
                 if (pt % 2) {
-                    x_pt      = l1_addr_x_1;
-                    x_pt_next = l1_addr_x_0;
+                    x_pt                = l1_addr_x_1;
+                    x_pt_next           = l1_addr_x_0;
+                    idma_evts_x_in_curr = &idma_evts_x_in_1;
+                    idma_evts_x_in_next = &idma_evts_x_in_0;
+                    idma_evts_y_in_curr = &idma_evts_y_in_1;
+                    idma_evts_y_in_next = &idma_evts_y_in_0;
                 } else {
-                    x_pt      = l1_addr_x_0;
-                    x_pt_next = l1_addr_x_1;
+                    x_pt                = l1_addr_x_0;
+                    x_pt_next           = l1_addr_x_1;
+                    idma_evts_x_in_curr = &idma_evts_x_in_0;
+                    idma_evts_x_in_next = &idma_evts_x_in_1;
+                    idma_evts_y_in_curr = &idma_evts_y_in_0;
+                    idma_evts_y_in_next = &idma_evts_y_in_1;
                 }
 
                 switch (pt % 3) {
@@ -175,7 +190,7 @@ int main(void)
                 }
 
                 if (pt < (timeslots - 1)) {
-                    // stage 0: load the blocks of timeslot pt
+                    // stage 0: load the blocks of timeslot pt, waited one step later
                     if (y_id == 0) {
                         mg_idma_memcpy_2d(WAIT_MODE,
                                           0,
@@ -184,7 +199,7 @@ int main(void)
                                           len_y,
                                           std_y,
                                           reps_y,
-                                          &idma_evt_y_in,
+                                          idma_evts_y_in_next,
                                           NULL);
                     }
 
@@ -195,7 +210,7 @@ int main(void)
                                       len_x,
                                       std_x,
                                       reps_x,
-                                      &idma_evt_x,
+                                      idma_evts_x_in_next,
                                       NULL);
                 }
 
@@ -209,7 +224,7 @@ int main(void)
                                           len_y,
                                           std_y,
                                           reps_y,
-                                          &idma_evt_y_out,
+                                          &idma_evt_y,
                                           NULL);
                     } else {
                         mg_idma_memcpy_1d(WAIT_MODE,
@@ -217,13 +232,18 @@ int main(void)
                                           l1_base_s + (y_pt_prev - l1_tile_base),
                                           y_pt_prev,
                                           t_size * tile_w * 2,
-                                          &idma_evt_y_out,
+                                          &idma_evt_y,
                                           NULL);
                     }
                 }
 
                 if (pt < timeslots) {
-                    // stage 1: accumulate the block of timeslot pt
+                    // stage 1: wait for the blocks of timeslot pt, then accumulate it
+                    if (y_id == 0) {
+                        mg_idma_wait(0, WAIT_MODE, idma_evts_y_in_curr);
+                    }
+                    mg_idma_wait(0, WAIT_MODE, idma_evts_x_in_curr);
+
                     mg_redmule_gemm_enqueue(WAIT_MODE,
                                             x_pt,
                                             l1_addr_w,
@@ -236,16 +256,9 @@ int main(void)
                     mg_redmule_gemm_commit_start();
                 }
 
-                if (pt < (timeslots - 1)) {
-                    // end of the step: wait for the transfers and the job issued above
-                    if (y_id == 0) {
-                        mg_idma_wait(0, WAIT_MODE, &idma_evt_y_in);
-                    }
-                    mg_idma_wait(0, WAIT_MODE, &idma_evt_x);
-                }
-
                 if (pt > 0) {
-                    mg_idma_wait(1, WAIT_MODE, &idma_evt_y_out);
+                    // end of the step: wait for the store and the job issued above
+                    mg_idma_wait(1, WAIT_MODE, &idma_evt_y);
                 }
 
                 if (pt < timeslots) {
