@@ -131,11 +131,20 @@ exit:
  add     a1, a1, a0
  add     a1, a1, a0
  sh      s0, 0(a1)
+# park the core for good, asleep: no event (or interrupt) may wake it, so
+# that a pending one (e.g. a completion pulse that no wait consumed) neither
+# makes it run past exit nor spin in the loop below
+ csrw    mie, zero
 #if CV32E40P == 1
- li      a1, 0x00000738
- cv.elw	 zero, 0(a1)
+ li      a1, 0x00000700  # EU_CORE_MASK
+ sw      zero, 0(a1)
+exit_park:
+ cv.elw	 zero, 0x38(a1)  # EU_CORE_EVENT_WAIT
+ j       exit_park
 #elif CV32E40X == 1
+exit_park:
  wfi
+ j       exit_park
 #endif
 
 .section .vectors, "ax"
