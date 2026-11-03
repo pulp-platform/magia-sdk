@@ -299,7 +299,9 @@ If you wish to profile your code in terms of cycles, it is possible to do it on 
 
 However, be aware that the utilities are different based on the simulation platform you want to use.
 
-In case you are simulating on GVSoC, please use the `perf_get_cycles()` utility:
+In case you are simulating on GVSoC, please use the `perf_get_cycles()` utility, after initializinf with `perf_init()`:
+
+    perf_init();
 
     int start = perf_get_cycles();
 
