@@ -33,10 +33,11 @@ static __attribute__((noinline, cold)) void rowmax_strided(
 /* Row max of 16 rows of at most VLMAX elements, with vl set by the caller: each row is
    loaded into v0 / v8 alternately, so that a load overlaps the previous reduction, and reduced
    into its own register v16..v31; the 16 maxima are stored after a single vtype switch, which
-   drains the VU. */
+   drains the VU. SPATZ_VLD_FENCE: the reduction must not chain on its load (see
+   spatz_vld_fence.h); the load of the next row still overlaps it. */
 #define ROWMAX_RED(dst, src, x)                                         \
     do {                                                                \
-        asm volatile("vle16.v " src ", (%0)" ::"r"(x));                 \
+        asm volatile("vle16.v " src ", (%0)" SPATZ_VLD_FENCE ::"r"(x)); \
         asm volatile("vfredmax.vs " dst ", " src ", " src);             \
     } while (0)
 #define ROWMAX_ST(src, m) asm volatile("vse16.v " src ", (%0)" SPATZ_VST_FENCE ::"r"(m) : "memory")
@@ -121,7 +122,8 @@ int rowmax_fp16_spatz_task(void)
         size_t avl;
 
         asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl0) : "r"(cols));
-        asm volatile("vle16.v v0, (%0)" ::"r"(x));
+        /* SPATZ_VLD_FENCE: with cols == vl0 the vfredmax below reads this load directly */
+        asm volatile("vle16.v v0, (%0)" SPATZ_VLD_FENCE ::"r"(x));
         for (x += vl0, avl = cols - vl0; avl > 0; avl -= vl, x += vl) {
             asm volatile("vsetvli %0, %1, e16, m8, tu, ma" : "=r"(vl) : "r"(avl));
             asm volatile("vle16.v v8, (%0)" ::"r"(x));

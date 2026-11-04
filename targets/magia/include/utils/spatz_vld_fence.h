@@ -17,6 +17,13 @@
 // The store writes zero to the word below sp, which is not allocated (the RISC-V ABI has no red
 // zone, so the compiler keeps nothing there).
 //
+// Also after any vector load whose register a reduction (vfred*, vfwred*) reads next. RTL
+// workaround: a reduction chained on a load gets its vector words as the load writes them; a
+// one-cycle gap in the middle of the REDUCE state leaves the FPU stalled with its own partial at
+// the output, and the operation decided in the previous cycle (a one-cycle
+// reduction_operand_ready_q pulse, spatz_vfu.sv) finds the FPU input register full and is dropped.
+// With the fence the reduction starts on a register fully written: one word per cycle, no gap.
+//
 // On by default; disabled (empty) with `make build spatz_vld_fence=0` (CMake -DSPATZ_VLD_FENCE=0).
 
 #ifndef SPATZ_VLD_FENCE_H
