@@ -111,5 +111,8 @@ add_subdirectory(kernels)
 ################################################################################
 # Testing                                                                      #
 ################################################################################
-
-add_subdirectory(tests)
+if (TESTPATH STREQUAL "")
+    add_subdirectory(tests)
+else()
+    add_subdirectory(${TESTPATH} ${TEST_BUILD_BINARY_DIR})
+endif()

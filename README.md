@@ -59,13 +59,13 @@ The following steps assume the default target platform, `magia`, on which Spatz 
     make llvm
     ```
 
-    This will clone the required repository and build the toolchain in the `llvm/install` directory. Alternatively, if you have a pre-built toolchain, you can specify its location by passing the `LLVM_INSTALL_DIR` variable to the make command:
+    This will clone the required repository and build the toolchain in the `llvm/install` directory. Alternatively, if you have a pre-built toolchain, you can specify its location by exporting the `LLVM_INSTALL_DIR` variable to your setup environment:
 
-    ```sh
-    make build LLVM_INSTALL_DIR=/path/to/your/llvm/install
-    ```
+    `export LLVM_INSTALL_DIR=path/to/llvm/install/dir`
 
-3. (Optional, RTL only) In case you are using this SDK as non-submodule, and you want to simulate the RTL: Clone the [MAGIA](https://github.com/pulp-platform/MAGIA/tree/main) repository:
+    (The install dir of the LLVM is the parent of the "bin" directory of LLVM's tools, such as Clang).
+
+3. (Optional) If you are using this SDK as non-submodule, and you want to simulate the RTL or Verilator model: Clone the [MAGIA](https://github.com/pulp-platform/MAGIA/tree/main) repository:
 
     `git clone git@github.com:pulp-platform/MAGIA.git`
 
@@ -73,15 +73,43 @@ The following steps assume the default target platform, `magia`, on which Spatz 
 
         MAGIA_RTL_DIR ?= path/to/MAGIA/repository
 
-        BUILD_DIR ?= $(MAGIA_RTL_DIR)//work/sw/tests/$(test).c
+        BUILD_DIR ?= $(MAGIA_RTL_DIR)/work/sw/tests/$(test).c
 
     It is also required to have a `cmake` version >= 3.13.
 
     In case you are NOT interested in the RTL and only want to simulate the architecture on GVSoC, you can ignore the previous command.
 
-## Getting started and Usage
+4. If you wish to develop your tests outside the SDK folder (RECOMMENDED), you can run the script:
 
-The following *optional* parameters can be specified when running the make command:
+    `source scripts/setup_env.sh <MAGIA_RTL_PATH>`
+
+    Which sets the `MAGIA_SDK_HOME` and `MAGIA_RTL_DIR` environment variables, the first pointing to this repository, the second to the `MAGIA_RTL_PATH` passed as argument, or on this repository's parent directory by default.
+
+    **YOU MUST RUN THIS SCRIPT ON EVERY NEW SHELL, UNLESS YOU ADD THIS SCRIPT TO YOUR OWN BASHRC.**
+
+## Quickstart and Usage
+
+To integrate Magia-SDK and its features, you need to setup your test application directory with the following:
+
+1. A `CMakeLists.txt` file to be used as entrypoint for the SDK's CMake building flow, you can check the [Adding your own test to the SDK](#Adding-your-own-test-to-the-SDK) and [Spatz CMake Integration Details](#Spatz-CMake-Integration-Details) sections for examples, or check the `tests` folder for more complex examples.
+
+2. A `Makefile` with the content of `Makefile_default`, which can be then edited to use a different test name (that must be the same as the one set in the CMakeLists file), change the number of mesh tiles, use a different control core or compiler etc... See [In-Depth Usage](#In-Depth-Usage) for more info about the available options.
+
+3. Source and header files for your test application
+
+From your test folder, to setup your simulation platform, simply run:
+
+`make setup_platform platform=rtl/verilator/gvsoc`
+
+Which will build and setup the platform for emulation. You can omit this step if you are sure the platform chose is already correctly setup to run your test.
+
+Then you can build and run your test with:
+
+`make clean all run platform=rtl/verilator/gvsoc`
+
+## In-Depth Usage
+
+The following *optional* parameters can be specified when running the make command inside the Magia-SDK repository:
 
 `target_platform`: **magia** (**Default**: magia). Selects the target platform to build and run tests on.
 
@@ -123,11 +151,11 @@ The following *optional* parameters can be specified when running the make comma
 
 Once the [Prerequisites](#prerequisites) are in place:
 
-1. Initialize the GVSoC submodule:
+1. (Optional but recommended) Initialize the GVSoC submodule with the latest stable and tested commits:
 
     `make gvsoc_init`
 
-2. Build the Magia RTL architecture (*this command may take time and return an error, please be patient.*):
+2. Build the Magia RTL architecture (*this command may take time and return a fake error during NoC initialization, please be patient.*):
 
     `make MAGIA <target_platform> <tiles> <build_mode> <fsync_mode> <control_core>`
 
@@ -157,8 +185,6 @@ Once the [Prerequisites](#prerequisites) are in place:
     `make run test=<test_name> <platform> <control_core>`
 
 ***WARNING: YOU HAVE TO REBUILD BOTH RTL/GVSOC AND THE TEST BINARY EACH TIME YOU WANT TO TEST A MAGIA MESH WITH A DIFFERENT NUMBER OF TILES.***
-
-If you want to run gvsoc or a binary from outside the magia-sdk directory you can edit the **GVSOC_ABS_PATH** and **BIN_ABS_PATH** option in Makefile or directly on the *run* command line.
 
 GVSOC will use **GVSOC_WORK_DIR** as working directory (default: `./gvsoc_work`). You will find traces, outputs, etc. there.
 
@@ -245,10 +271,10 @@ Two things to keep in mind:
   signal hierarchy is still sitting in the `<dump>.fst.hier` companion file — such a dump only reads
   in place and loses every signal name the moment it is moved.
 
-## Adding your own test
+## Adding your own test to the SDK
 
 This SDK uses a nested CMakeList mechanism to build and check for dependencies.
-To add your own test, you have to integrate a new test folder inside the **tests** directory.
+To add a new test to the SDK:
 
 1. Change directory to the desired architecture test folder
 
