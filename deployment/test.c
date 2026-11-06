@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Alberto Dequino <alberto.dequino@unibo.it>
-// Alex Marchioni <alex.marchioni@chips.it>
+// Alex Marchioni (chips-it)
 
 #include <stdint.h>
 #include "network.h"

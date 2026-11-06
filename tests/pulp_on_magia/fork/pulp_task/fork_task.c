@@ -14,7 +14,7 @@
  * limitations under the License.
  * SPDX-License-Identifier: Apache-2.0
  *
- * Authors: Luca Balboni <luca.balboni@chips.it>
+ * Authors: Luca Balboni (chips-it)
  * Alberto Dequino <alberto.dequino@unibo.it>
  *
  * fork test: a simple element wise add to check if the fork and barrier stuff works

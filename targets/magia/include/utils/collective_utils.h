@@ -14,7 +14,7 @@
  * limitations under the License.
  * SPDX-License-Identifier: Apache-2.0
  *
- * Authors: Carlotta Chiarini <carlotta.charini@chips.it>
+ * Authors: Carlotta Chiarini (chips-it)
  * Alberto Dequino <alberto.dequino@unibo.it>
  *
  * MAGIA Collectives - Generic utilities for FlooNoC collective functionalities
