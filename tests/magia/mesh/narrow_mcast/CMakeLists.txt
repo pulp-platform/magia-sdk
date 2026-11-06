@@ -2,7 +2,7 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Carlotta Chiarini <carlotta.chiarini@chips.it>
+# Carlotta Chiarini (chips-it)
 
 set(TEST_NAME test_narrow_mcast)
 
