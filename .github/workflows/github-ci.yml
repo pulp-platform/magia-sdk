@@ -22,7 +22,7 @@ jobs:
     steps:
       - name: Gitlab CI Runner
         id: gitlab_ci
-        uses: pulp-platform/pulp-actions/gitlab-ci@v2.4.1 # update version as needed, not auto-updated
+        uses: pulp-platform/pulp-actions/gitlab-ci@v2.5.1 # update version as needed, not auto-updated
         # Check if GITLAB_TOKEN is set to avoid running on forks.
         if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
