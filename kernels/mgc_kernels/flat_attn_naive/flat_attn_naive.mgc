@@ -4,13 +4,11 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Flat-Attention kernel, O = softmax(Q @ Kt / sqrt(P)) @ V, without software pipelining: the Q blocks and,
-# for each, the K/V blocks in plain loops.
-# Compile (the kernel, its header include/mgc_flat_attn_naive.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/flat_attn_naive/flat_attn_naive.mgc \
-#       --header tests/magia/mgc/flat_attn_naive/include/test.h \
-#       -o kernels/mgc_kernels/flat_attn_naive/src/mgc_flat_attn_naive.c \
-#       --test tests/magia/mgc/flat_attn_naive/src/test.c
+# Flat-Attention, without software pipelining:
+#
+#     O = softmax(Q @ Kt / sqrt(P)) @ V
+#
+# The Q blocks, and the K/V blocks of each, run in plain loops.
 
 from mgc import *
 

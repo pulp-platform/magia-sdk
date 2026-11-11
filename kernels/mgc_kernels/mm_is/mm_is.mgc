@@ -4,13 +4,11 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Input-static GEMM (Z = X @ W + Y) on the MAGIA mesh, as a systolic pipeline.
+# Input-static GEMM on the MAGIA mesh, as a systolic pipeline:
+#
+#     Z = X @ W + Y
+#
 # Same algorithm as tests/magia/mesh/mm_is_2.
-# Compile (the kernel, its header include/mgc_mm_is.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/mm_is/mm_is.mgc \
-#       --header tests/magia/mgc/mm_is_mgc/include/test.h \
-#       -o kernels/mgc_kernels/mm_is/src/mgc_mm_is.c \
-#       --test tests/magia/mgc/mm_is_mgc/src/test.c
 
 from mgc import *
 

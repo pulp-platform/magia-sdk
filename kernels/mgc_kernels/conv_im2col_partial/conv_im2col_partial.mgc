@@ -4,32 +4,47 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# 2-D convolution, CONV_K x CONV_K kernel (odd, default 3), stride CONV_S (default 1), zero padding
-# CONV_PAD = (CONV_K - 1) / 2, no bias, with a partial im2col: the im2col expanded along kx only, once per input row.
-# X is HWC, so for an input row iy the patch row of output pixel x (K pixels x CIN channels from column
-# x * CONV_S - CONV_PAD) is contiguous in L2. The expanded row E_iy [CONV_CP x CONV_KC] (CONV_KC = K * CIN) of a
-# block of CONV_CP output columns is then a single 2-D iDMA transfer from L2 (rows CONV_S * CIN apart, overlapping),
-# and
-#   Y[output row r, block] = sum over ky of E_(r * S - PAD + ky) [CONV_CP x K*CIN] @ W[ky rows] [K*CIN x tile_c]
-# is CONV_K RedMulE jobs accumulating in the output block (the first one a MATMUL), in the reduction order of the
-# im2col GEMM (bit-identical to it). An expanded input row serves the CONV_K output rows that need it: the tile keeps
-# the last CONV_NSLOT = CONV_K + CONV_S of them in a ring buffer in L1 (src/kernels.c), and each output row loads
-# only the CONV_S new ones.
-# Tile (ii, jj) owns the output rows tile_h (mesh rows) and the output channels tile_c (mesh columns), with its W block
-# resident in L1. In each of the CONV_WNB blocks of CONV_CP output columns, its output rows go through a 3-stage
-# pipeline:
-#   0. iDMA: the expanded input rows that the output row needs and the previous one did not (all of them for the first
-#      row), into the ring buffer; the parts of the patches outside the image are set to zero once they have landed;
-#   1. RedMulE: the CONV_K jobs of the row (the ones of the input rows outside the image are skipped);
-#   2. iDMA: the output block to L2.
-# The tiles exchange nothing, so the pipeline needs no barrier.
-# The blocking (CONV_NB, CONV_WNB, CONV_CP) is chosen per mesh side by the test's gen_golden.py so that the buffers
-# fit L1, and reaches the kernel as arguments.
-# Compile (the kernel, its header include/mgc_conv_im2col_partial.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/conv_im2col_partial/conv_im2col_partial.mgc \
-#       --header tests/magia/mgc/conv_im2col_partial/include/test.h \
-#       -o kernels/mgc_kernels/conv_im2col_partial/src/mgc_conv_im2col_partial.c \
-#       --test tests/magia/mgc/conv_im2col_partial/src/test.c
+# 2-D convolution with a partial im2col: the input is expanded along kx only, once per input row.
+#
+# - Kernel CONV_K x CONV_K (odd, default 3), stride CONV_S (default 1), zero padding
+#   CONV_PAD = (CONV_K - 1) / 2, no bias.
+# - X and Y are HWC in L2.
+#
+# For an input row iy and a block of CONV_CP output columns, the expanded row is
+#
+#     E_iy [CONV_CP x CONV_KC],        CONV_KC = K * CIN
+#
+# Its row x is the patch row of output pixel x: K pixels x CIN channels from input column
+# x * CONV_S - CONV_PAD. In HWC they are contiguous in L2, so E_iy is a single 2-D iDMA transfer
+# (rows CONV_S * CIN apart, overlapping).
+#
+# An output row r is then CONV_K RedMulE jobs accumulating into the output block (the first one a
+# MATMUL):
+#
+#                   K-1
+#     Y[r, block] = sum   E_(r*S - PAD + ky)  @  W[ky rows]
+#                  ky=0   [CONV_CP x K*CIN]      [K*CIN x tile_c]
+#
+# This is the reduction order of the im2col GEMM, so the result is bit-identical to it.
+#
+# An expanded row serves the CONV_K output rows that need it. The tile keeps the last
+# CONV_NSLOT = CONV_K + CONV_S of them in a ring buffer in L1 (src/kernels.c), so each output row
+# loads only CONV_S new ones.
+#
+# Tile (ii, jj) owns the output rows tile_h (mesh rows) and the output channels tile_c (mesh
+# columns), with its W block in L1. In each of the CONV_WNB column blocks, its output rows go
+# through a 3-stage pipeline:
+#
+#   0. iDMA: the expanded rows that this output row needs and the previous one did not (all of
+#      them for the first row), into the ring buffer. Once they have landed, their parts outside
+#      the image are zeroed.
+#   1. RedMulE: the CONV_K jobs of the row. The jobs of input rows outside the image are skipped.
+#   2. iDMA: the output block back to L2.
+#
+# The tiles exchange no data, so the pipeline needs no barrier.
+#
+# The test's gen_golden.py picks the blocking (CONV_NB, CONV_WNB, CONV_CP) for each mesh size, so
+# that the buffers fit in L1, and passes it as kernel arguments.
 
 from mgc import *
 

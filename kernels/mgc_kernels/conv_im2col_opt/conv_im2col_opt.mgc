@@ -4,30 +4,43 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# 2-D convolution, CONV_K x CONV_K kernel (odd, default 3), stride CONV_S (default 1), zero padding
-# CONV_PAD = (CONV_K - 1) / 2 ("same" at stride 1), no bias, as an im2col GEMM:
-#   Y[OH*OW x COUT] = im2col(X) [OH*OW x K*K*CIN] @ W [K*K*CIN x COUT],
-# with the output CONV_OH x CONV_OW, OH = (H + 2 * PAD - K) / S + 1 (OW the same). X is HWC in L2, unpadded;
-# W has its rows in (ky, kx, ci) order; Y is HWC.
-# Tiling and pipeline as in conv_im2col: tile (ii, jj) owns the output rows tile_h (mesh rows) and the output
-# channels tile_c (mesh columns), with its W block resident in L1, and its blocks of CONV_CP pixels of an output row
-# go through 4 stages, all running at once on consecutive blocks:
-#   0. iDMA: the CONV_K input rows that the output row needs (from row * CONV_S - CONV_PAD, clamped inside the
-#      image), the CONV_WIN columns of the column block's window, in one 2-D transfer;
-#   1. Spatz: the im2col block [CONV_CP x K*K*CIN], with the zero padding;
-#   2. RedMulE: the output block [CONV_CP x tile_c] = im2col block @ W block (MATMUL);
-#   3. iDMA: the output block to L2.
-# Unlike conv_im2col, the tiles of a mesh row share the im2col (src/kernels.c): each builds CONV_CP / MESH_X_TILES
-# pixels of the block on its Spatz, in tasks of CONV_SHARE_CHUNK pixels, and multicasts each task's pixels to the
-# others while Spatz builds the next ones. This needs the im2col block at the same L1 offset on every tile (declared
-# first) and a row barrier at the end of every pipeline step (sync=ROW).
-# The test's gen_golden.py sets CONV_SHARE_CHUNK and, per mesh side, the blocking (CONV_CP, CONV_NB, CONV_WNB) so
-# that the buffers fit L1; they reach the kernel as arguments.
-# Compile (the kernel, its header include/mgc_conv_im2col_opt.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/conv_im2col_opt/conv_im2col_opt.mgc \
-#       --header tests/magia/mgc/conv_im2col_opt/include/test.h \
-#       -o kernels/mgc_kernels/conv_im2col_opt/src/mgc_conv_im2col_opt.c \
-#       --test tests/magia/mgc/conv_im2col_opt/src/test.c
+# 2-D convolution as an im2col GEMM, with the im2col shared by the tiles of a mesh row:
+#
+#     Y[OH*OW x COUT] = im2col(X)[OH*OW x K*K*CIN] @ W[K*K*CIN x COUT]
+#
+#     OH = (H + 2*PAD - K) / S + 1        (OW likewise)
+#
+# - Kernel CONV_K x CONV_K (odd, default 3), stride CONV_S (default 1), zero padding
+#   CONV_PAD = (CONV_K - 1) / 2 ("same" at stride 1), no bias.
+# - X and Y are HWC in L2, X unpadded. The rows of W are in (ky, kx, ci) order.
+#
+# Tiling and pipeline are those of conv_im2col: tile (ii, jj) owns the output rows tile_h and the
+# output channels tile_c, keeps its W block in L1, and runs blocks of CONV_CP pixels of an output
+# row through 4 stages:
+#
+#   0. iDMA: the CONV_K input rows that the output row needs (from row * CONV_S - CONV_PAD, clamped
+#      to the image), CONV_WIN columns wide, in one 2-D transfer.
+#   1. Spatz: the im2col block [CONV_CP x K*K*CIN], zero padding included.
+#   2. RedMulE: output block [CONV_CP x tile_c] = im2col block @ W block (MATMUL).
+#   3. iDMA: the output block back to L2.
+#
+# The difference is stage 1. All the tiles of a mesh row need the same im2col block, so each one
+# builds only its part, CONV_CP / MESH_X_TILES pixels, and multicasts it to the others
+# (src/kernels.c):
+#
+#     im2col block, on every tile of mesh row ii:
+#
+#         | part 0  | part 1  | ... | part X-1  |
+#           (ii, 0)   (ii, 1)         (ii, X-1)     <- tile that builds it
+#
+# A tile builds its part in Spatz tasks of CONV_SHARE_CHUNK pixels, and multicasts each chunk while
+# Spatz builds the next one. This needs:
+#
+# - the im2col block at the same L1 offset on every tile (it is declared first);
+# - a row barrier at the end of every pipeline step (sync=ROW).
+#
+# The test's gen_golden.py sets CONV_SHARE_CHUNK and, for each mesh size, the blocking (CONV_CP,
+# CONV_NB, CONV_WNB), so that the buffers fit in L1. All of them are kernel arguments.
 
 from mgc import *
 

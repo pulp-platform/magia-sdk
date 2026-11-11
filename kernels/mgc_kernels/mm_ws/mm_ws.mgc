@@ -4,13 +4,11 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Weight-static GEMM (Z = X @ W + Y) on the MAGIA mesh, as a systolic pipeline.
-# Same algorithm as tests/magia/mesh/mm_ws_2; mm_ws_explicit.mgc is the hand-scheduled version.
-# Compile (the kernel, its header include/mgc_mm_ws.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/mm_ws/mm_ws.mgc \
-#       --header tests/magia/mgc/mm_ws_mgc/include/test.h \
-#       -o kernels/mgc_kernels/mm_ws/src/mgc_mm_ws.c \
-#       --test tests/magia/mgc/mm_ws_mgc/src/test.c
+# Weight-static GEMM on the MAGIA mesh, as a systolic pipeline:
+#
+#     Z = X @ W + Y
+#
+# Same algorithm as tests/magia/mesh/mm_ws_2. mm_ws_explicit.mgc is the hand-scheduled version.
 
 from mgc import *
 

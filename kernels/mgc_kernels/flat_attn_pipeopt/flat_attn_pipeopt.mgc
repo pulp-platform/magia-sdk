@@ -4,12 +4,7 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Flat-Attention kernel: flat_attn_pipe with the merged softmax kernels of the SDK (see src/kernels.c).
-# Compile (the kernel, its header include/mgc_flat_attn_pipeopt.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/flat_attn_pipeopt/flat_attn_pipeopt.mgc \
-#       --header tests/magia/mgc/flat_attn_pipeopt/include/test.h \
-#       -o kernels/mgc_kernels/flat_attn_pipeopt/src/mgc_flat_attn_pipeopt.c \
-#       --test tests/magia/mgc/flat_attn_pipeopt/src/test.c
+# Flat-Attention: flat_attn_pipe with the merged softmax kernels of the SDK (see src/kernels.c).
 
 from mgc import *
 

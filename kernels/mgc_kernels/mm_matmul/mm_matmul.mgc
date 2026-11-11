@@ -4,12 +4,9 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Output-static MATMUL (Z = X @ W, no bias) on the MAGIA mesh.
-# Compile (the kernel, its header include/mgc_mm_matmul.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/mm_matmul/mm_matmul.mgc \
-#       --header tests/magia/mgc/mm_matmul_mgc/include/test.h \
-#       -o kernels/mgc_kernels/mm_matmul/src/mgc_mm_matmul.c \
-#       --test tests/magia/mgc/mm_matmul_mgc/src/test.c
+# Output-static MATMUL on the MAGIA mesh (no bias):
+#
+#     Z = X @ W
 
 from mgc import *
 

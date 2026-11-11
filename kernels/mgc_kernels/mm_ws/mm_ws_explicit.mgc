@@ -4,9 +4,13 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Weight-static GEMM (Z = X @ W + Y) on the MAGIA mesh, explicit schedule: a statement-by-statement
-# mgc rendering of the schedule of tests/magia/mesh/mm_ws_2. No test builds it (mgc/tests/test_mgc.py only checks
-# that it compiles); the mm_ws_mgc test uses the pipelined version, mm_ws.mgc.
+# Weight-static GEMM on the MAGIA mesh, with the schedule of tests/magia/mesh/mm_ws_2 written out
+# statement by statement:
+#
+#     Z = X @ W + Y
+#
+# No test builds it: mgc/tests/test_mgc.py only checks that it compiles. The mm_ws_mgc test uses
+# the pipelined version, mm_ws.mgc.
 
 from mgc import *
 

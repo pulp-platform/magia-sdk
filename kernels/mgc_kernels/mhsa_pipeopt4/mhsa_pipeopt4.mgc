@@ -4,14 +4,11 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Multi-head self-attention kernel: mhsa_pipeopt3 with the per-tile outputs of a Q block reduce-scattered
-# along the mesh row (each tile sums, normalizes and stores Br / MESH_X_TILES rows) instead of tree-reduced into the
-# first column, as in flat_attn_pipeopt4.
-# Compile (the kernel, its header include/mgc_mhsa_pipeopt4.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/mhsa_pipeopt4/mhsa_pipeopt4.mgc \
-#       --header tests/magia/mgc/mhsa_pipeopt4/include/test.h \
-#       -o kernels/mgc_kernels/mhsa_pipeopt4/src/mgc_mhsa_pipeopt4.c \
-#       --test tests/magia/mgc/mhsa_pipeopt4/src/test.c
+# Multi-head self-attention: mhsa_pipeopt3, but the per-tile outputs of a Q block are
+# reduce-scattered along the mesh row (as in flat_attn_pipeopt4) instead of tree-reduced into the
+# first column.
+#
+# Each tile sums, normalizes and stores Br / MESH_X_TILES of the Br rows of the Q block.
 
 from mgc import *
 

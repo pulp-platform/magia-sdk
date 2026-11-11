@@ -4,12 +4,9 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Unfused attention kernel, the baseline of the flat_attn_* kernels.
-# Compile (the kernel, its header include/mgc_unfused_attn.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/unfused_attn/unfused_attn.mgc \
-#       --header tests/magia/mgc/unfused_attn/include/test.h \
-#       -o kernels/mgc_kernels/unfused_attn/src/mgc_unfused_attn.c \
-#       --test tests/magia/mgc/unfused_attn/src/test.c
+# Unfused attention, the baseline of the flat_attn_* kernels:
+#
+#     O = softmax(Q @ Kt / sqrt(P)) @ V
 
 from mgc import *
 

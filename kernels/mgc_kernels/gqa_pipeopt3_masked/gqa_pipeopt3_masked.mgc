@@ -4,15 +4,18 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Grouped-query self-attention kernel: gqa_pipeopt3 with an additive attention mask. The mask [S x S] (0 where a query
-# sees a key, -32768 where it does not), shared by all the heads, is added to Q @ Kt by RedMulE itself: every tile
-# loads its block of the mask into attn, and Q @ Kt runs as a GEMM accumulating on it. The exp kernel
-# (kernels/expminus_rowsum) has its lower clamp at -11, so that a masked score exps to 0.
-# Compile (the kernel, its header include/mgc_gqa_pipeopt3_masked.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/gqa_pipeopt3_masked/gqa_pipeopt3_masked.mgc \
-#       --header tests/magia/mgc/gqa_pipeopt3_masked/include/test.h \
-#       -o kernels/mgc_kernels/gqa_pipeopt3_masked/src/mgc_gqa_pipeopt3_masked.c \
-#       --test tests/magia/mgc/gqa_pipeopt3_masked/src/test.c
+# Grouped-query self-attention: gqa_pipeopt3 with an additive attention mask.
+#
+# The mask [S x S] is shared by all the heads:
+#
+#          0   where a query sees a key
+#     -32768   where it does not
+#
+# RedMulE adds it to Q @ Kt for free: each tile loads its block of the mask into attn, and Q @ Kt
+# runs as a GEMM accumulating onto it.
+#
+# The exp kernel (kernels/expminus_rowsum) clamps its input from below at -11, so that a masked
+# score gives exp = 0.
 
 from mgc import *
 

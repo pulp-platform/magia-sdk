@@ -4,13 +4,13 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Grouped-query self-attention kernel: mhsa_pipeopt4 with NUM_KV_HEADS K/V heads, each shared by
-# NUM_HEADS / NUM_KV_HEADS consecutive Q heads.
-# Compile (the kernel, its header include/mgc_gqa_pipeopt4.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/gqa_pipeopt4/gqa_pipeopt4.mgc \
-#       --header tests/magia/mgc/gqa_pipeopt4/include/test.h \
-#       -o kernels/mgc_kernels/gqa_pipeopt4/src/mgc_gqa_pipeopt4.c \
-#       --test tests/magia/mgc/gqa_pipeopt4/src/test.c
+# Grouped-query self-attention: mhsa_pipeopt4 with NUM_KV_HEADS K/V heads.
+#
+# Each K/V head is shared by NUM_HEADS / NUM_KV_HEADS consecutive Q heads, e.g. with 2 Q heads
+# per K/V head:
+#
+#     Q heads:     0  1 | 2  3 | 4  5 | ...
+#     K/V heads:     0  |   1  |   2  | ...
 
 from mgc import *
 

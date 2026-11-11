@@ -4,12 +4,8 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Multi-head self-attention kernel, with the Flat-Attention of every head as in flat_attn_pipeopt3.
-# Compile (the kernel, its header include/mgc_mhsa_pipeopt3.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/mhsa_pipeopt3/mhsa_pipeopt3.mgc \
-#       --header tests/magia/mgc/mhsa_pipeopt3/include/test.h \
-#       -o kernels/mgc_kernels/mhsa_pipeopt3/src/mgc_mhsa_pipeopt3.c \
-#       --test tests/magia/mgc/mhsa_pipeopt3/src/test.c
+# Multi-head self-attention. The attention of every head is the Flat-Attention of
+# flat_attn_pipeopt3.
 
 from mgc import *
 

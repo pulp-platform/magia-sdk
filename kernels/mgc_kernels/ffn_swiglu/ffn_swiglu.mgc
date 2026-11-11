@@ -4,22 +4,32 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Qwen2.5 FFN layer (SwiGLU MLP, no biases) with the residual: Y = R + (silu(X @ Wg) * (X @ Wu)) @ Wd.
-# X is the input after the RMSNorm, R the residual stream before it. The RMSNorm itself is not part of the kernel.
+# Qwen2.5 FFN layer (SwiGLU MLP, no biases), with the residual:
+#
+#     Y = R + (silu(X @ Wg) * (X @ Wu)) @ Wd
+#
+# X is the input after the RMSNorm, R the residual stream before it. The RMSNorm itself is not part
+# of the kernel.
+#
 # Two steps through L2, both output-static on RedMulE:
-# - H = silu(X @ Wg) * (X @ Wu): tile (ii, jj) owns the block [tile_s x tile_i] of H, computed in chunks of FFN_CI
-#   columns (G and U chunks double-buffered in L1, accumulated over blocks of FFN_KB_E of E). The SwiGLU of chunk c
-#   runs on Spatz, in place, while RedMulE computes chunk c + 1, and is stored while RedMulE runs the last jobs of
-#   chunk c + 1.
-# - Y = R + H @ Wd: tile (ii, jj) owns the block [tile_s x tile_e] of Y, loaded with the residual and accumulated
-#   over blocks of FFN_KB_I of I.
-# FFN_CI, FFN_KB_E and FFN_KB_I are chosen per mesh side by the test's gen_golden.py so that all the buffers fit L1,
-# and reach the kernel as arguments.
-# Compile (the kernel, its header include/mgc_ffn_swiglu.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/ffn_swiglu/ffn_swiglu.mgc \
-#       --header tests/magia/mgc/ffn_swiglu/include/test.h \
-#       -o kernels/mgc_kernels/ffn_swiglu/src/mgc_ffn_swiglu.c \
-#       --test tests/magia/mgc/ffn_swiglu/src/test.c
+#
+# 1. H = silu(X @ Wg) * (X @ Wu)
+#
+#    Tile (ii, jj) owns the block [tile_s x tile_i] of H. It computes it in chunks of FFN_CI
+#    columns (G and U chunks double-buffered in L1), with the reduction over E in blocks of
+#    FFN_KB_E. The chunks overlap:
+#
+#        RedMulE:   chunk c      chunk c+1
+#        Spatz:                  SwiGLU of chunk c (in place)
+#        iDMA:                          store of chunk c (during the last jobs of chunk c+1)
+#
+# 2. Y = R + H @ Wd
+#
+#    Tile (ii, jj) owns the block [tile_s x tile_e] of Y. It loads it with the residual, then
+#    accumulates onto it, with the reduction over I in blocks of FFN_KB_I.
+#
+# The test's gen_golden.py picks FFN_CI, FFN_KB_E and FFN_KB_I for each mesh size, so that the
+# buffers fit in L1, and passes them as kernel arguments.
 
 from mgc import *
 

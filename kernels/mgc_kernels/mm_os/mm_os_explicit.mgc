@@ -4,11 +4,14 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# mm_os.mgc written with the explicit (low-level) schedule instead of pipeline(): the prologue, the
-# multi-buffer slots, the event rotation and the placement of the RedMulE enqueue / commit_start / wait steps are
-# spelled out by hand. It is the 2-stage schedule (operands loaded in the stage of their RedMulE job, depth-2
-# buffers), not the 3-stage one of mm_os.mgc. No test builds it: mgc/tests/test_mgc.py checks that it compiles to
-# the same code as mm_os.mgc turned 2-stage, comments aside.
+# mm_os.mgc with its schedule written out by hand instead of pipeline(): the prologue, the
+# multi-buffer slots, the event rotation, and where the RedMulE enqueue / commit_start / wait go.
+#
+# It is the 2-stage schedule (operands loaded in the stage of their RedMulE job, depth-2 buffers),
+# not the 3-stage one of mm_os.mgc.
+#
+# No test builds it. mgc/tests/test_mgc.py checks that it compiles to the same code as mm_os.mgc
+# made 2-stage, comments aside.
 
 from mgc import *
 

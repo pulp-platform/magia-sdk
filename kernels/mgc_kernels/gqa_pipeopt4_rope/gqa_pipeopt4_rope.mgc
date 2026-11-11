@@ -4,23 +4,31 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Qwen2.5 self-attention layer: gqa_pipeopt4 with what a Qwen2/Llama-style decoder adds to it.
+# Qwen2.5 self-attention layer: gqa_pipeopt4 plus what a Qwen2/Llama-style decoder adds to it.
+#
+# X is the input after the RMSNorm, R the residual stream before it. The RMSNorm itself is not part
+# of the kernel.
+#
 # - Q/K/V biases, added after the projections.
-# - RoPE on Q and K, after the biases, in the projection steps (the projection blocks are resident in L1). The
-#   channels of every Q/K head are permuted offline (Wq, Wk, bq, bk) so that the rotate-half pairs (i, P/2 + i)
-#   become pairs (c, c + G/2) inside groups of G = ROPE_GROUP consecutive channels: Q_h @ Kt_g is unchanged, a
-#   projection block may start or end inside a head (at a multiple of G), and the RoPE is unit-stride on Spatz.
-# - Three projection loops, Q, Kt, V, each block's bias and RoPE on Spatz overlapped with the next projection on
-#   RedMulE (only the V bias is not overlapped).
-# - Causal attention with an additive mask, as in gqa_pipeopt3_masked. Every K/V block is computed, also the fully
-#   masked ones.
-# - The residual, added by the output projection accumulating on it (Y = R + O @ Wo).
-# X is the input after the RMSNorm, R the residual stream before it. The RMSNorm itself is not part of the kernel.
-# Compile (the kernel, its header include/mgc_gqa_pipeopt4_rope.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/gqa_pipeopt4_rope/gqa_pipeopt4_rope.mgc \
-#       --header tests/magia/mgc/gqa_pipeopt4_rope/include/test.h \
-#       -o kernels/mgc_kernels/gqa_pipeopt4_rope/src/mgc_gqa_pipeopt4_rope.c \
-#       --test tests/magia/mgc/gqa_pipeopt4_rope/src/test.c
+#
+# - RoPE on Q and K, after the biases, in the projection steps (the projection blocks stay in L1).
+#   The channels of every Q/K head are permuted offline (in Wq, Wk, bq, bk), so that the
+#   rotate-half pairs
+#
+#       (i, P/2 + i)   become   (c, c + G/2), inside groups of G = ROPE_GROUP channels
+#
+#   Q_h @ Kt_g does not change. In exchange, a projection block may start or end inside a head
+#   (at a multiple of G), and the RoPE is unit-stride on Spatz.
+#
+# - Three projection loops, for Q, Kt and V. The bias and RoPE of each block run on Spatz while
+#   RedMulE computes the next block. Only the V bias is not overlapped.
+#
+# - Causal attention with an additive mask, as in gqa_pipeopt3_masked. Every K/V block is
+#   computed, the fully masked ones too.
+#
+# - The residual, added by the output projection accumulating onto it:
+#
+#       Y = R + O @ Wo
 
 from mgc import *
 

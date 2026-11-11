@@ -4,13 +4,9 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Flat-Attention kernel, O = softmax(Q @ Kt / sqrt(P)) @ V, with the K/V blocks of every Q block in a
-# software pipeline.
-# Compile (the kernel, its header include/mgc_flat_attn_pipe.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/flat_attn_pipe/flat_attn_pipe.mgc \
-#       --header tests/magia/mgc/flat_attn_pipe/include/test.h \
-#       -o kernels/mgc_kernels/flat_attn_pipe/src/mgc_flat_attn_pipe.c \
-#       --test tests/magia/mgc/flat_attn_pipe/src/test.c
+# Flat-Attention, with the K/V blocks of every Q block in a software pipeline:
+#
+#     O = softmax(Q @ Kt / sqrt(P)) @ V
 
 from mgc import *
 

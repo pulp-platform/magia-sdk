@@ -4,27 +4,34 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# 2-D convolution, CONV_K x CONV_K kernel (odd, default 3), stride 1, zero padding CONV_PAD = (CONV_K - 1) / 2
-# ("same"), no bias, as an im2col GEMM: Y[H*W x COUT] = im2col(X) [H*W x K*K*CIN] @ W [K*K*CIN x COUT].
-# X is HWC in L2, unpadded; W has its rows in (ky, kx, ci) order; Y is HWC.
-# Tile (ii, jj) owns the output rows tile_h (mesh rows) and the output channels tile_c (mesh columns), with its
-# W block resident in L1. Each output row of a block of CONV_WB columns is cut into blocks of CONV_CP pixels, which
-# go through a 4-stage pipeline:
-#   0. iDMA: the CONV_K input rows that the output row needs, the CONV_WIN columns of the column block's window,
-#      in one 2-D transfer. At the top and bottom of the image the rows are clamped inside it, and the rows outside
-#      it are zeros in the im2col.
-#   1. Spatz: the im2col block [CONV_CP x K*K*CIN] of the pixels, with the zero padding.
-#   2. RedMulE: the output block [CONV_CP x tile_c] = im2col block @ W block (MATMUL).
-#   3. iDMA: the output block to L2.
-# All four run at once on consecutive blocks. The last block of a row may be partial: it is built and multiplied
-# whole, but only its pixels inside the CONV_WB columns are stored.
-# The blocking (CONV_CP, CONV_NB, CONV_WNB) is chosen per mesh side by the test's gen_golden.py so that the buffers
-# fit L1, and reaches the kernel as arguments.
-# Compile (the kernel, its header include/mgc_conv_im2col.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/conv_im2col/conv_im2col.mgc \
-#       --header tests/magia/mgc/conv_im2col/include/test.h \
-#       -o kernels/mgc_kernels/conv_im2col/src/mgc_conv_im2col.c \
-#       --test tests/magia/mgc/conv_im2col/src/test.c
+# 2-D convolution as an im2col GEMM:
+#
+#     Y[H*W x COUT] = im2col(X)[H*W x K*K*CIN] @ W[K*K*CIN x COUT]
+#
+# - Kernel CONV_K x CONV_K (odd, default 3), stride 1, "same" zero padding
+#   CONV_PAD = (CONV_K - 1) / 2, no bias.
+# - X and Y are HWC in L2, X unpadded. The rows of W are in (ky, kx, ci) order.
+#
+# Tile (ii, jj) owns the output rows tile_h (split over the mesh rows) and the output channels
+# tile_c (split over the mesh columns). Its W block stays in L1.
+#
+# Each output row of a column block (CONV_WB columns) is cut into blocks of CONV_CP pixels, which
+# go through a 4-stage pipeline. All stages run at once, on consecutive blocks:
+#
+#     iDMA in  ->  Spatz im2col  ->  RedMulE  ->  iDMA out
+#
+#   0. iDMA: the CONV_K input rows that the output row needs, CONV_WIN columns wide, in one 2-D
+#      transfer. At the top and bottom of the image the window is clamped inside it, and the rows
+#      outside it become zeros in the im2col.
+#   1. Spatz: the im2col block [CONV_CP x K*K*CIN], zero padding included.
+#   2. RedMulE: output block [CONV_CP x tile_c] = im2col block @ W block (MATMUL).
+#   3. iDMA: the output block back to L2.
+#
+# The last block of a row may be partial: it is computed whole, but only its pixels inside the
+# column block are stored.
+#
+# The test's gen_golden.py picks the blocking (CONV_CP, CONV_NB, CONV_WNB) for each mesh size, so
+# that the buffers fit in L1, and passes it as kernel arguments.
 
 from mgc import *
 

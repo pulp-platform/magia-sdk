@@ -4,12 +4,11 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# Output-static GEMM (Z = X @ W + Y) on the MAGIA mesh: the mgc version of tests/magia/mesh/mm_os_mglib.
-# Compile (the kernel, its header include/mgc_mm_os.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/mm_os/mm_os.mgc \
-#       --header tests/magia/mgc/mm_os_mgc/include/test.h \
-#       -o kernels/mgc_kernels/mm_os/src/mgc_mm_os.c \
-#       --test tests/magia/mgc/mm_os_mgc/src/test.c
+# Output-static GEMM on the MAGIA mesh:
+#
+#     Z = X @ W + Y
+#
+# The mgc version of tests/magia/mesh/mm_os_mglib.
 
 from mgc import *
 

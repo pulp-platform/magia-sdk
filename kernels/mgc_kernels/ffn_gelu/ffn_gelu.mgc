@@ -4,22 +4,36 @@
 #
 # Francesco Conti <f.conti@unibo.it>
 #
-# ViT FFN layer (GELU MLP, no biases) with the residual: Y = R + gelu(X @ W1) @ W2.
-# X is the input after the LayerNorm, R the residual stream before it. The LayerNorm itself is not part of the kernel.
-# As ffn_swiglu with a single up projection: two steps through L2, both output-static on RedMulE.
-# - H = gelu(X @ W1): tile (ii, jj) owns the block [tile_s x tile_i] of H, computed in chunks of FFN_CI columns
-#   (double-buffered in L1, accumulated over blocks of FFN_KB_E of E). The GELU of chunk c runs on Spatz, in place,
-#   while RedMulE computes chunk c + 1, and is stored while RedMulE runs the last jobs of chunk c + 1.
-# - Y = R + H @ W2: tile (ii, jj) owns the block [tile_s x tile_e] of Y, loaded with the residual and accumulated
-#   over blocks of FFN_KB_I of I.
-# Outer blocking: the FFN runs on FFN_NB blocks of FFN_SB = S / FFN_NB rows in turn (1 if they all fit).
-# FFN_NB, FFN_CI, FFN_KB_E and FFN_KB_I are chosen per mesh side by the test's gen_golden.py so that all the buffers
-# fit L1, and reach the kernel as arguments.
-# Compile (the kernel, its header include/mgc_ffn_gelu.h and its test) with
-#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/ffn_gelu/ffn_gelu.mgc \
-#       --header tests/magia/mgc/ffn_gelu/include/test.h \
-#       -o kernels/mgc_kernels/ffn_gelu/src/mgc_ffn_gelu.c \
-#       --test tests/magia/mgc/ffn_gelu/src/test.c
+# ViT FFN layer (GELU MLP, no biases), with the residual:
+#
+#     Y = R + gelu(X @ W1) @ W2
+#
+# X is the input after the LayerNorm, R the residual stream before it. The LayerNorm itself is not
+# part of the kernel.
+#
+# This is ffn_swiglu with a single up projection: two steps through L2, both output-static on
+# RedMulE.
+#
+# 1. H = gelu(X @ W1)
+#
+#    Tile (ii, jj) owns the block [tile_s x tile_i] of H. It computes it in chunks of FFN_CI
+#    columns, double-buffered in L1, with the reduction over E in blocks of FFN_KB_E. The chunks
+#    overlap:
+#
+#        RedMulE:   chunk c      chunk c+1
+#        Spatz:                  GELU of chunk c (in place)
+#        iDMA:                          store of chunk c (during the last jobs of chunk c+1)
+#
+# 2. Y = R + H @ W2
+#
+#    Tile (ii, jj) owns the block [tile_s x tile_e] of Y. It loads it with the residual, then
+#    accumulates onto it, with the reduction over I in blocks of FFN_KB_I.
+#
+# Outer blocking: the FFN runs on FFN_NB blocks of FFN_SB = S / FFN_NB rows, one after the other
+# (FFN_NB = 1 if they all fit).
+#
+# The test's gen_golden.py picks FFN_NB, FFN_CI, FFN_KB_E and FFN_KB_I for each mesh size, so that
+# the buffers fit in L1, and passes them as kernel arguments.
 
 from mgc import *
 
