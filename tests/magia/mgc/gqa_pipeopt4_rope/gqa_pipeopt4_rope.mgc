@@ -17,8 +17,8 @@
 # - the residual, added by the output projection accumulating on it (Y = R + O @ Wo).
 # X is the input after the RMSNorm, R the residual stream before it; the RMSNorm itself is not part of the test.
 # Compile with
-#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/gqa_pipeopt4_qwen2.5/gqa_pipeopt4_qwen2.5.mgc \
-#       -o tests/magia/mgc/gqa_pipeopt4_qwen2.5/src/test.c
+#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/gqa_pipeopt4_rope/gqa_pipeopt4_rope.mgc \
+#       -o tests/magia/mgc/gqa_pipeopt4_rope/src/test.c
 
 from mgc import *
 
@@ -111,7 +111,7 @@ spatz_bias_rope_kt_start = l1_kernel("l1_bias_rope_kt_start_fp16_spatz", operand
 spatz_wait = l1_kernel("l1_spatz_wait1", operands=("x:out",), params=(), executor=CORE)
 spatz_bias_v = l1_kernel("l1_bias_v_fp16_spatz", operands=("x:inout", "b:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
 
-@test("test_gqa_pipeopt4_qwen2.5", authors=["Francesco Conti <francesco.conti@chips.it>"])
+@test("test_gqa_pipeopt4_rope", authors=["Francesco Conti <francesco.conti@chips.it>"])
 def main():
 
     """

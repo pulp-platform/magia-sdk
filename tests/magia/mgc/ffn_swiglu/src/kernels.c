@@ -13,7 +13,7 @@
 #include "tile.h"
 #include "swiglu_fast_fp16_spatz_params.h"
 #include "eventunit.h"
-#include "ffn_qwen2_5_spatz_task_bin.h"
+#include "ffn_swiglu_spatz_task_bin.h"
 
 /* Per-tile flag: Spatz is set up on each tile before its first task. */
 static volatile uint8_t spatz_ready __attribute__((section(".tile_bss")));

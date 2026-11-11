@@ -6,15 +6,15 @@
 # Philip Wiese <wiesep@iis.ee.ethz.ch>
 # Alberto Dequino <alberto.dequino@unibo.it>
 
-set(TEST_NAME test_ffn_qwen2.5)
+set(TEST_NAME test_gqa_pipeopt4_rope)
 
 set(KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels)
 set(LOCAL_KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/kernels)
-# FP16 SwiGLU (Schraudolph exp) from this test's kernels/
-set(SPATZ_KERNELS)
-set(LOCAL_SPATZ_KERNELS swiglu_fast)
+# Generic kernels from kernels/, merged softmax and projection epilogue kernels from this test's kernels/
+set(SPATZ_KERNELS rowscale)
+set(LOCAL_SPATZ_KERNELS colmax colsum_rescale expminus_rowsum rowmax rowslice_sum_div bias_rope bias_rope_t)
 
-# All the Spatz kernels in one task binary -> ffn_qwen2_5_spatz_task_bin.h
+# All the Spatz kernels in one task binary -> gqa_pipeopt4_rope_spatz_task_bin.h
 set(SPATZ_TASK_SRCS)
 set(SPATZ_KERNEL_SRCS)
 set(SPATZ_KERNEL_INCS ${KERNELS_DIR}/common)
@@ -29,11 +29,14 @@ foreach(K ${LOCAL_SPATZ_KERNELS})
   list(APPEND SPATZ_KERNEL_INCS ${LOCAL_KERNELS_DIR}/${K}/fp16/spatz/include)
 endforeach()
 add_spatz_task(
-  TEST_NAME ffn_qwen2_5_spatz
+  TEST_NAME gqa_pipeopt4_rope_spatz
   TASK_SOURCES ${SPATZ_TASK_SRCS}
-  FIRST_TASK_NAME swiglu_fast_fp16_spatz_task
+  FIRST_TASK_NAME rowscale_fp16_spatz_task
   INCLUDE_DIRS ${SPATZ_KERNEL_INCS}
-  HOT_TASKS swiglu_fast_fp16_spatz_task
+  # Run on every K/V step, in this order
+  HOT_TASKS rowscale_fp16_spatz_task rowmax_fp16_spatz_task colmax_fp16_spatz_task
+            expminus_rowsum_fp16_spatz_task colsum_rescale_fp16_spatz_task
+            rowslice_sum_div_fp16_spatz_task
 )
 
 # Each kernel source includes its own <kernel>_task_bin.h: point them all to the shared header,
@@ -41,16 +44,16 @@ add_spatz_task(
 set(SPATZ_SHIM_DIR ${CMAKE_CURRENT_BINARY_DIR}/spatz_shim)
 foreach(K ${SPATZ_KERNELS} ${LOCAL_SPATZ_KERNELS})
   file(WRITE ${SPATZ_SHIM_DIR}/${K}_fp16_spatz_task_bin.h
-       "#define SPATZ_BINARY_NO_DEFINE\n#include \"ffn_qwen2_5_spatz_task_bin.h\"\n")
+       "#define SPATZ_BINARY_NO_DEFINE\n#include \"gqa_pipeopt4_rope_spatz_task_bin.h\"\n")
 endforeach()
-get_filename_component(SPATZ_HEADER_DIR ${ffn_qwen2_5_spatz_SPATZ_HEADER} DIRECTORY)
+get_filename_component(SPATZ_HEADER_DIR ${gqa_pipeopt4_rope_spatz_SPATZ_HEADER} DIRECTORY)
 
 file(GLOB_RECURSE TEST_SRCS
   "src/*.c"
 )
 
 add_executable(${TEST_NAME} ${TEST_SRCS} ${SPATZ_KERNEL_SRCS})
-add_dependencies(${TEST_NAME} ${ffn_qwen2_5_spatz_SPATZ_TARGET})
+add_dependencies(${TEST_NAME} ${gqa_pipeopt4_rope_spatz_SPATZ_TARGET})
 # Spatz boots from spatz_init.bin (as in add_cv32_executable_with_spatz)
 if(TARGET spatz_bootrom)
   add_dependencies(${TEST_NAME} spatz_bootrom)

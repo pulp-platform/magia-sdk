@@ -22,7 +22,7 @@
 #include "rowscale_fp16_spatz_params.h"
 #include "rowslice_sum_div_fp16_spatz_params.h"
 #include "eventunit.h"
-#include "gqa_pipeopt4_qwen2_5_spatz_task_bin.h"
+#include "gqa_pipeopt4_rope_spatz_task_bin.h"
 
 /* Per-tile flag: Spatz is set up on each tile before its first task. */
 static volatile uint8_t spatz_ready __attribute__((section(".tile_bss")));

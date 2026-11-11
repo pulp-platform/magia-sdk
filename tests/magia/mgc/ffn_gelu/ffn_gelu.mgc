@@ -4,7 +4,7 @@
 #
 # ViT FFN layer (GELU MLP, no biases) with the residual: Y = R + gelu(X @ W1) @ W2.
 # X is the input after the LayerNorm, R the residual stream before it; the LayerNorm itself is not part of the test.
-# As ffn_qwen2.5 with a single up projection, two steps through L2, both output-static on RedMulE:
+# As ffn_swiglu with a single up projection, two steps through L2, both output-static on RedMulE:
 # - H = gelu(X @ W1): tile (ii, jj) owns the block [tile_s x tile_i] of H, computed in chunks of FFN_CI columns
 #   (double-buffered in L1, accumulated over blocks of FFN_KB_E of E); the GELU of chunk c runs on Spatz, in place,
 #   while RedMulE computes chunk c + 1, and is stored while RedMulE runs the last jobs of chunk c + 1;

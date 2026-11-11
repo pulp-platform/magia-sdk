@@ -13,8 +13,8 @@
 #   over blocks of FFN_KB_I of I.
 # FFN_CI, FFN_KB_E and FFN_KB_I are chosen per mesh side by gen_golden.py so that all the buffers fit L1.
 # Compile with
-#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/ffn_qwen2.5/ffn_qwen2.5.mgc \
-#       -o tests/magia/mgc/ffn_qwen2.5/src/test.c
+#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/ffn_swiglu/ffn_swiglu.mgc \
+#       -o tests/magia/mgc/ffn_swiglu/src/test.c
 
 from mgc import *
 
@@ -37,7 +37,7 @@ spatz_swiglu_start = l1_kernel("l1_swiglu_start_fp16_spatz", operands=("g:inout"
                                executor=CORE)
 spatz_wait = l1_kernel("l1_spatz_wait1", operands=("x:out",), params=(), executor=CORE)
 
-@test("test_ffn_qwen2.5", authors=["Francesco Conti <francesco.conti@chips.it>"])
+@test("test_ffn_swiglu", authors=["Francesco Conti <francesco.conti@chips.it>"])
 def main():
 
     """
