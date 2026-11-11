@@ -8,7 +8,7 @@
 
 set(TEST_NAME test_flat_attn_naive)
 set(MGC_KERNEL flat_attn_naive)
-set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc/${MGC_KERNEL})
+set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc_kernels/${MGC_KERNEL})
 
 set(KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels)
 set(SPATZ_KERNELS add exp expminus max memset mul mul_broadcast reducemax reducesum rowdiv rowscale sub)

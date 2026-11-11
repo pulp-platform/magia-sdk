@@ -1,0 +1,134 @@
+# Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Qwen2.5 FFN layer (SwiGLU MLP, no biases) with the residual: Y = R + (silu(X @ Wg) * (X @ Wu)) @ Wd.
+# X is the input after the RMSNorm, R the residual stream before it. The RMSNorm itself is not part of the kernel.
+# Two steps through L2, both output-static on RedMulE:
+# - H = silu(X @ Wg) * (X @ Wu): tile (ii, jj) owns the block [tile_s x tile_i] of H, computed in chunks of FFN_CI
+#   columns (G and U chunks double-buffered in L1, accumulated over blocks of FFN_KB_E of E). The SwiGLU of chunk c
+#   runs on Spatz, in place, while RedMulE computes chunk c + 1, and is stored while RedMulE runs the last jobs of
+#   chunk c + 1.
+# - Y = R + H @ Wd: tile (ii, jj) owns the block [tile_s x tile_e] of Y, loaded with the residual and accumulated
+#   over blocks of FFN_KB_I of I.
+# FFN_CI, FFN_KB_E and FFN_KB_I are chosen per mesh side by the test's gen_golden.py so that all the buffers fit L1,
+# and reach the kernel as arguments.
+# Compile (the kernel, its header include/mgc_ffn_swiglu.h and its test) with
+#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/ffn_swiglu/ffn_swiglu.mgc \
+#       --header tests/magia/mgc/ffn_swiglu/include/test.h \
+#       -o kernels/mgc_kernels/ffn_swiglu/src/mgc_ffn_swiglu.c \
+#       --test tests/magia/mgc/ffn_swiglu/src/test.c
+
+from mgc import *
+
+S, E, I, CI, KB_E, KB_I = sizes("SEQ_LENGTH", "EMBED_SIZE", "FFN_SIZE", "FFN_CI", "FFN_KB_E", "FFN_KB_I")  # kernel arguments
+x_   = l2("x_inp",   (S, E), fp16)
+wg_  = l2("wg_inp",  (E, I), fp16)
+wu_  = l2("wu_inp",  (E, I), fp16)
+wd_  = l2("wd_inp",  (I, E), fp16)
+res_ = l2("res_inp", (S, E), fp16)  # residual
+h_   = l2("h_l2",    (S, I), fp16)  # intermediate
+y_   = l2("y_out",   (S, E), fp16)
+y_gold = l2("y_gold", (S, E), fp16)  # golden
+
+WAIT_MODE = define(WFE)
+
+# Implemented in src/kernels.c, on the tile's CV32 core:
+# spatz_swiglu_start starts g = silu(g) * u, element-wise and in place, on Spatz (kernels/swiglu_fast: Schraudolph
+# exp and division in FP16) and returns; spatz_wait(g) waits for it
+spatz_swiglu_start = l1_kernel("l1_swiglu_start_fp16_spatz", operands=("g:inout", "u:in"), params=("g.size",),
+                               executor=CORE)
+spatz_wait = l1_kernel("l1_spatz_wait1", operands=("x:out",), params=(), executor=CORE)
+
+@kernel("mgc_ffn_swiglu", check=(y_, y_gold), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+def ffn_swiglu():
+
+    """
+    Qwen2.5 FFN with the residual, Y = R + (silu(X @ Wg) * (X @ Wu)) @ Wd, in two steps through L2:
+    1. H = silu(X @ Wg) * (X @ Wu) in chunks of columns: output-static on RedMulE (G and U chunks resident in L1,
+       blocks of E streamed), then SwiGLU on Spatz, overlapped with the next chunk;
+    2. Y = R + H @ Wd, output-static, accumulating on R.
+    """
+    for ii, jj in tiles():
+
+        tile_s = ii.split(S)
+        tile_i = jj.split(I)
+        tile_e = jj.split(E)
+
+        # step 1: chunk [tile_s x FFN_CI] of G and U, double-buffered across the chunks, accumulated over
+        # X [tile_s x FFN_KB_E], Wg and Wu [FFN_KB_E x FFN_CI] streamed
+        xg = L1.multi_buffer(x_[tile_s, 0:KB_E])
+        wg = L1.multi_buffer(wg_[0:KB_E, 0:CI])
+        wu = L1.multi_buffer(wu_[0:KB_E, 0:CI])
+        yg = L1.multi_buffer(h_[tile_s, 0:CI], depth=2)
+        yu = L1.multi_buffer((tile_s, CI), fp16, depth=2)
+
+        # step 2: block [tile_s x tile_e] of Y, accumulated over H [tile_s x FFN_KB_I], Wd [FFN_KB_I x tile_e]
+        xd = L1.multi_buffer(h_[tile_s, 0:KB_I])
+        wd = L1.multi_buffer(wd_[0:KB_I, tile_e])
+        yo = L1.single_buffer(y_[tile_s, tile_e])
+
+        sync(GLOBAL)
+
+        """
+        STEP 1: H = silu(X @ Wg) * (X @ Wu), one chunk of FFN_CI columns at a time. In each chunk, blocks k of X, Wg
+        and Wu load while RedMulE accumulates block k - 1. The SwiGLU of chunk c - 1 runs on Spatz during chunk c, and
+        its store is issued once RedMulE has the last jobs of chunk c.
+        """
+
+        n_kb_e: u16 = E // KB_E
+        n_ci: u16 = tile_i.size // CI
+        ev_g = redmule.events()
+        ev_u = redmule.events()
+        for c in range(n_ci):
+            i0: u32 = tile_i.start + c * CI
+            for k in pipeline(n_kb_e):
+                with stage(0):
+                    k0: u16 = k * KB_E
+                    ex  = idma.load(xg[k], x_[tile_s, k0:k0 + KB_E])
+                    ewg = idma.load(wg[k], wg_[k0:k0 + KB_E, i0:i0 + CI])
+                    ewu = idma.load(wu[k], wu_[k0:k0 + KB_E, i0:i0 + CI])
+                with stage(1):
+                    ev_g[k].wait()
+                with stage(0):
+                    redmule.enqueue(xg[k], wg[k], yg[c], op=GEMM, event=ev_g[k], uninit=k == 0)
+                    ex.wait()
+                    ewg.wait()
+                    ewu.wait()
+                    redmule.commit_start()
+                with stage(1):
+                    ev_u[k].wait()
+                with stage(0):
+                    redmule.enqueue(xg[k], wu[k], yu[c], op=GEMM, event=ev_u[k], uninit=k == 0)
+                    redmule.commit_start()
+                    # store H chunk c - 1 once Spatz is done with it, while RedMulE runs the last jobs of chunk c
+                    if k == n_kb_e - 1:
+                        if c > 0:
+                            spatz_wait(yg[c - 1])
+                            idma.store(h_[tile_s, i0 - CI:i0], yg[c - 1]).wait()
+            spatz_swiglu_start(yg[c], yu[c])
+            if c == n_ci - 1:
+                spatz_wait(yg[c])
+                idma.store(h_[tile_s, i0:i0 + CI], yg[c]).wait()
+
+        # H complete in L2
+        sync(GLOBAL)
+
+        """
+        STEP 2: Y = R + H @ Wd, block k of H, Wd loading while RedMulE accumulates block k - 1
+        """
+
+        idma.load(yo, res_[tile_s, tile_e]).wait()
+        n_kb_i: u16 = I // KB_I
+        for k in pipeline(n_kb_i):
+            with stage(0):
+                k0: u16 = k * KB_I
+                ex = idma.load(xd[k], h_[tile_s, k0:k0 + KB_I])
+                ew = idma.load(wd[k], wd_[k0:k0 + KB_I, tile_e])
+                jd = redmule.enqueue(xd[k], wd[k], yo, op=GEMM)
+                ex.wait()
+                ew.wait()
+                redmule.commit_start()
+            with stage(1):
+                jd.wait()
+        idma.store(y_[tile_s, tile_e], yo).wait()

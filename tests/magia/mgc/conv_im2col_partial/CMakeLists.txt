@@ -8,7 +8,7 @@
 
 set(TEST_NAME test_conv_im2col_partial)
 set(MGC_KERNEL conv_im2col_partial)
-set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc/${MGC_KERNEL})
+set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc_kernels/${MGC_KERNEL})
 
 file(GLOB_RECURSE TEST_SRCS
   "src/*.c"

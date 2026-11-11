@@ -9,7 +9,7 @@
 set(TEST_NAME test_mm_ws_mgc)
 set(MGC_KERNEL mm_ws)
 
-set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc/${MGC_KERNEL})
+set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc_kernels/${MGC_KERNEL})
 file(GLOB_RECURSE TEST_SRCS
   "src/*.c"
   "${MGC_KERNEL_DIR}/src/*.c"

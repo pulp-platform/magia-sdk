@@ -8,7 +8,7 @@
 
 set(TEST_NAME test_mhsa_pipeopt4_masked)
 set(MGC_KERNEL mhsa_pipeopt4_masked)
-set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc/${MGC_KERNEL})
+set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc_kernels/${MGC_KERNEL})
 
 set(KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels)
 # Spatz kernels from kernels/

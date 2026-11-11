@@ -8,7 +8,7 @@
 
 set(TEST_NAME test_ffn_gelu)
 set(MGC_KERNEL ffn_gelu)
-set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc/${MGC_KERNEL})
+set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc_kernels/${MGC_KERNEL})
 
 set(KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels)
 # FP16 GELU (tanh form, Schraudolph exp) from kernels/

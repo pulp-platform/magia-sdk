@@ -4,7 +4,7 @@
 
 set(TEST_NAME test_unfused_attn)
 set(MGC_KERNEL unfused_attn)
-set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc/${MGC_KERNEL})
+set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc_kernels/${MGC_KERNEL})
 
 set(KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels)
 set(SOFTMAX_DIR ${KERNELS_DIR}/softmax_rows/fp16/spatz)
