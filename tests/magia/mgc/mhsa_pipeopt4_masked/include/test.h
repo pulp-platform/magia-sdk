@@ -12,6 +12,8 @@
 #define SEQ_LENGTH (1024)
 #define EMBED_SIZE (128)
 #define PROJ_SIZE  (64)
+// fp16 bits of 1 / sqrt(PROJ_SIZE)
+#define QK_SCALE_FP16 (12288)
 #define NUM_HEADS  (2)
 
 #define L2EXT

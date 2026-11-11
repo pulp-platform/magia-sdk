@@ -175,6 +175,7 @@ with open(os.path.join(args.inc_dir, 'test.h'), 'w') as f:
     f.write('#define SEQ_LENGTH (%d)\n' % s_size)
     f.write('#define EMBED_SIZE (%d)\n' % e_size)
     f.write('#define PROJ_SIZE  (%d)\n' % p_size)
+    f.write('// fp16 bits of 1 / sqrt(PROJ_SIZE)\n#define QK_SCALE_FP16 (%d)\n' % np.float16(np.float32(1) / np.sqrt(np.float32(p_size))).view(np.uint16))
     f.write('#define NUM_HEADS  (%d)\n' % n_heads)
     f.write('\n')
     if l2ext:

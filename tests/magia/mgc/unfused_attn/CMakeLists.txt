@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set(TEST_NAME test_unfused_attn)
+set(MGC_KERNEL unfused_attn)
+set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc/${MGC_KERNEL})
 
 set(KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels)
 set(SOFTMAX_DIR ${KERNELS_DIR}/softmax_rows/fp16/spatz)
@@ -19,6 +21,7 @@ get_filename_component(SPATZ_HEADER_DIR ${unfused_attn_spatz_SPATZ_HEADER} DIREC
 
 file(GLOB_RECURSE TEST_SRCS
   "src/*.c"
+  "${MGC_KERNEL_DIR}/src/*.c"
 )
 
 add_executable(${TEST_NAME} ${TEST_SRCS})
@@ -27,7 +30,7 @@ add_dependencies(${TEST_NAME} ${unfused_attn_spatz_SPATZ_TARGET})
 if(TARGET spatz_bootrom)
   add_dependencies(${TEST_NAME} spatz_bootrom)
 endif()
-target_include_directories(${TEST_NAME} PUBLIC include)
+target_include_directories(${TEST_NAME} PUBLIC include ${MGC_KERNEL_DIR}/include)
 target_include_directories(${TEST_NAME} PRIVATE ${SPATZ_KERNEL_INCS} ${SPATZ_HEADER_DIR})
 
 target_compile_options(${TEST_NAME}

@@ -93,7 +93,8 @@ with open(os.path.join(inc_path, 'test.h'), 'w') as f:
             % (s_size, p_size, r, args.seed, s_size, p_size, s_size, p_size, p_size, s_size,
                p_size, s_size, p_size))
     f.write('#ifndef _TEST_UNFUSED_ATTN_INCLUDE_GUARD_\n#define _TEST_UNFUSED_ATTN_INCLUDE_GUARD_\n\n')
-    f.write('#define SEQ_LENGTH (%d)\n#define PROJ_SIZE  (%d)\n\n' % (s_size, p_size))
+    f.write('#define SEQ_LENGTH (%d)\n#define PROJ_SIZE  (%d)\n' % (s_size, p_size))
+    f.write('// fp16 bits of 1 / sqrt(PROJ_SIZE)\n#define QK_SCALE_FP16 (%d)\n\n' % np.float16(np.float32(1) / np.sqrt(np.float32(p_size))).view(np.uint16))
     write_fp16_array(f, 'q_inp [SEQ_LENGTH * PROJ_SIZE]', Q)
     write_fp16_array(f, 'k_inp [SEQ_LENGTH * PROJ_SIZE]', Kt)
     write_fp16_array(f, 'v_inp [SEQ_LENGTH * PROJ_SIZE]', V)

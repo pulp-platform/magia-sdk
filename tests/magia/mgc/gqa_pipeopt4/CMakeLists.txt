@@ -7,6 +7,8 @@
 # Alberto Dequino <alberto.dequino@unibo.it>
 
 set(TEST_NAME test_gqa_pipeopt4)
+set(MGC_KERNEL gqa_pipeopt4)
+set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc/${MGC_KERNEL})
 
 set(KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels)
 # Spatz kernels from kernels/
@@ -43,6 +45,7 @@ get_filename_component(SPATZ_HEADER_DIR ${gqa_pipeopt4_spatz_SPATZ_HEADER} DIREC
 
 file(GLOB_RECURSE TEST_SRCS
   "src/*.c"
+  "${MGC_KERNEL_DIR}/src/*.c"
 )
 
 add_executable(${TEST_NAME} ${TEST_SRCS} ${SPATZ_KERNEL_SRCS})
@@ -51,7 +54,7 @@ add_dependencies(${TEST_NAME} ${gqa_pipeopt4_spatz_SPATZ_TARGET})
 if(TARGET spatz_bootrom)
   add_dependencies(${TEST_NAME} spatz_bootrom)
 endif()
-target_include_directories(${TEST_NAME} PUBLIC include)
+target_include_directories(${TEST_NAME} PUBLIC include ${MGC_KERNEL_DIR}/include)
 target_include_directories(${TEST_NAME} PRIVATE ${SPATZ_KERNEL_INCS} ${SPATZ_HEADER_DIR})
 set_source_files_properties(${SPATZ_KERNEL_SRCS} PROPERTIES INCLUDE_DIRECTORIES ${SPATZ_SHIM_DIR})
 
