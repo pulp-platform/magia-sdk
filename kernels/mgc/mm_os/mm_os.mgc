@@ -2,11 +2,9 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Same test as mm_os.mgc, written with the explicit (low-level) schedule instead
-# of pipeline(): prologue, multi-buffer slots, event rotation and the placement of
-# the RedMulE enqueue / commit_start / wait steps are spelled out by hand. It
-# compiles to the same C as mm_os.mgc, comments aside (compare with
-# `mgcc.py mm_os.mgc --print-ir-after=pipeline`).
+# Output-static GEMM (Z = X @ W + Y) on the MAGIA mesh: the mgc version of
+# tests/magia/mesh/mm_os_mglib. Compile with
+#   python mgc/mgcc.py tests/magia/mgc/mm_os_mgc/mm_os.mgc -o tests/magia/mgc/mm_os_mgc/src/test.c
 
 from mgc import *
 
@@ -25,8 +23,8 @@ M_BLK = define("(M_SIZE / M_NB)")
 WAIT_MODE = define(WFE)
 
 
-@test("test_mm_os_mgc", authors=["Francesco Conti <f.conti@unibo.it>"])
-def main():
+@kernel("mgc_mm_os", check=(Y, Z), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+def mm_os():
     """
     This test aims to verify the functionality of MAGIA as a systolic array for matrix
     multiplications, following the output-static mechanism. It is the mgc version of the
@@ -66,14 +64,14 @@ def main():
             y = L1.single_buffer(Y[tile_h, tile_w])
 
             """
-            2a. Input data-tile multi-buffer (double buffered over the timeslots).
+            2a. Input data-tile multi-buffer (triple buffered over the timeslots).
             """
-            x = L1.multi_buffer(X[tile_h, 0:t_size], depth=2)
+            x = L1.multi_buffer(X[tile_h, 0:t_size], depth=3)
 
             """
-            2b. Weight data-tile multi-buffer (double buffered over the timeslots).
+            2b. Weight data-tile multi-buffer (triple buffered over the timeslots).
             """
-            w = L1.multi_buffer(W[0:t_size, tile_w], depth=2)
+            w = L1.multi_buffer(W[0:t_size, tile_w], depth=3)
             redmule_evt = redmule.events(2)
 
             """
@@ -85,51 +83,29 @@ def main():
                 the operands of timeslot i+1 are prefetched while RedMulE computes timeslot i.
                 """
                 ey = idma.load(y, Y[m0:m0 + tile_h.size, tile_w])
-                ex = idma.load(x[0], X[m0:m0 + tile_h.size, 0:t_size])
-                ew = idma.load(w[0], W[0:t_size, tile_w])
-                # program the first job while its operands are loaded, start it once they have landed
-                redmule.enqueue(x[0], w[0], y, op=GEMM, event=redmule_evt[0])
-                ex.wait()
-                ew.wait()
-                ey.wait()
-                redmule.commit_start()
-
-                """
-                4. Cycle over the timeslots.
-                For each timeslot, the mesh-tile will:
-                a - Load the weight and input data-tile for the next timeslot (if there is one)
-                b - Multiply and add
-                Synchronization is not required.
-                We parallelize the IDMA with Redmule: the job is programmed while its operands
-                are loaded, committed once they have landed, and waited one step later.
-                """
-                for i in range(timeslots):
-                    if i < timeslots - 1:
-                        # prefetch the operands of the next iteration and program its job meanwhile
-                        ex = idma.load(x[i + 1], X[m0:m0 + tile_h.size, (i + 1) * t_size:(i + 2) * t_size])
-                        ew = idma.load(w[i + 1], W[(i + 1) * t_size:(i + 2) * t_size, tile_w])
-                        redmule.enqueue(x[i + 1], w[i + 1], y, op=GEMM, event=redmule_evt[i + 1])
-                        # commit & start the next job once its operands have landed: it runs
-                        # behind the current one
+                for i in pipeline(timeslots):
+                    """
+                    4. Cycle over the timeslots.
+                    For each timeslot, the mesh-tile will:
+                    a - Load the weight and input data-tile for the next timeslot (if there is one)
+                    b - Multiply and add
+                    Synchronization is not required.
+                    We parallelize the IDMA with Redmule: the operands are loaded one step ahead
+                    (stage 0), queued in the iDMA while the previous jobs run; the job is programmed,
+                    committed once they have landed (stage 1), and waited one step later (stage 2).
+                    """
+                    with stage(0):
+                        ex = idma.load(x[i], X[m0:m0 + tile_h.size, i * t_size:(i + 1) * t_size])
+                        ew = idma.load(w[i], W[i * t_size:(i + 1) * t_size, tile_w])
+                    with stage(1):
+                        redmule.enqueue(x[i], w[i], y, op=GEMM, event=redmule_evt[i])
                         ex.wait()
                         ew.wait()
                         redmule.commit_start()
-                        # wait for the current job
-                        redmule_evt[i].wait()
-                    else:
-                        # last iteration: nothing to prefetch
+                    with stage(2):
                         redmule_evt[i].wait()
 
                 """
                 5. Store the output data-tile back to L2
                 """
                 idma.store(Y[m0:m0 + tile_h.size, tile_w], y).wait()
-
-        """
-        6. Check results: the whole output on tile (0, 0), once every tile has written its blocks (after the blocks, so
-        that the check is not inside the measured window)
-        """
-        sync(GLOBAL)
-        if y_id == 0:
-            if x_id == 0:
-                check(Y[:, :], Z[:, :], tol=0x11)

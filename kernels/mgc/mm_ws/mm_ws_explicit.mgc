@@ -18,8 +18,8 @@ N_ITERATIONS = define(1)
 WAIT_MODE = define(WFE)
 
 
-@test("test_mm_ws_mgc", authors=["Francesco Conti <f.conti@unibo.it>"])
-def main():
+@kernel("mgc_mm_ws", check=(Y, Z), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+def mm_ws():
     """
     This test aims to verify the functionality of MAGIA as a systolic array for matrix
     multiplications, following the weight-static mechanism (explicit mgc schedule).
@@ -121,10 +121,3 @@ def main():
                 """
                 pt = pt + 1
                 sync(GLOBAL)
-
-        """
-        5. Check results
-        """
-        sync(COL)
-        if y_id == MESH_Y_TILES - 1:
-            check(Y[:, tile_w], Z[:, tile_w], tol=0x11)

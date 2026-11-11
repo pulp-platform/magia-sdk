@@ -19,8 +19,8 @@ N_TIMESLOTS = define(8)
 WAIT_MODE = define(WFE)
 
 
-@test("test_mm_matmul_mgc", authors=["Francesco Conti <f.conti@unibo.it>"])
-def main():
+@kernel("mgc_mm_matmul", check=(Y, Z), authors=["Francesco Conti <f.conti@unibo.it>"])
+def mm_matmul():
     """
     This test verifies MATMUL (no accumulation) on MAGIA, following the output-static
     mechanism of mm_os_mgc without the bias: the output tile is never loaded, so the
@@ -65,4 +65,3 @@ def main():
         4. Store the output data-tile back to L2 and check it
         """
         idma.store(Y[tile_h, tile_w], y).wait()
-        check(Y[tile_h, tile_w], Z[tile_h, tile_w])

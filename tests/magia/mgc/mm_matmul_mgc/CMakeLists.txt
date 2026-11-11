@@ -5,13 +5,16 @@
 # Francesco Conti <f.conti@unibo.it>
 
 set(TEST_NAME test_mm_matmul_mgc)
+set(MGC_KERNEL mm_matmul)
 
+set(MGC_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels/mgc/${MGC_KERNEL})
 file(GLOB_RECURSE TEST_SRCS
   "src/*.c"
+  "${MGC_KERNEL_DIR}/src/*.c"
 )
 
 add_executable(${TEST_NAME} ${TEST_SRCS})
-target_include_directories(${TEST_NAME} PUBLIC include)
+target_include_directories(${TEST_NAME} PUBLIC include ${MGC_KERNEL_DIR}/include)
 
 target_compile_options(${TEST_NAME}
   PRIVATE
