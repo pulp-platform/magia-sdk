@@ -9,10 +9,8 @@
 set(TEST_NAME test_gqa_pipeopt4)
 
 set(KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels)
-set(LOCAL_KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/kernels)
-# Generic kernels from kernels/, merged softmax kernels from this test's kernels/
-set(SPATZ_KERNELS rowscale)
-set(LOCAL_SPATZ_KERNELS colmax colsum_rescale expminus_rowsum rowmax rowslice_sum_div)
+# Spatz kernels from kernels/
+set(SPATZ_KERNELS rowscale colmax colsum_rescale expminus_rowsum rowmax rowslice_sum_div)
 
 # All the Spatz kernels in one task binary -> gqa_pipeopt4_spatz_task_bin.h
 set(SPATZ_TASK_SRCS)
@@ -22,11 +20,6 @@ foreach(K ${SPATZ_KERNELS})
   list(APPEND SPATZ_TASK_SRCS ${KERNELS_DIR}/${K}/fp16/spatz/spatz_task/${K}_fp16_spatz_task.c)
   list(APPEND SPATZ_KERNEL_SRCS ${KERNELS_DIR}/${K}/fp16/spatz/src/${K}_fp16_spatz.c)
   list(APPEND SPATZ_KERNEL_INCS ${KERNELS_DIR}/${K}/fp16/spatz/include)
-endforeach()
-foreach(K ${LOCAL_SPATZ_KERNELS})
-  list(APPEND SPATZ_TASK_SRCS ${LOCAL_KERNELS_DIR}/${K}/fp16/spatz/spatz_task/${K}_fp16_spatz_task.c)
-  list(APPEND SPATZ_KERNEL_SRCS ${LOCAL_KERNELS_DIR}/${K}/fp16/spatz/src/${K}_fp16_spatz.c)
-  list(APPEND SPATZ_KERNEL_INCS ${LOCAL_KERNELS_DIR}/${K}/fp16/spatz/include)
 endforeach()
 add_spatz_task(
   TEST_NAME gqa_pipeopt4_spatz
@@ -42,7 +35,7 @@ add_spatz_task(
 # Each kernel source includes its own <kernel>_task_bin.h: point them all to the shared header,
 # without redefining the binary array (defined once, in src/kernels.c).
 set(SPATZ_SHIM_DIR ${CMAKE_CURRENT_BINARY_DIR}/spatz_shim)
-foreach(K ${SPATZ_KERNELS} ${LOCAL_SPATZ_KERNELS})
+foreach(K ${SPATZ_KERNELS})
   file(WRITE ${SPATZ_SHIM_DIR}/${K}_fp16_spatz_task_bin.h
        "#define SPATZ_BINARY_NO_DEFINE\n#include \"gqa_pipeopt4_spatz_task_bin.h\"\n")
 endforeach()

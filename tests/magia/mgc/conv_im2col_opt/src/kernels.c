@@ -11,7 +11,7 @@
 
 #include "test.h"
 #include "tile.h"
-#include "im2col_fp16_spatz_params.h"
+#include "im2col_opt_fp16_spatz_params.h"
 #include "eventunit.h"
 #include "mg_idma.h"
 #include "conv_im2col_opt_spatz_task_bin.h"
@@ -21,7 +21,7 @@ static volatile uint8_t spatz_ready __attribute__((section(".tile_bss")));
 
 /* Per-tile Spatz task parameters, preallocated in the per-tile L1. */
 static struct {
-    im2col_fp16_spatz_params_t im2col;
+    im2col_opt_fp16_spatz_params_t im2col;
 } spatz_params __attribute__((section(".tile_bss")));
 
 /* The tiles of a mesh row share the im2col: each builds CONV_CP / MESH_X_TILES pixels of the block and multicasts
@@ -77,7 +77,7 @@ static inline void spatz_launch(uint32_t task, void *params)
  */
 void l1_im2col_start_fp16_spatz(uint32_t col, uint32_t x, uint32_t row, uint32_t x0)
 {
-    im2col_fp16_spatz_params_t *p = &spatz_params.im2col;
+    im2col_opt_fp16_spatz_params_t *p = &spatz_params.im2col;
     uint32_t lo, wx, left;
 
     /* the input window of the W block of x0 (CONV_WB output columns): the input columns of their patches, from
@@ -123,7 +123,7 @@ void l1_im2col_start_fp16_spatz(uint32_t col, uint32_t x, uint32_t row, uint32_t
             return;
     }
 #endif
-    spatz_launch(IM2COL_FP16_SPATZ_TASK, p);
+    spatz_launch(IM2COL_OPT_FP16_SPATZ_TASK, p);
 }
 
 /**
@@ -136,7 +136,7 @@ void l1_im2col_start_fp16_spatz(uint32_t col, uint32_t x, uint32_t row, uint32_t
 void l1_im2col_wait(uint32_t col)
 {
 #if OPT_SHARE
-    im2col_fp16_spatz_params_t *p = &spatz_params.im2col;
+    im2col_opt_fp16_spatz_params_t *p = &spatz_params.im2col;
     mg_event_t ev;
 
     uint32_t nb_chunks = (share_n + SHARE_CHUNK - 1) / SHARE_CHUNK;
@@ -155,7 +155,7 @@ void l1_im2col_wait(uint32_t col)
             p->dst = share_part + next * CONV_KKC * 2;
             p->x0  = share_x0 + next;
             p->cp  = share_n - next < SHARE_CHUNK ? share_n - next : SHARE_CHUNK;
-            spatz_launch(IM2COL_FP16_SPATZ_TASK, p);
+            spatz_launch(IM2COL_OPT_FP16_SPATZ_TASK, p);
         }
         /* same-direction iDMA jobs complete in order: waiting for the last one waits for all of them */
         mg_idma_mcast_row(WFE, 1, addr, addr, n * CONV_KKC * 2, &ev, NULL);

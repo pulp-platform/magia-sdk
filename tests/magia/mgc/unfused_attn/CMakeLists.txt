@@ -5,7 +5,7 @@
 set(TEST_NAME test_unfused_attn)
 
 set(KERNELS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../kernels)
-set(SOFTMAX_DIR ${CMAKE_CURRENT_SOURCE_DIR}/kernels/softmax_rows/fp16/spatz)
+set(SOFTMAX_DIR ${KERNELS_DIR}/softmax_rows/fp16/spatz)
 set(SPATZ_KERNEL_INCS ${KERNELS_DIR}/common ${SOFTMAX_DIR}/include)
 
 # The row softmax kernel -> unfused_attn_spatz_task_bin.h
