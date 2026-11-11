@@ -2,6 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
+# Francesco Conti <f.conti@unibo.it>
+#
 # Output-static MATMUL (Z = X @ W, no bias) on the MAGIA mesh.
 # Compile (the kernel, its header include/mgc_mm_matmul.h and its test) with
 #   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/mm_matmul/mm_matmul.mgc \
@@ -21,7 +23,7 @@ N_TIMESLOTS = define(8)
 WAIT_MODE = define(WFE)
 
 
-@kernel("mgc_mm_matmul", check=(Y, Z), authors=["Francesco Conti <f.conti@unibo.it>"])
+@kernel("mgc_mm_matmul", check=(Y, Z))
 def mm_matmul():
     """
     MATMUL (no accumulation) kernel, output-static without bias: the output tile is never loaded, so the

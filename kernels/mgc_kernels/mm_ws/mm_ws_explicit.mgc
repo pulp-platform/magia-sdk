@@ -2,6 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
+# Francesco Conti <f.conti@unibo.it>
+#
 # Weight-static GEMM (Z = X @ W + Y) on the MAGIA mesh, explicit schedule: a statement-by-statement
 # mgc rendering of the schedule of tests/magia/mesh/mm_ws_2. No test builds it (mgc/tests/test_mgc.py only checks
 # that it compiles); the mm_ws_mgc test uses the pipelined version, mm_ws.mgc.
@@ -18,7 +20,7 @@ N_ITERATIONS = define(1)
 WAIT_MODE = define(WFE)
 
 
-@kernel("mgc_mm_ws", check=(Y, Z), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+@kernel("mgc_mm_ws", check=(Y, Z), tol=0x11)
 def mm_ws():
     """
     Weight-static matrix multiplication on MAGIA used as a systolic array, with an explicit schedule.

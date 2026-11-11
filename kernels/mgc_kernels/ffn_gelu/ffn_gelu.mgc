@@ -2,6 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
+# Francesco Conti <f.conti@unibo.it>
+#
 # ViT FFN layer (GELU MLP, no biases) with the residual: Y = R + gelu(X @ W1) @ W2.
 # X is the input after the LayerNorm, R the residual stream before it. The LayerNorm itself is not part of the kernel.
 # As ffn_swiglu with a single up projection: two steps through L2, both output-static on RedMulE.
@@ -39,7 +41,7 @@ WAIT_MODE = define(WFE)
 spatz_gelu_start = l1_kernel("l1_gelu_start_fp16_spatz", operands=("x:inout",), params=("x.size",), executor=CORE)
 spatz_wait = l1_kernel("l1_spatz_wait1", operands=("x:out",), params=(), executor=CORE)
 
-@kernel("mgc_ffn_gelu", check=(y_, y_gold), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+@kernel("mgc_ffn_gelu", check=(y_, y_gold), tol=0x11)
 def ffn_gelu():
 
     """

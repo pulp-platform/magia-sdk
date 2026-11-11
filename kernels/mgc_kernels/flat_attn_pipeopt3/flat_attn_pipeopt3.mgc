@@ -2,6 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
+# Francesco Conti <f.conti@unibo.it>
+#
 # Flat-Attention kernel: flat_attn_pipeopt2 with the exp and row sum of the softmax started on Spatz without
 # waiting, so that the core drives the iDMA meanwhile.
 # Compile (the kernel, its header include/mgc_flat_attn_pipeopt3.h and its test) with
@@ -48,7 +50,7 @@ spatz_rowscale = l1_kernel("l1_rowscale_fp16_spatz", operands=("y:out", "x:in", 
 # spatz_rowdiv: y[r, c] = x[r, c] / s[r], i.e. y = diag(s)^-1 x, on Spatz.
 spatz_rowdiv = l1_kernel("l1_rowdiv_fp16_spatz", operands=("y:out", "x:in", "s:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
 
-@kernel("mgc_flat_attn_pipeopt3", check=(o_, o_gold), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+@kernel("mgc_flat_attn_pipeopt3", check=(o_, o_gold), tol=0x11)
 def flat_attn_pipeopt3():
 
     """

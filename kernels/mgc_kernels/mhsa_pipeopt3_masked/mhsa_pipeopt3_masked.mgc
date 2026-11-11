@@ -2,6 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
+# Francesco Conti <f.conti@unibo.it>
+#
 # Multi-head self-attention kernel: mhsa_pipeopt3 with an additive attention mask. The mask [S x S] (0 where a query
 # sees a key, -32768 where it does not), shared by all the heads, is added to Q @ Kt by RedMulE itself: every tile
 # loads its block of the mask into attn, and Q @ Kt runs as a GEMM accumulating on it. The exp kernel
@@ -78,7 +80,7 @@ spatz_rowscale = l1_kernel("l1_rowscale_fp16_spatz", operands=("y:out", "x:in", 
 # spatz_rowdiv: y[r, c] = x[r, c] / s[r], i.e. y = diag(s)^-1 x, on Spatz.
 spatz_rowdiv = l1_kernel("l1_rowdiv_fp16_spatz", operands=("y:out", "x:in", "s:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
 
-@kernel("mgc_mhsa_pipeopt3_masked", check=(y_, y_gold), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+@kernel("mgc_mhsa_pipeopt3_masked", check=(y_, y_gold), tol=0x11)
 def mhsa_pipeopt3_masked():
 
     """

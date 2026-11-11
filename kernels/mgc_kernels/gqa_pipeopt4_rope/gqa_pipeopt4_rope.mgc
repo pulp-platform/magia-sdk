@@ -2,6 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
+# Francesco Conti <f.conti@unibo.it>
+#
 # Qwen2.5 self-attention layer: gqa_pipeopt4 with what a Qwen2/Llama-style decoder adds to it.
 # - Q/K/V biases, added after the projections.
 # - RoPE on Q and K, after the biases, in the projection steps (the projection blocks are resident in L1). The
@@ -112,7 +114,7 @@ spatz_bias_rope_kt_start = l1_kernel("l1_bias_rope_kt_start_fp16_spatz", operand
 spatz_wait = l1_kernel("l1_spatz_wait1", operands=("x:out",), params=(), executor=CORE)
 spatz_bias_v = l1_kernel("l1_bias_v_fp16_spatz", operands=("x:inout", "b:in"), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
 
-@kernel("mgc_gqa_pipeopt4_rope", check=(y_, y_gold), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+@kernel("mgc_gqa_pipeopt4_rope", check=(y_, y_gold), tol=0x11)
 def gqa_pipeopt4_rope():
 
     """

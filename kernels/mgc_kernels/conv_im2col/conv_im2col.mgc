@@ -2,6 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
+# Francesco Conti <f.conti@unibo.it>
+#
 # 2-D convolution, CONV_K x CONV_K kernel (odd, default 3), stride 1, zero padding CONV_PAD = (CONV_K - 1) / 2
 # ("same"), no bias, as an im2col GEMM: Y[H*W x COUT] = im2col(X) [H*W x K*K*CIN] @ W [K*K*CIN x COUT].
 # X is HWC in L2, unpadded; W has its rows in (ky, kx, ci) order; Y is HWC.
@@ -51,7 +53,7 @@ im2col_start = l1_kernel("l1_im2col_start_fp16_spatz", operands=("col:out", "x:i
 spatz_wait = l1_kernel("l1_spatz_wait1", operands=("x:out",), params=(), executor=CORE)
 
 
-@kernel("mgc_conv_im2col", check=(y_, y_gold), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+@kernel("mgc_conv_im2col", check=(y_, y_gold), tol=0x11)
 def conv_im2col():
     """
     CONV_K x CONV_K convolution ("same" padding, stride 1) as an im2col GEMM: per block of CONV_CP output pixels

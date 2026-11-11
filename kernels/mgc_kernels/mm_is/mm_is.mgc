@@ -2,6 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
+# Francesco Conti <f.conti@unibo.it>
+#
 # Input-static GEMM (Z = X @ W + Y) on the MAGIA mesh, as a systolic pipeline.
 # Same algorithm as tests/magia/mesh/mm_is_2.
 # Compile (the kernel, its header include/mgc_mm_is.h and its test) with
@@ -22,7 +24,7 @@ N_ITERATIONS = define(1)
 WAIT_MODE = define(WFE)
 
 
-@kernel("mgc_mm_is", check=(Y, Z), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+@kernel("mgc_mm_is", check=(Y, Z), tol=0x11)
 def mm_is():
     """
     Matrix multiplication on MAGIA as an input-static systolic array: each tile keeps a block of X in L1, and

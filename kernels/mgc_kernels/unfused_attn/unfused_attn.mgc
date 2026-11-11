@@ -2,6 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
+# Francesco Conti <f.conti@unibo.it>
+#
 # Unfused attention kernel, the baseline of the flat_attn_* kernels.
 # Compile (the kernel, its header include/mgc_unfused_attn.h and its test) with
 #   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc_kernels/unfused_attn/unfused_attn.mgc \
@@ -30,7 +32,7 @@ SM_CHUNK = define("(SEQ_LENGTH / (MESH_X_TILES * MESH_Y_TILES) < 32 ? SEQ_LENGTH
 spatz_softmax_rows = l1_kernel("l1_softmax_rows_fp16_spatz", operands=("x:inout",), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
 
 
-@kernel("mgc_unfused_attn", check=(o_, o_gold), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+@kernel("mgc_unfused_attn", check=(o_, o_gold), tol=0x11)
 def unfused_attn():
     """
     Unfused attention, O = softmax(Q @ Kt / sqrt(P)) @ V, as three back-to-back kernels over the whole mesh,

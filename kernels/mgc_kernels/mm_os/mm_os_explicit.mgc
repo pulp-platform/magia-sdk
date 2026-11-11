@@ -2,6 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
+# Francesco Conti <f.conti@unibo.it>
+#
 # mm_os.mgc written with the explicit (low-level) schedule instead of pipeline(): the prologue, the
 # multi-buffer slots, the event rotation and the placement of the RedMulE enqueue / commit_start / wait steps are
 # spelled out by hand. It is the 2-stage schedule (operands loaded in the stage of their RedMulE job, depth-2
@@ -25,7 +27,7 @@ M_BLK = define("(M_SIZE / M_NB)")
 WAIT_MODE = define(WFE)
 
 
-@kernel("mgc_mm_os", check=(Y, Z), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+@kernel("mgc_mm_os", check=(Y, Z), tol=0x11)
 def mm_os():
     """
     Output-static matrix multiplication on MAGIA used as a systolic array, with transfers and jobs

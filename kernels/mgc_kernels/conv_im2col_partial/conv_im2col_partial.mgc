@@ -2,6 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
+# Francesco Conti <f.conti@unibo.it>
+#
 # 2-D convolution, CONV_K x CONV_K kernel (odd, default 3), stride CONV_S (default 1), zero padding
 # CONV_PAD = (CONV_K - 1) / 2, no bias, with a partial im2col: the im2col expanded along kx only, once per input row.
 # X is HWC, so for an input row iy the patch row of output pixel x (K pixels x CIN channels from column
@@ -63,7 +65,7 @@ e_gemm = l1_kernel("l1_e_gemm", operands=("y:out", "ring:in", "w:in"), params=()
                    executor=CORE)
 
 
-@kernel("mgc_conv_im2col_partial", check=(y_, y_gold), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
+@kernel("mgc_conv_im2col_partial", check=(y_, y_gold), tol=0x11)
 def conv_im2col_partial():
     """
     CONV_K x CONV_K convolution (padding (CONV_K - 1) / 2, stride CONV_S) with a partial im2col, as a 3-stage
