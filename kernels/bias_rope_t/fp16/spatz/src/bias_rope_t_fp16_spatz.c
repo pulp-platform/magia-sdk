@@ -12,8 +12,10 @@
 #define HID         get_hartid()
 #define KERNEL_NAME "bias_rope_t_fp16_spatz"
 
-/* This tile's columns [*col_start, *col_start + *col_len) out of cols, split in pairs so that
-   each tile gets an even number of columns; an odd last column goes to the last tile. */
+/*
+ * This tile's columns [*col_start, *col_start + *col_len) out of cols, split in pairs so that
+ * each tile gets an even number of columns; an odd last column goes to the last tile.
+ */
 static void tile_cols(uint32_t cols, uint32_t *col_start, uint32_t *col_len)
 {
     uint32_t pairs = cols / 2;
@@ -96,8 +98,10 @@ static int init_input_params(void *params,
     if (col_len == 0)
         return 0;
 
-    /* This tile's columns (tokens) of every row of X, C and S, packed into matrices of col_len
-       columns; every tile needs the whole bias. */
+    /*
+     * This tile's columns (tokens) of every row of X, C and S, packed into matrices of col_len
+     * columns; every tile needs the whole bias.
+     */
     if (rows > 0) {
         idma_memcpy_2d(0,
                        (uint32_t)(X + col_start),

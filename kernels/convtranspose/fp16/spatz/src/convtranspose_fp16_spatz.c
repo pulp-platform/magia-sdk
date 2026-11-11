@@ -136,8 +136,10 @@ exit:
     return ret;
 }
 
-/* ConvTranspose on this tile's Spatz, for operands that are already in this tile's L1: no sharding
-   across tiles, no L1 allocation and no L2 transfers. */
+/*
+ * ConvTranspose on this tile's Spatz, for operands that are already in this tile's L1: no sharding
+ * across tiles, no L1 allocation and no L2 transfers.
+ */
 void MAGIA_convtranspose_fp16_spatz_l1(const float16 *X,
                                        const float16 *W,
                                        float16 *Y,

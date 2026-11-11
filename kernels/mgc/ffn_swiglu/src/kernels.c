@@ -4,7 +4,7 @@
 //
 // Francesco Conti <f.conti@unibo.it>
 //
-// L1 kernels called (on the CV32 control core) by the mgc-generated test.c.
+// L1 kernels called (on the CV32 control core) by the mgc-generated kernel src/mgc_ffn_swiglu.c.
 // All pointer arguments are L1 addresses.
 
 #include <stdint.h>
@@ -16,7 +16,7 @@
 #include "eventunit.h"
 #include "ffn_swiglu_spatz_task_bin.h"
 
-/* Per-tile flag: Spatz is set up on each tile before its first task. */
+/* Per-tile flag: set once Spatz has been set up on this tile (before its first task). */
 static volatile uint8_t spatz_ready __attribute__((section(".tile_bss")));
 
 /* Per-tile Spatz task parameters, preallocated in the per-tile L1. */
@@ -41,15 +41,16 @@ static void spatz_setup(void)
 static inline void spatz_launch(uint32_t task, void *params)
 {
     spatz_setup();
-    /* The block stores must land before Spatz is triggered. */
+    /* Compiler barrier: the parameter-block stores must be issued before Spatz is triggered. */
     asm volatile("" ::: "memory");
     spatz_run_task_with_params(task, (uint32_t)params);
 }
 
 /**
  * Starts g[i] = silu(g[i]) * u[i] for `n` fp16 elements, in place, on this tile's Spatz;
- * l1_spatz_wait1(g) waits for it. The parameter block is rewritten at every start: the double-buffered
- * chunks alternate, and Spatz reads it only when the task starts (after the previous one is waited).
+ * l1_spatz_wait1(g) waits for it. The parameter block is rewritten at every start (the
+ * double-buffered chunks alternate): Spatz reads it only when the task starts, after the previous
+ * one has been waited.
  */
 void l1_swiglu_start_fp16_spatz(uint32_t g, uint32_t u, uint32_t n)
 {

@@ -78,8 +78,10 @@ static int init_input_params(void *params, const float16 *A)
     if (elem_len == 0)
         return 0;
 
-    /* This tile's slice [elem_start, elem_start+elem_len) is contiguous in A.
-       The Spatz task writes every output (C = A * s), so shard_C is not zeroed here. */
+    /*
+     * This tile's slice [elem_start, elem_start+elem_len) is contiguous in A.
+     * The Spatz task writes every output (C = A * s), so shard_C is not zeroed here.
+     */
     idma_memcpy_1d(
         0, (uint32_t)(A + elem_start), (uint32_t)mul_params->shard_A, elem_len * sizeof(float16));
     eu_idma_wait_a2o(WFE);
@@ -108,8 +110,10 @@ exit:
     return ret;
 }
 
-/* C = A * B[0] on this tile's Spatz, for operands that are already in this tile's L1:
-   no sharding across tiles, no L1 allocation and no L2 transfers. C may alias A. */
+/*
+ * C = A * B[0] on this tile's Spatz, for operands that are already in this tile's L1:
+ * no sharding across tiles, no L1 allocation and no L2 transfers. C may alias A.
+ */
 void MAGIA_mul_broadcast_fp16_spatz_l1(const float16 *A, const float16 *B, float16 *C, uint32_t n)
 {
     volatile mul_broadcast_fp16_spatz_params_t params = {

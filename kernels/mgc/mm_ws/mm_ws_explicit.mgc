@@ -2,13 +2,13 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Weight-static GEMM (Z = X @ W + Y) on the MAGIA mesh, explicit schedule: a
-# statement-by-statement mgc rendering of the schedule of tests/magia/mesh/mm_ws_2
-# on mglib. See mm_ws.mgc for the pipelined version.
+# Weight-static GEMM (Z = X @ W + Y) on the MAGIA mesh, explicit schedule: a statement-by-statement
+# mgc rendering of the schedule of tests/magia/mesh/mm_ws_2. No test builds it (mgc/tests/test_mgc.py only checks
+# that it compiles); the mm_ws_mgc test uses the pipelined version, mm_ws.mgc.
 
 from mgc import *
 
-M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # from include/test.h
+M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # kernel arguments
 X = l2("x_inp", (M, N), fp16)
 W = l2("w_inp", (N, K), fp16)
 Y = l2("y_inp", (M, K), fp16)  # bias in, result out
@@ -21,20 +21,19 @@ WAIT_MODE = define(WFE)
 @kernel("mgc_mm_ws", check=(Y, Z), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
 def mm_ws():
     """
-    This test aims to verify the functionality of MAGIA as a systolic array for matrix
-    multiplications, following the weight-static mechanism (explicit mgc schedule).
+    Weight-static matrix multiplication on MAGIA used as a systolic array, with an explicit schedule.
     """
     for y_id, x_id in tiles():
         """
-        1. Calculate the static input data-tile dimensions.
+        1. Static weight data-tile dimensions: N is split over the mesh rows, K over the mesh columns.
         """
         tile_h = y_id.split(N)
         tile_w = x_id.split(K)
 
         """
-        1a. Set the t_size, how many timeslots we want to divide the temporal dimension into.
-        t_start is the first timeslot in which it is possible to elaborate the output.
-        t_end is the last timeslot.
+        1a. M is split into `timeslots` blocks of t_size rows. t_start is the first timeslot in which this
+        tile can compute an output block (2 after the mesh row above); t_end is the last active one, which
+        only passes on the last block.
         """
         timeslots: u8 = 4
         t_size: u8 = M // timeslots
@@ -61,14 +60,12 @@ def mm_ws():
         pt: u8 = 0
 
         """
-        TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+        Repeat the kernel body N_ITERATIONS times.
         """
         for z in range(N_ITERATIONS):
-            # TIMESLOT t = -1
-            # Initial static weight load
+            # timeslot -1: load the static weights and the first input block
             idma.load(w, W[tile_h, tile_w]).wait()
 
-            # First input load
             idma.load(x[0], X[0:t_size, tile_h]).wait()
 
             sync(GLOBAL)
@@ -78,7 +75,7 @@ def mm_ws():
             """
             for t in range(total_timeslots):
                 """
-                3a. Skip the timeslot if outside the range
+                3a. Outside [t_start, t_end], only join the timeslot barrier.
                 """
                 if t < t_start or t > t_end:
                     sync(GLOBAL)
@@ -90,7 +87,7 @@ def mm_ws():
                 rotate(pt)
 
                 """
-                3c. Load L2 output of current timeslot (if upmost tile)
+                3c. Top mesh row: load the output block of the current timeslot from L2.
                 """
                 if y_id == 0 and t < t_end:
                     idma.load(y[pt], Y[pt * t_size:(pt + 1) * t_size, tile_w]).wait()
@@ -117,7 +114,7 @@ def mm_ws():
                     job.wait()
 
                 """
-                3f. Sync before next timeslot
+                3e. Barrier before the next timeslot.
                 """
                 pt = pt + 1
                 sync(GLOBAL)

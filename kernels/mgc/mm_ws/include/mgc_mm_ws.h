@@ -14,8 +14,8 @@
 void mgc_mm_ws(uint16_t *x_inp,
                uint16_t *w_inp,
                uint16_t *y_inp,
-               uint32_t m_size,
-               uint32_t n_size,
-               uint32_t k_size);
+               int32_t m_size,
+               int32_t n_size,
+               int32_t k_size);
 
 #endif /* MGC_MM_WS_H_ */

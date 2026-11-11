@@ -143,8 +143,10 @@ exit:
     return ret;
 }
 
-/* LayerNorm over the last axis on this tile's Spatz, for operands that are already in this tile's
-   L1: no sharding across tiles, no L1 allocation and no L2 transfers. */
+/*
+ * LayerNorm over the last axis on this tile's Spatz, for operands that are already in this tile's
+ * L1: no sharding across tiles, no L1 allocation and no L2 transfers.
+ */
 void MAGIA_layernorm_fp16_spatz_l1(const float16 *X,
                                    const float16 *scale,
                                    const float16 *B,

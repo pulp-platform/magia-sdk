@@ -3,7 +3,7 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Francesco Conti <francesco.conti@chips.it>
+# Francesco Conti <f.conti@unibo.it>
 """
 Generate include/test.h for gqa_pipeopt4_rope, a Qwen2.5 self-attention layer (H Q heads, Hkv K/V heads,
 Q head h uses K/V head h // (H/Hkv), Q/K/V biases, RoPE, causal mask, residual):

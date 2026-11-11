@@ -3,22 +3,25 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # ViT FFN layer (GELU MLP, no biases) with the residual: Y = R + gelu(X @ W1) @ W2.
-# X is the input after the LayerNorm, R the residual stream before it; the LayerNorm itself is not part of the test.
-# As ffn_swiglu with a single up projection, two steps through L2, both output-static on RedMulE:
+# X is the input after the LayerNorm, R the residual stream before it. The LayerNorm itself is not part of the kernel.
+# As ffn_swiglu with a single up projection: two steps through L2, both output-static on RedMulE.
 # - H = gelu(X @ W1): tile (ii, jj) owns the block [tile_s x tile_i] of H, computed in chunks of FFN_CI columns
-#   (double-buffered in L1, accumulated over blocks of FFN_KB_E of E); the GELU of chunk c runs on Spatz, in place,
-#   while RedMulE computes chunk c + 1, and is stored while RedMulE runs the last jobs of chunk c + 1;
+#   (double-buffered in L1, accumulated over blocks of FFN_KB_E of E). The GELU of chunk c runs on Spatz, in place,
+#   while RedMulE computes chunk c + 1, and is stored while RedMulE runs the last jobs of chunk c + 1.
 # - Y = R + H @ W2: tile (ii, jj) owns the block [tile_s x tile_e] of Y, loaded with the residual and accumulated
 #   over blocks of FFN_KB_I of I.
 # Outer blocking: the FFN runs on FFN_NB blocks of FFN_SB = S / FFN_NB rows in turn (1 if they all fit).
-# FFN_NB, FFN_CI, FFN_KB_E and FFN_KB_I are chosen per mesh side by gen_golden.py so that all the buffers fit L1.
-# Compile with
-#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/ffn_gelu/ffn_gelu.mgc \
-#       -o tests/magia/mgc/ffn_gelu/src/test.c
+# FFN_NB, FFN_CI, FFN_KB_E and FFN_KB_I are chosen per mesh side by the test's gen_golden.py so that all the buffers
+# fit L1, and reach the kernel as arguments.
+# Compile (the kernel, its header include/mgc_ffn_gelu.h and its test) with
+#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc/ffn_gelu/ffn_gelu.mgc \
+#       --header tests/magia/mgc/ffn_gelu/include/test.h \
+#       -o kernels/mgc/ffn_gelu/src/mgc_ffn_gelu.c \
+#       --test tests/magia/mgc/ffn_gelu/src/test.c
 
 from mgc import *
 
-S, E, I, CI, KB_E, KB_I = sizes("SEQ_LENGTH", "EMBED_SIZE", "FFN_SIZE", "FFN_CI", "FFN_KB_E", "FFN_KB_I")  # from include/test.h
+S, E, I, CI, KB_E, KB_I = sizes("SEQ_LENGTH", "EMBED_SIZE", "FFN_SIZE", "FFN_CI", "FFN_KB_E", "FFN_KB_I")  # kernel arguments
 NB, SB = sizes("FFN_NB", "FFN_SB")  # blocks of rows of the outer blocking loop, rows per block
 x_   = l2("x_inp",   (S, E), fp16)
 w1_  = l2("w1_inp",  (E, I), fp16)
@@ -31,21 +34,22 @@ y_gold = l2("y_gold", (S, E), fp16)  # golden
 WAIT_MODE = define(WFE)
 
 # Implemented in src/kernels.c, on the tile's CV32 core:
-# spatz_gelu_start: starts x = gelu(x), element-wise, in place, on Spatz (kernels/gelu_fast: tanh form, Schraudolph
-# exp and division in FP16) and returns; spatz_wait(x) waits for it
+# spatz_gelu_start starts x = gelu(x), element-wise and in place, on Spatz (kernels/gelu_fast: tanh form,
+# Schraudolph exp and division in FP16) and returns; spatz_wait(x) waits for it
 spatz_gelu_start = l1_kernel("l1_gelu_start_fp16_spatz", operands=("x:inout",), params=("x.size",), executor=CORE)
 spatz_wait = l1_kernel("l1_spatz_wait1", operands=("x:out",), params=(), executor=CORE)
 
-@kernel("mgc_ffn_gelu", check=(y_, y_gold), tol=0x11, authors=["Francesco Conti <francesco.conti@chips.it>"])
+@kernel("mgc_ffn_gelu", check=(y_, y_gold), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
 def ffn_gelu():
 
     """
-    ViT FFN with the residual, Y = R + gelu(X @ W1) @ W2, in two steps through L2: H = gelu(X @ W1) in chunks of
-    columns (output-static on RedMulE, the H chunk resident in L1 and blocks of E streamed, then GELU on Spatz
-    overlapped with the next chunk), Y = R + H @ W2 (output-static, accumulating on R).
+    ViT FFN with the residual, Y = R + gelu(X @ W1) @ W2, in two steps through L2:
+    1. H = gelu(X @ W1) in chunks of columns: output-static on RedMulE (H chunk resident in L1, blocks of E
+       streamed), then GELU on Spatz, overlapped with the next chunk;
+    2. Y = R + H @ W2, output-static, accumulating on R.
     """
     for ii, jj in tiles():
-        # outer blocking: the rest of the FFN, on rows [sb * FFN_SB, (sb + 1) * FFN_SB) in turn
+        # outer blocking: rows [sb * FFN_SB, (sb + 1) * FFN_SB) in turn
         for sb in range(NB):
             tile_s = ii.split(SB)
             tile_i = jj.split(I)
@@ -67,9 +71,9 @@ def ffn_gelu():
             sync(GLOBAL)
 
             """
-            STEP 1: H = gelu(X @ W1), chunk by chunk of FFN_CI columns; in each chunk, block k of X, W1 loading while
-            RedMulE accumulates block k - 1. The GELU of chunk c - 1 runs on Spatz during chunk c, and its store is
-            issued once RedMulE has the last jobs of chunk c.
+            STEP 1: H = gelu(X @ W1), one chunk of FFN_CI columns at a time. In each chunk, blocks k of X and W1
+            load while RedMulE accumulates block k - 1. The GELU of chunk c - 1 runs on Spatz during chunk c, and its
+            store is issued once RedMulE has the last jobs of chunk c.
             """
 
             n_kb_e: u16 = E // KB_E
@@ -89,7 +93,7 @@ def ffn_gelu():
                         ex.wait()
                         ew1.wait()
                         redmule.commit_start()
-                        # H chunk c - 1, while RedMulE runs the last jobs of chunk c
+                        # store H chunk c - 1 once Spatz is done with it, while RedMulE runs the last jobs of chunk c
                         if k == n_kb_e - 1:
                             if c > 0:
                                 spatz_wait(yu[c - 1])

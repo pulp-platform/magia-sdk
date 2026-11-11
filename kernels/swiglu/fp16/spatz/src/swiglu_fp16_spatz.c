@@ -104,8 +104,10 @@ exit:
     return ret;
 }
 
-/* Y = SiLU(G) * U on this tile's Spatz, for operands that are already in this tile's L1: no
-   sharding across tiles, no L1 allocation and no L2 transfers. Y may alias G or U. */
+/*
+ * Y = SiLU(G) * U on this tile's Spatz, for operands that are already in this tile's L1: no
+ * sharding across tiles, no L1 allocation and no L2 transfers. Y may alias G or U.
+ */
 void MAGIA_swiglu_fp16_spatz_l1(const float16 *G, const float16 *U, float16 *Y, uint32_t n)
 {
     volatile swiglu_fp16_spatz_params_t params = {

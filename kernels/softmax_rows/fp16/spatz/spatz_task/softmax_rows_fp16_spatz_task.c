@@ -9,10 +9,12 @@
 /* Unit-stride vector accesses must be 4-byte aligned. */
 #define MISALIGNED(p) (((uintptr_t)(p)) & 0x2)
 
-/* Row-wise softmax in place: X[r, :] = exp(s * (X[r, :] - max)) / sum, with the fast exp and
-   the scale s folded into its clamp and coefficient (exact for s a power of 2), the sum
-   accumulated in fp32 (one partial per lane, then an ordered reduction) and normalized by one
-   fp16 reciprocal per row. */
+/*
+ * Row-wise softmax in place: X[r, :] = exp(s * (X[r, :] - max)) / sum, with
+ * - the fast exp, the scale s folded into its clamp and coefficient (exact for s a power of 2);
+ * - the sum accumulated in fp32, one partial per lane, then one (unordered) reduction;
+ * - the normalization by one fp16 reciprocal per row.
+ */
 int softmax_rows_fp16_spatz_task(void)
 {
     const softmax_rows_fp16_spatz_params_t *params;

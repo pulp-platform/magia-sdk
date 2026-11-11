@@ -144,8 +144,10 @@ exit:
     return ret;
 }
 
-/* AveragePool of NCHW planes on this tile's Spatz, for operands that are already in this tile's L1:
-   no sharding across tiles, no L1 allocation and no L2 transfers. */
+/*
+ * AveragePool of NCHW planes on this tile's Spatz, for operands that are already in this tile's L1:
+ * no sharding across tiles, no L1 allocation and no L2 transfers.
+ */
 void MAGIA_averagepool2d_fp16_spatz_l1(const float16 *X,
                                        float16 *Y,
                                        uint32_t input_shape[4],

@@ -2,8 +2,10 @@
 #include "utils/spatz_recip.h"
 #include "rmsnorm_fp16_spatz_params.h"
 
-/* Sum of squares of one row: the squares are exact in fp32 (vfwmacc, fp16 x fp16) and accumulate
-   per lane in fp32, then one fp32 reduction. */
+/*
+ * Sum of squares of one row: the squares are exact in fp32 (vfwmacc, fp16 x fp16) and accumulate
+ * per lane in fp32, then one fp32 reduction.
+ */
 static inline float sum_squares(const _Float16 *src, size_t len)
 {
     float ZERO = 0.0f;

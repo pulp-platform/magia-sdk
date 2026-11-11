@@ -4,10 +4,12 @@
 //
 // Francesco Conti <f.conti@unibo.it>
 //
-// L1 kernels called (synchronously, on the CV32 control core) by the
-// mgc-generated test.c. All pointer arguments are L1 addresses.
-// The softmax uses the merged kernels in ../kernels instead of the generic ones, the projection
-// epilogues (bias, RoPE) the bias_rope kernels in ../kernels, started asynchronously for Q and Kt.
+// L1 kernels called (on the CV32 control core) by the mgc-generated kernel src/mgc_gqa_pipeopt4_rope.c.
+// All pointer arguments are L1 addresses.
+// Sizes are the kernel's arguments, read through the MGC_GLUE macros of mgc_gqa_pipeopt4_rope.h.
+// The softmax uses the merged Spatz kernels kernels/expminus_rowsum and kernels/colsum_rescale.
+// The projection epilogues (bias, RoPE) use kernels/bias_rope for Q and V and kernels/bias_rope_t for Kt;
+// those of Q and Kt are started without waiting.
 
 #include <stdint.h>
 
@@ -25,12 +27,14 @@
 #include "eventunit.h"
 #include "gqa_pipeopt4_rope_spatz_task_bin.h"
 
-/* Per-tile flag: Spatz is set up on each tile before its first task. */
+/* Per-tile flag: set once Spatz has been set up on this tile (before its first task). */
 static volatile uint8_t spatz_ready __attribute__((section(".tile_bss")));
 
-/* Per-tile Spatz task parameters, one block per kernel of the K/V loop, preallocated in the
-   per-tile L1 so that each call only stores the pointers that change (fixed fields are set on
-   the first call, flagged by their non-zero sizes). */
+/*
+ * Per-tile Spatz task parameter blocks, preallocated in L1 so that each call only stores the
+ * fields that change. The fixed fields (sizes and some pointers) are set on the first call,
+ * detected by the block's size field still being zero, so they must be the same on every call.
+ */
 static struct {
     rowscale_fp16_spatz_params_t rowscale;
     rowmax_fp16_spatz_params_t rowmax;
@@ -60,7 +64,7 @@ static void spatz_setup(void)
 static inline void spatz_offload(uint32_t task, void *params)
 {
     spatz_setup();
-    /* The block stores must land before Spatz is triggered. */
+    /* Compiler barrier: the parameter-block stores must be issued before Spatz is triggered. */
     asm volatile("" ::: "memory");
     spatz_run_task_with_params(task, (uint32_t)params);
     eu_wait_events(EU_SPATZ_DONE_MASK, WFE, 0);
@@ -150,7 +154,8 @@ static inline void spatz_launch(uint32_t task, void *params)
 }
 
 /**
- * Waits for the Spatz task started by an l1_*_start kernel, which writes y and s.
+ * Waits for the Spatz task started by an l1_*_start kernel. y and s are unused: they only tell
+ * mgc which buffers the task writes.
  */
 void l1_spatz_wait(uint32_t y, uint32_t s)
 {
@@ -262,10 +267,10 @@ void l1_spatz_wait1(uint32_t x)
 }
 
 /**
- * Q projection epilogue: starts x[r, c] += b[c] for this tile's block of Q [rows x cols], then the
+ * Q projection epilogue: starts x[r, c] += b[c] on this tile's block of Q [rows x cols], then the
  * RoPE of each row (token) on the channel pairs of the ROPE_GROUP groups, with the angles
  * c/s [rows x PROJ_SIZE / 2] of the block's tokens; l1_spatz_wait1() waits for it. The block starts
- * at column x_id * ceil(NUM_HEADS * PROJ_SIZE / MESH_X_TILES) of Q (as the mgc tile split).
+ * at column x_id * ceil(NUM_HEADS * PROJ_SIZE / MESH_X_TILES) of Q, matching the mgc tile split.
  */
 void l1_bias_rope_q_start_fp16_spatz(
     uint32_t x, uint32_t b, uint32_t c, uint32_t s, uint32_t rows, uint32_t cols)
@@ -303,11 +308,11 @@ void l1_bias_v_fp16_spatz(uint32_t x, uint32_t b, uint32_t rows, uint32_t cols)
 }
 
 /**
- * Kt projection epilogue: starts x[r, t] += b[r] for this tile's block of Kt [rows x cols], then the
+ * Kt projection epilogue: starts x[r, t] += b[r] on this tile's block of Kt [rows x cols], then the
  * RoPE of each column (token) on the channel pairs (pairs of rows) of the ROPE_GROUP groups, with the
  * transposed angles c/s [PROJ_SIZE / 2 x cols] of the block's tokens; l1_spatz_wait1() waits for it.
- * The block starts at row y_id * ceil(NUM_KV_HEADS * PROJ_SIZE / MESH_Y_TILES) of Kt (as the mgc tile
- * split).
+ * The block starts at row y_id * ceil(NUM_KV_HEADS * PROJ_SIZE / MESH_Y_TILES) of Kt, matching the
+ * mgc tile split.
  */
 void l1_bias_rope_kt_start_fp16_spatz(
     uint32_t x, uint32_t b, uint32_t c, uint32_t s, uint32_t rows, uint32_t cols)

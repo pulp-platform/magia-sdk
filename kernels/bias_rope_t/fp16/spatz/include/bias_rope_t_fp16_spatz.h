@@ -3,11 +3,13 @@
 
 #include <stdint.h>
 
-/* X[r, t] += B[r], then the RoPE of each column (token) with the channels of each head in groups
-   of group: in group g of a head, rows (g * group + j, g * group + group / 2 + j) are the pair of
-   angle g * group / 2 + j of cos/sin [head_dim / 2 x cols]. The block starts at row row0 (a
-   multiple of group) of its head. X is updated in place; the columns (tokens) are split over all
-   tiles, in pairs. */
+/*
+ * X[r, t] += B[r], then the RoPE of each column (token) with the channels of each head in groups
+ * of group: in group g of a head, rows (g * group + j, g * group + group / 2 + j) are the pair of
+ * angle g * group / 2 + j of cos/sin [head_dim / 2 x cols]. The block starts at row row0 (a
+ * multiple of group) of its head. X is updated in place; the columns (tokens) are split over all
+ * tiles, in pairs.
+ */
 void MAGIA_bias_rope_t_fp16_spatz(float16 *X,
                                   const float16 *B,
                                   const float16 *C,

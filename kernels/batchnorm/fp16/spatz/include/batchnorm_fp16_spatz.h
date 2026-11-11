@@ -11,8 +11,10 @@ void MAGIA_batchnorm_fp16_spatz(const float16 *X,
                                 const float16 epsilon,
                                 float16 *Y,
                                 uint32_t shape[4]);
-/* Same operation on this tile only, with X, scale, B, input_mean, input_var and Y already in this
-   tile's L1. */
+/*
+ * Same operation on this tile only, with X, scale, B, input_mean, input_var and Y already in this
+ * tile's L1.
+ */
 void MAGIA_batchnorm_fp16_spatz_l1(const float16 *X,
                                    const float16 *scale,
                                    const float16 *B,

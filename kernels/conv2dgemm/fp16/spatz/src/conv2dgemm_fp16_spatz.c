@@ -233,8 +233,10 @@ exit:
     return ret;
 }
 
-/* Conv2D as im2col + GEMM on this tile's Spatz, for operands that are already in this tile's L1: no
-   sharding across tiles, no L1 allocation and no L2 transfers. */
+/*
+ * Conv2D as im2col + GEMM on this tile's Spatz, for operands that are already in this tile's L1: no
+ * sharding across tiles, no L1 allocation and no L2 transfers.
+ */
 void MAGIA_conv2dgemm_fp16_spatz_l1(const float16 *X,
                                     const float16 *W,
                                     const float16 *B,

@@ -12,8 +12,10 @@
 #define HID         get_hartid()
 #define KERNEL_NAME "colmax_fp16_spatz"
 
-/* This tile's columns [*col_start, *col_start + *col_len) out of cols, split in pairs so that
-   each tile gets an even number of columns; an odd last column goes to the last tile. */
+/*
+ * This tile's columns [*col_start, *col_start + *col_len) out of cols, split in pairs so that
+ * each tile gets an even number of columns; an odd last column goes to the last tile.
+ */
 static void tile_cols(uint32_t cols, uint32_t *col_start, uint32_t *col_len)
 {
     uint32_t pairs = cols / 2;

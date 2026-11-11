@@ -4,8 +4,10 @@
 /* Unit-stride vector accesses must be 4-byte aligned. */
 #define MISALIGNED(p)  (((uintptr_t)(p)) & 0x2)
 
-/* Fuses reducesum over the first axis (fp32 accumulation, seeded with S as row 0, as
-   reducesum), mul and add, with the same arithmetic as the separate kernels. */
+/*
+ * Fuses reducesum over the first axis (fp32 accumulation, seeded with S as row 0, as
+ * reducesum), mul and add, with the same arithmetic as the separate kernels.
+ */
 int colsum_rescale_fp16_spatz_task(void)
 {
     const colsum_rescale_fp16_spatz_params_t *params;

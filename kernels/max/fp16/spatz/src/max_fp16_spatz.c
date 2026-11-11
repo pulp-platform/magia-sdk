@@ -74,8 +74,10 @@ static int init_input_params(void *params, const float16 *A, const float16 *B)
     if (len == 0)
         return 0;
 
-    /* This tile's slice [start, start+len) is contiguous in both operands. The Spatz task
-       writes every output (C = max(A, B)), so shard_C is not zeroed here. */
+    /*
+     * This tile's slice [start, start + len) is contiguous in both operands. The Spatz task
+     * writes every output (C = max(A, B)), so shard_C is not zeroed here.
+     */
     idma_memcpy_1d(0, (uint32_t)(A + start), (uint32_t)max_params->shard_A, len * sizeof(float16));
     eu_idma_wait_a2o(WFE);
     idma_memcpy_1d(0, (uint32_t)(B + start), (uint32_t)max_params->shard_B, len * sizeof(float16));
@@ -105,8 +107,10 @@ exit:
     return ret;
 }
 
-/* C = max(A, B) on this tile's Spatz, for operands that are already in this tile's L1: no
-   sharding across tiles, no L1 allocation and no L2 transfers. C may alias A or B. */
+/*
+ * C = max(A, B) on this tile's Spatz, for operands already in this tile's L1: no sharding across
+ * tiles, no L1 allocation and no L2 transfers. C may alias A or B.
+ */
 void MAGIA_max_fp16_spatz_l1(const float16 *A, const float16 *B, float16 *C, uint32_t size)
 {
     volatile max_fp16_spatz_params_t params = {

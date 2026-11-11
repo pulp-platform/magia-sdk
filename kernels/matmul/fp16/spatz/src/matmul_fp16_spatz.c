@@ -140,8 +140,10 @@ exit:
     return ret;
 }
 
-/* Batched MatMul on this tile's Spatz, for operands that are already in this tile's L1: no sharding
-   across tiles, no L1 allocation and no L2 transfers. */
+/*
+ * Batched MatMul on this tile's Spatz, for operands that are already in this tile's L1: no sharding
+ * across tiles, no L1 allocation and no L2 transfers.
+ */
 void MAGIA_matmul_fp16_spatz_l1(const float16 *A,
                                 const float16 *B,
                                 float16 *Y,
@@ -165,8 +167,10 @@ void MAGIA_matmul_fp16_spatz_l1(const float16 *A,
     uint32_t steps = 1;
     int ret;
 
-    /* The task advances A and B by one matrix per batch: with a broadcast (not batched) operand,
-       offload one batch at a time and hold that operand fixed. */
+    /*
+     * The task advances A and B by one matrix per batch: with a broadcast (not batched) operand,
+     * offload one batch at a time and hold that operand fixed.
+     */
     if (!a_batched || !b_batched) {
         params.batch_len = 1;
         steps            = total_batches;

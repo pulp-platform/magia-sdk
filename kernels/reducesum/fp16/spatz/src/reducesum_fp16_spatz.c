@@ -66,8 +66,10 @@ static int init_input_params(void *params, const float16 *X)
     src_base = rm_params->outer_start * rm_params->reduce_dim * rm_params->inner_dim;
     in_elems = rm_params->outer_len * rm_params->reduce_dim * rm_params->inner_dim;
 
-    /* This tile's outer slice [outer_start, outer_start+outer_len) is contiguous in L2. The
-       Spatz task fully writes shard_Y (one sum per output), so it is not zeroed here. */
+    /*
+     * This tile's outer slice [outer_start, outer_start+outer_len) is contiguous in L2. The
+     * Spatz task fully writes shard_Y (one sum per output), so it is not zeroed here.
+     */
     idma_memcpy_1d(
         0, (uint32_t)(X + src_base), (uint32_t)rm_params->shard_X, in_elems * sizeof(float16));
     eu_idma_wait_a2o(WFE);
@@ -91,8 +93,10 @@ exit:
     return ret;
 }
 
-/* Y = sum of X over reduce_dim on this tile's Spatz, for operands that are already in this
-   tile's L1: no sharding across tiles, no L1 allocation and no L2 transfers. */
+/*
+ * Y = sum of X over reduce_dim on this tile's Spatz, for operands that are already in this
+ * tile's L1: no sharding across tiles, no L1 allocation and no L2 transfers.
+ */
 void MAGIA_reducesum_fp16_spatz_l1(
     const float16 *X, float16 *Y, uint32_t outer_len, uint32_t reduce_dim, uint32_t inner_dim)
 {

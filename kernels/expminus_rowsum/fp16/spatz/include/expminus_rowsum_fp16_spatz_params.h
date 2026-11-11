@@ -15,10 +15,12 @@ typedef struct {
     uint32_t coef;    /* fp16 bits of the exp coefficient COEF * s             */
 } expminus_rowsum_fp16_spatz_params_t;
 
-/* Fast exp (Schraudolph 1999): exp(x) ~ reinterpret_fp16(COEF * x + BIAS), with x clamped to
-   [MIN, MAX]. COEF = 2^mantissa / ln(2), BIAS = exponent_bias * 2^mantissa (FP16).
-   MIN = -11: below -10.4, COEF * x + BIAS < 0 converts to 0, so that a masked score (and the
-   rescaling factor after a fully masked block) exps to 0 on every path. */
+/*
+ * Fast exp (Schraudolph 1999): exp(x) ~ reinterpret_fp16(COEF * x + BIAS), with x clamped to
+ * [MIN, MAX]. COEF = 2^mantissa / ln(2), BIAS = exponent_bias * 2^mantissa (FP16).
+ * MIN = -11: below -10.4, COEF * x + BIAS < 0 converts to 0, so that a masked score (and the
+ * rescaling factor after a fully masked block) exps to 0 on every path.
+ */
 #define EXPMINUS_ROWSUM_EXP_MIN  (-11.0f)
 #define EXPMINUS_ROWSUM_EXP_MAX  (+10.0f)
 #define EXPMINUS_ROWSUM_EXP_COEF (1477.0f)

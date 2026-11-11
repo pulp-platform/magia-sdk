@@ -2,14 +2,16 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Unfused attention test, the baseline of the flat_attn_* tests
-# Compile with
-#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/unfused_attn/unfused_attn.mgc \
-#       -o tests/magia/mgc/unfused_attn/src/test.c
+# Unfused attention kernel, the baseline of the flat_attn_* kernels.
+# Compile (the kernel, its header include/mgc_unfused_attn.h and its test) with
+#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc/unfused_attn/unfused_attn.mgc \
+#       --header tests/magia/mgc/unfused_attn/include/test.h \
+#       -o kernels/mgc/unfused_attn/src/mgc_unfused_attn.c \
+#       --test tests/magia/mgc/unfused_attn/src/test.c
 
 from mgc import *
 
-S, P, QKS = sizes("SEQ_LENGTH", "PROJ_SIZE", "QK_SCALE_FP16")  # from include/test.h
+S, P, QKS = sizes("SEQ_LENGTH", "PROJ_SIZE", "QK_SCALE_FP16")  # kernel arguments
 q_     = l2("q_inp",   (S, P), fp16)
 kt_    = l2("k_inp",   (P, S), fp16)
 v_     = l2("v_inp",   (S, P), fp16)
@@ -28,12 +30,14 @@ SM_CHUNK = define("(SEQ_LENGTH / (MESH_X_TILES * MESH_Y_TILES) < 32 ? SEQ_LENGTH
 spatz_softmax_rows = l1_kernel("l1_softmax_rows_fp16_spatz", operands=("x:inout",), params=("x.shape[0]", "x.shape[1]"), executor=CORE)
 
 
-@kernel("mgc_unfused_attn", check=(o_, o_gold), tol=0x11, authors=["Francesco Conti <francesco.conti@chips.it>"])
+@kernel("mgc_unfused_attn", check=(o_, o_gold), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
 def unfused_attn():
     """
-    Unfused attention, O = softmax(Q @ Kt / sqrt(P)) @ V, as three back-to-back kernels over
-    the whole mesh, each through L2: attn = Q @ Kt and O = attn @ V output-static on RedMulE (as
-    mm_os_mgc), the row softmax of attn on Spatz in between.
+    Unfused attention, O = softmax(Q @ Kt / sqrt(P)) @ V, as three back-to-back kernels over the whole mesh,
+    each through L2:
+    1. attn = Q @ Kt, output-static on RedMulE;
+    2. the row softmax of attn, on Spatz;
+    3. O = attn @ V, output-static on RedMulE.
     """
     for y_id, x_id in tiles():
         tile_h   = y_id.split(S)
@@ -45,7 +49,7 @@ def unfused_attn():
         sm_rows: u32 = S // (MESH_X_TILES * MESH_Y_TILES)
         sm_row0: u32 = (y_id * MESH_X_TILES + x_id) * sm_rows
 
-        # each step's buffers are pinned to its loop: the three steps share L1
+        # each step's buffers are pinned to its loop, so the three steps share L1
         # step 1: attn block (y_id, x_id), resident in L1, never initialized; Q and Kt slices
         # double buffered over the timeslots
         a  = L1.single_buffer(attn_[tile_h, tile_w], pin="qk")
@@ -61,7 +65,7 @@ def unfused_attn():
         ev_qk = redmule.events(2)
         ev_pv = redmule.events(2)
 
-        # start together, as the flat_attn_* tests do
+        # all tiles start together
         sync(GLOBAL)
 
         # 1. attn = Q @ Kt: the operands of timeslot i+1 are prefetched while RedMulE computes

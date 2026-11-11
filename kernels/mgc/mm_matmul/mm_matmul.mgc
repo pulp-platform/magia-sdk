@@ -2,14 +2,16 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Output-static MATMUL (Z = X @ W, no bias) on the MAGIA mesh. The output tile is
-# never initialized: the uninit-acc pass makes the RedMulE job of the first
-# timeslot a MATMUL, the others accumulate onto it. Compile with
-#   python mgc/mgcc.py tests/magia/mgc/mm_matmul_mgc/mm_matmul.mgc -o tests/magia/mgc/mm_matmul_mgc/src/test.c
+# Output-static MATMUL (Z = X @ W, no bias) on the MAGIA mesh.
+# Compile (the kernel, its header include/mgc_mm_matmul.h and its test) with
+#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc/mm_matmul/mm_matmul.mgc \
+#       --header tests/magia/mgc/mm_matmul_mgc/include/test.h \
+#       -o kernels/mgc/mm_matmul/src/mgc_mm_matmul.c \
+#       --test tests/magia/mgc/mm_matmul_mgc/src/test.c
 
 from mgc import *
 
-M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # from include/test.h
+M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # kernel arguments
 X = l2("x_inp", (M, N), fp16)
 W = l2("w_inp", (N, K), fp16)
 Y = l2("y_out", (M, K), fp16)  # result out
@@ -22,10 +24,9 @@ WAIT_MODE = define(WFE)
 @kernel("mgc_mm_matmul", check=(Y, Z), authors=["Francesco Conti <f.conti@unibo.it>"])
 def mm_matmul():
     """
-    This test verifies MATMUL (no accumulation) on MAGIA, following the output-static
-    mechanism of mm_os_mgc without the bias: the output tile is never loaded, so the
-    compiler issues the first RedMulE job of each tile as a MATMUL, which does not read it,
-    and the following ones as GEMMs accumulating onto it.
+    MATMUL (no accumulation) kernel, output-static without bias: the output tile is never loaded, so the
+    compiler issues the first RedMulE job of each tile as a MATMUL, which does not read it, and the
+    following ones as GEMMs accumulating onto it.
     """
     for y_id, x_id in tiles():
         """
@@ -62,6 +63,6 @@ def mm_matmul():
                 redmule_evt[i].wait()
 
         """
-        4. Store the output data-tile back to L2 and check it
+        4. Store the output data-tile back to L2.
         """
         idma.store(Y[tile_h, tile_w], y).wait()

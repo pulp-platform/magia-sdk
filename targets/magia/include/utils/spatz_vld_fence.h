@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 //
-// Francesco Conti <francesco.conti@chips.it>
+// Francesco Conti <f.conti@unibo.it>
 //
 // Load fence for Spatz tasks, force-included in every Spatz task compile (spatz_helpers.cmake).
 // Every strided or indexed vector load asm string in the Spatz kernels is followed by

@@ -13,8 +13,10 @@ typedef struct {
     uint32_t min_coef; /* fp16 bits of the exp clamp MIN / s | COEF * s << 16        */
 } softmax_rows_fp16_spatz_params_t;
 
-/* Fast exp (Schraudolph 1999): exp(x) ~ reinterpret_fp16(COEF * x + BIAS), with x clamped to
-   MIN from below. COEF = 2^mantissa / ln(2), BIAS = exponent_bias * 2^mantissa (FP16). */
+/*
+ * Fast exp (Schraudolph 1999): exp(x) ~ reinterpret_fp16(COEF * x + BIAS), with x clamped to
+ * MIN from below. COEF = 2^mantissa / ln(2), BIAS = exponent_bias * 2^mantissa (FP16).
+ */
 #define SOFTMAX_ROWS_EXP_MIN  (-10.0f)
 #define SOFTMAX_ROWS_EXP_COEF (1477.0f)
 #define SOFTMAX_ROWS_EXP_BIAS (15360.0f)

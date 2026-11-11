@@ -1,16 +1,22 @@
 #include "tile.h"
 #include "bias_rope_fp16_spatz_params.h"
 
-/* X += bias (fp16 adds), broadcast along the rows; then, if cos is given, the RoPE of each row
-   (token) with the channels of a head in groups of G = group: in group g, columns
-   a = g * G + j and b = a + G/2 (j < G/2) are the pair of angle i = g * G/2 + j,
-     y[a] = x[a] * cos[i] - x[b] * sin[i]
-     y[b] = x[b] * cos[i] + x[a] * sin[i]
-   i.e. the rotate-half RoPE (pairs i, P/2 + i) on the channels permuted per head: Q and K permuted
-   the same way give the same Q @ Kt. All the accesses are unit-stride, in vectors of up to G/2
-   elements; the four products are exact in fp32 (vfwmul, fp16 x fp16), the sum and difference are
-   rounded once in fp32 and once to fp16 (as kernels/rope). The block starts at column col0 of its
-   head (a multiple of G) and may straddle heads; its columns are a multiple of G. */
+/*
+ * X += bias (fp16 adds), broadcast along the rows. Then, if cos is given, the RoPE of each row
+ * (token), with the channels of a head in groups of G = group. In group g, columns
+ *     a = g * G + j  and  b = a + G/2   (j < G/2)
+ * are the pair of angle i = g * G/2 + j:
+ *     y[a] = x[a] * cos[i] - x[b] * sin[i]
+ *     y[b] = x[b] * cos[i] + x[a] * sin[i]
+ * This is the rotate-half RoPE (pairs i, head_dim/2 + i) on the channels permuted per head: Q and
+ * K permuted the same way give the same Q @ Kt.
+ *
+ * - All accesses are unit-stride, in vectors of up to G/2 elements.
+ * - The four products are exact in fp32 (vfwmul, fp16 x fp16); the sum and difference are rounded
+ *   once in fp32 and once to fp16, as in kernels/rope.
+ * - The block starts at column col0 of its head (a multiple of G) and may straddle heads; its
+ *   number of columns is a multiple of G.
+ */
 int bias_rope_fp16_spatz_task(void)
 {
     const bias_rope_fp16_spatz_params_t *params;

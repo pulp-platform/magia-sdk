@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Yvan Tortorella <yvan.tortorella@unibo.it>
-# Francesco Conti <francesco.conti@chips.it>
+# Francesco Conti <f.conti@unibo.it>
 #
 # Bit-true FP16 helpers shared by the golden-data generators.
 

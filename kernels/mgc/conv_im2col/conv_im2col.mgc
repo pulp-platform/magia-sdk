@@ -5,23 +5,28 @@
 # 2-D convolution, CONV_K x CONV_K kernel (odd, default 3), stride 1, zero padding CONV_PAD = (CONV_K - 1) / 2
 # ("same"), no bias, as an im2col GEMM: Y[H*W x COUT] = im2col(X) [H*W x K*K*CIN] @ W [K*K*CIN x COUT].
 # X is HWC in L2, unpadded; W has its rows in (ky, kx, ci) order; Y is HWC.
-# Tile (ii, jj) owns the output rows tile_h of the image (mesh rows) and the output channels tile_c (mesh columns),
-# with its W block resident in L1. Its pixels go through a 4-stage pipeline, CONV_CP pixels of one output row at a
-# time (the last block of a row of a column block of CONV_WB columns may be partial: built and multiplied whole, only
-# its pixels inside the column block stored; chosen by gen_golden.py so that the buffers fit L1):
-#   0. iDMA: the CONV_K input rows the output row needs, in one contiguous transfer; at the top and bottom of the
-#      image the window is clamped inside it, and the rows outside it are zeros in the im2col;
-#   1. Spatz: the im2col block [CONV_CP x K*K*CIN] of the pixels, with the zero padding;
-#   2. RedMulE: the output block [CONV_CP x tile_c] = im2col block @ W block (MATMUL);
+# Tile (ii, jj) owns the output rows tile_h (mesh rows) and the output channels tile_c (mesh columns), with its
+# W block resident in L1. Each output row of a block of CONV_WB columns is cut into blocks of CONV_CP pixels, which
+# go through a 4-stage pipeline:
+#   0. iDMA: the CONV_K input rows that the output row needs, the CONV_WIN columns of the column block's window,
+#      in one 2-D transfer. At the top and bottom of the image the rows are clamped inside it, and the rows outside
+#      it are zeros in the im2col.
+#   1. Spatz: the im2col block [CONV_CP x K*K*CIN] of the pixels, with the zero padding.
+#   2. RedMulE: the output block [CONV_CP x tile_c] = im2col block @ W block (MATMUL).
 #   3. iDMA: the output block to L2.
-# All four run at once on consecutive blocks.
-# Compile with
-#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/conv_im2col/conv_im2col.mgc \
-#       -o tests/magia/mgc/conv_im2col/src/test.c
+# All four run at once on consecutive blocks. The last block of a row may be partial: it is built and multiplied
+# whole, but only its pixels inside the CONV_WB columns are stored.
+# The blocking (CONV_CP, CONV_NB, CONV_WNB) is chosen per mesh side by the test's gen_golden.py so that the buffers
+# fit L1, and reaches the kernel as arguments.
+# Compile (the kernel, its header include/mgc_conv_im2col.h and its test) with
+#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc/conv_im2col/conv_im2col.mgc \
+#       --header tests/magia/mgc/conv_im2col/include/test.h \
+#       -o kernels/mgc/conv_im2col/src/mgc_conv_im2col.c \
+#       --test tests/magia/mgc/conv_im2col/src/test.c
 
 from mgc import *
 
-H, W, CIN, COUT, KS, PAD = sizes("CONV_H", "CONV_W", "CONV_CIN", "CONV_COUT", "CONV_K", "CONV_PAD")  # from include/test.h
+H, W, CIN, COUT, KS, PAD = sizes("CONV_H", "CONV_W", "CONV_CIN", "CONV_COUT", "CONV_K", "CONV_PAD")  # kernel arguments
 ROW, KKC, HW, CP = sizes("CONV_ROW", "CONV_KKC", "CONV_HW", "CONV_CP")  # W * CIN, K * K * CIN, H * W, pixels per block
 # outer blocking: the convolution runs on CONV_NB blocks of CONV_CB = COUT / CONV_NB output channels in turn, so that
 # the weights resident in L1 are those of the tile's channels of a block (CONV_NB chosen by gen_golden.py, 1 if all
@@ -54,7 +59,7 @@ def conv_im2col():
     weights, the output stored by iDMA, in a 4-stage pipeline.
     """
     for ii, jj in tiles():
-        # outer blocking: the rest of the test, on output channels [cb * CONV_CB, (cb + 1) * CONV_CB) in turn
+        # outer blocking: output channels [cb * CONV_CB, (cb + 1) * CONV_CB) in turn
         for cb in range(NB):
             tile_h = ii.split(H)
             tile_c = jj.split(CB)
@@ -62,7 +67,7 @@ def conv_im2col():
             c0: u32 = cb * CB + tile_c.start
 
             w   = L1.single_buffer(w_[:, tile_c])        # weights of the tile's output channels
-            xin = L1.multi_buffer(x_[0:KS, 0:WIN * CIN]) # the input window of a block: CONV_K rows, CONV_WIN columns
+            xin = L1.multi_buffer(x_[0:KS, 0:WIN * CIN]) # input window of a W block: CONV_K rows, CONV_WIN columns
             col = L1.multi_buffer((CP, KKC), fp16)       # im2col block
             y   = L1.multi_buffer(y_[0:CP, tile_c])      # output block
 
@@ -71,8 +76,8 @@ def conv_im2col():
 
             idma.load(w, w_[:, c0:c0 + tile_c.size]).wait()
 
-            # y_out is in the shared .bss, which tile 0 clears in its crt0 while the other tiles may already run:
-            # no output store before every tile is in main
+            # the caller's y_out may be in the shared .bss, which tile 0 clears in its crt0 while the other tiles
+            # may already run: no output store before every tile is in main
             sync(GLOBAL)
 
             for wb in range(WNB):
@@ -85,8 +90,9 @@ def conv_im2col():
                     left = W - WIN
 
                 """
-                Block i of W block wb: output row tile_h.start + i / n_ch, columns wx + (i % n_ch) * CONV_CP onwards. In every step the
-                transfers, the Spatz task and the RedMulE job of four consecutive blocks are started, then waited.
+                Block i of W block wb: output row tile_h.start + i / n_ch, columns wx + (i % n_ch) * CONV_CP onwards.
+                Each pipeline step starts, then waits for, 1) the transfers, 2) the Spatz task and 3) the RedMulE
+                job of four consecutive blocks.
                 """
                 for i in pipeline(n_it):
                     with stage(0):

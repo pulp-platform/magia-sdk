@@ -99,8 +99,10 @@ static int init_input_params(void *params,
     if (row_len == 0)
         return 0;
 
-    /* This tile's rows (tokens) are contiguous in X, and so are their angles in C and S; every
-       tile needs the whole bias. */
+    /*
+     * This tile's rows (tokens) are contiguous in X, and so are their angles in C and S. Every
+     * tile needs the whole bias.
+     */
     idma_memcpy_1d(0,
                    (uint32_t)(X + row_start * cols),
                    (uint32_t)br_params->shard_X,

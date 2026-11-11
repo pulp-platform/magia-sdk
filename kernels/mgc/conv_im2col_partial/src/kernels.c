@@ -4,11 +4,12 @@
 //
 // Francesco Conti <f.conti@unibo.it>
 //
-// L1 kernels called (on the CV32 control core) by the mgc-generated test.c.
+// L1 kernels called (on the CV32 control core) by the mgc-generated kernel src/mgc_conv_im2col_partial.c.
 // All pointer arguments are L1 addresses.
+// Sizes and x_inp are the kernel's arguments, read through the MGC_GLUE macros of mgc_conv_im2col_partial.h.
 //
-// The ring holds CONV_NSLOT expanded input rows: input row iy is in slot iy % CONV_NSLOT, as CONV_CP rows of
-// CONV_KC = CONV_K * CONV_CIN values, row p the patch row of output column x0 + p: input columns
+// The ring buffer holds CONV_NSLOT expanded input rows: input row iy is in slot iy % CONV_NSLOT, as CONV_CP rows of
+// CONV_KC = CONV_K * CONV_CIN values. Row p is the patch row of output column x0 + p: input columns
 // (x0 + p) * CONV_S - CONV_PAD .. + CONV_K - 1, all channels (zeros outside the image).
 
 #include <stdint.h>
@@ -21,16 +22,20 @@
 
 #define SLOT_BYTES (CONV_CP * CONV_KC * 2)
 
-/* The loads in flight (started by l1_e_load, waited by l1_e_load_wait in the same step): input rows pend_lo ..
-   pend_hi of the block of columns from pend_x0 (none if pend_lo > pend_hi); the last one's event, as same-direction
-   transfers complete in order. */
+/*
+ * Loads in flight (started by l1_e_load, waited for by l1_e_load_wait in the same step): input rows pend_lo ..
+ * pend_hi of the block of columns from pend_x0 (none if pend_lo > pend_hi). load_ev is the event of the last
+ * one: same-direction transfers complete in order.
+ */
 static mg_event_t load_ev __attribute__((section(".tile_bss")));
 static int32_t pend_lo __attribute__((section(".tile_bss")));
 static int32_t pend_hi __attribute__((section(".tile_bss")));
 static uint32_t pend_x0 __attribute__((section(".tile_bss")));
 
-/* A multiple of CONV_NSLOT at most CONV_NSLOT below the rows in use, so that iy % CONV_NSLOT is iy - slot_iy0
-   without a division (CONV_NSLOT is a run-time value). */
+/*
+ * A multiple of CONV_NSLOT at most CONV_NSLOT below the rows in use, so that iy % CONV_NSLOT is iy - slot_iy0
+ * without a division (CONV_NSLOT is a run-time value).
+ */
 static int32_t slot_iy0 __attribute__((section(".tile_bss")));
 
 static inline uint32_t slot_addr(uint32_t ring, int32_t iy)
@@ -43,11 +48,11 @@ static inline uint32_t slot_addr(uint32_t ring, int32_t iy)
 }
 
 /**
- * Starts the loads into `ring` of the expanded input rows that output row `row` needs and output row row - 1 did not
- * (all of them if `row` is the first row of the pipeline, r0), inside the image, for the CONV_CP output columns from
- * x0. Each is one 2-D transfer: CONV_CP patch rows of CONV_KC values, CONV_S * CONV_CIN values apart in L2 (they
- * overlap). The patch rows at the left and right edges of the image read past the input row (the previous or next
- * row, or the L2 next to x_inp): l1_e_load_wait zeroes those parts once the data has landed.
+ * Starts the loads into `ring` of the expanded input rows that output row `row` needs and output row row - 1 did
+ * not (all of them if `row` is r0, the first row of the pipeline), clipped to the image, for the CONV_CP output
+ * columns from x0. Each is one 2-D transfer: CONV_CP patch rows of CONV_KC values, CONV_S * CONV_CIN values apart
+ * in L2 (they overlap). The patch rows at the left and right edges of the image read past the input row (into the
+ * previous or next row, or the L2 next to x_inp); l1_e_load_wait zeroes those parts once the data has landed.
  */
 void l1_e_load(uint32_t ring, uint32_t row, uint32_t r0, uint32_t x0)
 {
@@ -99,10 +104,10 @@ void l1_e_load_wait(uint32_t ring)
 }
 
 /**
- * y [CONV_CP x tc] = the convolution of the block of output row `row` from the expanded input rows in `ring`, with the
+ * y [CONV_CP x tc] = convolution of the block of output row `row`, from the expanded input rows in `ring` and the
  * weights `w` [CONV_KKC x tc]: for each kernel row ky whose input row is inside the image, in ky order,
- * y += E_iy [CONV_CP x CONV_KC] @ w[ky rows] [CONV_KC x tc], the first job a MATMUL. Issues the jobs (two in the
- * RedMulE queue) and waits for the last one.
+ * y += E_iy [CONV_CP x CONV_KC] @ w[ky rows] [CONV_KC x tc]; the first job is a MATMUL, which initializes y.
+ * Issues the jobs (two in the RedMulE queue) and waits for the last one.
  */
 void l1_e_gemm(uint32_t y, uint32_t ring, uint32_t w, uint32_t row, uint32_t tc)
 {
@@ -114,7 +119,7 @@ void l1_e_gemm(uint32_t y, uint32_t ring, uint32_t w, uint32_t row, uint32_t tc)
         uint32_t wk = w + (uint32_t)ky * CONV_KC * tc * 2;
 
         if (iy < 0 || iy >= CONV_H)
-            continue; /* zeros: nothing to accumulate */
+            continue; /* input row in the zero padding: nothing to accumulate */
         if (first)
             mg_redmule_matmul(WFE, slot_addr(ring, iy), wk, y, CONV_CP, CONV_KC, tc, &ev, NULL);
         else

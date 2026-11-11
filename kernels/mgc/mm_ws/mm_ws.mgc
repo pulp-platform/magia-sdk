@@ -3,13 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Weight-static GEMM (Z = X @ W + Y) on the MAGIA mesh, as a systolic pipeline.
-# Same algorithm as tests/magia/mesh/mm_ws_2; mm_ws_explicit.mgc is the
-# hand-scheduled version. Compile with
-#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/mm_ws_mgc/mm_ws.mgc -o tests/magia/mgc/mm_ws_mgc/src/test.c
+# Same algorithm as tests/magia/mesh/mm_ws_2; mm_ws_explicit.mgc is the hand-scheduled version.
+# Compile (the kernel, its header include/mgc_mm_ws.h and its test) with
+#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc/mm_ws/mm_ws.mgc \
+#       --header tests/magia/mgc/mm_ws_mgc/include/test.h \
+#       -o kernels/mgc/mm_ws/src/mgc_mm_ws.c \
+#       --test tests/magia/mgc/mm_ws_mgc/src/test.c
 
 from mgc import *
 
-M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # from include/test.h
+M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # kernel arguments
 X = l2("x_inp", (M, N), fp16)
 W = l2("w_inp", (N, K), fp16)
 Y = l2("y_inp", (M, K), fp16)  # bias in, result out
@@ -22,9 +25,8 @@ WAIT_MODE = define(WFE)
 @kernel("mgc_mm_ws", check=(Y, Z), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
 def mm_ws():
     """
-    This test aims to verify the functionality of MAGIA as a systolic array for matrix
-    multiplications, following the weight-static mechanism. Each tile keeps a block of W in
-    L1; blocks of output rows flow down the mesh columns, accumulating x @ w at each tile.
+    Weight-static matrix multiplication on MAGIA used as a systolic array. Each tile keeps a block of W
+    in L1; blocks of output rows flow down the mesh columns, accumulating x @ w at each tile.
     """
     for y_id, x_id in tiles():
         """
@@ -49,7 +51,7 @@ def mm_ws():
         y = L1.multi_buffer(Y[0:t_size, tile_w], depth=3)
 
         """
-        TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+        Repeat the kernel body N_ITERATIONS times.
         """
         for z in range(N_ITERATIONS):
             idma.load(w, W[tile_h, tile_w]).wait()

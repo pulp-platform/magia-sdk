@@ -4,8 +4,11 @@
 /* Unit-stride vector accesses must be 4-byte aligned. */
 #define MISALIGNED(p)  (((uintptr_t)(p)) & 0x2)
 
-/* Any rows: reducemax over the last axis with one lane per row (column-strided loads), and
-   the element-wise max with the previous row max. Cold: linked out of the hot tasks. */
+/*
+ * Fallback for a misaligned X or odd cols: reducemax over the last axis with one lane per row
+ * (column-strided loads), then the element-wise max with the previous row max. Marked cold to
+ * keep it out of the hot path.
+ */
 static __attribute__((noinline, cold)) void rowmax_strided(
     const _Float16 *X, const _Float16 *P, _Float16 *M, size_t rows, size_t cols)
 {
@@ -30,11 +33,14 @@ static __attribute__((noinline, cold)) void rowmax_strided(
     }
 }
 
-/* Row max of 16 rows of at most VLMAX elements, with vl set by the caller: each row is
-   loaded into v0 / v8 alternately, so that a load overlaps the previous reduction, and reduced
-   into its own register v16..v31; the 16 maxima are stored after a single vtype switch, which
-   drains the VU. SPATZ_VLD_FENCE: the reduction must not chain on its load (see
-   spatz_vld_fence.h); the load of the next row still overlaps it. */
+/*
+ * Row max of 16 rows of at most VLMAX elements, with vl set by the caller:
+ * - each row is loaded into v0 / v8 alternately, so that a load overlaps the previous
+ *   reduction, and reduced into its own register v16..v31;
+ * - the 16 maxima are stored after a single vtype switch, which drains the VU.
+ * SPATZ_VLD_FENCE: the reduction must not chain on its load (see spatz_vld_fence.h); the load of
+ * the next row still overlaps it.
+ */
 #define ROWMAX_RED(dst, src, x)                                         \
     do {                                                                \
         asm volatile("vle16.v " src ", (%0)" SPATZ_VLD_FENCE ::"r"(x)); \
@@ -80,10 +86,12 @@ static inline void rowmax_16rows(const _Float16 *X, _Float16 *M, size_t cols)
     asm volatile("vsetvli zero, %0, e16, m8, ta, ma" ::"r"(cols));
 }
 
-/* Fuses reducemax over the last axis and the element-wise max with the previous row max.
-   Rows are read with unit-stride loads and reduced with vfredmax: a column-strided load hits a
-   single L1 bank when the row pitch is a multiple of 128 B. Each row max is stored by a
-   1-element vector store, so the Snitch never waits for it. */
+/*
+ * Fuses reducemax over the last axis and the element-wise max with the previous row max.
+ * Rows are read with unit-stride loads and reduced with vfredmax: a column-strided load hits a
+ * single L1 bank when the row pitch is a multiple of 128 B. Each row max is stored by a
+ * 1-element vector store, so the Snitch never waits for it.
+ */
 int rowmax_fp16_spatz_task(void)
 {
     const rowmax_fp16_spatz_params_t *params;

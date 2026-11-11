@@ -34,25 +34,25 @@ mgc_conv_im2col_opt_args_t mgc_conv_im2col_opt_args __attribute__((section(".til
 void mgc_conv_im2col_opt(uint16_t *x_inp,
                          uint16_t *w_inp,
                          uint16_t *y_out,
-                         uint32_t CONV_H,
-                         uint32_t CONV_W,
-                         uint32_t CONV_CIN,
-                         uint32_t CONV_COUT,
-                         uint32_t CONV_K,
-                         uint32_t CONV_PAD,
-                         uint32_t CONV_S,
-                         uint32_t CONV_OH,
-                         uint32_t CONV_OW,
-                         uint32_t CONV_ROW,
-                         uint32_t CONV_KKC,
-                         uint32_t CONV_HW,
-                         uint32_t CONV_CP,
-                         uint32_t CONV_NB,
-                         uint32_t CONV_CB,
-                         uint32_t CONV_WNB,
-                         uint32_t CONV_WB,
-                         uint32_t CONV_WIN,
-                         uint32_t CONV_SHARE_CHUNK)
+                         int32_t CONV_H,
+                         int32_t CONV_W,
+                         int32_t CONV_CIN,
+                         int32_t CONV_COUT,
+                         int32_t CONV_K,
+                         int32_t CONV_PAD,
+                         int32_t CONV_S,
+                         int32_t CONV_OH,
+                         int32_t CONV_OW,
+                         int32_t CONV_ROW,
+                         int32_t CONV_KKC,
+                         int32_t CONV_HW,
+                         int32_t CONV_CP,
+                         int32_t CONV_NB,
+                         int32_t CONV_CB,
+                         int32_t CONV_WNB,
+                         int32_t CONV_WB,
+                         int32_t CONV_WIN,
+                         int32_t CONV_SHARE_CHUNK)
 {
     /* the arguments, for the L1 kernels */
     mgc_conv_im2col_opt_args.x_inp            = x_inp;
@@ -106,8 +106,7 @@ void mgc_conv_im2col_opt(uint16_t *x_inp,
 
     mg_event_t idma_evt_xin, idma_evt_w, idma_evt_y;
     mg_event_t redmule_evt;
-    // outer blocking: the rest of the test, on output channels [cb * CONV_CB, (cb + 1) * CONV_CB)
-    // in turn
+    // outer blocking: output channels [cb * CONV_CB, (cb + 1) * CONV_CB) in turn
     for (int cb = 0; cb < CONV_NB; cb++) {
         uint32_t tile_h_max = ((CONV_OH + MESH_Y_TILES - 1) / MESH_Y_TILES);
         uint32_t tile_c_max = ((CONV_CB + MESH_X_TILES - 1) / MESH_X_TILES);
@@ -166,8 +165,8 @@ void mgc_conv_im2col_opt(uint16_t *x_inp,
                           NULL);
         mg_idma_wait(0, WAIT_MODE, &idma_evt_w);
 
-        // y_out is in the shared .bss, which tile 0 clears in its crt0 while the other tiles may
-        // already run: no output store before every tile is in main
+        // the caller's y_out may be in the shared .bss, which tile 0 clears in its crt0 while the
+        // other tiles may already run: no output store before every tile is in main
         fsync_sync_global();
         eu_fsync_wait(WAIT_MODE);
 
@@ -187,8 +186,8 @@ void mgc_conv_im2col_opt(uint16_t *x_inp,
 
             /**
              * Block i of W block wb: output row tile_h.start + i / n_ch, columns wx + (i % n_ch) *
-             * CONV_CP onwards. In every step the transfers, the Spatz task and the RedMulE job of
-             * four consecutive blocks are started, then waited.
+             * CONV_CP onwards. Each pipeline step starts, then waits for, 1) the transfers, 2) the
+             * Spatz task and 3) the RedMulE job of four consecutive blocks.
              */
             uint32_t r  = (tile_h_max * ii + 0 / n_ch) * CONV_S;
             uint32_t lo = 0;

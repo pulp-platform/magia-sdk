@@ -164,8 +164,10 @@ exit:
     return ret;
 }
 
-/* Col2Im on this tile's Spatz, for operands that are already in this tile's L1: no sharding across
-   tiles, no L1 allocation and no L2 transfers. */
+/*
+ * Col2Im on this tile's Spatz, for operands that are already in this tile's L1: no sharding across
+ * tiles, no L1 allocation and no L2 transfers.
+ */
 void MAGIA_col2im_fp16_spatz_l1(const float16 *input,
                                 float16 *output,
                                 uint32_t batch,

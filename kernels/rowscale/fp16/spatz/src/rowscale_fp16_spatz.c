@@ -77,8 +77,10 @@ static int init_input_params(void *params, const float16 *X, const float16 *S)
     if (row_len == 0)
         return 0;
 
-    /* This tile's rows [row_start, row_start+row_len) are contiguous in X, and so are their
-       scale factors in S. The Spatz task writes every output, so shard_Y is not zeroed here. */
+    /*
+     * This tile's rows [row_start, row_start + row_len) are contiguous in X, and so are their
+     * scale factors in S. The Spatz task writes every output, so shard_Y is not zeroed here.
+     */
     idma_memcpy_1d(0,
                    (uint32_t)(X + row_start * cols),
                    (uint32_t)rs_params->shard_X,
@@ -113,8 +115,10 @@ exit:
     return ret;
 }
 
-/* Y[r, c] = X[r, c] * S[r] on this tile's Spatz, for operands that are already in this
-   tile's L1: no sharding across tiles, no L1 allocation and no L2 transfers. Y may alias X. */
+/*
+ * Y[r, c] = X[r, c] * S[r] on this tile's Spatz, for operands already in this tile's L1: no
+ * sharding across tiles, no L1 allocation and no L2 transfers. Y may alias X.
+ */
 void MAGIA_rowscale_fp16_spatz_l1(
     const float16 *X, const float16 *S, float16 *Y, uint32_t rows, uint32_t cols)
 {

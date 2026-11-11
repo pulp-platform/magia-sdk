@@ -2,17 +2,40 @@
 #include "utils/spatz_recip.h"
 #include "gelu_fast_fp16_spatz_params.h"
 
-/* GELU(x), tanh form, x * sigmoid(2 * sqrt(2 / pi) * (x + 0.044715 * x^3)) = x / (1 + exp(-K * z)),
-   z = x * (1 + 0.044715 * x^2), K = 2 * sqrt(2 / pi), all in FP16 (one rounding per instruction):
-     z = x * (x * x * C3 + 1);
-     e = exp(-K * z), the Schraudolph exp of swiglu_fast with K folded into COEF: the FP16 bits of
-         rtz(min(max(z, -6.875), 16) * -COEF + BIAS) (one fused multiply-add), 0 for z > ~6.5; the upper
-         clamp keeps the multiply-add finite (it would be -inf for z > ~34);
-     d = 1 + e, in [1, 53000]: finite, so no clamp of the divisor;
-     y = 1 / d: a = d * 2^-4 (exact, so that 1/a is normal), seed 0x77a0 - bits(a), 2 Newton steps
-         y += y * (1 - a * y), then y * 2^-4;
-     h = x / d: q0 = x * y, then one fused correction step q0 + y * (x - d * q0) (SPATZ_VFDIV_VV
-         without the sign and range handling, for d >= 1). */
+/*
+ * GELU, tanh approximation, computed entirely in FP16
+ * (one rounding per instruction).
+ *
+ *   GELU(x) = x * sigmoid(K * z)  =  x / (1 + exp(-K * z))
+ *   where  z = x * (1 + C3 * x^2),  C3 = 0.044715,  K = 2 * sqrt(2 / pi)
+ *
+ * Steps:
+ *
+ * 1. z = x * (x * x * C3 + 1)
+ *
+ * 2. e = exp(-K * z), Schraudolph approximation.
+ *    K is folded into COEF, so one fused multiply-add gives the FP16 bits of e:
+ *        e_bits = rtz(clamp(z, -6.875, 16) * -COEF + BIAS)
+ *    - The result is 0 for z > ~6.5.
+ *    - The upper clamp (16) keeps the FMA finite; without it the FMA
+ *      would overflow to -inf for z > ~34.
+ *
+ * 3. d = 1 + e
+ *    d is in [1, ~59400], always finite, so the divisor needs no clamp.
+ *
+ * 4. y = 1 / d, by Newton-Raphson:
+ *    - Scale: a = d * 2^-4 (exact). This keeps 1/a a normal number;
+ *      1/d itself would be subnormal for large d.
+ *    - Seed:  y = bits(0x77a0 - bits(a))
+ *    - Twice: y += y * (1 - a * y)
+ *    - Undo the scale: y = y * 2^-4
+ *
+ * 5. h = x / d:
+ *    - q0 = x * y
+ *    - One fused correction step: h = q0 + y * (x - d * q0)
+ *    This is SPATZ_VFDIV_VV without its sign and range handling,
+ *    which is not needed here because d >= 1.
+ */
 int gelu_fast_fp16_spatz_task(void)
 {
     const gelu_fast_fp16_spatz_params_t *params;

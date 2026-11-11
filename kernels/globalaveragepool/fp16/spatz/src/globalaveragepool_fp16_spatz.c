@@ -110,8 +110,10 @@ exit:
     return ret;
 }
 
-/* GlobalAveragePool of NCHW planes on this tile's Spatz, for operands that are already in this
-   tile's L1: no sharding across tiles, no L1 allocation and no L2 transfers. */
+/*
+ * GlobalAveragePool of NCHW planes on this tile's Spatz, for operands that are already in this
+ * tile's L1: no sharding across tiles, no L1 allocation and no L2 transfers.
+ */
 void MAGIA_globalaveragepool_fp16_spatz_l1(const float16 *X, float16 *Y, uint32_t input_shape[4])
 {
     volatile globalaveragepool_fp16_spatz_params_t params = {

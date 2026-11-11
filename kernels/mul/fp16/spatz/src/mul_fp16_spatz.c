@@ -110,8 +110,10 @@ exit:
     return ret;
 }
 
-/* C = A * B on this tile's Spatz, for operands that are already in this tile's L1:
-   no sharding across tiles, no L1 allocation and no L2 transfers. C may alias A or B. */
+/*
+ * C = A * B on this tile's Spatz, for operands that are already in this tile's L1:
+ * no sharding across tiles, no L1 allocation and no L2 transfers. C may alias A or B.
+ */
 void MAGIA_mul_fp16_spatz_l1(const float16 *A, const float16 *B, float16 *C, uint32_t n)
 {
     volatile mul_fp16_spatz_params_t params = {

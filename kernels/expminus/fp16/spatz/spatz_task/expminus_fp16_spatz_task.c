@@ -6,7 +6,7 @@
 
 /**
  * Computes a fast vectorized approximation of exp(x - m), m being a per-row scalar.
- * Uses the bit-level fast exponential method (Schraudolph 1999), as the exp kernel:
+ * Uses the bit-level fast exponential method (Schraudolph 1999):
  *      exp(x) ~ reinterpret_fp16(COEF * x + BIAS)
  * COEF = 2^mantissa / ln(2) (mantissa = 10 for FP16), scales x to the FP16 exponent range.
  * BIAS = exponent_bias * 2^mantissa (bias = 15 for FP16), shifts the bits to approximate exp.

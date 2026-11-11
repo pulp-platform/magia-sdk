@@ -14,8 +14,8 @@
 void mgc_mm_matmul(uint16_t *x_inp,
                    uint16_t *w_inp,
                    uint16_t *y_out,
-                   uint32_t m_size,
-                   uint32_t n_size,
-                   uint32_t k_size);
+                   int32_t m_size,
+                   int32_t n_size,
+                   int32_t k_size);
 
 #endif /* MGC_MM_MATMUL_H_ */

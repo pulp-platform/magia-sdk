@@ -18,17 +18,16 @@
 #define WAIT_MODE   WFE
 
 /**
- * This test verifies MATMUL (no accumulation) on MAGIA, following the output-static
- * mechanism of mm_os_mgc without the bias: the output tile is never loaded, so the
- * compiler issues the first RedMulE job of each tile as a MATMUL, which does not read it,
- * and the following ones as GEMMs accumulating onto it.
+ * MATMUL (no accumulation) kernel, output-static without bias: the output tile is never loaded, so
+ * the compiler issues the first RedMulE job of each tile as a MATMUL, which does not read it, and
+ * the following ones as GEMMs accumulating onto it.
  */
 void mgc_mm_matmul(uint16_t *x_inp,
                    uint16_t *w_inp,
                    uint16_t *y_out,
-                   uint32_t M_SIZE,
-                   uint32_t N_SIZE,
-                   uint32_t K_SIZE)
+                   int32_t M_SIZE,
+                   int32_t N_SIZE,
+                   int32_t K_SIZE)
 {
     /**
      * 0. Get the mesh-tile's hartid, mesh-tile coordinates and define its L1 base,
@@ -192,7 +191,7 @@ void mgc_mm_matmul(uint16_t *x_inp,
     }
 
     /**
-     * 4. Store the output data-tile back to L2 and check it
+     * 4. Store the output data-tile back to L2.
      */
     mg_idma_memcpy_2d(WAIT_MODE, 1, l2_addr_y, l1_addr_y, len_y, std_y, reps_y, &idma_evt_y, NULL);
     mg_idma_wait(1, WAIT_MODE, &idma_evt_y);

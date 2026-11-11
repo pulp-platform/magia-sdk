@@ -244,8 +244,10 @@ exit:
     return ret;
 }
 
-/* Y = alpha * A' @ B' + beta * C on this tile's Spatz, for operands that are already in this tile's
-   L1: no sharding across tiles, no L1 allocation and no L2 transfers. */
+/*
+ * Y = alpha * A' @ B' + beta * C on this tile's Spatz, for operands already in this tile's L1:
+ * no sharding across tiles, no L1 allocation and no L2 transfers.
+ */
 void MAGIA_gemm_fp16_spatz_l1(const float16 *A,
                               const float16 *B,
                               const float16 *C,

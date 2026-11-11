@@ -2,9 +2,17 @@
 #include "utils/spatz_recip.h"
 #include "swiglu_fp16_spatz_params.h"
 
-/* SiLU(g) * u in fp32, one rounding to fp16 at the end. SiLU(g) = g / (1 + exp(-g)): exp(-g) = 2^t,
-   t = -g * log2(e), clamped to [-125, 126] (exp(-g) only has to be finite and normal); t = n + f with n = round(t), f in [-0.5, 0.5]; 2^f by a degree-5 polynomial (relative
-   error < 2e-7), 2^n added to its exponent field. */
+/*
+ * SiLU(g) * u, computed in fp32 with one rounding to fp16 at the end.
+ *
+ *   SiLU(g) = g / (1 + exp(-g))
+ *
+ * exp(-g) = 2^t, with t = -g * log2(e):
+ * - t is clamped to [-125, 126]: exp(-g) only has to be finite and normal.
+ * - t = n + f, with n = round(t) and f in [-0.5, 0.5].
+ * - 2^f by a degree-5 polynomial (relative error < 2e-7).
+ * - 2^n is added to the exponent field of 2^f.
+ */
 int swiglu_fp16_spatz_task(void)
 {
     volatile swiglu_fp16_spatz_params_t *params;

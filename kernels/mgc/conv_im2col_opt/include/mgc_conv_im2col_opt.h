@@ -15,25 +15,25 @@ typedef struct {
     uint16_t *x_inp;
     uint16_t *w_inp;
     uint16_t *y_out;
-    uint32_t conv_h;
-    uint32_t conv_w;
-    uint32_t conv_cin;
-    uint32_t conv_cout;
-    uint32_t conv_k;
-    uint32_t conv_pad;
-    uint32_t conv_s;
-    uint32_t conv_oh;
-    uint32_t conv_ow;
-    uint32_t conv_row;
-    uint32_t conv_kkc;
-    uint32_t conv_hw;
-    uint32_t conv_cp;
-    uint32_t conv_nb;
-    uint32_t conv_cb;
-    uint32_t conv_wnb;
-    uint32_t conv_wb;
-    uint32_t conv_win;
-    uint32_t conv_share_chunk;
+    int32_t conv_h;
+    int32_t conv_w;
+    int32_t conv_cin;
+    int32_t conv_cout;
+    int32_t conv_k;
+    int32_t conv_pad;
+    int32_t conv_s;
+    int32_t conv_oh;
+    int32_t conv_ow;
+    int32_t conv_row;
+    int32_t conv_kkc;
+    int32_t conv_hw;
+    int32_t conv_cp;
+    int32_t conv_nb;
+    int32_t conv_cb;
+    int32_t conv_wnb;
+    int32_t conv_wb;
+    int32_t conv_win;
+    int32_t conv_share_chunk;
 } mgc_conv_im2col_opt_args_t;
 
 /* The arguments of the running call, in each tile's L1. */
@@ -42,25 +42,25 @@ extern mgc_conv_im2col_opt_args_t mgc_conv_im2col_opt_args;
 void mgc_conv_im2col_opt(uint16_t *x_inp,
                          uint16_t *w_inp,
                          uint16_t *y_out,
-                         uint32_t conv_h,
-                         uint32_t conv_w,
-                         uint32_t conv_cin,
-                         uint32_t conv_cout,
-                         uint32_t conv_k,
-                         uint32_t conv_pad,
-                         uint32_t conv_s,
-                         uint32_t conv_oh,
-                         uint32_t conv_ow,
-                         uint32_t conv_row,
-                         uint32_t conv_kkc,
-                         uint32_t conv_hw,
-                         uint32_t conv_cp,
-                         uint32_t conv_nb,
-                         uint32_t conv_cb,
-                         uint32_t conv_wnb,
-                         uint32_t conv_wb,
-                         uint32_t conv_win,
-                         uint32_t conv_share_chunk);
+                         int32_t conv_h,
+                         int32_t conv_w,
+                         int32_t conv_cin,
+                         int32_t conv_cout,
+                         int32_t conv_k,
+                         int32_t conv_pad,
+                         int32_t conv_s,
+                         int32_t conv_oh,
+                         int32_t conv_ow,
+                         int32_t conv_row,
+                         int32_t conv_kkc,
+                         int32_t conv_hw,
+                         int32_t conv_cp,
+                         int32_t conv_nb,
+                         int32_t conv_cb,
+                         int32_t conv_wnb,
+                         int32_t conv_wb,
+                         int32_t conv_win,
+                         int32_t conv_share_chunk);
 
 /* For the L1 kernels: the arguments under their names in the .mgc. */
 #ifdef MGC_GLUE

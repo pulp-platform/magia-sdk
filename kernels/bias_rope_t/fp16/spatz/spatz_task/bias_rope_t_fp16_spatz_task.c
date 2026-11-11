@@ -1,14 +1,16 @@
 #include "tile.h"
 #include "bias_rope_t_fp16_spatz_params.h"
 
-/* bias_rope on a transposed block (channels along the rows, tokens along the columns, as Kt):
-   X[r, t] += bias[r] (fp16 adds), then, in each group g of G = group rows of a head, rows
-   a = g * G + j and b = a + G/2 (j < G/2) rotated by angle i = g * G/2 + j,
-     y[a, t] = x[a, t] * cos[i, t] - x[b, t] * sin[i, t]
-     y[b, t] = x[b, t] * cos[i, t] + x[a, t] * sin[i, t]
-   with the same arithmetic as bias_rope (exact fp32 products, fp32 then fp16 rounding), all
-   unit-stride along the tokens. The block starts at row row0 of its head (a multiple of G) and may
-   straddle heads; its rows are a multiple of G. */
+/*
+ * bias_rope on a transposed block (channels along the rows, tokens along the columns, as Kt):
+ * X[r, t] += bias[r] (fp16 adds), then, in each group g of G = group rows of a head, rows
+ * a = g * G + j and b = a + G/2 (j < G/2) rotated by angle i = g * G/2 + j,
+ *   y[a, t] = x[a, t] * cos[i, t] - x[b, t] * sin[i, t]
+ *   y[b, t] = x[b, t] * cos[i, t] + x[a, t] * sin[i, t]
+ * with the same arithmetic as bias_rope (exact fp32 products, fp32 then fp16 rounding), all
+ * unit-stride along the tokens. The block starts at row row0 of its head (a multiple of G) and may
+ * straddle heads; its rows are a multiple of G.
+ */
 int bias_rope_t_fp16_spatz_task(void)
 {
     const bias_rope_t_fp16_spatz_params_t *params;
@@ -32,7 +34,7 @@ int bias_rope_t_fp16_spatz_task(void)
     cols   = params->dims >> 16;
     half   = params->head_dim / 2;
     gh     = params->group / 2;
-    i      = params->row0 / 2; /* angle of the first pair of the group */
+    i      = params->row0 / 2; /* angle of the block's first pair */
 
     for (size_t g0 = 0; g0 < rows; g0 += 2 * gh) {
         for (size_t j = 0; j < gh; j++) {

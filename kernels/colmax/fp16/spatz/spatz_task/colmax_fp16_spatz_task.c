@@ -4,8 +4,10 @@
 /* Unit-stride vector accesses must be 4-byte aligned. */
 #define MISALIGNED(p)  (((uintptr_t)(p)) & 0x2)
 
-/* reducemax over the first axis for aligned rows: element-wise max of the rows, vectorized
-   along the columns. */
+/*
+ * reducemax over the first axis for aligned rows: element-wise max of the rows, vectorized
+ * along the columns.
+ */
 int colmax_fp16_spatz_task(void)
 {
     const colmax_fp16_spatz_params_t *params;

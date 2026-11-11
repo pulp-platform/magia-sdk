@@ -27,35 +27,35 @@ extern void l1_e_load_wait(uint32_t ring);
 extern void l1_e_gemm(uint32_t y, uint32_t ring, uint32_t w, uint32_t row, uint32_t tc);
 
 /**
- * CONV_K x CONV_K convolution (padding (CONV_K - 1) / 2, stride CONV_S) with a partial im2col: per
- * output row, the input rows expanded along kx loaded by iDMA into a ring, one RedMulE job per
- * kernel row accumulating in the output block with the resident weights, the output stored by iDMA,
- * in a 3-stage pipeline.
+ * CONV_K x CONV_K convolution (padding (CONV_K - 1) / 2, stride CONV_S) with a partial im2col, as a
+ * 3-stage pipeline over the output rows: iDMA loads the input rows, expanded along kx, into a ring
+ * buffer; RedMulE runs one job per kernel row, accumulating into the output block with the resident
+ * weights; iDMA stores the output.
  */
 mgc_conv_im2col_partial_args_t mgc_conv_im2col_partial_args __attribute__((section(".tile_bss")));
 
 void mgc_conv_im2col_partial(uint16_t *x_inp,
                              uint16_t *w_inp,
                              uint16_t *y_out,
-                             uint32_t CONV_H,
-                             uint32_t CONV_W,
-                             uint32_t CONV_CIN,
-                             uint32_t CONV_COUT,
-                             uint32_t CONV_K,
-                             uint32_t CONV_PAD,
-                             uint32_t CONV_S,
-                             uint32_t CONV_OH,
-                             uint32_t CONV_OW,
-                             uint32_t CONV_ROW,
-                             uint32_t CONV_KKC,
-                             uint32_t CONV_HW,
-                             uint32_t CONV_KC,
-                             uint32_t CONV_CP,
-                             uint32_t CONV_ZR,
-                             uint32_t CONV_NSLOT,
-                             uint32_t CONV_NB,
-                             uint32_t CONV_CB,
-                             uint32_t CONV_WNB)
+                             int32_t CONV_H,
+                             int32_t CONV_W,
+                             int32_t CONV_CIN,
+                             int32_t CONV_COUT,
+                             int32_t CONV_K,
+                             int32_t CONV_PAD,
+                             int32_t CONV_S,
+                             int32_t CONV_OH,
+                             int32_t CONV_OW,
+                             int32_t CONV_ROW,
+                             int32_t CONV_KKC,
+                             int32_t CONV_HW,
+                             int32_t CONV_KC,
+                             int32_t CONV_CP,
+                             int32_t CONV_ZR,
+                             int32_t CONV_NSLOT,
+                             int32_t CONV_NB,
+                             int32_t CONV_CB,
+                             int32_t CONV_WNB)
 {
     /* the arguments, for the L1 kernels */
     mgc_conv_im2col_partial_args.x_inp      = x_inp;
@@ -104,8 +104,7 @@ void mgc_conv_im2col_partial(uint16_t *x_inp,
     volatile uint32_t y_pt_prev;
 
     mg_event_t idma_evt_w, idma_evt_y;
-    // outer blocking: the rest of the test, on output channels [cb * CONV_CB, (cb + 1) * CONV_CB)
-    // in turn
+    // outer blocking: output channels [cb * CONV_CB, (cb + 1) * CONV_CB) in turn
     for (int cb = 0; cb < CONV_NB; cb++) {
         uint32_t tile_h_max = ((CONV_OH + MESH_Y_TILES - 1) / MESH_Y_TILES);
         uint32_t tile_c_max = ((CONV_CB + MESH_X_TILES - 1) / MESH_X_TILES);
@@ -155,8 +154,8 @@ void mgc_conv_im2col_partial(uint16_t *x_inp,
                           NULL);
         mg_idma_wait(0, WAIT_MODE, &idma_evt_w);
 
-        // y_out is in the shared .bss, which tile 0 clears in its crt0 while the other tiles may
-        // already run: no output store before every tile is in main
+        // the caller's y_out may be in the shared .bss, which tile 0 clears in its crt0 while the
+        // other tiles may already run: no output store before every tile is in main
         fsync_sync_global();
         eu_fsync_wait(WAIT_MODE);
 
@@ -164,9 +163,10 @@ void mgc_conv_im2col_partial(uint16_t *x_inp,
             uint32_t x0 = wb * CONV_CP;
 
             /**
-             * Iteration i: output row tile_h.start + i of the block of columns. In every step the
-             * loads, the RedMulE jobs and the store of three consecutive rows: the transfers are
-             * started first, as the core issues the jobs and waits for them.
+             * Iteration i computes output row tile_h.start + i of the block of columns. Each step
+             * handles the loads, the RedMulE jobs and the store of three consecutive rows; the
+             * transfers are started first, so that they proceed while the core issues the jobs and
+             * waits for them.
              */
             l1_e_load(l1_addr_ring, tile_h_max * ii, tile_h_max * ii, x0);
 

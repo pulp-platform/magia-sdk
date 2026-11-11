@@ -4,12 +4,15 @@
 #
 # Input-static GEMM (Z = X @ W + Y) on the MAGIA mesh, as a systolic pipeline.
 # Same algorithm as tests/magia/mesh/mm_is_2.
-# Compile with
-#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/mm_is_mgc/mm_is.mgc -o tests/magia/mgc/mm_is_mgc/src/test.c
+# Compile (the kernel, its header include/mgc_mm_is.h and its test) with
+#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc/mm_is/mm_is.mgc \
+#       --header tests/magia/mgc/mm_is_mgc/include/test.h \
+#       -o kernels/mgc/mm_is/src/mgc_mm_is.c \
+#       --test tests/magia/mgc/mm_is_mgc/src/test.c
 
 from mgc import *
 
-M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # from include/test.h
+M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # kernel arguments
 X = l2("x_inp", (M, N), fp16)
 W = l2("w_inp", (N, K), fp16)
 Y = l2("y_inp", (M, K), fp16)  # bias in, result out
@@ -22,14 +25,12 @@ WAIT_MODE = define(WFE)
 @kernel("mgc_mm_is", check=(Y, Z), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
 def mm_is():
     """
-    This test aims to verify the functionality of MAGIA as a systolic array for matrix
-    multiplications, following the input-static mechanism. Each tile keeps a block of X in
-    L1; blocks of output columns flow east along the mesh rows, accumulating x @ w at each
-    tile.
+    Matrix multiplication on MAGIA as an input-static systolic array: each tile keeps a block of X in L1, and
+    blocks of output columns flow east along the mesh rows, accumulating x @ w at each tile.
     """
     for y_id, x_id in tiles():
         """
-        1. Static input data-tile: M is split over the mesh rows, N over the mesh columns.
+        1. Static input block: M is split over the mesh rows, N over the mesh columns.
         """
         tile_h = y_id.split(M)
         tile_w = x_id.split(N)
@@ -50,7 +51,7 @@ def mm_is():
         y = L1.multi_buffer(Y[tile_h, 0:t_size], depth=3)
 
         """
-        TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+        Repeat the kernel body N_ITERATIONS times.
         """
         for z in range(N_ITERATIONS):
             idma.load(x, X[tile_h, tile_w]).wait()

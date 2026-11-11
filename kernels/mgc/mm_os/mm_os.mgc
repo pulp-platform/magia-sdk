@@ -2,13 +2,16 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Output-static GEMM (Z = X @ W + Y) on the MAGIA mesh: the mgc version of
-# tests/magia/mesh/mm_os_mglib. Compile with
-#   python mgc/mgcc.py tests/magia/mgc/mm_os_mgc/mm_os.mgc -o tests/magia/mgc/mm_os_mgc/src/test.c
+# Output-static GEMM (Z = X @ W + Y) on the MAGIA mesh: the mgc version of tests/magia/mesh/mm_os_mglib.
+# Compile (the kernel, its header include/mgc_mm_os.h and its test) with
+#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc/mm_os/mm_os.mgc \
+#       --header tests/magia/mgc/mm_os_mgc/include/test.h \
+#       -o kernels/mgc/mm_os/src/mgc_mm_os.c \
+#       --test tests/magia/mgc/mm_os_mgc/src/test.c
 
 from mgc import *
 
-M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # from include/test.h
+M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # kernel arguments
 X = l2("x_inp", (M, N), fp16)
 W = l2("w_inp", (N, K), fp16)
 Y = l2("y_inp", (M, K), fp16)  # bias in, result out
@@ -16,8 +19,8 @@ Z = l2("z_out", (M, K), fp16)  # golden
 
 N_ITERATIONS = define(1)
 T_SIZE = define(64)  # reduction (N) rows per timeslot, N_SIZE / T_SIZE timeslots
-# outer blocking: the test runs on M_NB blocks of M_BLK rows of the output in turn (M_NB divides M_SIZE), so that the
-# output block of a tile, resident in L1, is M_BLK / MESH_Y_TILES rows (1: the whole output at once)
+# Outer blocking: the output is processed in M_NB blocks of M_BLK rows in turn (M_NB must divide M_SIZE), so that
+# the L1-resident output block of a tile is M_BLK / MESH_Y_TILES rows (M_NB = 1: the whole output at once)
 M_NB = define(1)
 M_BLK = define("(M_SIZE / M_NB)")
 WAIT_MODE = define(WFE)
@@ -26,22 +29,17 @@ WAIT_MODE = define(WFE)
 @kernel("mgc_mm_os", check=(Y, Z), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
 def mm_os():
     """
-    This test aims to verify the functionality of MAGIA as a systolic array for matrix
-    multiplications, following the output-static mechanism. It is the mgc version of the
-    mm_os_mglib test: transfers/jobs are issued through the mglib layer (mg_idma /
-    mg_redmule / mg_event).
+    Output-static matrix multiplication on MAGIA used as a systolic array, with transfers and jobs
+    issued through the mglib layer (mg_idma / mg_redmule / mg_event).
     """
     for y_id, x_id in tiles():
         """
-        0. Outer blocking: the rest of the test, on rows [mb * M_BLK, (mb + 1) * M_BLK) of the output in turn.
+        0. Outer blocking: output rows [mb * M_BLK, (mb + 1) * M_BLK) in turn.
         """
         for mb in range(M_NB):
             """
-            1. Calculate the static output data-tile dimensions.
-            If M_BLK and K are perfect multiples of the number of mesh-tiles in their respective axis,
-            tile_h and tile_w will be the same for each mesh-tile.
-            Otherwise, these dimensions will be smaller for the mesh-tiles closer to the right and lower
-            border of the mesh.
+            1. Static output data-tile dimensions. If M_BLK and K are not multiples of the number of
+            mesh-tiles along their axis, the tiles on the right and lower borders of the mesh get smaller ones.
             """
             tile_h = y_id.split(M_BLK)
             tile_w = x_id.split(K)
@@ -49,11 +47,9 @@ def mm_os():
             m0: u32 = mb * M_BLK + tile_h.start
 
             """
-            1a. Set the t_size, the size of the timeslots we divide the temporal dimension into.
-            The final L1 memory requirement will be:
-            Input data-tile: (tile_h x t_size) * data_dim
-            Weight data-tile: (t_size x tile_w) * data_dim
-            Output data-tile: ((tile_h x tile_w) * data_dim)
+            1a. The reduction dimension N is split into timeslots of t_size. L1 per buffer, in bytes:
+            input (tile_h x t_size) * data_dim, weight (t_size x tile_w) * data_dim,
+            output (tile_h x tile_w) * data_dim.
             """
             t_size: u16 = T_SIZE
             timeslots: u16 = N // t_size
@@ -75,7 +71,7 @@ def mm_os():
             redmule_evt = redmule.events(2)
 
             """
-            TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+            Repeat the kernel body N_ITERATIONS times.
             """
             for z in range(N_ITERATIONS):
                 """
@@ -85,14 +81,11 @@ def mm_os():
                 ey = idma.load(y, Y[m0:m0 + tile_h.size, tile_w])
                 for i in pipeline(timeslots):
                     """
-                    4. Cycle over the timeslots.
-                    For each timeslot, the mesh-tile will:
-                    a - Load the weight and input data-tile for the next timeslot (if there is one)
-                    b - Multiply and add
-                    Synchronization is not required.
-                    We parallelize the IDMA with Redmule: the operands are loaded one step ahead
-                    (stage 0), queued in the iDMA while the previous jobs run; the job is programmed,
-                    committed once they have landed (stage 1), and waited one step later (stage 2).
+                    4. Software pipeline over the timeslots (no inter-tile synchronization needed):
+                    - stage 0: load the input and weight data-tiles, queued in the iDMA while the
+                      previous jobs run
+                    - stage 1: program the RedMulE job, commit it once its operands have landed
+                    - stage 2: wait for the job
                     """
                     with stage(0):
                         ex = idma.load(x[i], X[m0:m0 + tile_h.size, i * t_size:(i + 1) * t_size])

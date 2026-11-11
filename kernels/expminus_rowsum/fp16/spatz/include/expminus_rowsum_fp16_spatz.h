@@ -5,7 +5,7 @@
 
 #include "expminus_rowsum_fp16_spatz_params.h"
 
-/* Fixed fields of the parameter block for the scale s: rows, cols and the exp constants. */
+/* Sets dims and the exp constants (scaled by s) in the parameter block. */
 static inline void expminus_rowsum_fp16_spatz_set_scale(expminus_rowsum_fp16_spatz_params_t *p,
                                                         float16 s,
                                                         uint32_t rows,
@@ -26,8 +26,10 @@ static inline void expminus_rowsum_fp16_spatz_set_scale(expminus_rowsum_fp16_spa
     p->coef    = coef.u;
 }
 
-/* Y[r, c] = exp(s * (X[r, c] - M[r])) and S[r] = sum_c Y[r, c]; if A is not NULL, also
-   A[r] = exp(s * (A[r] - M[r])) in place. The rows are split over all tiles. */
+/*
+ * Y[r, c] = exp(s * (X[r, c] - M[r])) and S[r] = sum_c Y[r, c]; if A is not NULL, also
+ * A[r] = exp(s * (A[r] - M[r])) in place. The rows are split over all tiles.
+ */
 void MAGIA_expminus_rowsum_fp16_spatz(const float16 *X,
                                       const float16 *M,
                                       float16 *Y,

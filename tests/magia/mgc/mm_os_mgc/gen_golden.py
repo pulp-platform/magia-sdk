@@ -3,7 +3,7 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Francesco Conti <francesco.conti@chips.it>
+# Francesco Conti <f.conti@unibo.it>
 """
 Generate include/test.h for mm_os_mgc: Z[M x K] = X[M x N] @ W[N x K] + Y[M x K], fp16 data
 in U(-0.5, 0.5). The golden is bit-true: one FP16 FMA per n, in n order, starting from Y, as

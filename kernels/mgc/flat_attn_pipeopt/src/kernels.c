@@ -4,9 +4,10 @@
 //
 // Francesco Conti <f.conti@unibo.it>
 //
-// L1 kernels called (synchronously, on the CV32 control core) by the
-// mgc-generated test.c. All pointer arguments are L1 addresses.
-// The softmax uses the merged kernels in ../kernels instead of the generic ones.
+// L1 kernels called (synchronously, on the CV32 control core) by the mgc-generated kernel src/mgc_flat_attn_pipeopt.c.
+// All pointer arguments are L1 addresses.
+// Sizes are the kernel's arguments, read through the MGC_GLUE macros of mgc_flat_attn_pipeopt.h.
+// The softmax uses the merged Spatz kernels kernels/expminus_rowsum and kernels/colsum_rescale.
 
 #include <stdint.h>
 
@@ -24,12 +25,14 @@
 #include "eventunit.h"
 #include "flat_attn_pipeopt_spatz_task_bin.h"
 
-/* Per-tile flag: Spatz is set up on each tile before its first task. */
+/* Per-tile flag: set once Spatz has been set up on this tile (before its first task). */
 static volatile uint8_t spatz_ready __attribute__((section(".tile_bss")));
 
-/* Per-tile Spatz task parameters, one block per kernel of the K/V loop, preallocated in the
-   per-tile L1 so that each call only stores the pointers that change (fixed fields are set on
-   the first call, flagged by their non-zero sizes). */
+/*
+ * Per-tile Spatz task parameter blocks, preallocated in L1 so that each call only stores the
+ * fields that change. The fixed fields (sizes and some pointers) are set on the first call,
+ * detected by the block's size field still being zero, so they must be the same on every call.
+ */
 static struct {
     memset_fp16_spatz_params_t memset;
     rowscale_fp16_spatz_params_t rowscale;
@@ -56,7 +59,7 @@ static void spatz_setup(void)
 static inline void spatz_offload(uint32_t task, void *params)
 {
     spatz_setup();
-    /* The block stores must land before Spatz is triggered. */
+    /* Compiler barrier: the parameter-block stores must be issued before Spatz is triggered. */
     asm volatile("" ::: "memory");
     spatz_run_task_with_params(task, (uint32_t)params);
     eu_wait_events(EU_SPATZ_DONE_MASK, WFE, 0);

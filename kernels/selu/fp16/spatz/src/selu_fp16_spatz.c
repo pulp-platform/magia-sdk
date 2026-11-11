@@ -114,8 +114,10 @@ exit:
     return ret;
 }
 
-/* Y = selu(X, alpha, gamma) on this tile's Spatz, for operands that are already in this tile's L1:
-   no sharding across tiles, no L1 allocation and no L2 transfers. Y may alias X. */
+/*
+ * Y = selu(X, alpha, gamma) on this tile's Spatz, for operands that are already in this tile's L1:
+ * no sharding across tiles, no L1 allocation and no L2 transfers. Y may alias X.
+ */
 void MAGIA_selu_fp16_spatz_l1(
     const float16 *X, float16 *Y, uint32_t size, float16 alpha, float16 gamma)
 {

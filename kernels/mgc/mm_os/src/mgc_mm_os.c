@@ -21,17 +21,15 @@
 #define WAIT_MODE    WFE
 
 /**
- * This test aims to verify the functionality of MAGIA as a systolic array for matrix
- * multiplications, following the output-static mechanism. It is the mgc version of the
- * mm_os_mglib test: transfers/jobs are issued through the mglib layer (mg_idma /
- * mg_redmule / mg_event).
+ * Output-static matrix multiplication on MAGIA used as a systolic array, with transfers and jobs
+ * issued through the mglib layer (mg_idma / mg_redmule / mg_event).
  */
 void mgc_mm_os(uint16_t *x_inp,
                uint16_t *w_inp,
                uint16_t *y_inp,
-               uint32_t M_SIZE,
-               uint32_t N_SIZE,
-               uint32_t K_SIZE)
+               int32_t M_SIZE,
+               int32_t N_SIZE,
+               int32_t K_SIZE)
 {
     /**
      * 0. Get the mesh-tile's hartid, mesh-tile coordinates and define its L1 base,
@@ -63,15 +61,13 @@ void mgc_mm_os(uint16_t *x_inp,
     mg_event_t idma_evts_w_in_0, idma_evts_w_in_1;
     mg_event_t *idma_evts_w_in_next, *idma_evts_w_in_curr;
     /**
-     * 0. Outer blocking: the rest of the test, on rows [mb * M_BLK, (mb + 1) * M_BLK) of the output
-     * in turn.
+     * 0. Outer blocking: output rows [mb * M_BLK, (mb + 1) * M_BLK) in turn.
      */
     for (int mb = 0; mb < M_NB; mb++) {
         /**
-         * 1. Calculate the static output data-tile dimensions.
-         * If M_BLK and K are perfect multiples of the number of mesh-tiles in their respective
-         * axis, tile_h and tile_w will be the same for each mesh-tile. Otherwise, these dimensions
-         * will be smaller for the mesh-tiles closer to the right and lower border of the mesh.
+         * 1. Static output data-tile dimensions. If M_BLK and K are not multiples of the number of
+         * mesh-tiles along their axis, the tiles on the right and lower borders of the mesh get
+         * smaller ones.
          */
         uint32_t tile_h_max = ((M_BLK + MESH_Y_TILES - 1) / MESH_Y_TILES);
         uint32_t tile_w_max = ((K_SIZE + MESH_X_TILES - 1) / MESH_X_TILES);
@@ -98,11 +94,9 @@ void mgc_mm_os(uint16_t *x_inp,
         uint32_t m0 = mb * M_BLK + tile_h_max * y_id;
 
         /**
-         * 1a. Set the t_size, the size of the timeslots we divide the temporal dimension into.
-         * The final L1 memory requirement will be:
-         * Input data-tile: (tile_h x t_size) * data_dim
-         * Weight data-tile: (t_size x tile_w) * data_dim
-         * Output data-tile: ((tile_h x tile_w) * data_dim)
+         * 1a. The reduction dimension N is split into timeslots of t_size. L1 per buffer, in bytes:
+         * input (tile_h x t_size) * data_dim, weight (t_size x tile_w) * data_dim,
+         * output (tile_h x tile_w) * data_dim.
          */
         uint16_t t_size    = T_SIZE;
         uint16_t timeslots = N_SIZE / t_size;
@@ -140,7 +134,7 @@ void mgc_mm_os(uint16_t *x_inp,
         uint32_t l2_addr_w   = (uint32_t)w_inp + (tile_w_max * x_id * 2);
 
         /**
-         * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+         * Repeat the kernel body N_ITERATIONS times.
          */
         for (int z = 0; z < N_ITERATIONS; z++) {
             /**
@@ -179,14 +173,11 @@ void mgc_mm_os(uint16_t *x_inp,
             mg_idma_wait(0, WAIT_MODE, &idma_evt_y);
 
             /**
-             * 4. Cycle over the timeslots.
-             * For each timeslot, the mesh-tile will:
-             * a - Load the weight and input data-tile for the next timeslot (if there is one)
-             * b - Multiply and add
-             * Synchronization is not required.
-             * We parallelize the IDMA with Redmule: the operands are loaded one step ahead
-             * (stage 0), queued in the iDMA while the previous jobs run; the job is programmed,
-             * committed once they have landed (stage 1), and waited one step later (stage 2).
+             * 4. Software pipeline over the timeslots (no inter-tile synchronization needed):
+             * - stage 0: load the input and weight data-tiles, queued in the iDMA while the
+             *   previous jobs run
+             * - stage 1: program the RedMulE job, commit it once its operands have landed
+             * - stage 2: wait for the job
              */
             /**
              * pipeline: 3 stages; step i runs stage k on iteration i + 1 - k

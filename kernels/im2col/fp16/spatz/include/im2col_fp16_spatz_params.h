@@ -4,8 +4,8 @@
 #include <stdint.h>
 
 typedef struct {
-    uintptr_t src; /* Input rows lo .. lo + ksize - 1 of the image, columns src_x .. src_x + src_w - 1,
-                      [ksize x src_w x cin] (HWC) */
+    uintptr_t src; /* Input image rows from lo on (all the rows the block reads), columns
+                      src_x .. src_x + src_w - 1, HWC [n_rows x src_w x cin] */
     uintptr_t dst; /* im2col block [cp x (ksize * ksize * cin)], columns in (ky, kx, ci) order    */
 
     uint32_t height; /* Image rows                                              */

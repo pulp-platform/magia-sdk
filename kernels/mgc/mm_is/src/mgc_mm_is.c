@@ -19,17 +19,15 @@
 #define WAIT_MODE    WFE
 
 /**
- * This test aims to verify the functionality of MAGIA as a systolic array for matrix
- * multiplications, following the input-static mechanism. Each tile keeps a block of X in
- * L1; blocks of output columns flow east along the mesh rows, accumulating x @ w at each
- * tile.
+ * Matrix multiplication on MAGIA as an input-static systolic array: each tile keeps a block of X in
+ * L1, and blocks of output columns flow east along the mesh rows, accumulating x @ w at each tile.
  */
 void mgc_mm_is(uint16_t *x_inp,
                uint16_t *w_inp,
                uint16_t *y_inp,
-               uint32_t M_SIZE,
-               uint32_t N_SIZE,
-               uint32_t K_SIZE)
+               int32_t M_SIZE,
+               int32_t N_SIZE,
+               int32_t K_SIZE)
 {
     /**
      * 0. Get the mesh-tile's hartid, mesh-tile coordinates and define its L1 base,
@@ -51,7 +49,7 @@ void mgc_mm_is(uint16_t *x_inp,
     uint32_t l1_tile_base = get_l1_base(hartid);
 
     /**
-     * 1. Static input data-tile: M is split over the mesh rows, N over the mesh columns.
+     * 1. Static input block: M is split over the mesh rows, N over the mesh columns.
      */
     uint32_t tile_h_max = ((M_SIZE + MESH_Y_TILES - 1) / MESH_Y_TILES);
     uint32_t tile_w_max = ((N_SIZE + MESH_X_TILES - 1) / MESH_X_TILES);
@@ -120,7 +118,7 @@ void mgc_mm_is(uint16_t *x_inp,
     uint32_t l1_base_e = get_l1_base(hartid + 1);
 
     /**
-     * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+     * Repeat the kernel body N_ITERATIONS times.
      */
     for (int z = 0; z < N_ITERATIONS; z++) {
         mg_idma_memcpy_2d(

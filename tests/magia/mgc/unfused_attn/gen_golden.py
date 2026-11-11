@@ -3,7 +3,7 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Francesco Conti <francesco.conti@chips.it>
+# Francesco Conti <f.conti@unibo.it>
 """
 Generate include/test.h for unfused_attn:
 

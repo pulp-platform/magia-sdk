@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 //
-// Francesco Conti <francesco.conti@chips.it>
+// Francesco Conti <f.conti@unibo.it>
 //
 // FP16 division for Spatz tasks without a divider (Spatz decodes no vfdiv,
 // and MAGIA builds it without the DIVSQRT unit). A division is a reciprocal (integer-trick seed

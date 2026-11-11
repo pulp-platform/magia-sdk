@@ -23,50 +23,50 @@ static inline void store_v0(_Float16 *p, const size_t vl)
     }
 }
 
-/* ReduceMax of a tensor of size [outer_dims..., reduce_dim, inner_dim] with
-   inner_dim > 1: vectorize across inner_dim, element-wise max over reduce_dim rows.
-   In case of aligned rows (step==1):
-                         inner_dim
-              |<--------------------->|
-          ^   +-----------------------+   r0   --(1)--> v0 = r0
-          |   +-----------------------+   r1   --(2)--> v0 = max(v0, r1)
-          |   +-----------------------+   r2   --(3)--> v0 = max(v0, r2)
-  reduce  |   +-----------------------+   r3   --(4)--> v0 = max(v0, r3)
-   _dim   |   :                       :    :              :
-          |   +-----------------------+   rR-1 --(R)--> v0 = max(v0, rR-1)
-          v                                               |
-                                                          v
-                                            +-----------------------+
-                                            |          dst          |  1
-                                            +-----------------------+
-                                            |<----- inner_dim ----->|
-    
-    In case of misaligned rows (step==2):
-                       inner_dim
-               |<--------------------->|
-          ^    +-----------------------+   r0  --(a1)--> v0  = r0
-          |  x +-----------------------+   r1  --(b1)--> v16 = r1'            (vl+1 lanes)
-          |    +-----------------------+   r2  --(a2)--> v0  = max(v0,  r2)
-  reduce  |  x +-----------------------+   r3  --(b2)--> v16 = max(v16, r3')
-   _dim   |    +-----------------------+   r4  --(a3)--> v0  = max(v0,  r4)
-          |  x +-----------------------+   r5  --(b3)--> v16 = max(v16, r5')
-          |    :                       :    :                :
-          v
-                                                 v0             v16
-                                                 |               |
-                                                 |        vslidedown 1   (drop x lane)
-                                                 |               |
-                                                 +---> max <-----+
-                                                        |
-                                                        v
-                                          +-----------------------+
-                                          |          dst          |  1
-                                          +-----------------------+
-                                          |<----- inner_dim ----->|
-
-  order: a1 a2 a3 ... (all v0 rows), then b1 b2 b3 ... (all v16 rows), then merge
-
-*/
+/*
+ * ReduceMax of a tensor of size [outer_dims..., reduce_dim, inner_dim] with
+ * inner_dim > 1: vectorize across inner_dim, element-wise max over reduce_dim rows.
+ * In case of aligned rows (step==1):
+ *                        inner_dim
+ *             |<--------------------->|
+ *         ^   +-----------------------+   r0   --(1)--> v0 = r0
+ *         |   +-----------------------+   r1   --(2)--> v0 = max(v0, r1)
+ *         |   +-----------------------+   r2   --(3)--> v0 = max(v0, r2)
+ * reduce  |   +-----------------------+   r3   --(4)--> v0 = max(v0, r3)
+ *  _dim   |   :                       :    :              :
+ *         |   +-----------------------+   rR-1 --(R)--> v0 = max(v0, rR-1)
+ *         v                                               |
+ *                                                         v
+ *                                           +-----------------------+
+ *                                           |          dst          |  1
+ *                                           +-----------------------+
+ *                                           |<----- inner_dim ----->|
+ *
+ * In case of misaligned rows (step==2):
+ *                      inner_dim
+ *              |<--------------------->|
+ *         ^    +-----------------------+   r0  --(a1)--> v0  = r0
+ *         |  x +-----------------------+   r1  --(b1)--> v16 = r1'            (vl+1 lanes)
+ *         |    +-----------------------+   r2  --(a2)--> v0  = max(v0,  r2)
+ * reduce  |  x +-----------------------+   r3  --(b2)--> v16 = max(v16, r3')
+ *  _dim   |    +-----------------------+   r4  --(a3)--> v0  = max(v0,  r4)
+ *         |  x +-----------------------+   r5  --(b3)--> v16 = max(v16, r5')
+ *         |    :                       :    :                :
+ *         v
+ *                                                v0             v16
+ *                                                |               |
+ *                                                |        vslidedown 1   (drop x lane)
+ *                                                |               |
+ *                                                +---> max <-----+
+ *                                                       |
+ *                                                       v
+ *                                         +-----------------------+
+ *                                         |          dst          |  1
+ *                                         +-----------------------+
+ *                                         |<----- inner_dim ----->|
+ *
+ * order: a1 a2 a3 ... (all v0 rows), then b1 b2 b3 ... (all v16 rows), then merge
+ */
 static __attribute__((noinline)) void reduce_max_noninnermost(const _Float16 *src,
                                            _Float16 *dst,
                                            const size_t reduce_dim,
@@ -124,27 +124,28 @@ static __attribute__((noinline)) void reduce_max_noninnermost(const _Float16 *sr
     }
 }
 
-/* ReduceMax of a tensor of size [outer_dims..., reduce_dim, inner_dim] with
-   inner_dim == 1: element-wise max over VL-wide chunks, then one vfredmax into v16[0].
-   The reduce_dim row is contiguous; src[0] seeds v16[0] and, if misaligned, is skipped
-   so that the chunks c0..cN-1 start aligned:
-
-       src[0] --(0)--> v16[0] = src[0]
-                          vl
-              |<--------------------->|
-          ^   +-----------------------+   c0   --(1)--> v0 = c0
-          |   +-----------------------+   c1   --(2)--> v0 = max(v0, c1)
-  reduce  |   +-----------------------+   c2   --(3)--> v0 = max(v0, c2)
-   _dim   |   :                       :    :              :
-          |   +-----------+               cN-1 --(N)--> v0 = max(v0, cN-1)   (tu: keeps upper lanes)
-          v                                               |
-                                                     vfredmax.vs   (max of v16[0] and all v0 lanes)
-                                                          |
-                                                          v
-                                                       +-----+
-                                                       | dst |  1
-                                                       +-----+
-*/
+/*
+ * ReduceMax of a tensor of size [outer_dims..., reduce_dim, inner_dim] with
+ * inner_dim == 1: element-wise max over VL-wide chunks, then one vfredmax into v16[0].
+ * The reduce_dim row is contiguous; src[0] seeds v16[0] and, if misaligned, is skipped
+ * so that the chunks c0..cN-1 start aligned:
+ *
+ *      src[0] --(0)--> v16[0] = src[0]
+ *                         vl
+ *             |<--------------------->|
+ *         ^   +-----------------------+   c0   --(1)--> v0 = c0
+ *         |   +-----------------------+   c1   --(2)--> v0 = max(v0, c1)
+ * reduce  |   +-----------------------+   c2   --(3)--> v0 = max(v0, c2)
+ *  _dim   |   :                       :    :              :
+ *         |   +-----------+               cN-1 --(N)--> v0 = max(v0, cN-1)   (tu: keeps upper lanes)
+ *         v                                               |
+ *                                                    vfredmax.vs   (max of v16[0] and all v0 lanes)
+ *                                                         |
+ *                                                         v
+ *                                                      +-----+
+ *                                                      | dst |  1
+ *                                                      +-----+
+ */
 static inline void reduce_max_innermost(const _Float16 *src, _Float16 *dst, const size_t reduce_dim)
 {
     size_t avl = reduce_dim;
@@ -184,27 +185,28 @@ static inline void reduce_max_innermost(const _Float16 *src, _Float16 *dst, cons
     *dst = max;
 }
 
-/* ReduceMax of a tensor of size [outer_dims..., reduce_dim, inner_dim] with
-   inner_dim == 1, batched: vectorize across rows with strided column loads.
-   Each lane owns one row; each column of vl rows is one vlse16 with stride reduce_dim:
-
-                        reduce_dim
-              |<------------------------->|
-          ^   +----+----+----+-----+------+
-          |   |    |    |    |     |      |
-     vl   |   | k0 | k1 | k2 | ... | kR-1 |
-    rows  |   |    |    |    |     |      |
-          v   +----+----+----+-----+------+
-                |    |    |           |
-               (1)  (2)  (3)         (R)
-                v    v    v           v
-               v0 = k0                                   +-----+   ^
-                    v0 = max(v0, k1)                     |     |   |
-                         v0 = max(v0, k2)       ---->    | dst |   vl
-                                 :                       |     |   |
-                                v0 = max(v0, kR-1)       +-----+   v
-                                                            1
-*/
+/*
+ * ReduceMax of a tensor of size [outer_dims..., reduce_dim, inner_dim] with
+ * inner_dim == 1, batched: vectorize across rows with strided column loads.
+ * Each lane owns one row; each column of vl rows is one vlse16 with stride reduce_dim:
+ *
+ *                       reduce_dim
+ *             |<------------------------->|
+ *         ^   +----+----+----+-----+------+
+ *         |   |    |    |    |     |      |
+ *    vl   |   | k0 | k1 | k2 | ... | kR-1 |
+ *   rows  |   |    |    |    |     |      |
+ *         v   +----+----+----+-----+------+
+ *               |    |    |           |
+ *              (1)  (2)  (3)         (R)
+ *               v    v    v           v
+ *              v0 = k0                                   +-----+   ^
+ *                   v0 = max(v0, k1)                     |     |   |
+ *                        v0 = max(v0, k2)       ---->    | dst |   vl
+ *                                :                       |     |   |
+ *                               v0 = max(v0, kR-1)       +-----+   v
+ *                                                           1
+ */
 static inline void reduce_max_innermost_strided(const _Float16 *src,
                                                 _Float16 *dst,
                                                 size_t rows,

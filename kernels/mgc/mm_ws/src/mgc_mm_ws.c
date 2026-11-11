@@ -19,16 +19,15 @@
 #define WAIT_MODE    WFE
 
 /**
- * This test aims to verify the functionality of MAGIA as a systolic array for matrix
- * multiplications, following the weight-static mechanism. Each tile keeps a block of W in
- * L1; blocks of output rows flow down the mesh columns, accumulating x @ w at each tile.
+ * Weight-static matrix multiplication on MAGIA used as a systolic array. Each tile keeps a block of
+ * W in L1; blocks of output rows flow down the mesh columns, accumulating x @ w at each tile.
  */
 void mgc_mm_ws(uint16_t *x_inp,
                uint16_t *w_inp,
                uint16_t *y_inp,
-               uint32_t M_SIZE,
-               uint32_t N_SIZE,
-               uint32_t K_SIZE)
+               int32_t M_SIZE,
+               int32_t N_SIZE,
+               int32_t K_SIZE)
 {
     /**
      * 0. Get the mesh-tile's hartid, mesh-tile coordinates and define its L1 base,
@@ -119,7 +118,7 @@ void mgc_mm_ws(uint16_t *x_inp,
     uint32_t l1_base_s = get_l1_base(hartid + MESH_X_TILES);
 
     /**
-     * TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+     * Repeat the kernel body N_ITERATIONS times.
      */
     for (int z = 0; z < N_ITERATIONS; z++) {
         mg_idma_memcpy_2d(

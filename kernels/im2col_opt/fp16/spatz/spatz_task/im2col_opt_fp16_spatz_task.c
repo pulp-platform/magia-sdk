@@ -25,13 +25,30 @@ static inline void copy_fp16(_Float16 *dst, const _Float16 *src, size_t n)
     }
 }
 
-/* im2col of `cp` output pixels of output row `row`, columns x0 .. x0 + cp - 1, of a ksize x ksize convolution
-   with stride `stride` and `pad` zeros on each side: row p of dst is the patch of pixel (row, x0 + p),
-     dst[p][(ky * ksize + kx) * cin + ci] = in[row * stride - pad + ky][(x0 + p) * stride - pad + kx][ci]
-   (0 outside the image),
-   with the input rows lo .. lo + ksize - 1, columns src_x .. src_x + src_w - 1, in src (HWC; the columns of
-   the patches inside the image must be among them). In HWC the kx x cin values of a patch row are contiguous
-   in the input row: each (p, ky) is one copy of the columns inside the image and the zeros of the ones outside. */
+/*
+ * im2col for a strip of `cp` consecutive output pixels in one output row:
+ *   (row, x0), (row, x0 + 1), ..., (row, x0 + cp - 1)
+ *
+ * Convolution parameters: ksize x ksize kernel, stride `stride`,
+ * `pad` zeros on each side.
+ *
+ * Output layout:
+ *   Row p of dst is the patch of output pixel (row, x0 + p), flattened as
+ *   (ky, kx, ci):
+ *     dst[p][(ky * ksize + kx) * cin + ci] =
+ *         in[row * stride - pad + ky][(x0 + p) * stride - pad + kx][ci]
+ *   Positions outside the image are 0.
+ *
+ * Input buffer (src, HWC layout):
+ *   - Starts at input row lo and holds columns src_x .. src_x + src_w - 1.
+ *   - Must contain every in-image row and column that any of the cp patches reads.
+ *
+ * Copy pattern:
+ *   In HWC, one patch row (fixed ky, all kx and ci) is ksize * cin
+ *   contiguous values in the input row. So for each (p, ky) there is
+ *   one contiguous copy of the in-image columns, plus zero fill for
+ *   the columns outside the image.
+ */
 int im2col_opt_fp16_spatz_task(void)
 {
     const im2col_opt_fp16_spatz_params_t *params;

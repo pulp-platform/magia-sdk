@@ -169,8 +169,10 @@ exit:
     return ret;
 }
 
-/* Transpose on this tile's Spatz, for operands that are already in this tile's L1: no sharding
-   across tiles, no L1 allocation and no L2 transfers. */
+/*
+ * Transpose on this tile's Spatz, for operands that are already in this tile's L1: no sharding
+ * across tiles, no L1 allocation and no L2 transfers.
+ */
 void MAGIA_transpose_fp16_spatz_l1(const float16 *input,
                                    float16 *output,
                                    uint32_t *perm,
@@ -186,8 +188,10 @@ void MAGIA_transpose_fp16_spatz_l1(const float16 *input,
     uint32_t stride;
     int ret;
 
-    /* The task reads rank-sized metadata (and an odometer scratch) through the params: stage
-       them on this core's stack, which is in L1. */
+    /*
+     * The task reads rank-sized metadata (and an odometer scratch) through the params: stage
+     * them on this core's stack, which is in L1.
+     */
     for (uint32_t i = 0; i < rank; i++) {
         out_shape_l1[i] = out_shape[i];
         perm_l1[i]      = perm[i];

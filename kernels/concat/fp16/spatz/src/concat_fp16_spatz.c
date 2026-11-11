@@ -136,8 +136,10 @@ exit:
     return ret;
 }
 
-/* Concat on this tile's Spatz, for operands that are already in this tile's L1: no sharding across
-   tiles, no L1 allocation and no L2 transfers. */
+/*
+ * Concat on this tile's Spatz, for operands already in this tile's L1: no sharding across tiles,
+ * no L1 allocation and no L2 transfers.
+ */
 void MAGIA_concat_fp16_spatz_l1(const float16 **inputs,
                                 const uint32_t *lens,
                                 uint32_t num_inputs,
@@ -148,8 +150,10 @@ void MAGIA_concat_fp16_spatz_l1(const float16 **inputs,
     volatile uint32_t len_input[num_inputs];
     int ret;
 
-    /* The task reads the input addresses and lengths through the params: stage them on this
-       core's stack, which is in L1. */
+    /*
+     * The task reads the input addresses and lengths through the params: stage them on this
+     * core's stack, which is in L1.
+     */
     for (uint32_t i = 0; i < num_inputs; i++) {
         shard_input[i] = (uintptr_t)inputs[i];
         len_input[i]   = lens[i];

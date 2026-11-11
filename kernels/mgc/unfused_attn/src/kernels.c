@@ -2,10 +2,11 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 //
-// Francesco Conti <francesco.conti@chips.it>
+// Francesco Conti <f.conti@unibo.it>
 //
-// L1 kernel called (synchronously, on the CV32 control core) by the mgc-generated test.c.
+// L1 kernel called (synchronously, on the CV32 control core) by the mgc-generated kernel src/mgc_unfused_attn.c.
 // All pointer arguments are L1 addresses.
+// Sizes are the kernel's arguments, read through the MGC_GLUE macros of mgc_unfused_attn.h.
 
 #include <stdint.h>
 
@@ -16,7 +17,7 @@
 #include "softmax_rows_fp16_spatz_params.h"
 #include "unfused_attn_spatz_task_bin.h"
 
-/* Per-tile flag: Spatz is set up on each tile before its first task. */
+/* Per-tile flag: set once Spatz has been set up on this tile (before its first task). */
 static volatile uint8_t spatz_ready __attribute__((section(".tile_bss")));
 
 /* Per-tile Spatz task parameters, in the per-tile L1. */
@@ -44,7 +45,7 @@ void l1_softmax_rows_fp16_spatz(uint32_t x, uint32_t rows, uint32_t cols)
     }
     p->shard_X = x;
     p->dims    = rows | (cols << 16);
-    /* The block stores must land before Spatz is triggered. */
+    /* Compiler barrier: the parameter-block stores must be issued before Spatz is triggered. */
     asm volatile("" ::: "memory");
     spatz_run_task_with_params(SOFTMAX_ROWS_FP16_SPATZ_TASK, (uint32_t)p);
     eu_wait_events(EU_SPATZ_DONE_MASK, WFE, 0);

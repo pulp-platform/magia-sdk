@@ -3,8 +3,10 @@
 
 #include <stdint.h>
 
-/* Y[r, c] = (O[r, c] + sum_{k != own} G[k, r, c]) / S[r], for k < n, with G [n x rows x cols].
-   The rows are split over all tiles. */
+/*
+ * Y[r, c] = (O[r, c] + sum_{k != own} G[k, r, c]) / S[r], for k < n, with G [n x rows x cols].
+ * The rows are split over all tiles.
+ */
 void MAGIA_rowslice_sum_div_fp16_spatz(float16 *Y,
                                        const float16 *O,
                                        const float16 *G,

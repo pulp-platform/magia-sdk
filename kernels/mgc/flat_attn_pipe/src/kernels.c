@@ -4,8 +4,9 @@
 //
 // Francesco Conti <f.conti@unibo.it>
 //
-// L1 kernels called (synchronously, on the CV32 control core) by the
-// mgc-generated test.c. All pointer arguments are L1 addresses.
+// L1 kernels called (synchronously, on the CV32 control core) by the mgc-generated kernel src/mgc_flat_attn_pipe.c.
+// All pointer arguments are L1 addresses.
+// Sizes are the kernel's arguments, read through the MGC_GLUE macros of mgc_flat_attn_pipe.h.
 
 #include <stdint.h>
 
@@ -27,7 +28,7 @@
 #include "eventunit.h"
 #include "flat_attn_pipe_spatz_task_bin.h"
 
-/* Per-tile flag: Spatz is set up on each tile before its first task. */
+/* Per-tile flag: set once Spatz has been set up on this tile (before its first task). */
 static volatile uint8_t spatz_ready __attribute__((section(".tile_bss")));
 
 /**

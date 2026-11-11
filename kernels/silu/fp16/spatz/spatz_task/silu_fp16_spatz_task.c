@@ -2,10 +2,14 @@
 #include "utils/spatz_recip.h"
 #include "silu_fp16_spatz_params.h"
 
-/* SiLU in fp32, one rounding to fp16 at the end. exp(-x) = 2^t, t = -x * log2(e), clamped to
-   [-125, 126] (exp(-x) only has to be finite and normal: below x = -17.4, SiLU rounds to 0 in fp16
-   anyway); t = n + f with n = round(t), f in [-0.5, 0.5]; 2^f by a degree-5 polynomial (relative
-   error < 2e-7), 2^n added to its exponent field. */
+/*
+ * SiLU in fp32, with one rounding to fp16 at the end. exp(-x) = 2^t, t = -x * log2(e):
+ * - t is clamped to [-125, 126], so that 2^t stays finite and normal. The clamp only acts for
+ *   x < -87.3 or x > 86.6, where SiLU rounds to 0 or to x in fp16 anyway;
+ * - t = n + f, with n = round(t) and f in [-0.5, 0.5];
+ * - 2^f by its degree-5 Taylor polynomial (relative error < 4e-6, far below the fp16 rounding),
+ *   2^n added to its exponent field.
+ */
 int silu_fp16_spatz_task(void)
 {
     volatile silu_fp16_spatz_params_t *params;

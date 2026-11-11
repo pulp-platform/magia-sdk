@@ -93,8 +93,10 @@ exit:
     return ret;
 }
 
-/* Y = mean of X over reduce_dim on this tile's Spatz, for operands that are already in this tile's
-   L1: no sharding across tiles, no L1 allocation and no L2 transfers. */
+/*
+ * Y = mean of X over reduce_dim on this tile's Spatz, for operands that are already in this tile's
+ * L1: no sharding across tiles, no L1 allocation and no L2 transfers.
+ */
 void MAGIA_reducemean_fp16_spatz_l1(
     const float16 *X, float16 *Y, uint32_t outer_dim, uint32_t reduce_dim, uint32_t inner_dim)
 {

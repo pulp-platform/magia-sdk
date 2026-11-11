@@ -2,15 +2,15 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Same test as mm_os.mgc, written with the explicit (low-level) schedule instead
-# of pipeline(): prologue, multi-buffer slots, event rotation and the placement of
-# the RedMulE enqueue / commit_start / wait steps are spelled out by hand. It
-# compiles to the same C as mm_os.mgc, comments aside (compare with
-# `mgcc.py mm_os.mgc --print-ir-after=pipeline`).
+# mm_os.mgc written with the explicit (low-level) schedule instead of pipeline(): the prologue, the
+# multi-buffer slots, the event rotation and the placement of the RedMulE enqueue / commit_start / wait steps are
+# spelled out by hand. It is the 2-stage schedule (operands loaded in the stage of their RedMulE job, depth-2
+# buffers), not the 3-stage one of mm_os.mgc. No test builds it: mgc/tests/test_mgc.py checks that it compiles to
+# the same code as mm_os.mgc turned 2-stage, comments aside.
 
 from mgc import *
 
-M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # from include/test.h
+M, N, K = sizes("M_SIZE", "N_SIZE", "K_SIZE")  # kernel arguments
 X = l2("x_inp", (M, N), fp16)
 W = l2("w_inp", (N, K), fp16)
 Y = l2("y_inp", (M, K), fp16)  # bias in, result out
@@ -18,8 +18,8 @@ Z = l2("z_out", (M, K), fp16)  # golden
 
 N_ITERATIONS = define(1)
 T_SIZE = define(64)  # reduction (N) rows per timeslot, N_SIZE / T_SIZE timeslots
-# outer blocking: the test runs on M_NB blocks of M_BLK rows of the output in turn (M_NB divides M_SIZE), so that the
-# output block of a tile, resident in L1, is M_BLK / MESH_Y_TILES rows (1: the whole output at once)
+# Outer blocking: the output is processed in M_NB blocks of M_BLK rows in turn (M_NB must divide M_SIZE), so that
+# the L1-resident output block of a tile is M_BLK / MESH_Y_TILES rows (M_NB = 1: the whole output at once)
 M_NB = define(1)
 M_BLK = define("(M_SIZE / M_NB)")
 WAIT_MODE = define(WFE)
@@ -28,22 +28,17 @@ WAIT_MODE = define(WFE)
 @kernel("mgc_mm_os", check=(Y, Z), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
 def mm_os():
     """
-    This test aims to verify the functionality of MAGIA as a systolic array for matrix
-    multiplications, following the output-static mechanism. It is the mgc version of the
-    mm_os_mglib test: transfers/jobs are issued through the mglib layer (mg_idma /
-    mg_redmule / mg_event).
+    Output-static matrix multiplication on MAGIA used as a systolic array, with transfers and jobs
+    issued through the mglib layer (mg_idma / mg_redmule / mg_event).
     """
     for y_id, x_id in tiles():
         """
-        0. Outer blocking: the rest of the test, on rows [mb * M_BLK, (mb + 1) * M_BLK) of the output in turn.
+        0. Outer blocking: output rows [mb * M_BLK, (mb + 1) * M_BLK) in turn.
         """
         for mb in range(M_NB):
             """
-            1. Calculate the static output data-tile dimensions.
-            If M_BLK and K are perfect multiples of the number of mesh-tiles in their respective axis,
-            tile_h and tile_w will be the same for each mesh-tile.
-            Otherwise, these dimensions will be smaller for the mesh-tiles closer to the right and lower
-            border of the mesh.
+            1. Static output data-tile dimensions. If M_BLK and K are not multiples of the number of
+            mesh-tiles along their axis, the tiles on the right and lower borders of the mesh get smaller ones.
             """
             tile_h = y_id.split(M_BLK)
             tile_w = x_id.split(K)
@@ -51,11 +46,9 @@ def mm_os():
             m0: u32 = mb * M_BLK + tile_h.start
 
             """
-            1a. Set the t_size, the size of the timeslots we divide the temporal dimension into.
-            The final L1 memory requirement will be:
-            Input data-tile: (tile_h x t_size) * data_dim
-            Weight data-tile: (t_size x tile_w) * data_dim
-            Output data-tile: ((tile_h x tile_w) * data_dim)
+            1a. The reduction dimension N is split into timeslots of t_size. L1 per buffer, in bytes:
+            input (tile_h x t_size) * data_dim, weight (t_size x tile_w) * data_dim,
+            output (tile_h x tile_w) * data_dim.
             """
             t_size: u16 = T_SIZE
             timeslots: u16 = N // t_size
@@ -77,7 +70,7 @@ def mm_os():
             redmule_evt = redmule.events(2)
 
             """
-            TEST LOOP - REPEAT THE TEST N_ITERATION TIMES.
+            Repeat the kernel body N_ITERATIONS times.
             """
             for z in range(N_ITERATIONS):
                 """
@@ -95,29 +88,23 @@ def mm_os():
                 redmule.commit_start()
 
                 """
-                4. Cycle over the timeslots.
-                For each timeslot, the mesh-tile will:
-                a - Load the weight and input data-tile for the next timeslot (if there is one)
-                b - Multiply and add
-                Synchronization is not required.
-                We parallelize the IDMA with Redmule: the job is programmed while its operands
-                are loaded, committed once they have landed, and waited one step later.
+                4. Per timeslot, overlap the loads and the job of the next timeslot with the
+                current job. No inter-tile synchronization is needed.
                 """
                 for i in range(timeslots):
                     if i < timeslots - 1:
-                        # prefetch the operands of the next iteration and program its job meanwhile
+                        # prefetch the operands of the next timeslot and program its job meanwhile
                         ex = idma.load(x[i + 1], X[m0:m0 + tile_h.size, (i + 1) * t_size:(i + 2) * t_size])
                         ew = idma.load(w[i + 1], W[(i + 1) * t_size:(i + 2) * t_size, tile_w])
                         redmule.enqueue(x[i + 1], w[i + 1], y, op=GEMM, event=redmule_evt[i + 1])
-                        # commit & start the next job once its operands have landed: it runs
-                        # behind the current one
+                        # commit the next job once its operands have landed: it runs after the current one
                         ex.wait()
                         ew.wait()
                         redmule.commit_start()
                         # wait for the current job
                         redmule_evt[i].wait()
                     else:
-                        # last iteration: nothing to prefetch
+                        # last timeslot: nothing to prefetch
                         redmule_evt[i].wait()
 
                 """

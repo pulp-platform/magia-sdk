@@ -4,10 +4,12 @@
 /* Unit-stride vector accesses must be 4-byte aligned. */
 #define MISALIGNED(p)  (((uintptr_t)(p)) & 0x2)
 
-/* Fuses expminus (with the scale folded into the exp), reducesum over the last axis and
-   exp of the max difference, with the same arithmetic as the separate kernels.
-   exp(s * x) uses COEF * s and the clamps divided by s, precomputed by the caller: exact if s
-   is a power of 2. */
+/*
+ * Fuses expminus (with the scale folded into the exp), reducesum over the last axis and the exp
+ * of the max difference. exp(s * x) uses COEF * s and the clamps divided by s, precomputed by the
+ * caller: exact if s is a power of 2. The general path (expminus_rowsum_any) has the arithmetic
+ * of the separate kernels; the fast path (expminus_rows_1strip) does not, see there.
+ */
 
 /* v0 = reinterpret_fp16(coef * max(v0, min) + BIAS). */
 static inline void fast_exp_v0(_Float16 min, _Float16 coef)
@@ -20,9 +22,11 @@ static inline void fast_exp_v0(_Float16 min, _Float16 coef)
     asm volatile(SPATZ_FPU_FENCE "vfcvt.rtz.xu.f.v v0, v0");
 }
 
-/* One row, vectorized along cols. A misaligned row (odd cols) peels its first element.
-   Returns *m_next, loaded before the row's store: a scalar load stalls on a pending vector
-   store, which would drain the VU at every row. */
+/*
+ * One row, vectorized along cols. A misaligned row (odd cols) peels its first element.
+ * Returns *m_next, loaded before the row's store: a scalar load stalls on a pending vector
+ * store, which would drain the VU at every row.
+ */
 static inline _Float16 expminus_row(const _Float16 *src,
                                     _Float16 *dst,
                                     size_t len,
@@ -61,9 +65,11 @@ static inline _Float16 expminus_row(const _Float16 *src,
     return next;
 }
 
-/* One row of expminus_rows_1strip, as two halves of h elements in v0 and v4 (e16, m4), its
-   row sum reduced in FP32 into element 0 of `s`. Loads the next row max into m before the
-   row's stores: a scalar load stalls on a pending vector store, which would drain the VU. */
+/*
+ * One row of expminus_rows_1strip, as two halves of h elements in v0 and v4 (e16, m4), its
+ * row sum reduced in FP32 into element 0 of `s`. Loads the next row max into m before the
+ * row's stores: a scalar load stalls on a pending vector store, which would drain the VU.
+ */
 #define EXPMINUS_ROW(s)                                                        \
     do {                                                                       \
         M = M < m_last ? M + 1 : M;                                            \
@@ -93,13 +99,16 @@ static inline _Float16 expminus_row(const _Float16 *src,
         asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p) : "memory");                  \
     } while (0)
 
-/* expminus_row and rowsum on all rows, for aligned rows of 2 h elements, h at most VLMAX at
-   LMUL 4. The exp is coef * (x - m) + BIAS in one vfmadd against a BIAS splat, without the
-   lower clamp: a negative result converts to 0, the limit of the exp. The row sum adds the two
-   halves of the row while widened (in the same vtype as the exp), then reduces them in FP32
-   with one vfredusum; the sums of 4 rows go to v24, v26, v28, v30 and are stored after one
-   vtype switch (each switch drains the VU). No column-strided loads, which hit a single L1 bank
-   when the row pitch is a multiple of 128 B. */
+/*
+ * expminus_row and rowsum on all rows, for aligned rows of 2 h elements, h at most VLMAX at LMUL 4:
+ * - exp: coef * (x - m) + BIAS in one vfmadd against a BIAS splat, without the lower clamp
+ *   (a negative result converts to 0, the limit of the exp);
+ * - row sum: the two halves of the row are added while widened (in the same vtype as the exp),
+ *   then reduced in FP32 with one vfredusum;
+ * - the sums of 4 rows go to v24, v26, v28, v30 and are stored after one vtype switch (each
+ *   switch drains the VU).
+ * No column-strided loads: they hit a single L1 bank when the row pitch is a multiple of 128 B.
+ */
 static inline void expminus_rows_1strip(const _Float16 *X,
                                         _Float16 *Y,
                                         _Float16 *S,
@@ -140,7 +149,7 @@ static inline void expminus_rows_1strip(const _Float16 *X,
     }
 }
 
-/* S[r] = sum_c Y[r, c], one lane per row, fp32 accumulation (as reducesum). */
+/* S[r] = sum_c Y[r, c], one lane per row, fp32 accumulation. */
 static inline void rowsum(const _Float16 *Y, _Float16 *S, size_t rows, size_t cols)
 {
     register _Float16 zero asm("fs0") = 0.0f;
@@ -162,7 +171,7 @@ static inline void rowsum(const _Float16 *Y, _Float16 *S, size_t rows, size_t co
     }
 }
 
-/* A[r] = exp(s * (A[r] - M[r])), with the clamps of the exp kernel. */
+/* A[r] = exp(s * (A[r] - M[r])), with s * (A[r] - M[r]) clamped to [MIN, MAX]. */
 static inline void exp_diff(_Float16 *A, const _Float16 *M, size_t rows, _Float16 min,
                             _Float16 max, _Float16 coef)
 {
@@ -179,8 +188,10 @@ static inline void exp_diff(_Float16 *A, const _Float16 *M, size_t rows, _Float1
     }
 }
 
-/* The whole kernel, for any rows. Cold: linked out of the hot tasks, and the task does not
-   spill callee-saved registers for it. */
+/*
+ * The whole kernel, for any rows. Cold: linked out of the hot tasks, and the task does not
+ * spill callee-saved registers for it.
+ */
 static __attribute__((noinline, cold)) int expminus_rowsum_any(const _Float16 *X,
                                                               _Float16 *Y,
                                                               const _Float16 *M,

@@ -2,10 +2,12 @@
 #include "rowslice_sum_div_fp16_spatz_params.h"
 #include "utils/spatz_recip.h"
 
-/* Fuses the reduce-scatter sum of the n partial outputs and the row division (add, then rowdiv,
-   with the same arithmetic as the separate kernels: fp16 adds, division as a multiplication by
-   1/s with one correction step). Each row's divisor is loaded before the previous row's last
-   store: a scalar load stalls on a pending vector store, which would drain the VU at every row. */
+/*
+ * Fuses the sum of the n partial outputs (reduce-scatter) with the row division, using the same
+ * arithmetic as the separate add and rowdiv kernels: fp16 adds, division as a multiplication by
+ * 1/s with one correction step. Each row's divisor is loaded before the previous row's last
+ * store: a scalar load stalls on a pending vector store, which would drain the VU at every row.
+ */
 int rowslice_sum_div_fp16_spatz_task(void)
 {
     const rowslice_sum_div_fp16_spatz_params_t *params;

@@ -2,15 +2,36 @@
 #include "utils/spatz_recip.h"
 #include "swiglu_fast_fp16_spatz_params.h"
 
-/* SiLU(g) * u = g * u / (1 + exp(-g)), all in FP16 (one rounding per instruction):
-     e = exp(-g), the Schraudolph exp of the expminus kernels: the FP16 bits of
-         rtz(max(g, -11) * -COEF + BIAS) (one fused multiply-add), 0 for g > ~10.4;
-     d = 1 + e, in [1, 61000]: finite, so no clamp of the divisor;
-     p = g * u;
-     y = 1 / d: a = d * 2^-4 (exact, so that 1/a is normal), seed 0x77a0 - bits(a), 2 Newton steps
-         y += y * (1 - a * y), then y * 2^-4;
-     h = p / d: q0 = p * y, then one fused correction step q0 + y * (p - d * q0) (SPATZ_VFDIV_VV
-         without the sign and range handling, for d >= 1). */
+/*
+ * SiLU(g) * u, computed entirely in FP16 (one rounding per instruction).
+ *
+ *   SiLU(g) * u = g * u / (1 + exp(-g))
+ *
+ * Steps:
+ *
+ * 1. e = exp(-g), Schraudolph approximation (as in kernels/expminus).
+ *    One fused multiply-add gives the FP16 bits of e:
+ *        e_bits = rtz(max(g, -11) * -COEF + BIAS)
+ *    The result is 0 for g > ~10.4.
+ *
+ * 2. d = 1 + e
+ *    d is in [1, ~61000], always finite, so the divisor needs no clamp.
+ *
+ * 3. p = g * u
+ *
+ * 4. y = 1 / d, by Newton-Raphson:
+ *    - Scale: a = d * 2^-4 (exact). This keeps 1/a a normal number;
+ *      1/d itself would be subnormal for large d.
+ *    - Seed:  y = bits(0x77a0 - bits(a))
+ *    - Twice: y += y * (1 - a * y)
+ *    - Undo the scale: y = y * 2^-4
+ *
+ * 5. h = p / d:
+ *    - q0 = p * y
+ *    - One fused correction step: h = q0 + y * (p - d * q0)
+ *    This is SPATZ_VFDIV_VV without its sign and range handling,
+ *    which is not needed here because d >= 1.
+ */
 int swiglu_fast_fp16_spatz_task(void)
 {
     const swiglu_fast_fp16_spatz_params_t *params;

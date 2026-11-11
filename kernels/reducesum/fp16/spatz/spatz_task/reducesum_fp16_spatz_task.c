@@ -1,16 +1,20 @@
 #include "tile.h"
 #include "reducesum_fp16_spatz_params.h"
 
-/* Sums accumulate in fp32: fp16 inputs are loaded at e16/m4 and widened into e32/m8 accumulators
-   with vfwadd, and the result is narrowed back to fp16 only once, at the end.
-   Register use: v0 (m8) accumulator, v8 (m4) loads, v16 (m8) misaligned-row accumulator,
-   v24 (m8) temporary. */
+/*
+ * Sums accumulate in fp32: fp16 inputs are loaded at e16/m4 and widened into e32/m8 accumulators
+ * with vfwadd, and the result is narrowed back to fp16 only once, at the end.
+ * Register use: v0 (m8) accumulator, v8 (m4) loads, v16 (m8) misaligned-row accumulator,
+ * v24 (m8) temporary.
+ */
 
 /* Unit-stride vector accesses must be 4-byte aligned. */
 #define MISALIGNED(p)  (((uintptr_t)(p)) & 0x2)
 
-/* Narrow vl fp32 sums of v0 to fp16 and store them; peel the first one if p is misaligned.
-   Clobbers v8, v12. */
+/*
+ * Narrow vl fp32 sums of v0 to fp16 and store them; peel the first one if p is misaligned.
+ * Clobbers v8, v12.
+ */
 static inline void narrow_store_v0(_Float16 *p, const size_t vl)
 {
     _Float16 first;
@@ -32,54 +36,54 @@ static inline void narrow_store_v0(_Float16 *p, const size_t vl)
     }
 }
 
-/* ReduceSum of a tensor of size [outer_dims..., reduce_dim, inner_dim] with
-   inner_dim > 1: vectorize across inner_dim, element-wise fp32 sum over reduce_dim rows.
-   In case of aligned rows (step==1):
-                         inner_dim
-              |<--------------------->|
-          ^   +-----------------------+   r0   --(1)--> v0 = wide(r0)
-          |   +-----------------------+   r1   --(2)--> v0 = v0 + wide(r1)
-          |   +-----------------------+   r2   --(3)--> v0 = v0 + wide(r2)
-  reduce  |   +-----------------------+   r3   --(4)--> v0 = v0 + wide(r3)
-   _dim   |   :                       :    :              :
-          |   +-----------------------+   rR-1 --(R)--> v0 = v0 + wide(rR-1)
-          v                                               |
-                                                       vfncvt
-                                                          |
-                                                          v
-                                            +-----------------------+
-                                            |          dst          |  1
-                                            +-----------------------+
-                                            |<----- inner_dim ----->|
-
-    In case of misaligned rows (step==2):
-                       inner_dim
-               |<--------------------->|
-          ^    +-----------------------+   r0  --(a1)--> v0  = wide(r0)
-          |  x +-----------------------+   r1  --(b1)--> v16 = wide(r1')            (vl+1 lanes)
-          |    +-----------------------+   r2  --(a2)--> v0  = v0  + wide(r2)
-  reduce  |  x +-----------------------+   r3  --(b2)--> v16 = v16 + wide(r3')
-   _dim   |    +-----------------------+   r4  --(a3)--> v0  = v0  + wide(r4)
-          |  x +-----------------------+   r5  --(b3)--> v16 = v16 + wide(r5')
-          |    :                       :    :                :
-          v
-                                                 v0             v16
-                                                 |               |
-                                                 |        vslidedown 1   (drop x lane)
-                                                 |               |
-                                                 +-----> + <-----+
-                                                         |
-                                                      vfncvt
-                                                         |
-                                                         v
-                                          +-----------------------+
-                                          |          dst          |  1
-                                          +-----------------------+
-                                          |<----- inner_dim ----->|
-
-  order: a1 a2 a3 ... (all v0 rows), then b1 b2 b3 ... (all v16 rows), then merge
-
-*/
+/*
+ * ReduceSum of a tensor of size [outer_dims..., reduce_dim, inner_dim] with
+ * inner_dim > 1: vectorize across inner_dim, element-wise fp32 sum over reduce_dim rows.
+ * In case of aligned rows (step==1):
+ *                        inner_dim
+ *             |<--------------------->|
+ *         ^   +-----------------------+   r0   --(1)--> v0 = wide(r0)
+ *         |   +-----------------------+   r1   --(2)--> v0 = v0 + wide(r1)
+ *         |   +-----------------------+   r2   --(3)--> v0 = v0 + wide(r2)
+ * reduce  |   +-----------------------+   r3   --(4)--> v0 = v0 + wide(r3)
+ *  _dim   |   :                       :    :              :
+ *         |   +-----------------------+   rR-1 --(R)--> v0 = v0 + wide(rR-1)
+ *         v                                               |
+ *                                                      vfncvt
+ *                                                         |
+ *                                                         v
+ *                                           +-----------------------+
+ *                                           |          dst          |  1
+ *                                           +-----------------------+
+ *                                           |<----- inner_dim ----->|
+ *
+ * In case of misaligned rows (step==2):
+ *                      inner_dim
+ *              |<--------------------->|
+ *         ^    +-----------------------+   r0  --(a1)--> v0  = wide(r0)
+ *         |  x +-----------------------+   r1  --(b1)--> v16 = wide(r1')            (vl+1 lanes)
+ *         |    +-----------------------+   r2  --(a2)--> v0  = v0  + wide(r2)
+ * reduce  |  x +-----------------------+   r3  --(b2)--> v16 = v16 + wide(r3')
+ *  _dim   |    +-----------------------+   r4  --(a3)--> v0  = v0  + wide(r4)
+ *         |  x +-----------------------+   r5  --(b3)--> v16 = v16 + wide(r5')
+ *         |    :                       :    :                :
+ *         v
+ *                                                v0             v16
+ *                                                |               |
+ *                                                |        vslidedown 1   (drop x lane)
+ *                                                |               |
+ *                                                +-----> + <-----+
+ *                                                        |
+ *                                                     vfncvt
+ *                                                        |
+ *                                                        v
+ *                                         +-----------------------+
+ *                                         |          dst          |  1
+ *                                         +-----------------------+
+ *                                         |<----- inner_dim ----->|
+ *
+ * order: a1 a2 a3 ... (all v0 rows), then b1 b2 b3 ... (all v16 rows), then merge
+ */
 static __attribute__((noinline)) void reduce_sum_noninnermost(const _Float16 *src,
                                            _Float16 *dst,
                                            const size_t reduce_dim,
@@ -140,27 +144,28 @@ static __attribute__((noinline)) void reduce_sum_noninnermost(const _Float16 *sr
     }
 }
 
-/* ReduceSum of a tensor of size [outer_dims..., reduce_dim, inner_dim] with
-   inner_dim == 1: element-wise fp32 sum over VL-wide chunks, then one vfredusum into v16[0].
-   The reduce_dim row is contiguous; if src is misaligned, src[0] seeds v16[0] and is
-   skipped so that the chunks c0..cN-1 start aligned, otherwise v16[0] = 0:
-
-       src[0] --(0)--> v16[0] = src[0] or 0
-                          vl
-              |<--------------------->|
-          ^   +-----------------------+   c0   --(1)--> v0 = wide(c0)
-          |   +-----------------------+   c1   --(2)--> v0 = v0 + wide(c1)
-  reduce  |   +-----------------------+   c2   --(3)--> v0 = v0 + wide(c2)
-   _dim   |   :                       :    :              :
-          |   +-----------+               cN-1 --(N)--> v0 = v0 + wide(cN-1)   (tu: keeps upper lanes)
-          v                                               |
-                                                     vfredusum.vs   (fp32 sum of v16[0] and all v0 lanes)
-                                                          |
-                                                          v
-                                                       +-----+
-                                                       | dst |  1
-                                                       +-----+
-*/
+/*
+ * ReduceSum of a tensor of size [outer_dims..., reduce_dim, inner_dim] with
+ * inner_dim == 1: element-wise fp32 sum over VL-wide chunks, then one vfredusum into v16[0].
+ * The reduce_dim row is contiguous; if src is misaligned, src[0] seeds v16[0] and is
+ * skipped so that the chunks c0..cN-1 start aligned, otherwise v16[0] = 0:
+ *
+ *      src[0] --(0)--> v16[0] = src[0] or 0
+ *                         vl
+ *             |<--------------------->|
+ *         ^   +-----------------------+   c0   --(1)--> v0 = wide(c0)
+ *         |   +-----------------------+   c1   --(2)--> v0 = v0 + wide(c1)
+ * reduce  |   +-----------------------+   c2   --(3)--> v0 = v0 + wide(c2)
+ *  _dim   |   :                       :    :              :
+ *         |   +-----------+               cN-1 --(N)--> v0 = v0 + wide(cN-1)   (tu: keeps upper lanes)
+ *         v                                               |
+ *                                                    vfredusum.vs   (fp32 sum of v16[0] and all v0 lanes)
+ *                                                         |
+ *                                                         v
+ *                                                      +-----+
+ *                                                      | dst |  1
+ *                                                      +-----+
+ */
 static inline void reduce_sum_innermost(const _Float16 *src, _Float16 *dst, const size_t reduce_dim)
 {
     register _Float16 zero asm("fs0") = 0.0f;
@@ -168,7 +173,7 @@ static inline void reduce_sum_innermost(const _Float16 *src, _Float16 *dst, cons
     size_t vl, vl_first;
     float sum;
 
-    /* Unlike max, sum is not idempotent: src[0] goes to v16 only if it is skipped. */
+    /* Sum is not idempotent: src[0] seeds v16 only when skipped for alignment, otherwise v16 = 0. */
     asm volatile("vsetvli zero, %0, e32, m8, ta, ma" ::"r"(1));
     if (MISALIGNED(src)) {
         asm volatile("vfmv.s.f v16, %0" ::"f"((float)src[0]));
@@ -201,27 +206,28 @@ static inline void reduce_sum_innermost(const _Float16 *src, _Float16 *dst, cons
     *dst = (_Float16)sum;
 }
 
-/* ReduceSum of a tensor of size [outer_dims..., reduce_dim, inner_dim] with
-   inner_dim == 1, batched: vectorize across rows with strided column loads.
-   Each lane owns one row; each column of vl rows is one vlse16 with stride reduce_dim:
-
-                        reduce_dim
-              |<------------------------->|
-          ^   +----+----+----+-----+------+
-          |   |    |    |    |     |      |
-     vl   |   | k0 | k1 | k2 | ... | kR-1 |
-    rows  |   |    |    |    |     |      |
-          v   +----+----+----+-----+------+
-                |    |    |           |
-               (1)  (2)  (3)         (R)
-                v    v    v           v
-               v0 = wide(k0)                             +-----+   ^
-                    v0 = v0 + wide(k1)                   |     |   |
-                         v0 = v0 + wide(k2)   --vfncvt-->| dst |   vl
-                                 :                       |     |   |
-                                v0 = v0 + wide(kR-1)     +-----+   v
-                                                            1
-*/
+/*
+ * ReduceSum of a tensor of size [outer_dims..., reduce_dim, inner_dim] with
+ * inner_dim == 1, batched: vectorize across rows with strided column loads.
+ * Each lane owns one row; each column of vl rows is one vlse16 with stride reduce_dim:
+ *
+ *                       reduce_dim
+ *             |<------------------------->|
+ *         ^   +----+----+----+-----+------+
+ *         |   |    |    |    |     |      |
+ *    vl   |   | k0 | k1 | k2 | ... | kR-1 |
+ *   rows  |   |    |    |    |     |      |
+ *         v   +----+----+----+-----+------+
+ *               |    |    |           |
+ *              (1)  (2)  (3)         (R)
+ *               v    v    v           v
+ *              v0 = wide(k0)                             +-----+   ^
+ *                   v0 = v0 + wide(k1)                   |     |   |
+ *                        v0 = v0 + wide(k2)   --vfncvt-->| dst |   vl
+ *                                :                       |     |   |
+ *                               v0 = v0 + wide(kR-1)     +-----+   v
+ *                                                           1
+ */
 static inline void reduce_sum_innermost_strided(const _Float16 *src,
                                                 _Float16 *dst,
                                                 size_t rows,

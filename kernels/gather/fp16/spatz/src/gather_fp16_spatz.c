@@ -122,8 +122,10 @@ exit:
     return ret;
 }
 
-/* Gather on this tile's Spatz, for operands that are already in this tile's L1: no sharding across
-   tiles, no L1 allocation and no L2 transfers. */
+/*
+ * Gather on this tile's Spatz, for operands that are already in this tile's L1: no sharding across
+ * tiles, no L1 allocation and no L2 transfers.
+ */
 void MAGIA_gather_fp16_spatz_l1(const float16 *data,
                                 uint32_t in_shape[4],
                                 float16 *output,

@@ -1,8 +1,10 @@
 #include "tile.h"
 #include "rope_fp16_spatz_params.h"
 
-/* The four products are exact in fp32 (vfwmul, fp16 x fp16), the sum and difference are rounded
-   once in fp32 and once to fp16. */
+/*
+ * The four products are exact in fp32 (vfwmul, fp16 x fp16), the sum and difference are rounded
+ * once in fp32 and once to fp16.
+ */
 int rope_fp16_spatz_task(void)
 {
     volatile rope_fp16_spatz_params_t *params;

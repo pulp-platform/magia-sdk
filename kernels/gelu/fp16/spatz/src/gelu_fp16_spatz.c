@@ -99,8 +99,10 @@ exit:
     return ret;
 }
 
-/* Y = gelu(X) on this tile's Spatz, for operands that are already in this tile's L1: no sharding
-   across tiles, no L1 allocation and no L2 transfers. Y may alias X. */
+/*
+ * Y = gelu(X) on this tile's Spatz, for operands that are already in this tile's L1: no sharding
+ * across tiles, no L1 allocation and no L2 transfers. Y may alias X.
+ */
 void MAGIA_gelu_fp16_spatz_l1(const float16 *X, float16 *Y, uint32_t size)
 {
     volatile gelu_fp16_spatz_params_t params = {

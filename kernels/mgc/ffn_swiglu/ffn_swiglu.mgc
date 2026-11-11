@@ -3,22 +3,25 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Qwen2.5 FFN layer (SwiGLU MLP, no biases) with the residual: Y = R + (silu(X @ Wg) * (X @ Wu)) @ Wd.
-# X is the input after the RMSNorm, R the residual stream before it; the RMSNorm itself is not part of the test.
-# Two steps through L2, both output-static on RedMulE as the projections of gqa_pipeopt4:
+# X is the input after the RMSNorm, R the residual stream before it. The RMSNorm itself is not part of the kernel.
+# Two steps through L2, both output-static on RedMulE:
 # - H = silu(X @ Wg) * (X @ Wu): tile (ii, jj) owns the block [tile_s x tile_i] of H, computed in chunks of FFN_CI
-#   columns (G and U chunks double-buffered in L1, accumulated over blocks of FFN_KB_E of E); the SwiGLU of chunk
-#   c runs on Spatz, in place, while RedMulE computes chunk c + 1, and is stored while RedMulE runs the last jobs
-#   of chunk c + 1;
+#   columns (G and U chunks double-buffered in L1, accumulated over blocks of FFN_KB_E of E). The SwiGLU of chunk c
+#   runs on Spatz, in place, while RedMulE computes chunk c + 1, and is stored while RedMulE runs the last jobs of
+#   chunk c + 1.
 # - Y = R + H @ Wd: tile (ii, jj) owns the block [tile_s x tile_e] of Y, loaded with the residual and accumulated
 #   over blocks of FFN_KB_I of I.
-# FFN_CI, FFN_KB_E and FFN_KB_I are chosen per mesh side by gen_golden.py so that all the buffers fit L1.
-# Compile with
-#   mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/ffn_swiglu/ffn_swiglu.mgc \
-#       -o tests/magia/mgc/ffn_swiglu/src/test.c
+# FFN_CI, FFN_KB_E and FFN_KB_I are chosen per mesh side by the test's gen_golden.py so that all the buffers fit L1,
+# and reach the kernel as arguments.
+# Compile (the kernel, its header include/mgc_ffn_swiglu.h and its test) with
+#   mgc/.venv/bin/python mgc/mgcc.py kernels/mgc/ffn_swiglu/ffn_swiglu.mgc \
+#       --header tests/magia/mgc/ffn_swiglu/include/test.h \
+#       -o kernels/mgc/ffn_swiglu/src/mgc_ffn_swiglu.c \
+#       --test tests/magia/mgc/ffn_swiglu/src/test.c
 
 from mgc import *
 
-S, E, I, CI, KB_E, KB_I = sizes("SEQ_LENGTH", "EMBED_SIZE", "FFN_SIZE", "FFN_CI", "FFN_KB_E", "FFN_KB_I")  # from include/test.h
+S, E, I, CI, KB_E, KB_I = sizes("SEQ_LENGTH", "EMBED_SIZE", "FFN_SIZE", "FFN_CI", "FFN_KB_E", "FFN_KB_I")  # kernel arguments
 x_   = l2("x_inp",   (S, E), fp16)
 wg_  = l2("wg_inp",  (E, I), fp16)
 wu_  = l2("wu_inp",  (E, I), fp16)
@@ -31,19 +34,20 @@ y_gold = l2("y_gold", (S, E), fp16)  # golden
 WAIT_MODE = define(WFE)
 
 # Implemented in src/kernels.c, on the tile's CV32 core:
-# spatz_swiglu_start: starts g = silu(g) * u, element-wise, in place, on Spatz (kernels/swiglu_fast: Schraudolph
+# spatz_swiglu_start starts g = silu(g) * u, element-wise and in place, on Spatz (kernels/swiglu_fast: Schraudolph
 # exp and division in FP16) and returns; spatz_wait(g) waits for it
 spatz_swiglu_start = l1_kernel("l1_swiglu_start_fp16_spatz", operands=("g:inout", "u:in"), params=("g.size",),
                                executor=CORE)
 spatz_wait = l1_kernel("l1_spatz_wait1", operands=("x:out",), params=(), executor=CORE)
 
-@kernel("mgc_ffn_swiglu", check=(y_, y_gold), tol=0x11, authors=["Francesco Conti <francesco.conti@chips.it>"])
+@kernel("mgc_ffn_swiglu", check=(y_, y_gold), tol=0x11, authors=["Francesco Conti <f.conti@unibo.it>"])
 def ffn_swiglu():
 
     """
-    Qwen2.5 FFN with the residual, Y = R + (silu(X @ Wg) * (X @ Wu)) @ Wd, in two steps through L2: H = silu(X @ Wg) *
-    (X @ Wu) in chunks of columns (output-static on RedMulE, the G and U chunks resident in L1 and blocks of E
-    streamed, then SwiGLU on Spatz overlapped with the next chunk), Y = R + H @ Wd (output-static, accumulating on R).
+    Qwen2.5 FFN with the residual, Y = R + (silu(X @ Wg) * (X @ Wu)) @ Wd, in two steps through L2:
+    1. H = silu(X @ Wg) * (X @ Wu) in chunks of columns: output-static on RedMulE (G and U chunks resident in L1,
+       blocks of E streamed), then SwiGLU on Spatz, overlapped with the next chunk;
+    2. Y = R + H @ Wd, output-static, accumulating on R.
     """
     for ii, jj in tiles():
 
@@ -67,9 +71,9 @@ def ffn_swiglu():
         sync(GLOBAL)
 
         """
-        STEP 1: H = silu(X @ Wg) * (X @ Wu), chunk by chunk of FFN_CI columns; in each chunk, block k of X, Wg, Wu
-        loading while RedMulE accumulates block k - 1 (as the Q/V projection of gqa_pipeopt4). The SwiGLU of chunk
-        c - 1 runs on Spatz during chunk c, and its store is issued once RedMulE has the last jobs of chunk c.
+        STEP 1: H = silu(X @ Wg) * (X @ Wu), one chunk of FFN_CI columns at a time. In each chunk, blocks k of X, Wg
+        and Wu load while RedMulE accumulates block k - 1. The SwiGLU of chunk c - 1 runs on Spatz during chunk c, and
+        its store is issued once RedMulE has the last jobs of chunk c.
         """
 
         n_kb_e: u16 = E // KB_E
@@ -97,7 +101,7 @@ def ffn_swiglu():
                 with stage(0):
                     redmule.enqueue(xg[k], wu[k], yu[c], op=GEMM, event=ev_u[k], uninit=k == 0)
                     redmule.commit_start()
-                    # H chunk c - 1, while RedMulE runs the last jobs of chunk c
+                    # store H chunk c - 1 once Spatz is done with it, while RedMulE runs the last jobs of chunk c
                     if k == n_kb_e - 1:
                         if c > 0:
                             spatz_wait(yg[c - 1])

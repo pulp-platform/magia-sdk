@@ -12,8 +12,10 @@
 #define HID         get_hartid()
 #define KERNEL_NAME "colsum_rescale_fp16_spatz"
 
-/* This tile's columns [*col_start, *col_start + *col_len) out of cols, split in pairs so that
-   each tile gets an even number of columns; an odd last column goes to the last tile. */
+/*
+ * This tile's columns [*col_start, *col_start + *col_len) out of cols, split in pairs so that
+ * each tile gets an even number of columns; an odd last column goes to the last tile.
+ */
 static void tile_cols(uint32_t cols, uint32_t *col_start, uint32_t *col_len)
 {
     uint32_t pairs = cols / 2;
@@ -96,8 +98,10 @@ static int init_input_params(void *params,
         0, (uint32_t)(S + col_start), (uint32_t)cs_params->shard_S, col_len * sizeof(float16));
     eu_idma_wait_a2o(WFE);
 
-    /* This tile's columns of every row of G, packed into a rows x col_len matrix (row 0 is
-       unused by the task, but keeps the row indexing). */
+    /*
+     * This tile's columns of every row of G, packed into a rows x col_len matrix (row 0 is
+     * unused by the task, but keeps the row indexing).
+     */
     if (rows > 0) {
         idma_memcpy_2d(0,
                        (uint32_t)(G + col_start),
