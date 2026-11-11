@@ -136,6 +136,59 @@ exit:
     return ret;
 }
 
+/* ConvTranspose on this tile's Spatz, for operands that are already in this tile's L1: no sharding
+   across tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_convtranspose_fp16_spatz_l1(const float16 *X,
+                                       const float16 *W,
+                                       float16 *Y,
+                                       uint32_t input_shape[4],
+                                       uint32_t output_shape[4],
+                                       uint32_t kernel_h,
+                                       uint32_t kernel_w,
+                                       uint32_t stride_h,
+                                       uint32_t stride_w,
+                                       uint32_t pad_h,
+                                       uint32_t pad_w,
+                                       uint32_t num_groups)
+{
+    uint32_t out_len = output_shape[0] * output_shape[1] * output_shape[2] * output_shape[3];
+    volatile convtranspose_fp16_spatz_params_t params = {
+        .shard_X    = (uintptr_t)X,
+        .shard_W    = (uintptr_t)W,
+        .shard_Y    = (uintptr_t)Y,
+        .n_batches  = input_shape[0],
+        .c_in       = input_shape[1],
+        .c_out      = output_shape[1],
+        .iter_start = 0,
+        .iter_len   = input_shape[0] * output_shape[1],
+        .c_in_g     = input_shape[1] / num_groups,
+        .c_out_g    = output_shape[1] / num_groups,
+        .h_in       = input_shape[2],
+        .w_in       = input_shape[3],
+        .h_out      = output_shape[2],
+        .w_out      = output_shape[3],
+        .kernel_h   = kernel_h,
+        .kernel_w   = kernel_w,
+        .stride_h   = stride_h,
+        .stride_w   = stride_w,
+        .pad_h      = pad_h,
+        .pad_w      = pad_w,
+    };
+    int ret;
+
+    /* ConvTranspose scatters with accumulation, so the output must start zeroed. */
+    for (uint32_t i = 0; i < out_len; i++)
+        mmio_fp16((uintptr_t)(Y + i)) = 0.0f;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *Y)
 {
     volatile convtranspose_fp16_spatz_params_t *conv_params =

@@ -108,6 +108,30 @@ exit:
     return ret;
 }
 
+/* Y = leakyrelu(X, alpha) on this tile's Spatz, for operands that are already in this tile's L1: no
+   sharding across tiles, no L1 allocation and no L2 transfers. Y may alias X. */
+void MAGIA_leakyrelu_fp16_spatz_l1(const float16 *X, float16 *Y, uint32_t size, float16 alpha)
+{
+    volatile float16 alpha_val                    = alpha;
+    volatile leakyrelu_fp16_spatz_params_t params = {
+        .shard_X = (uintptr_t)X,
+        .shard_Y = (uintptr_t)Y,
+        .alpha   = (uintptr_t)&alpha_val,
+        .start   = 0,
+        .end     = size,
+        .len     = size,
+    };
+    int ret;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *dst)
 {
     volatile leakyrelu_fp16_spatz_params_t *leakyrelu_params;

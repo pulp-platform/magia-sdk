@@ -164,6 +164,58 @@ exit:
     return ret;
 }
 
+/* Col2Im on this tile's Spatz, for operands that are already in this tile's L1: no sharding across
+   tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_col2im_fp16_spatz_l1(const float16 *input,
+                                float16 *output,
+                                uint32_t batch,
+                                uint32_t channels,
+                                uint32_t image_h,
+                                uint32_t image_w,
+                                uint32_t block_h,
+                                uint32_t block_w,
+                                uint32_t pad_h,
+                                uint32_t pad_w,
+                                uint32_t stride_h,
+                                uint32_t stride_w,
+                                uint32_t dilation_h,
+                                uint32_t dilation_w,
+                                uint32_t l_len)
+{
+    volatile col2im_fp16_spatz_params_t params = {
+        .shard_X        = (uintptr_t)input,
+        .shard_Y        = (uintptr_t)output,
+        .batch          = batch,
+        .total_channels = channels,
+        .c_start        = 0,
+        .c_len          = channels,
+        .image_h        = image_h,
+        .image_w        = image_w,
+        .block_h        = block_h,
+        .block_w        = block_w,
+        .pad_h          = pad_h,
+        .pad_w          = pad_w,
+        .stride_h       = stride_h,
+        .stride_w       = stride_w,
+        .dilation_h     = dilation_h,
+        .dilation_w     = dilation_w,
+        .l_len          = l_len,
+    };
+    int ret;
+
+    /* col2im scatters with accumulation, so the output must start zeroed. */
+    for (uint32_t i = 0; i < batch * channels * image_h * image_w; i++)
+        mmio_fp16((uintptr_t)(output + i)) = 0;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *output)
 {
     volatile col2im_fp16_spatz_params_t *col2im_params;

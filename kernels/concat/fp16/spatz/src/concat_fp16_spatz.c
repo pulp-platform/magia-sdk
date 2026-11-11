@@ -136,6 +136,43 @@ exit:
     return ret;
 }
 
+/* Concat on this tile's Spatz, for operands that are already in this tile's L1: no sharding across
+   tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_concat_fp16_spatz_l1(const float16 **inputs,
+                                const uint32_t *lens,
+                                uint32_t num_inputs,
+                                float16 *concat_result,
+                                uint32_t iterations)
+{
+    volatile uintptr_t shard_input[num_inputs];
+    volatile uint32_t len_input[num_inputs];
+    int ret;
+
+    /* The task reads the input addresses and lengths through the params: stage them on this
+       core's stack, which is in L1. */
+    for (uint32_t i = 0; i < num_inputs; i++) {
+        shard_input[i] = (uintptr_t)inputs[i];
+        len_input[i]   = lens[i];
+    }
+
+    volatile concat_fp16_spatz_params_t params = {
+        .shard_input  = (uintptr_t)shard_input,
+        .len_input    = (uintptr_t)len_input,
+        .shard_output = (uintptr_t)concat_result,
+        .iter_start   = 0,
+        .iter_len     = iterations,
+        .num_inputs   = num_inputs,
+    };
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *concat_result, const uint32_t iterations)
 {
     volatile concat_fp16_spatz_params_t *concat_params;

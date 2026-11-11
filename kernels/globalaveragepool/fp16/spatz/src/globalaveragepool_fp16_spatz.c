@@ -110,6 +110,28 @@ exit:
     return ret;
 }
 
+/* GlobalAveragePool of NCHW planes on this tile's Spatz, for operands that are already in this
+   tile's L1: no sharding across tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_globalaveragepool_fp16_spatz_l1(const float16 *X, float16 *Y, uint32_t input_shape[4])
+{
+    volatile globalaveragepool_fp16_spatz_params_t params = {
+        .shard_X = (uintptr_t)X,
+        .shard_Y = (uintptr_t)Y,
+        .start   = 0,
+        .len     = input_shape[0] * input_shape[1],
+        .hw_len  = input_shape[2] * input_shape[3],
+    };
+    int ret;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *Y)
 {
     volatile globalaveragepool_fp16_spatz_params_t *gap_params;

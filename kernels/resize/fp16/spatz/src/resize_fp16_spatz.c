@@ -116,6 +116,38 @@ exit:
     return ret;
 }
 
+/* Nearest-neighbour Resize of NCHW planes on this tile's Spatz, for operands that are already in
+   this tile's L1: no sharding across tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_resize_fp16_spatz_l1(const float16 *X,
+                                float16 *Y,
+                                uint32_t batch_size,
+                                uint32_t channels,
+                                uint32_t in_h,
+                                uint32_t in_w,
+                                uint32_t out_h,
+                                uint32_t out_w)
+{
+    volatile resize_fp16_spatz_params_t params = {
+        .shard_X         = (uintptr_t)X,
+        .shard_Y         = (uintptr_t)Y,
+        .in_h            = in_h,
+        .in_w            = in_w,
+        .out_h           = out_h,
+        .out_w           = out_w,
+        .iteration_start = 0,
+        .iteration_len   = batch_size * channels,
+    };
+    int ret;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *Y)
 {
     volatile resize_fp16_spatz_params_t *resize_params;

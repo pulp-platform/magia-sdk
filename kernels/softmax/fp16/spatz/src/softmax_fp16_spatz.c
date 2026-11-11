@@ -109,6 +109,33 @@ exit:
     return ret;
 }
 
+/* Softmax over reduce_dim on this tile's Spatz, for operands that are already in this tile's L1: no
+   sharding across tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_softmax_fp16_spatz_l1(const float16 *input,
+                                 float16 *output,
+                                 uint32_t outer_dim,
+                                 uint32_t reduce_dim,
+                                 uint32_t inner_dim)
+{
+    volatile softmax_fp16_spatz_params_t params = {
+        .shard_input  = (uintptr_t)input,
+        .shard_output = (uintptr_t)output,
+        .reduce_dim   = reduce_dim,
+        .inner_dim    = inner_dim,
+        .outer_start  = 0,
+        .outer_len    = outer_dim,
+    };
+    int ret;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *output)
 {
     volatile softmax_fp16_spatz_params_t *softmax_params;

@@ -115,6 +115,33 @@ exit:
     return ret;
 }
 
+/* output = clip(input, min, max) on this tile's Spatz, for operands that are already in this tile's
+   L1: no sharding across tiles, no L1 allocation and no L2 transfers. output may alias input. */
+void MAGIA_clip_fp16_spatz_l1(
+    const float16 *input, float16 *output, float16 min, float16 max, uint32_t size)
+{
+    volatile float16 min_val                 = min;
+    volatile float16 max_val                 = max;
+    volatile clip_fp16_spatz_params_t params = {
+        .shard_input  = (uintptr_t)input,
+        .shard_output = (uintptr_t)output,
+        .min          = (uintptr_t)&min_val,
+        .max          = (uintptr_t)&max_val,
+        .start        = 0,
+        .end          = size,
+        .len          = size,
+    };
+    int ret;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *dst)
 {
     volatile clip_fp16_spatz_params_t *clip_params;

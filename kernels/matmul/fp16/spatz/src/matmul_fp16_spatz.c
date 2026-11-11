@@ -140,6 +140,54 @@ exit:
     return ret;
 }
 
+/* Batched MatMul on this tile's Spatz, for operands that are already in this tile's L1: no sharding
+   across tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_matmul_fp16_spatz_l1(const float16 *A,
+                                const float16 *B,
+                                float16 *Y,
+                                uint32_t M,
+                                uint32_t K,
+                                uint32_t O,
+                                uint32_t total_batches,
+                                uint32_t a_batched,
+                                uint32_t b_batched)
+{
+    volatile matmul_fp16_spatz_params_t params = {
+        .shard_A     = (uintptr_t)A,
+        .shard_B     = (uintptr_t)B,
+        .shard_Y     = (uintptr_t)Y,
+        .M           = M,
+        .K           = K,
+        .O           = O,
+        .batch_start = 0,
+        .batch_len   = total_batches,
+    };
+    uint32_t steps = 1;
+    int ret;
+
+    /* The task advances A and B by one matrix per batch: with a broadcast (not batched) operand,
+       offload one batch at a time and hold that operand fixed. */
+    if (!a_batched || !b_batched) {
+        params.batch_len = 1;
+        steps            = total_batches;
+    }
+
+    for (uint32_t b = 0; b < steps; b++) {
+        params.shard_A = (uintptr_t)(A + (a_batched ? b * M * K : 0));
+        params.shard_B = (uintptr_t)(B + (b_batched ? b * K * O : 0));
+        params.shard_Y = (uintptr_t)(Y + b * M * O);
+
+        ret = offload_spatz_task((void *)&params);
+        if (ret != 0) {
+            printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+                   HID,
+                   KERNEL_NAME,
+                   ret);
+            return;
+        }
+    }
+}
+
 static int store_result(void *params, float16 *Y)
 {
     volatile matmul_fp16_spatz_params_t *matmul_params;

@@ -148,6 +148,38 @@ exit:
     return ret;
 }
 
+/* InstanceNorm of NCHW planes on this tile's Spatz, for operands that are already in this tile's
+   L1: no sharding across tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_instancenorm_fp16_spatz_l1(const float16 *input,
+                                      float16 *output,
+                                      const float16 *scale,
+                                      const float16 *B,
+                                      const float16 epsilon,
+                                      uint32_t input_shape[4])
+{
+    volatile float16 eps                             = epsilon;
+    volatile instancenorm_fp16_spatz_params_t params = {
+        .shard_input  = (uintptr_t)input,
+        .shard_output = (uintptr_t)output,
+        .gamma        = (uintptr_t)scale,
+        .beta         = (uintptr_t)B,
+        .eps          = (uintptr_t)&eps,
+        .inst_start   = 0,
+        .inst_len     = input_shape[0] * input_shape[1],
+        .hw_len       = input_shape[2] * input_shape[3],
+        .num_channels = input_shape[1],
+    };
+    int ret;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *output)
 {
     volatile instancenorm_fp16_spatz_params_t *instancenorm_params;

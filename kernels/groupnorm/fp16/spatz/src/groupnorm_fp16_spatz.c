@@ -153,6 +153,44 @@ exit:
     return ret;
 }
 
+/* GroupNorm of NCHW groups on this tile's Spatz, for operands that are already in this tile's L1:
+   no sharding across tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_groupnorm_fp16_spatz_l1(const float16 *X,
+                                   float16 *Y,
+                                   const float16 *scale,
+                                   const float16 *B,
+                                   uint32_t input_shape[4],
+                                   uint32_t num_groups,
+                                   float16 epsilon)
+{
+    uint32_t len         = input_shape[0] * input_shape[1] * input_shape[2] * input_shape[3];
+    volatile float16 eps = epsilon;
+    volatile groupnorm_fp16_spatz_params_t params = {
+        .shard_X    = (uintptr_t)X,
+        .shard_Y    = (uintptr_t)Y,
+        .gamma      = (uintptr_t)scale,
+        .beta       = (uintptr_t)B,
+        .eps        = (uintptr_t)&eps,
+        .g_start    = 0,
+        .g_len      = input_shape[0] * num_groups,
+        .c_per_g    = input_shape[1] / num_groups,
+        .hw_len     = input_shape[2] * input_shape[3],
+        .num_groups = num_groups,
+        .c_out      = input_shape[1],
+        .input_len  = len,
+        .output_len = len,
+    };
+    int ret;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *Y)
 {
     volatile groupnorm_fp16_spatz_params_t *groupnorm_params;

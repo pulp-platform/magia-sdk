@@ -233,6 +233,81 @@ exit:
     return ret;
 }
 
+/* Conv2D as im2col + GEMM on this tile's Spatz, for operands that are already in this tile's L1: no
+   sharding across tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_conv2dgemm_fp16_spatz_l1(const float16 *X,
+                                    const float16 *W,
+                                    const float16 *B,
+                                    float16 *Y,
+                                    uint32_t input_shape[4],
+                                    uint32_t output_shape[4],
+                                    uint32_t kernel_h,
+                                    uint32_t kernel_w,
+                                    uint32_t stride_h,
+                                    uint32_t stride_w,
+                                    uint32_t pad_h,
+                                    uint32_t pad_w,
+                                    uint32_t group,
+                                    int has_bias,
+                                    float16 *scratch)
+{
+    uint32_t K      = input_shape[1] * kernel_h * kernel_w;
+    uint32_t c_out  = output_shape[1];
+    uint32_t hw_out = output_shape[2] * output_shape[3];
+    int is_1x1 = (kernel_h == 1 && kernel_w == 1 && stride_h == 1 && stride_w == 1 && pad_h == 0 &&
+                  pad_w == 0);
+    float16 *im2col        = is_1x1 ? (float16 *)X : scratch;
+    float16 *bias          = is_1x1 ? scratch : scratch + input_shape[0] * K * hw_out;
+    volatile float16 alpha = 1.0f;
+    volatile float16 beta  = has_bias ? 1.0f : 0.0f;
+    volatile conv2dgemm_fp16_spatz_params_t params = {
+        .shard_X   = (uintptr_t)X,
+        .shard_A   = (uintptr_t)W,
+        .shard_B   = (uintptr_t)im2col,
+        .shard_C   = (uintptr_t)bias,
+        .shard_Y   = (uintptr_t)Y,
+        .alpha     = (uintptr_t)&alpha,
+        .beta      = (uintptr_t)&beta,
+        .M         = c_out,
+        .N         = hw_out,
+        .K         = K,
+        .has_bias  = (uint32_t)has_bias,
+        .n_batches = input_shape[0],
+        .c_out     = c_out,
+        .group     = group,
+        .oc_start  = 0,
+        .oh_start  = 0,
+        .oh_len    = output_shape[2],
+        .c_in      = input_shape[1],
+        .h_in      = input_shape[2],
+        .w_in      = input_shape[3],
+        .h_out     = output_shape[2],
+        .w_out     = output_shape[3],
+        .kernel_h  = kernel_h,
+        .kernel_w  = kernel_w,
+        .stride_h  = stride_h,
+        .stride_w  = stride_w,
+        .pad_h     = pad_h,
+        .pad_w     = pad_w,
+    };
+    int ret;
+
+    /* The GEMM adds beta * C: broadcast the per-output-channel bias over the output pixels. */
+    if (has_bias) {
+        for (uint32_t m = 0; m < c_out; m++)
+            for (uint32_t n = 0; n < hw_out; n++)
+                mmio_fp16((uintptr_t)(bias + m * hw_out + n)) = B[m];
+    }
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *Y)
 {
     volatile conv2dgemm_fp16_spatz_params_t *conv_params;

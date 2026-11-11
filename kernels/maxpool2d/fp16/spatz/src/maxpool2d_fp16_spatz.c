@@ -134,6 +134,46 @@ exit:
     return ret;
 }
 
+/* MaxPool of NCHW planes on this tile's Spatz, for operands that are already in this tile's L1: no
+   sharding across tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_maxpool2d_fp16_spatz_l1(const float16 *X,
+                                   float16 *Y,
+                                   uint32_t kernel_h,
+                                   uint32_t kernel_w,
+                                   uint32_t stride_h,
+                                   uint32_t stride_w,
+                                   uint32_t pad_h,
+                                   uint32_t pad_w,
+                                   uint32_t input_shape[4],
+                                   uint32_t output_shape[4])
+{
+    volatile maxpool2d_fp16_spatz_params_t params = {
+        .shard_X  = (uintptr_t)X,
+        .shard_Y  = (uintptr_t)Y,
+        .c_start  = 0,
+        .c_len    = input_shape[0] * input_shape[1],
+        .h_in     = input_shape[2],
+        .w_in     = input_shape[3],
+        .h_out    = output_shape[2],
+        .w_out    = output_shape[3],
+        .kernel_h = kernel_h,
+        .kernel_w = kernel_w,
+        .stride_h = stride_h,
+        .stride_w = stride_w,
+        .pad_h    = pad_h,
+        .pad_w    = pad_w,
+    };
+    int ret;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *Y)
 {
     volatile maxpool2d_fp16_spatz_params_t *maxpool_params;

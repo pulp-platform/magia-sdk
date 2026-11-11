@@ -162,6 +162,43 @@ exit:
     return ret;
 }
 
+/* ScatterElements on this tile's Spatz, for operands that are already in this tile's L1: no
+   sharding across tiles, no L1 allocation and no L2 transfers. output may alias data. */
+void MAGIA_scatter_fp16_spatz_l1(const float16 *data,
+                                 const int32_t *indices,
+                                 const float16 *updates,
+                                 float16 *output,
+                                 uint32_t outer_size,
+                                 uint32_t inner_size,
+                                 uint32_t axis,
+                                 uint32_t data_axis_dim,
+                                 uint32_t indices_axis_dim)
+{
+    volatile scatter_fp16_spatz_params_t params = {
+        .shard_data             = (uintptr_t)data,
+        .shard_indices          = (uintptr_t)indices,
+        .shard_updates          = (uintptr_t)updates,
+        .shard_output           = (uintptr_t)output,
+        .outer_per_tile         = outer_size,
+        .elems_per_tile         = outer_size * data_axis_dim * inner_size,
+        .elems_indices_per_tile = outer_size * indices_axis_dim * inner_size,
+        .outer_start            = 0,
+        .inner_size             = inner_size,
+        .data_axis_dim          = data_axis_dim,
+        .indices_axis_dim       = indices_axis_dim,
+        .axis                   = axis,
+    };
+    int ret;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *output)
 {
     volatile scatter_fp16_spatz_params_t *scatter_params;

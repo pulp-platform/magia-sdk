@@ -93,6 +93,30 @@ exit:
     return ret;
 }
 
+/* Y = mean of X over reduce_dim on this tile's Spatz, for operands that are already in this tile's
+   L1: no sharding across tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_reducemean_fp16_spatz_l1(
+    const float16 *X, float16 *Y, uint32_t outer_dim, uint32_t reduce_dim, uint32_t inner_dim)
+{
+    volatile reducemean_fp16_spatz_params_t params = {
+        .shard_X     = (uintptr_t)X,
+        .shard_Y     = (uintptr_t)Y,
+        .reduce_dim  = reduce_dim,
+        .inner_dim   = inner_dim,
+        .outer_start = 0,
+        .outer_len   = outer_dim,
+    };
+    int ret;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *Y)
 {
     volatile reducemean_fp16_spatz_params_t *rm_params =

@@ -169,6 +169,57 @@ exit:
     return ret;
 }
 
+/* Transpose on this tile's Spatz, for operands that are already in this tile's L1: no sharding
+   across tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_transpose_fp16_spatz_l1(const float16 *input,
+                                   float16 *output,
+                                   uint32_t *perm,
+                                   uint32_t *in_shape,
+                                   uint32_t *out_shape,
+                                   uint32_t rank,
+                                   uint32_t iterations)
+{
+    volatile uint32_t out_shape_l1[rank];
+    volatile uint32_t in_strides[rank];
+    volatile uint32_t perm_l1[rank];
+    volatile uint32_t coord[rank];
+    uint32_t stride;
+    int ret;
+
+    /* The task reads rank-sized metadata (and an odometer scratch) through the params: stage
+       them on this core's stack, which is in L1. */
+    for (uint32_t i = 0; i < rank; i++) {
+        out_shape_l1[i] = out_shape[i];
+        perm_l1[i]      = perm[i];
+    }
+
+    stride = 1;
+    for (int i = (int)rank - 1; i >= 0; i--) {
+        in_strides[i] = stride;
+        stride *= in_shape[i];
+    }
+
+    volatile transpose_fp16_spatz_params_t params = {
+        .shard_input     = (uintptr_t)input,
+        .shard_output    = (uintptr_t)output,
+        .out_shape       = (uintptr_t)out_shape_l1,
+        .in_strides      = (uintptr_t)in_strides,
+        .perm            = (uintptr_t)perm_l1,
+        .coord           = (uintptr_t)coord,
+        .rank            = rank,
+        .iteration_start = 0,
+        .iteration_len   = iterations,
+    };
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *output, uint32_t shard_out_elems)
 {
     volatile transpose_fp16_spatz_params_t *trans_params;

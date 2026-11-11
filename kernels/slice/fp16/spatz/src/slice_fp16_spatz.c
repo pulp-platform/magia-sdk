@@ -123,6 +123,37 @@ exit:
     return ret;
 }
 
+/* Slice on this tile's Spatz, for operands that are already in this tile's L1: no sharding across
+   tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_slice_fp16_spatz_l1(const float16 *data,
+                               float16 *sliced,
+                               uint32_t outer_dim,
+                               uint32_t slice_dim,
+                               uint32_t inner_dim,
+                               uint32_t start_idx,
+                               uint32_t out_slice_dim)
+{
+    volatile slice_fp16_spatz_params_t params = {
+        .shard_X       = (uintptr_t)data,
+        .shard_Y       = (uintptr_t)sliced,
+        .slice_dim     = slice_dim,
+        .out_slice_dim = out_slice_dim,
+        .inner_dim     = inner_dim,
+        .start_idx     = start_idx,
+        .start_outer   = 0,
+        .len_outer     = outer_dim,
+    };
+    int ret;
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *sliced)
 {
     volatile slice_fp16_spatz_params_t *slice_params;

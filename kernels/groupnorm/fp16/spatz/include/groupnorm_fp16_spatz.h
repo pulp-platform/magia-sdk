@@ -10,5 +10,13 @@ void MAGIA_groupnorm_fp16_spatz(const float16 *X,
                                 uint32_t input_shape[4],
                                 uint32_t num_groups,
                                 float16 epsilon);
+/* Same operation on this tile only, with X, Y, scale and B already in this tile's L1. */
+void MAGIA_groupnorm_fp16_spatz_l1(const float16 *X,
+                                   float16 *Y,
+                                   const float16 *scale,
+                                   const float16 *B,
+                                   uint32_t input_shape[4],
+                                   uint32_t num_groups,
+                                   float16 epsilon);
 
 #endif /* GROUPNORM_FP16_SPATZ_H_ */

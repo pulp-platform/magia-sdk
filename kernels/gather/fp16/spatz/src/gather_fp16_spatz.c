@@ -122,6 +122,48 @@ exit:
     return ret;
 }
 
+/* Gather on this tile's Spatz, for operands that are already in this tile's L1: no sharding across
+   tiles, no L1 allocation and no L2 transfers. */
+void MAGIA_gather_fp16_spatz_l1(const float16 *data,
+                                uint32_t in_shape[4],
+                                float16 *output,
+                                uint32_t batch,
+                                uint32_t gather_dim_size,
+                                uint32_t axis_length,
+                                uint32_t index,
+                                uint32_t axis)
+{
+    uint32_t batch_len;
+    int ret;
+
+    if (axis == 0 || axis > 3) {
+        printf("[CV32 (%d)] [%s] Unsupported gather axis: %d\n", HID, KERNEL_NAME, (int)axis);
+        return;
+    }
+
+    batch_len = 1;
+    for (uint32_t d = 0; d < axis; d++)
+        batch_len *= in_shape[d];
+
+    volatile gather_fp16_spatz_params_t params = {
+        .shard_input     = (uintptr_t)data,
+        .shard_output    = (uintptr_t)output,
+        .batch_start     = 0,
+        .batch_len       = batch_len,
+        .gather_dim_size = gather_dim_size,
+        .axis_length     = axis_length,
+        .index           = index,
+    };
+
+    ret = offload_spatz_task((void *)&params);
+    if (ret != 0) {
+        printf("[CV32 (%d)] [%s] Spatz task offloading failed with error: %d\n",
+               HID,
+               KERNEL_NAME,
+               ret);
+    }
+}
+
 static int store_result(void *params, float16 *gather_result)
 {
     volatile gather_fp16_spatz_params_t *gather_params;
