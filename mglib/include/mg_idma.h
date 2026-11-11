@@ -22,44 +22,58 @@
  * (depth 16): if that queue is full, the launch stalls until a slot frees.
  * `mode` is unused here, and kept for symmetry with mg_idma_wait().
  */
-extern void mg_idma_memcpy_1d(eu_wait_mode_t mode,
-                              uint8_t dir,
-                              uint32_t axi_addr,
-                              uint32_t obi_addr,
-                              uint32_t len,
-                              mg_event_t *event,
-                              mg_event_callback_t callback);
+static inline __ALWAYS_INLINE_ void mg_idma_memcpy_1d(eu_wait_mode_t mode,
+                                                      uint8_t dir,
+                                                      uint32_t axi_addr,
+                                                      uint32_t obi_addr,
+                                                      uint32_t len,
+                                                      mg_event_t *event,
+                                                      mg_event_callback_t callback)
+{
+    (void)mode;
+    mg_event_init(event, idma_memcpy_1d(dir, axi_addr, obi_addr, len), callback);
+}
 
 /**
  * Issue an asynchronous 2D iDMA transfer and stamp `event` with the id needed
  * to later wait for its completion via mg_idma_wait(). Queued in hardware like
  * mg_idma_memcpy_1d().
  */
-extern void mg_idma_memcpy_2d(eu_wait_mode_t mode,
-                              uint8_t dir,
-                              uint32_t axi_addr,
-                              uint32_t obi_addr,
-                              uint32_t len,
-                              uint32_t std,
-                              uint32_t reps,
-                              mg_event_t *event,
-                              mg_event_callback_t callback);
+static inline __ALWAYS_INLINE_ void mg_idma_memcpy_2d(eu_wait_mode_t mode,
+                                                      uint8_t dir,
+                                                      uint32_t axi_addr,
+                                                      uint32_t obi_addr,
+                                                      uint32_t len,
+                                                      uint32_t std,
+                                                      uint32_t reps,
+                                                      mg_event_t *event,
+                                                      mg_event_callback_t callback)
+{
+    (void)mode;
+    mg_event_init(event, idma_memcpy_2d(dir, axi_addr, obi_addr, len, std, reps), callback);
+}
 
 /**
  * As mg_idma_memcpy_2d, with a stride on both sides: after each block of `len`
  * bytes the AXI address advances by `axi_std` and the L1 address by `obi_std`,
  * e.g. rows loaded into an L1 buffer with wider rows (zero padding around them).
  */
-extern void mg_idma_memcpy_2d_strided(eu_wait_mode_t mode,
-                                      uint8_t dir,
-                                      uint32_t axi_addr,
-                                      uint32_t obi_addr,
-                                      uint32_t len,
-                                      uint32_t axi_std,
-                                      uint32_t obi_std,
-                                      uint32_t reps,
-                                      mg_event_t *event,
-                                      mg_event_callback_t callback);
+static inline __ALWAYS_INLINE_ void mg_idma_memcpy_2d_strided(eu_wait_mode_t mode,
+                                                              uint8_t dir,
+                                                              uint32_t axi_addr,
+                                                              uint32_t obi_addr,
+                                                              uint32_t len,
+                                                              uint32_t axi_std,
+                                                              uint32_t obi_std,
+                                                              uint32_t reps,
+                                                              mg_event_t *event,
+                                                              mg_event_callback_t callback)
+{
+    (void)mode;
+    mg_event_init(event,
+                  idma_memcpy_2d_strided(dir, axi_addr, obi_addr, len, axi_std, obi_std, reps),
+                  callback);
+}
 
 /**
  * Native row / column multicast: copy `len` bytes from this tile's L1 at
@@ -120,4 +134,52 @@ mg_idma_wait(uint8_t dir, eu_wait_mode_t mode, mg_event_t *event)
     }
 
     mg_event_trigger(event);
+}
+
+/*
+ * Blocking transfers: launch, then sleep (per `mode`) until the direction's next completion. Only
+ * valid when no other transfer of direction `dir` is in flight, as in a kernel that loads its
+ * operands, computes and stores in sequence; with several transfers in flight use the event calls
+ * above. Cheaper than mg_idma_memcpy_*() + mg_idma_wait(), which reads DONE_ID before and after
+ * sleeping.
+ */
+static inline __ALWAYS_INLINE_ void mg_idma_sync_wait(eu_wait_mode_t mode, uint8_t dir)
+{
+    if (dir) {
+        eu32_idma_wait_o2a(mode);
+    } else {
+        eu32_idma_wait_a2o(mode);
+    }
+}
+
+static inline __ALWAYS_INLINE_ void
+mg_idma_memcpy_1d_sync(eu_wait_mode_t mode, uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len)
+{
+    idma_memcpy_1d(dir, axi_addr, obi_addr, len);
+    mg_idma_sync_wait(mode, dir);
+}
+
+static inline __ALWAYS_INLINE_ void mg_idma_memcpy_2d_sync(eu_wait_mode_t mode,
+                                                           uint8_t dir,
+                                                           uint32_t axi_addr,
+                                                           uint32_t obi_addr,
+                                                           uint32_t len,
+                                                           uint32_t std,
+                                                           uint32_t reps)
+{
+    idma_memcpy_2d(dir, axi_addr, obi_addr, len, std, reps);
+    mg_idma_sync_wait(mode, dir);
+}
+
+static inline __ALWAYS_INLINE_ void mg_idma_memcpy_2d_strided_sync(eu_wait_mode_t mode,
+                                                                   uint8_t dir,
+                                                                   uint32_t axi_addr,
+                                                                   uint32_t obi_addr,
+                                                                   uint32_t len,
+                                                                   uint32_t axi_std,
+                                                                   uint32_t obi_std,
+                                                                   uint32_t reps)
+{
+    idma_memcpy_2d_strided(dir, axi_addr, obi_addr, len, axi_std, obi_std, reps);
+    mg_idma_sync_wait(mode, dir);
 }

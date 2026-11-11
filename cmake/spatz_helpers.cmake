@@ -217,7 +217,7 @@ function(add_cv32_executable_with_spatz)
 
     target_compile_options(${ARG_TARGET_NAME} PRIVATE ${CV32_COMPILE_FLAGS})
     target_link_options(${ARG_TARGET_NAME} PRIVATE ${CV32_LINK_FLAGS})
-    target_link_libraries(${ARG_TARGET_NAME} PUBLIC runtime hal)
+    target_link_libraries(${ARG_TARGET_NAME} PUBLIC runtime hal mglib)
 
     # --------------------------------------------------------------------------
     # Post-build dump
@@ -227,4 +227,62 @@ function(add_cv32_executable_with_spatz)
         COMMAND ${CMAKE_OBJDUMP} -D -S $<TARGET_FILE:${ARG_TARGET_NAME}> > ${ELF_DUMP}
         VERBATIM
     )
+endfunction()
+
+# ------------------------------------------------------------------------------
+# add_spatz_kernels(TARGET <exe> TEST_NAME <name> KERNELS <k>... [HOT_TASKS <task>...])
+#
+# Links the SDK Spatz kernels kernels/<k>/fp16/spatz into the executable <exe>:
+# - their tasks are built into one Spatz binary, <name>_task_bin.h (add_spatz_task,
+#   with the first kernel's task first and the HOT_TASKS right after it);
+# - their CV32 sources and include directories are added to <exe>, and each source
+#   finds its <k>_fp16_spatz_task_bin.h, a shim that includes the shared header
+#   without defining the binary;
+# - the binary itself is defined once, in a generated <name>_binary.c.
+# Sources of <exe> may include <name>_task_bin.h for the task ids, after
+# #define SPATZ_BINARY_NO_DEFINE.
+# ------------------------------------------------------------------------------
+function(add_spatz_kernels)
+    cmake_parse_arguments(ARG "" "TARGET;TEST_NAME" "KERNELS;HOT_TASKS" ${ARGN})
+    if(NOT ARG_TARGET OR NOT ARG_TEST_NAME OR NOT ARG_KERNELS)
+        message(FATAL_ERROR "add_spatz_kernels requires TARGET, TEST_NAME and KERNELS")
+    endif()
+
+    set(KD ${CMAKE_SOURCE_DIR}/kernels)
+    set(TASK_SRCS)
+    set(KERNEL_SRCS)
+    set(INCS ${KD}/common)
+    foreach(K ${ARG_KERNELS})
+        list(APPEND TASK_SRCS ${KD}/${K}/fp16/spatz/spatz_task/${K}_fp16_spatz_task.c)
+        list(APPEND KERNEL_SRCS ${KD}/${K}/fp16/spatz/src/${K}_fp16_spatz.c)
+        list(APPEND INCS ${KD}/${K}/fp16/spatz/include)
+    endforeach()
+    list(GET ARG_KERNELS 0 FIRST)
+
+    add_spatz_task(
+        TEST_NAME ${ARG_TEST_NAME}
+        TASK_SOURCES ${TASK_SRCS}
+        FIRST_TASK_NAME ${FIRST}_fp16_spatz_task
+        INCLUDE_DIRS ${INCS}
+        HOT_TASKS ${ARG_HOT_TASKS}
+    )
+    get_filename_component(HEADER_DIR ${${ARG_TEST_NAME}_SPATZ_HEADER} DIRECTORY)
+    get_filename_component(HEADER ${${ARG_TEST_NAME}_SPATZ_HEADER} NAME)
+
+    set(SHIM_DIR ${CMAKE_CURRENT_BINARY_DIR}/${ARG_TEST_NAME}_shim)
+    foreach(K ${ARG_KERNELS})
+        file(WRITE ${SHIM_DIR}/${K}_fp16_spatz_task_bin.h
+             "#define SPATZ_BINARY_NO_DEFINE\n#include \"${HEADER}\"\n")
+    endforeach()
+    set(BINARY_C ${CMAKE_CURRENT_BINARY_DIR}/${ARG_TEST_NAME}_binary.c)
+    file(WRITE ${BINARY_C} "#include \"${HEADER}\"\n")
+
+    target_sources(${ARG_TARGET} PRIVATE ${KERNEL_SRCS} ${BINARY_C})
+    set_source_files_properties(${KERNEL_SRCS} TARGET_DIRECTORY ${ARG_TARGET}
+                                PROPERTIES INCLUDE_DIRECTORIES ${SHIM_DIR})
+    target_include_directories(${ARG_TARGET} PRIVATE ${INCS} ${HEADER_DIR})
+    add_dependencies(${ARG_TARGET} ${${ARG_TEST_NAME}_SPATZ_TARGET})
+    if(TARGET spatz_bootrom)
+        add_dependencies(${ARG_TARGET} spatz_bootrom)
+    endif()
 endfunction()
