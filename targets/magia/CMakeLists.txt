@@ -76,6 +76,12 @@ target_link_options(runtime
   -Wl,--gc-sections #ZL-MOD 03072025
 )
 
+# Re-link every executable using the runtime when the linker script changes
+# (CMake does not track files passed via -T as link dependencies).
+set_property(TARGET runtime APPEND PROPERTY
+  INTERFACE_LINK_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/link.ld
+)
+
 # Build bootrom only when Spatz tests are enabled.
 if(SPATZ_TESTS)
     add_spatz_bootrom()
