@@ -6,4 +6,7 @@
 
 # Add test
 add_subdirectory(mesh)
-add_subdirectory(mgc)
+# The mgc tests have goldens for 2x2 to 16x16 meshes only (#error in their test.h otherwise)
+if(NOT TILES STREQUAL "1")
+    add_subdirectory(mgc)
+endif()
