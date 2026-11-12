@@ -6,18 +6,24 @@
 #include <stdint.h>
 #include "tile.h"
 
-/* Fixed exchange buffer, MAGIA L2 address (= RTEMS 0xC1000000) */
-#define UMA_EXCHANGE_BUFFER 0xC1000000u
+#define GUEST_READY       0x5EADBEEFu
+#define SYNC_FROM_GVSOC   0x9ABCDEF0u
+#define SYNC_TO_GVSOC     0xAAAAAAAAu
+#define START_FROM_CORE_0 0xDEADBEEFu
 
-#define GUEST_READY     0x5EADBEEFu
-#define SYNC_FROM_GVSOC 0x9ABCDEF0u
-#define SYNC_TO_GVSOC   0xAAAAAAAAu
+/* Exchange buffer shared with the host MCU, placed by the linker in the
+ * .uma_xbuf section at 0xC1000000 (= RTEMS 0xC1000000), see link.ld. */
+__attribute__((section(".uma_xbuf"), aligned(64), used))
+volatile uint32_t uma_xbuf[16];
+
+__attribute__((section(".dataram"), aligned(64), used))
+volatile uint32_t startFromCore0[16];
 
 int main(void)
 {
     if (get_hartid() == 0)
     {
-        volatile uint32_t *xbuf = (volatile uint32_t *)UMA_EXCHANGE_BUFFER;
+        volatile uint32_t *xbuf = uma_xbuf;
         volatile uint32_t *sync_from_gvsoc = &xbuf[0];
         volatile uint32_t *sync_to_gvsoc   = &xbuf[1];
         volatile uint32_t *guest_ready     = &xbuf[2];
@@ -37,10 +43,18 @@ int main(void)
         while (*sync_to_gvsoc != SYNC_TO_GVSOC)
             ;
         printf("[MAGIA] ELF LOADER TEST: guest answered 0x%x, handshake done\n", *sync_to_gvsoc);
+        
+        for(uint32_t coreIdx=0; coreIdx<sizeof(startFromCore0)/sizeof(uint32_t); coreIdx++)
+        {
+            startFromCore0[coreIdx]=START_FROM_CORE_0;
+        }
+        __asm__ volatile ("fence rw, rw" ::: "memory");
     }
     else
     {
-        printf("[MAGIA] ELF LOADER TEST: I'm tile %u\n", get_hartid());
+        while(startFromCore0[get_hartid()]!=START_FROM_CORE_0);
+            ;
+        printf("[MAGIA] ELF LOADER TEST: Start from core 0 received, I'm tile %u\n", get_hartid());
     }
 
     return 0;

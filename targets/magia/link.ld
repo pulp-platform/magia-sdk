@@ -23,6 +23,7 @@ MEMORY
     instrram    : ORIGIN = 0xcc000000, LENGTH = 0x8000
     dataram     : ORIGIN = 0xcc010000, LENGTH = 0xF00000  /* MAGIA: data at 0xCC010000 */
     stack       : ORIGIN = 0x00010000, LENGTH = 0x0C000   /* CV32/PULP stacks below Spatz [0x1C000, 0x20000) */
+    uma_xbuf    : ORIGIN = 0xC1000000, LENGTH = 0x1000 /* 4K UMA exchange buffer shared with host MCU (= RTEMS 0xC1000000) */
 }
 
 /* Stack information variables.
@@ -159,6 +160,19 @@ SECTIONS
         *(COMMON)
         _bss_end = .;
     } > dataram :data
+
+    /* UMA exchange buffer shared with the host MCU, at a fixed address.
+     * NOLOAD: not part of any PT_LOAD segment, so the host ELF loader does not
+     * overwrite it, and crt0 does not zero it (it is not .bss). The host is
+     * responsible for initializing it before releasing the Magia cores. */
+    .uma_xbuf (NOLOAD) :
+    {
+        . = ALIGN(64);
+        _uma_xbuf_start = .;
+        KEEP(*(.uma_xbuf))
+        KEEP(*(.uma_xbuf.*))
+        _uma_xbuf_end = .;
+    } > uma_xbuf :NONE
 
     /* Per-tile-aliased scratch (private to each tile, unlike the shared-L2 .bss).
      * Placed above the stack top so the downward-growing stack never reaches it.
