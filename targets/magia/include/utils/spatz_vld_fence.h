@@ -4,27 +4,45 @@
 //
 // Francesco Conti <f.conti@unibo.it>
 //
-// Load fence for Spatz tasks, force-included in every Spatz task compile (spatz_helpers.cmake).
-// Every strided or indexed vector load asm string in the Spatz kernels is followed by
-// SPATZ_VLD_FENCE.
+// SPATZ_VLD_FENCE: a workaround for two Spatz RTL bugs with vector loads.
+// This header is force-included in every Spatz task (see spatz_helpers.cmake).
 //
-// RTL workaround: a strided/indexed load writes each VRF word in more than
-// one partial write, but the scoreboard lets a chained VFU instruction read a word as soon as the
-// load wrote to it in the previous cycle, so it can read the word half-written. Snitch does not
-// issue a scalar store while an offloaded vector memory instruction is outstanding
-// (acc_mem_cnt_q != 0 stalls it, see snitch.sv), so a dummy store right after the load holds
-// back everything that follows until the load has written all its elements: no chaining on it.
-// The store writes zero to the word below sp, which is not allocated (the RISC-V ABI has no red
-// zone, so the compiler keeps nothing there).
+// HOW TO USE IT
+//   Put SPATZ_VLD_FENCE right after:
+//     1. every strided or indexed vector load (vlse*, vluxei*, ...);
+//     2. any vector load whose destination register is read next by a
+//        reduction (vfred*, vfwred*).
+//   Example:
+//     asm volatile("vlse32.v v0, (%0), %1" SPATZ_VLD_FENCE ...);
 //
-// Also after any vector load whose register a reduction (vfred*, vfwred*) reads next. RTL
-// workaround: a reduction chained on a load gets its vector words as the load writes them; a
-// one-cycle gap in the middle of the REDUCE state leaves the FPU stalled with its own partial at
-// the output, and the operation decided in the previous cycle (a one-cycle
-// reduction_operand_ready_q pulse, spatz_vfu.sv) finds the FPU input register full and is dropped.
-// With the fence the reduction starts on a register fully written: one word per cycle, no gap.
+// HOW IT WORKS
+//   The fence is a dummy scalar store: "sw zero, -4(sp)".
+//   Snitch does not issue a scalar store while a vector memory instruction
+//   is still in flight (it stalls on acc_mem_cnt_q != 0, see snitch.sv).
+//   So the store, and everything after it, waits until the load has
+//   written all its elements. Nothing can chain on the load.
+//   The store writes to the word just below sp. Nothing lives there: the
+//   RISC-V ABI has no red zone, so the compiler never uses that memory.
 //
-// On by default; disabled (empty) with `make build spatz_vld_fence=0` (CMake -DSPATZ_VLD_FENCE=0).
+// BUG 1: strided/indexed loads (half-written words)
+//   These loads fill each word of the vector register file in several
+//   partial writes. The scoreboard, however, lets a chained instruction
+//   read a word as soon as the load has written to it once. The chained
+//   instruction can then read a half-written word.
+//
+// BUG 2: reductions chained on a load (dropped operation)
+//   A reduction chained on a load gets its input words as the load writes
+//   them, so there can be one-cycle gaps. A gap in the middle of the
+//   reduction leaves the FPU stalled with a partial result at its output.
+//   The next operation (triggered by a one-cycle pulse of
+//   reduction_operand_ready_q, see spatz_vfu.sv) finds the FPU input full
+//   and is silently dropped.
+//   With the fence, the reduction starts on a fully written register: it
+//   gets one word per cycle, with no gaps.
+//
+// ENABLING / DISABLING
+//   On by default. Turn it off (the macro becomes empty) with
+//     make build spatz_vld_fence=0      (CMake: -DSPATZ_VLD_FENCE=0)
 
 #ifndef SPATZ_VLD_FENCE_H
 #define SPATZ_VLD_FENCE_H

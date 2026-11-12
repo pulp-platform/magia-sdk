@@ -4,28 +4,48 @@
 //
 // Francesco Conti <f.conti@unibo.it>
 //
-// FPU fence for Spatz tasks, force-included in every Spatz task compile (spatz_helpers.cmake).
-// SPATZ_FPU_FENCE prefixes the asm string of a vector FP instruction whose FPnew op group has a
-// lower latency than the FP instruction issued to the VFU before it (MAGIA: ADDMUL 3, CONV 2,
-// NONCOMP 1), e.g. asm volatile(SPATZ_FPU_FENCE "vfmax.vf v0, v0, %0" ...).
+// SPATZ_FPU_FENCE: a workaround for a Spatz RTL deadlock.
+// This header is force-included in every Spatz task (see spatz_helpers.cmake).
 //
-// RTL workaround: FPnew completes out of order across op groups, so the
-// shorter instruction's first result can overtake the last result of the one before it; if it
-// depends on it, the scoreboard's lockstep chaining holds it at the FPU output with the older
-// result queued behind it, and the VFU deadlocks. vmv.x.s is an integer VFU operation (vl = 1,
-// result to tp): the VFU switches from its FPU to its IPU state only once the FPUs are no longer
-// busy, so everything after it starts with the FPU pipelines drained. The result goes to tp, which
-// the Spatz tasks never read (no TLS; the compiler does not allocate it), not to x0: GVSoC's
-// vmv.x.s writes its destination without the x0 guard.
+// WHAT IT IS FOR
+//   Inside the Spatz vector unit (VFU), the FPU (FPnew) has op groups with
+//   different latencies. On MAGIA:
+//     ADDMUL   (vfadd, vfmul, vfmacc, ...)  3 cycles
+//     CONV     (conversions)                2 cycles
+//     NONCOMP  (vfmax, vfmin, sign-inj...)  1 cycle
+//   Results from different groups can come back out of order. A fast
+//   instruction may finish before the slow instruction issued just before it.
+//   If the fast one depends on the slow one, the chaining logic stalls it
+//   at the FPU output, the slow result gets stuck behind it, and the VFU
+//   hangs forever.
 //
-// Never put it right before a reduction: the VFU can accept the reduction
-// while the vmv.x.s result is still in the IPU result register, and drops that result without a
-// response, so tp stays reserved forever. A reduction does not need it anyway: the VFU waits for
-// the FPU to drain before starting one (only at its start: a reduction chained on a load needs
-// SPATZ_VLD_FENCE after the load, see spatz_vld_fence.h).
+// HOW TO USE IT
+//   Put SPATZ_FPU_FENCE in front of any vector FP instruction that is faster
+//   than the FP instruction before it, e.g.
+//     asm volatile(SPATZ_FPU_FENCE "vfmax.vf v0, v0, %0" ...);
+//   scripts/spatz_fpu_hazards.py scans the task ELFs and lists the
+//   instructions that need it.
 //
-// On by default; disabled (empty) with `make build spatz_fpu_fence=0` (CMake -DSPATZ_FPU_FENCE=0).
-// scripts/spatz_fpu_hazards.py lists the instructions that need it, from the task ELFs.
+// HOW IT WORKS
+//   The fence is a single "vmv.x.s tp, v0" instruction. It is an integer
+//   VFU op, and the VFU only switches from FP to integer mode once all FPU
+//   pipelines are empty. So everything after the fence starts with a
+//   drained FPU.
+//   The result is written to tp, which Spatz tasks never use (no TLS, and
+//   the compiler does not allocate it). We cannot use x0 because GVSoC's
+//   vmv.x.s writes its destination even when it is x0.
+//
+// DO NOT put it right before a reduction (vfredsum etc.)
+//   The VFU may accept the reduction while the fence's result is still
+//   pending, and then drop that result. tp then stays marked as "busy"
+//   forever and the core hangs.
+//   Reductions do not need the fence anyway: the VFU already waits for the
+//   FPU to drain before starting one. (A reduction that follows a vector
+//   load needs SPATZ_VLD_FENCE instead; see spatz_vld_fence.h.)
+//
+// ENABLING / DISABLING
+//   On by default. Turn it off (the macro becomes empty) with
+//     make build spatz_fpu_fence=0      (CMake: -DSPATZ_FPU_FENCE=0)
 
 #ifndef SPATZ_FPU_FENCE_H
 #define SPATZ_FPU_FENCE_H
