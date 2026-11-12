@@ -19,19 +19,21 @@
 #include <stdint.h>
 #include "tile.h"
 
-/* Fixed exchange buffer, MAGIA L2 address (= RTEMS 0xC1000000) */
-#define UMA_EXCHANGE_BUFFER 0xC1000000u
-
 #define GUEST_READY     0x5EADBEEFu
 #define SYNC_FROM_GVSOC 0x9ABCDEF0u
 #define SYNC_TO_GVSOC   0xAAAAAAAAu
+
+/* Exchange buffer shared with the RTEMS guest, placed by the linker in the
+ * .uma_xbuf section at 0xC1000000 (= RTEMS 0xC1000000), see link.ld. */
+__attribute__((section(".uma_xbuf"), aligned(64), used))
+volatile uint32_t uma_xbuf[16];
 
 int main(void)
 {
     if (get_hartid() != 0)
         return 0;
 
-    volatile uint32_t *xbuf = (volatile uint32_t *)UMA_EXCHANGE_BUFFER;
+    volatile uint32_t *xbuf = uma_xbuf;
     volatile uint32_t *sync_from_gvsoc = &xbuf[0];
     volatile uint32_t *sync_to_gvsoc   = &xbuf[1];
     volatile uint32_t *guest_ready     = &xbuf[2];

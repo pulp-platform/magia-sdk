@@ -27,6 +27,7 @@ MEMORY
     instrram    : ORIGIN = 0xcc000000, LENGTH = 0x20000
     dataram     : ORIGIN = 0xcc020000, LENGTH = 0xF00000
     stack       : ORIGIN = 0x00010000, LENGTH = 0x4000 /* 16K for control core CV32 (0x10000-0x14000); PULP 0x14000-0x1C000, Spatz 0x1C000-0x20000 */
+    uma_xbuf    : ORIGIN = 0xC1000000, LENGTH = 0x1000 /* 4K UMA exchange buffer shared with host MCU (= RTEMS 0xC1000000) */
 }
 
 /* Stack information variables */
@@ -155,6 +156,19 @@ SECTIONS
         *(COMMON)
         _bss_end = .;
     } > dataram :data
+
+    /* UMA exchange buffer shared with the host MCU, at a fixed address.
+     * NOLOAD: not part of any PT_LOAD segment, so the host ELF loader does not
+     * overwrite it, and crt0 does not zero it (it is not .bss). The host is
+     * responsible for initializing it before releasing the Magia cores. */
+    .uma_xbuf (NOLOAD) :
+    {
+        . = ALIGN(64);
+        _uma_xbuf_start = .;
+        KEEP(*(.uma_xbuf))
+        KEEP(*(.uma_xbuf.*))
+        _uma_xbuf_end = .;
+    } > uma_xbuf :NONE
 
     /* ensure there is enough room for stack */
     .stack (NOLOAD): {
