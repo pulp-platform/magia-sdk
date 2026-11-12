@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "onnx_sigmoid_params.h"
 
 static inline void sigmoid(const _Float16 *src, _Float16 *dst, const size_t len)
@@ -19,11 +20,11 @@ static inline void sigmoid(const _Float16 *src, _Float16 *dst, const size_t len)
     p_dst = dst;
     avl   = len;
 
-    asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+    asm volatile("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl)); /* m4: room for the division */
     asm volatile("vfmv.v.f v8, %0" ::"f"(ONE));
 
     for (; avl > 0; avl -= vl) {
-        asm volatile("vsetvli %0, %1, e16, m8, ta, ma" : "=r"(vl) : "r"(avl));
+        asm volatile("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl)); /* m4: room for the division */
 
         asm volatile("vle16.v v0,( %0)" ::"r"(p_src));
 
@@ -32,13 +33,13 @@ static inline void sigmoid(const _Float16 *src, _Float16 *dst, const size_t len)
         /* ---------- fast exp approximation ---------- */
         asm volatile("vfmul.vf v0, v0, %0" ::"f"(COEF));
         asm volatile("vfadd.vf v0, v0, %0" ::"f"(BIAS));
-        asm volatile("vfcvt.rtz.xu.f.v v0, v0");
+        asm volatile(SPATZ_FPU_FENCE "vfcvt.rtz.xu.f.v v0, v0");
         /* -------------------------------------------- */
 
         asm volatile("vfadd.vf v0, v0, %0" ::"f"(ONE));
-        asm volatile("vfdiv.vv v0, v8, v0");
+        SPATZ_VFDIV_VV("v16", "v8", "v0", "v20", "v24"); /* no vfdiv, see spatz_recip.h */
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst));
+        asm volatile("vse16.v v16, (%0)" SPATZ_VST_FENCE ::"r"(p_dst));
 
         p_src += vl;
         p_dst += vl;

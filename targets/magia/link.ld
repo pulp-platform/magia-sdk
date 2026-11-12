@@ -45,6 +45,7 @@ PHDRS
 {
     text PT_LOAD;
     data PT_LOAD;
+    l2ext PT_LOAD;
 }
 
 SECTIONS

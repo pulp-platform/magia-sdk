@@ -33,7 +33,7 @@ int onnx_clip_task(void)
         asm volatile("vfmin.vf v8, v0, %0" ::"f"(max));
         asm volatile("vfmax.vf v8, v8, %0" ::"f"(min));
 
-        asm volatile("vse16.v v8, (%0)" ::"r"(result));
+        asm volatile("vse16.v v8, (%0)" SPATZ_VST_FENCE ::"r"(result));
 
         result += vl;
         input += vl;

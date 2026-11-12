@@ -57,3 +57,12 @@ static inline int mg_seq_ge(uint8_t a, uint8_t b)
 {
     return (int8_t)(a - b) >= 0;
 }
+
+/**
+ * As mg_seq_ge(), on a 32-bit wrapping counter (e.g. the iDMA job ids). Only
+ * valid while the two are never more than 2^31 - 1 apart.
+ */
+static inline int mg_seq_ge32(uint32_t a, uint32_t b)
+{
+    return (int32_t)(a - b) >= 0;
+}

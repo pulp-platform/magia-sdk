@@ -34,15 +34,15 @@ static inline void fast_exp(const _Float16 *src, _Float16 *dst, size_t len)
         asm volatile("vle16.v v0, (%0)" ::"r"(p_src));
 
         /* clamp for stability */
-        asm volatile("vfmin.vf v0, v0, %0" ::"f"(MAX));
+        asm volatile(SPATZ_FPU_FENCE "vfmin.vf v0, v0, %0" ::"f"(MAX));
         asm volatile("vfmax.vf v0, v0, %0" ::"f"(MIN));
 
         asm volatile("vfmul.vf v0, v0, %0" ::"f"(COEF));
         asm volatile("vfadd.vf v0, v0, %0" ::"f"(BIAS));
 
-        asm volatile("vfcvt.rtz.xu.f.v v0, v0");
+        asm volatile(SPATZ_FPU_FENCE "vfcvt.rtz.xu.f.v v0, v0");
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst));
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst));
 
         p_src += vl;
         p_dst += vl;

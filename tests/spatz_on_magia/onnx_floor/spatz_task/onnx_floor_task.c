@@ -31,7 +31,7 @@ int onnx_floor_task(void)
         asm volatile("vle16.v v8, (%0)" ::"r"(X));
         asm volatile("vfcvt.x.f.v v16, v8");
         asm volatile("vfcvt.f.x.v v8, v16");
-        asm volatile("vse16.v v8, (%0)" ::"r"(Y) : "memory");
+        asm volatile("vse16.v v8, (%0)" SPATZ_VST_FENCE ::"r"(Y) : "memory");
 
         X += vl;
         Y += vl;

@@ -258,8 +258,24 @@ int fsync32_sync_global()
 {
     if (MAX_SYNC_LVL == 0)
         return 0;
+    // Which barrier id to use:
+    //
+    // - General case: id = MESH_Y_TILES.
+    //   Even ids go up the horizontal tree (h-tree), odd ids up the vertical one (v-tree).
+    //   Row barriers use ids (y % (MESH_Y_TILES / 2)) * 2, which are at most MESH_Y_TILES - 2.
+    //   MESH_Y_TILES is even and larger than all of them, so a global barrier and a row
+    //   barrier waiting on the same fractal node never use the same id.
+    //
+    // - 2x2 mesh: id = 1.
+    //   The general rule does not work here: it would give id = MESH_Y_TILES = 2, but on a
+    //   2x2 mesh the root only accepts ids 0 and 1 (it has one local register per tree).
+    //   A larger id is a register-file error, which wakes the caller immediately, so the
+    //   barrier would not wait at all. Row barriers use id 0 (h-tree), so the global barrier
+    //   uses id 1 and goes up the v-tree instead.
+    else if (MESH_Y_TILES == 2)
+        fsync(1, (uint32_t)(0xFFFFFFFF >> (32 - MAX_SYNC_LVL)));
     else
-        fsync(0, (uint32_t)(0xFFFFFFFF >> (32 - MAX_SYNC_LVL)));
+        fsync(MESH_Y_TILES, (uint32_t)(0xFFFFFFFF >> (32 - MAX_SYNC_LVL)));
     return 0;
 }
 
