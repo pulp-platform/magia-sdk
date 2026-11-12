@@ -49,11 +49,31 @@ static inline __ALWAYS_INLINE_ void mg_spatz_run(eu_wait_mode_t mode,
  */
 static inline __ALWAYS_INLINE_ void mg_spatz_wait(eu_wait_mode_t mode, mg_event_t *event)
 {
+    /* read before sleeping: the wait clobbers memory, and a known NULL callback costs nothing */
+    mg_event_callback_t callback = event->callback;
+
     if (event->id) {
         eu_wait_events(EU_SPATZ_DONE_MASK, mode, 0);
         event->id = 0;
     }
-    mg_event_trigger(event);
+    if (callback)
+        callback(event);
+}
+
+/**
+ * The same without an event, for code that starts a task in one function and waits for it in
+ * another: mg_spatz_start() starts it, mg_spatz_wait_last() waits (per `mode`) for the task started
+ * last, which must not have been waited yet.
+ */
+static inline __ALWAYS_INLINE_ void mg_spatz_start(uint32_t task, const void *params)
+{
+    asm volatile("" ::: "memory");
+    spatz_run_task_with_params(task, (uint32_t)params);
+}
+
+static inline __ALWAYS_INLINE_ void mg_spatz_wait_last(eu_wait_mode_t mode)
+{
+    eu_wait_events(EU_SPATZ_DONE_MASK, mode, 0);
 }
 
 /** Exit code of the last task that completed. */
