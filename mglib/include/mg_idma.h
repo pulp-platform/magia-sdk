@@ -85,6 +85,8 @@ static inline __ALWAYS_INLINE_ void mg_idma_memcpy_2d_strided(eu_wait_mode_t mod
  * unicast paying the full pipeline fill. Same arguments as mg_idma_memcpy_1d
  * (`dir` must be 1, L1 -> remote L1); `event` tracks the last job issued, and
  * same-direction jobs complete in order, so waiting on it waits for all.
+ * Built with `make hw_mcast=1` (MAGIA v4), a multicast whose `dst_addr` is
+ * `obi_addr` is instead one NoC hardware multicast job (iDMA multicast mask).
  */
 extern void mg_idma_mcast_row(eu_wait_mode_t mode,
                               uint8_t dir,
