@@ -115,7 +115,7 @@ int main(void)
     // uint32_t perf_scaled = (total_bytes) / avg_cycles;
 
     // // Sync all tiles before printing
-    // fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    // fsync_sync_global();
 
     // // Each tile prints its own performance
     // printf("Tile %u | Total bytes per repetition: %u | Avg cycles: %u | Performance: %u

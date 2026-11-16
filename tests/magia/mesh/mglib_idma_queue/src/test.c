@@ -77,7 +77,7 @@ int main(void)
 
     // hart 0 clears the shared .bss (l2_buf) in crt0 while the other tiles
     // already run: wait for all tiles before the first transfer to L2
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     uint32_t errors = 0;

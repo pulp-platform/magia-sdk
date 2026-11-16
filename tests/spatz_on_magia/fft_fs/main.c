@@ -210,7 +210,7 @@ int main(void)
     eu_init();
     eu_fsync_init(0);
 
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WFE);
 
     if (HID == 0) {

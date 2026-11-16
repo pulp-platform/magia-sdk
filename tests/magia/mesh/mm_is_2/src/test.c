@@ -283,7 +283,7 @@ int main(void)
              * 3f. Sync before next timeslot
              */
             pt++;
-            fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+            fsync_sync_global();
 #if STALLING == 0
             eu_fsync_wait(WAIT_MODE);
 #endif

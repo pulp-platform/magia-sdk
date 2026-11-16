@@ -66,7 +66,7 @@ int main(void)
         InitNetwork();
     }
 
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     /* input copy */

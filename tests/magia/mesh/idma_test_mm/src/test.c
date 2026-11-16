@@ -63,7 +63,7 @@ int main(void)
     eu_fsync_init(0);
 #endif
 
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
 #if STALLING == 0
     eu_fsync_wait(WFE);
 #endif

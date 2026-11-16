@@ -222,15 +222,8 @@ Verilator model built from the same checkout).
 
 Requirements:
 
-- A MAGIA checkout containing the Verilator flow (`verilator/verilator.mk`). This is **not** in the
-  commit pinned by `scripts/deps.env` yet, so point `MAGIA_RTL_DIR` at a checkout that has it.
+- A MAGIA checkout containing the Verilator flow (`verilator/verilator.mk`).
 - Verilator >= 5.046 — earlier versions miss the hierarchical-block fixes the flow depends on.
-- `mesh_dv=1`: the flow is mesh-only, so `tiles=1` is rejected (it forces `mesh_dv=0`).
-- Not `target_platform=magia_v1`: it selects CV32E40X, whose hierarchical core traces would need
-  per-tile filenames resolved at run time. Also rejected.
-
-Both constraints are checked by `make MAGIA`, which stops with an explanatory error rather than
-letting the build fail later.
 
 Options:
 
@@ -238,7 +231,9 @@ Options:
 
 `verilator_threads`: **N** (**Default**: 4). Threads the *simulation* runs on. Compiled into the model, so it only has an effect on `make MAGIA platform=verilator`.
 
-`MAGIA_VERILATOR_BIN`: Path to the model. **Default**: `$(MAGIA_RTL_DIR)/verilator/build/obj_dir/Vmagia_tb`. Override to run a model kept outside the MAGIA checkout.
+`TESTBENCH_NAME`: Name of the testbench binary. **Default**: `Vmagia_tb`. On standalone tile, it is called `Vmagia_tile_tb`. This parameter is automatically managed by the SDK.
+
+`MAGIA_VERILATOR_BIN_DIR`: Path to the model. **Default**: `$(MAGIA_RTL_DIR)/verilator/build/obj_dir/`. Override to run a model kept outside the MAGIA checkout. The build folder might have a different generated name if building a standalone-tile model or with CV32E40X as control core.
 
 `gui`: **0**|**1** (**Default**: 0). Dumps an FST waveform of the run to `<test_name>.fst` in the test directory, and prints ready-to-paste `gtkwave` and `surfer` commands when the simulation ends. This is what `gui` means for Verilator — there is no interactive simulator window as with QuestaSim. Dumping is off otherwise and costs nothing. Override the filename with `VERILATOR_FST`.
 
@@ -266,7 +261,7 @@ never reported an end-of-simulation line (hung or killed).
 Two things to keep in mind:
 
 - **Nothing bounds a hung run.** If a tile never signals end-of-computation the simulation waits
-  forever; interrupt it with Ctrl-C.
+  forever; interrupt it with Ctrl-C, or risk a memory overflow with the log!
 - **Let a waveform run reach `$finish`.** A run killed earlier leaves the FST unclosed, and its
   signal hierarchy is still sitting in the `<dump>.fst.hier` companion file — such a dump only reads
   in place and loses every signal name the moment it is moved.

@@ -41,7 +41,7 @@ int main(void)
     mmio32(l1_tile_base) = (uint32_t)INITIAL_VALUE;
 
     // Synch all the tiles
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
 #if STALLING == 0
     eu_fsync_wait(WAIT_MODE);
 #endif
@@ -58,7 +58,7 @@ int main(void)
     }
 
     // Synch all the tiles
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
 #if STALLING == 0
     eu_fsync_wait(WAIT_MODE);
 #endif

@@ -47,9 +47,10 @@ BUILD_DIR_ABS	?= $(MAGIA_DIR_ABS)/sw/tests/$(test)
 # Also searches for the installed binaries when using the 'run' command in this directory.
 GVSOC_DIR 		?= $(MAGIA_SDK_HOME)/gvsoc
 GVSOC_ABS_PATH	?= $(abspath $(GVSOC_DIR))
-# Prebuilt Verilator model. Built in the MAGIA repo with `make verilate mesh_dv=1`;
+# Prebuilt Verilator model. Built in the MAGIA repo with `make verilate`;
 # SDK doesn't modify this model.
-MAGIA_VERILATOR_BIN	?= $(MAGIA_DIR_ABS)/verilator/build/obj_dir/Vmagia_tb
+TESTBENCH_NAME      ?= Vmagia_tb
+MAGIA_VERILATOR_BIN_DIR	?= $(MAGIA_DIR_ABS)/verilator/build/obj_dir/
 # Waveform a verilator run dumps under gui=1, relative to the test build dir the
 # model runs in. Dumping is off otherwise and costs nothing.
 VERILATOR_FST	?= $(test).fst
@@ -227,6 +228,7 @@ endif
 set_mesh:
 ifeq ($(tiles), 1)
 	$(eval mesh_dv=0)
+	$(eval TESTBENCH_NAME=Vmagia_tile_tb)
 endif
 
 $(GVSOC_WORK_DIR):
@@ -289,8 +291,8 @@ else ifeq ($(platform), rtl)
 	cd $(MAGIA_RTL_DIR) 												&& \
 	make run test=$(test) gui=$(gui) mesh_dv=$(mesh_dv) fast_sim=$(fast_sim) core=$(control_core)
 else ifeq ($(platform), verilator)
-	@test -x "$(MAGIA_VERILATOR_BIN)" || {								\
-	  echo "error: no Verilator model at $(MAGIA_VERILATOR_BIN)" >&2;	\
+	@test -x "$(MAGIA_VERILATOR_BIN_DIR)/$(TESTBENCH_NAME)" || {								\
+	  echo "error: no Verilator model at $(MAGIA_VERILATOR_BIN_DIR)/$(TESTBENCH_NAME)" >&2;	\
 	  echo "       build it in the MAGIA repo first:" >&2;				\
 	  echo "         make verilate core=CV32E40P mesh_dv=1" >&2;		\
 	  exit 1; }
@@ -301,7 +303,7 @@ else ifeq ($(platform), verilator)
 # tests living in that repo.
 	set -o pipefail												 	 && \
 	cd $(BUILD_DIR_ABS)												 	 && \
-	"$(MAGIA_VERILATOR_BIN)"											\
+	$(MAGIA_VERILATOR_BIN_DIR)/$(TESTBENCH_NAME)											\
 	  +INST_HEX=$(inst_hex_name)										\
 	  +DATA_HEX=$(data_hex_name)										\
 	  +INST_ENTRY=$(inst_entry)											\
@@ -371,20 +373,6 @@ endif
 MAGIA: set_mesh
 ifeq (,$(filter $(hw_platform), rtl verilator))
 	$(error Only rtl and verilator can be built with `make MAGIA` (got platform=$(hw_platform)).)
-endif
-# The MAGIA verilator flow is mesh-only and CV32E40P-only (verilator/verilator.mk).
-# tiles=1 is rejected because set_mesh turns it into mesh_dv=0, and magia_v1
-# because it seds the core to CV32E40X further down.
-ifeq ($(hw_platform), verilator)
-ifeq ($(tiles), 1)
-	$(error platform=verilator requires mesh_dv=1, but tiles=1 forces mesh_dv=0: there is no single-tile verilator target.)
-endif
-ifneq ($(mesh_dv), 1)
-	$(error platform=verilator requires mesh_dv=1: there is no single-tile verilator target.)
-endif
-ifeq ($(control_core), CV32E40X)
-	$(error platform=verilator does not support CV32E40X, whose hierarchical core traces need per-tile filenames resolved at run time.)
-endif
 endif
 # 16 x 16 is currently the largest supported and tested mesh in RTL
 ifeq ($(shell expr $(tiles_2) \> 256), 1)
