@@ -57,10 +57,12 @@ void eu32_pulp_init(uint32_t enable_irq)
  */
 uint32_t eu32_pulp_wait(eu_wait_mode_t mode)
 {
+    eu_enable_events(EU_PULP_DONE_MASK);
     uint32_t retval = eu_wait_events(EU_PULP_DONE_MASK, mode, 1000000);
 #if PROFILE_CMI == 1
     stnl_cmi_f();
 #endif
+    eu_disable_events(EU_PULP_DONE_MASK);
     return retval;
 }
 
@@ -129,6 +131,7 @@ void eu32_idma_init(uint32_t enable_irq)
 uint32_t eu32_idma_wait_direction(uint32_t direction, eu_wait_mode_t mode)
 {
     uint32_t wait_mask = direction ? EU_IDMA_O2A_DONE_MASK : EU_IDMA_A2O_DONE_MASK;
+    eu_enable_events(wait_mask);
     uint32_t retval    = eu_wait_events(wait_mask, mode, 1000000);
 #if PROFILE_CMO == 1
     if (direction == 1)
@@ -138,6 +141,7 @@ uint32_t eu32_idma_wait_direction(uint32_t direction, eu_wait_mode_t mode)
     if (direction == 0)
         stnl_cmi_f();
 #endif
+    eu_disable_events(wait_mask);
     return retval; // 1M cycle timeout
 }
 
@@ -254,12 +258,14 @@ void eu32_fsync_init(uint32_t enable_irq)
  */
 uint32_t eu32_fsync_wait(eu_wait_mode_t mode)
 {
+    eu_enable_events(EU_FSYNC_DONE_MASK);
     if (MESH_2_POWER == 0)
         return 1;
     uint32_t retval = eu_wait_events(EU_FSYNC_DONE_MASK, mode, 1000000);
 #if PROFILE_SNC == 1
     stnl_snc_f();
 #endif
+    eu_disable_events(EU_FSYNC_DONE_MASK);
     return retval; // 1M cycle timeout
 }
 
@@ -309,10 +315,12 @@ void eu32_spatz_init(uint32_t enable_irq)
  */
 uint32_t eu32_spatz_wait(eu_wait_mode_t mode)
 {
+    eu_enable_events(EU_SPATZ_DONE_MASK);
     uint32_t retval = eu_wait_events(EU_SPATZ_DONE_MASK, mode, 1000000);
 #if PROFILE_SNC == 1
     stnl_snc_f();
 #endif
+    eu_disable_events(EU_SPATZ_DONE_MASK);
     return retval; // 1M cycle timeout
 }
 
