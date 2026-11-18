@@ -32,7 +32,7 @@ extern void mg_idma_memcpy_1d(eu_wait_mode_t mode,
 
 /**
  * Issue an asynchronous 2D iDMA transfer and stamp `event` with the id needed
- * to later wait for its completion via mg_idma_wait(). Queued in hardware as
+ * to later wait for its completion via mg_idma_wait(). Queued in hardware like
  * mg_idma_memcpy_1d().
  */
 extern void mg_idma_memcpy_2d(eu_wait_mode_t mode,

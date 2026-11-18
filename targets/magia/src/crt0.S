@@ -71,6 +71,7 @@ _start:
   csrrs   zero, mstatus, t0
 #endif
 
+#if CLEAR_BSS == 1
   # clear the bss segment
   csrr    t2, mhartid
   bnez    t2, skip_bss_clear
@@ -82,6 +83,7 @@ _start:
   bltu    t0, t1, 1b
 
 skip_bss_clear:
+#endif
 
 # clear the per-tile .tile_bss on every hart (per-tile aliased memory, so
   # each control core must zero its own copy - unlike the shared-L2 .bss above)

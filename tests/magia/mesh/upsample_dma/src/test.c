@@ -14,15 +14,16 @@
 #include "mg_idma.h"
 
 /**
- * Nearest x2 upsample of a HWC tensor (UP_C fp16 channels per pixel) by DMA replication, no compute: the input
- * pixels are split over the tiles, in segments cut at the row ends. A segment is loaded to L1 in one transfer, then
- * written to L2 with four 2D transfers, one per (row, column) phase of the output, each putting the segment's
- * pixels on every other output pixel (stride 2 pixels in L2). Double buffered: the next segment loads while this
- * one is written. The data is a pattern of 16-bit words, written by all the tiles before the run and checked after
- * it; tile 0 prints the cycles of the run, between two global barriers.
+ * Nearest x2 upsample of a HWC tensor (UP_C fp16 channels per pixel) by DMA replication, no
+ * compute: the input pixels are split over the tiles, in segments cut at the row ends. A segment is
+ * loaded to L1 in one transfer, then written to L2 with four 2D transfers, one per (row, column)
+ * phase of the output, each putting the segment's pixels on every other output pixel (stride 2
+ * pixels in L2). Double buffered: the next segment loads while this one is written. The data is a
+ * pattern of 16-bit words, written by all the tiles before the run and checked after it; tile 0
+ * prints the cycles of the run, between two global barriers.
  */
 
-#define HID get_hartid()
+#define HID   get_hartid()
 
 #define L2EXT __attribute__((section(".l2ext"), aligned(64)))
 
@@ -45,7 +46,7 @@ static void upsample2x_dma(const uint16_t *X, uint16_t *Y, uint32_t c, uint32_t 
 {
     uint32_t px = c * sizeof(uint16_t), n = h * w / NUM_HARTS, left = h * w % NUM_HARTS;
     uint32_t p0 = HID * n + (HID < left ? HID : left), p1 = p0 + n + (HID < left ? 1 : 0);
-    uint32_t buf[2], b = 0, p, q;
+    uint32_t buf[2], b                                    = 0, p, q;
     mg_event_t ld, st;
 
     if (p0 == p1)
@@ -53,17 +54,26 @@ static void upsample2x_dma(const uint16_t *X, uint16_t *Y, uint32_t c, uint32_t 
     l1_alloc_init();
     buf[0] = (uint32_t)l1_alloc(w * px);
     buf[1] = (uint32_t)l1_alloc(w * px);
-    mg_idma_memcpy_1d(WFE, 0, (uint32_t)(X + p0 * c), buf[0], (seg_end(p0, p1, w) - p0) * px, &ld, NULL);
+    mg_idma_memcpy_1d(
+        WFE, 0, (uint32_t)(X + p0 * c), buf[0], (seg_end(p0, p1, w) - p0) * px, &ld, NULL);
     for (p = p0; p < p1; p = q, b ^= 1) {
         uint32_t y = p / w, x = p % w;
         q = seg_end(p, p1, w);
         mg_idma_wait(0, WFE, &ld);
         if (q < p1)
-            mg_idma_memcpy_1d(WFE, 0, (uint32_t)(X + q * c), buf[b ^ 1], (seg_end(q, p1, w) - q) * px, &ld, NULL);
+            mg_idma_memcpy_1d(
+                WFE, 0, (uint32_t)(X + q * c), buf[b ^ 1], (seg_end(q, p1, w) - q) * px, &ld, NULL);
         for (uint32_t a = 0; a < 2; a++)
             for (uint32_t d = 0; d < 2; d++)
-                mg_idma_memcpy_2d(WFE, 1, (uint32_t)(Y + ((2 * y + a) * 2 * w + 2 * x + d) * c), buf[b], px, 2 * px,
-                                  q - p, &st, NULL);
+                mg_idma_memcpy_2d(WFE,
+                                  1,
+                                  (uint32_t)(Y + ((2 * y + a) * 2 * w + 2 * x + d) * c),
+                                  buf[b],
+                                  px,
+                                  2 * px,
+                                  q - p,
+                                  &st,
+                                  NULL);
         /* the buffer is loaded again two segments later */
         mg_idma_wait(1, WFE, &st);
     }
@@ -100,7 +110,13 @@ int main(void)
     if (errors)
         printf("[upsample_dma] tile %u errors=%u\n", HID, errors);
     if (HID == 0)
-        printf("[upsample_dma] %ux%u x%u ch -> %ux%u cycles=%u\n", UP_H, UP_W, UP_C, 2 * UP_H, 2 * UP_W, t1 - t0);
+        printf("[upsample_dma] %ux%u x%u ch -> %ux%u cycles=%u\n",
+               UP_H,
+               UP_W,
+               UP_C,
+               2 * UP_H,
+               2 * UP_W,
+               t1 - t0);
     sync();
 
     return errors != 0;

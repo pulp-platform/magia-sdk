@@ -20,11 +20,15 @@ static inline void sigmoid(const _Float16 *src, _Float16 *dst, const size_t len)
     p_dst = dst;
     avl   = len;
 
-    asm volatile("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl)); /* m4: room for the division */
+    asm volatile("vsetvli %0, %1, e16, m4, ta, ma"
+                 : "=r"(vl)
+                 : "r"(avl)); /* m4: room for the division */
     asm volatile("vfmv.v.f v8, %0" ::"f"(ONE));
 
     for (; avl > 0; avl -= vl) {
-        asm volatile("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl)); /* m4: room for the division */
+        asm volatile("vsetvli %0, %1, e16, m4, ta, ma"
+                     : "=r"(vl)
+                     : "r"(avl)); /* m4: room for the division */
 
         asm volatile("vle16.v v0,( %0)" ::"r"(p_src));
 

@@ -8,8 +8,8 @@
 // Probed L2 window: [0xC000_0000, 0xC000_0000 + L2_PROBE_SIZE), i.e. 256 MiB.
 // The default gvsoc L2 (0x0CFF_0000) ends at 0xCCFF_0000, so the probes above
 // it only succeed on a gvsoc built with l2_size=0x10000000 (or larger).
-#define L2_PROBE_BASE (0xC0000000)
-#define L2_PROBE_SIZE (0x10000000)
+#define L2_PROBE_BASE   (0xC0000000)
+#define L2_PROBE_SIZE   (0x10000000)
 
 // Narrow (core LD/ST) probes: one word per tile at base + hartid * stride
 #define N_NARROW_PROBES (4)

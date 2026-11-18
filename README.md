@@ -145,6 +145,8 @@ The following *optional* parameters can be specified when running the make comma
 
 `control_core`: **CV32E40P**|**CV32E40X** (**Default**: CV32E40P). Selects the control core version.
 
+`clear_bss` : **1**|**0** (**Default**: 0). Inserts a .bss clean routine in the crt0.S. Necessary when offloading multiple tasks.
+
 `verbose`: **0**|**1** (**Default**: 0). When 1, `make build` restores the full CMake configure trace and per-file compiler command lines. Leave at 0 for concise progress output.
 
 `test`: When set on `make build` (e.g. `make build test=<test_name>`), builds only that single test target instead of the whole test suite. The name is the same test binary name used by `make run test=...`.
@@ -193,6 +195,8 @@ To ensure a clean re-build of the RTL, you can run:
 `make rtl-clean`
 
 before building the RTL back using the `make MAGIA` command.
+
+**RTL simulation also uses a Rust script. You need rustc 1.85 or newer installed to run it.**
 
 ## Simulating with Verilator
 

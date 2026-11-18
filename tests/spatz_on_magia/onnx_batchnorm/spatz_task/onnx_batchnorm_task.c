@@ -33,7 +33,9 @@ static inline void batchnorm(const _Float16 *src,
     avl     = len;
 
     for (; avl > 0; avl -= vl) {
-        asm volatile("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl)); /* m4: room for the division */
+        asm volatile("vsetvli %0, %1, e16, m4, ta, ma"
+                     : "=r"(vl)
+                     : "r"(avl)); /* m4: room for the division */
 
         asm volatile("vle16.v v0, (%0)" ::"r"(p_src));
         asm volatile("vle16.v v8, (%0)" ::"r"(p_mean));
@@ -47,7 +49,11 @@ static inline void batchnorm(const _Float16 *src,
         asm volatile("vfsqrt.v v24, v16");
 
         /* normalize: norm[i] = x_centered[i] / std[i] */
-        SPATZ_VFDIV_VV("v28", "v0", "v24", "v4", "v12"); /* no vfdiv, see spatz_recip.h; vfsqrt above still needs one */
+        SPATZ_VFDIV_VV("v28",
+                       "v0",
+                       "v24",
+                       "v4",
+                       "v12"); /* no vfdiv, see spatz_recip.h; vfsqrt above still needs one */
 
         /* affine: dst = norm[i] * gamma[i] + beta[i] */
         asm volatile("vle16.v v8, (%0)" ::"r"(p_gamma));

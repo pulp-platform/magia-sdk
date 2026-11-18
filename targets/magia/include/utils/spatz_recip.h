@@ -15,8 +15,8 @@
 //   spatz_recip_f16/f32(d)               scalar 1/d (FP32 Newton), for SPATZ_VFDIV_VF
 //   spatz_div_f16/f32(n, d)              scalar n / d, replaces C `/` (compiled to fdiv.h/fdiv.s)
 //   spatz_sqrt_f16/f32(x)                scalar sqrt (FP32 Newton on 1/sqrt), replaces fsqrt.h/.s
-//   SPATZ_VFDIV_VF(q, n, a, d, y)        vq = vn / d for a scalar d, y = spatz_recip_f16(d); va scratch
-//   SPATZ_VFDIV_VV(q, n, d, a, y)        FP16 vq = vn / vd; va, vy scratch
+//   SPATZ_VFDIV_VF(q, n, a, d, y)        vq = vn / d for a scalar d, y = spatz_recip_f16(d); va
+//   scratch SPATZ_VFDIV_VV(q, n, d, a, y)        FP16 vq = vn / vd; va, vy scratch
 //   SPATZ_VFDIV_VV_F32(q, n, d, a, y)    FP32 (e32) vq = vn / vd; va, vy scratch
 //
 // Register arguments are strings ("v8"), groups at the current LMUL, pairwise distinct; vn and vd
@@ -124,8 +124,9 @@ static inline _Float16 spatz_sqrt_f16(_Float16 x)
     } while (0)
 
 /* vq = vn / vd. va = clamp(|vd| * 2^-4, 2^-14, 4094), vy = 1/va (seed 0x77a0 - bits(va), 2 Newton
-   steps y += y * (1 - a*y) with a fused error term in vq), vy = sign(vd) * vy * 2^-4; the correction step uses the divisor the
-   reciprocal was computed for, va = sign(vd) * va * 16 (equal to vd in range, finite for inf). */
+   steps y += y * (1 - a*y) with a fused error term in vq), vy = sign(vd) * vy * 2^-4; the
+   correction step uses the divisor the reciprocal was computed for, va = sign(vd) * va * 16 (equal
+   to vd in range, finite for inf). */
 #define SPATZ_VFDIV_VV(q, n, d, a, y)                                                              \
     do {                                                                                           \
         SPATZ_F16_CONST(_scale, 0x2C00); /* 2^-4 */                                                \

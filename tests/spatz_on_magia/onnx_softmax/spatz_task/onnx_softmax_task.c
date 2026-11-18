@@ -106,8 +106,8 @@ static inline void normalize(_Float16 *dst, size_t len, _Float16 sum)
     size_t avl;
     size_t vl;
 
-    p_dst = dst;
-    avl   = len;
+    p_dst   = dst;
+    avl     = len;
     sum_inv = spatz_recip_f16(sum);
 
     for (; avl > 0; avl -= vl) {

@@ -12,7 +12,10 @@
 
 #define WAIT_MODE WFE
 
-static inline uint32_t pattern(uint32_t addr) { return 0xA5000000 ^ addr; }
+static inline uint32_t pattern(uint32_t addr)
+{
+    return 0xA5000000 ^ addr;
+}
 
 /**
  * Minimal check of a 256 MiB L2: every tile writes and reads back a few words
@@ -40,7 +43,7 @@ int main(void)
      * 1. Narrow probes: write all, then read all back.
      */
     for (int i = 0; i < N_NARROW_PROBES; i++) {
-        uint32_t addr = narrow_base[i] + hartid * narrow_stride[i];
+        uint32_t addr              = narrow_base[i] + hartid * narrow_stride[i];
         *(volatile uint32_t *)addr = pattern(addr);
     }
     if (hartid == 0)
@@ -68,7 +71,7 @@ int main(void)
      * 2. Wide probe: L1 -> L2 with the iDMA, clear L1, L2 -> L1, compare.
      */
     uint32_t l2_addr      = DMA_BASE + hartid * 4096;
-    volatile uint32_t *l1  = (volatile uint32_t *)l1_tile_base;
+    volatile uint32_t *l1 = (volatile uint32_t *)l1_tile_base;
     for (int i = 0; i < DMA_LEN / 4; i++)
         l1[i] = pattern(l2_addr + 4 * i);
 

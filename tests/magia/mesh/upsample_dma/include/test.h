@@ -6,8 +6,8 @@
 
 #pragma once
 
-// Input of the nearest x2 upsample: UP_H x UP_W pixels of UP_C fp16 channels, HWC (YOLO26x neck: 768 ch, 20x20 and
-// 40x40). Overridable with -D.
+// Input of the nearest x2 upsample: UP_H x UP_W pixels of UP_C fp16 channels, HWC (YOLO26x neck:
+// 768 ch, 20x20 and 40x40). Overridable with -D.
 #ifndef UP_C
 #define UP_C 768
 #endif

@@ -49,6 +49,7 @@ target_compile_options(runtime
   -DPROFILE_CMI=${PROFILE_CMI}
   -DPROFILE_CMO=${PROFILE_CMO}
   -DPROFILE_SNC=${PROFILE_SNC}
+  -DCLEAR_BSS=${CLEAR_BSS}
 )
 
 target_compile_options(runtime

@@ -87,7 +87,7 @@ uint32_t eu32_idma_wait_direction(uint32_t direction, eu_wait_mode_t mode)
 {
     uint32_t wait_mask = direction ? EU_IDMA_O2A_DONE_MASK : EU_IDMA_A2O_DONE_MASK;
     eu_enable_events(wait_mask);
-    uint32_t retval    = eu_wait_events(wait_mask, mode, 1000000);
+    uint32_t retval = eu_wait_events(wait_mask, mode, 1000000);
 #if PROFILE_CMO == 1
     if (direction == 1)
         stnl_cmo_f();

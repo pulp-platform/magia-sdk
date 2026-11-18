@@ -28,7 +28,9 @@ static inline void gelu_forward(const _Float16 *src, _Float16 *dst, size_t len)
     avl   = len;
 
     for (; avl > 0; avl -= vl) {
-        asm volatile("vsetvli %0, %1, e16, m4, ta, ma" : "=r"(vl) : "r"(avl)); /* m4: room for the division */
+        asm volatile("vsetvli %0, %1, e16, m4, ta, ma"
+                     : "=r"(vl)
+                     : "r"(avl)); /* m4: room for the division */
         asm volatile("vle16.v v0, (%0)" ::"r"(p_src));
         asm volatile("vfmul.vv v8, v0, v0");           /* x^2              */
         asm volatile("vfmul.vv v8, v8, v0");           /* x^3              */

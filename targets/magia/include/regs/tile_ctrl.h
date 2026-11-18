@@ -239,9 +239,9 @@ typedef enum {
 #define REDMULE_MCFG2_PTR             0x28
 
 /* MCFG1 operation field (gemm_ops, bits [22:20]) */
-#define REDMULE_MCFG1_OP_SHIFT   20
-#define REDMULE_OP_MATMUL        0x0 /* Z = X * W */
-#define REDMULE_OP_GEMM          0x1 /* Z = X * W + Z */
+#define REDMULE_MCFG1_OP_SHIFT        20
+#define REDMULE_OP_MATMUL             0x0 /* Z = X * W */
+#define REDMULE_OP_GEMM               0x1 /* Z = X * W + Z */
 #define REDMULE_ARITH_PTR             0x54
 
 #define REDMULE_STATUS_BUSY_MASK      (0xFFFFFFFF)
