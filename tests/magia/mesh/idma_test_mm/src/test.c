@@ -59,8 +59,6 @@ int main(void)
 #if STALLING == 0
     eu_init();
     eu_clear_events(0xFFFFFFFF);
-    eu_idma_init(0);
-    eu_fsync_init(0);
 #endif
 
     fsync_sync_global();

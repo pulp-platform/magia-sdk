@@ -63,8 +63,6 @@ int main(void)
     idma_init();
     fsync_init();
     eu_init();
-    eu_fsync_init(0);
-    eu_idma_init(0);
 
     uint32_t l1_a = get_l1_base(hartid);
     uint32_t l1_b = l1_a + BUF_BYTES;

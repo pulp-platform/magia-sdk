@@ -81,8 +81,6 @@ int main(void)
     fsync_init();
     idma_init();
     eu_init();
-    eu_fsync_init(0);
-    eu_idma_init(0);
     perf_init();
 
     for (uint32_t i = HID; i < n; i += NUM_HARTS)

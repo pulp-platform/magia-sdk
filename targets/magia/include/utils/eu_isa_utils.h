@@ -113,6 +113,16 @@ static inline uint32_t eu_check_events(uint32_t event_mask)
     return mmio32(EU_CORE_BUFFER_MASKED) & event_mask;
 }
 
+/**
+ * @brief Check if specific events are present on the full unmasked buffer
+ * @param event_mask Bitmask of events to check
+ * @return Non-zero if any of the specified events are present
+ */
+static inline uint32_t eu_check_events_buffer(uint32_t event_mask)
+{
+    return mmio32(EU_CORE_BUFFER) & event_mask;
+}
+
 //=============================================================================
 // Wait Functions - Different waiting strategies
 //=============================================================================

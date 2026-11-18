@@ -28,7 +28,6 @@ int main(void)
 
 #if STALLING == 0
     eu_init();
-    eu_idma_init(0);
 #endif
 
     l1_alloc_init();

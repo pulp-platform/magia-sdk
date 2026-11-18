@@ -41,9 +41,6 @@ int main(void)
     fsync_init();
     idma_init();
     eu_init();
-    eu_spatz_init(0);
-    eu_fsync_init(0);
-    eu_idma_init(0);
     spatz_init(SPATZ_BINARY_START);
     perf_init();
 

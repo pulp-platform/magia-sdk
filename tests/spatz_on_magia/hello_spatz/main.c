@@ -19,7 +19,6 @@ int main(void)
     eu_init();
 
     printf("[CV32] Initializing Spatz Event Unit\n");
-    eu_spatz_init(0);
 
     printf("[CV32] Initializing Spatz\n");
     spatz_init(SPATZ_BINARY_START);

@@ -57,9 +57,6 @@ int main(void)
     redmule_init();
 
     eu_init();
-    eu_fsync_init(0);
-    eu_redmule_init(0);
-    eu_idma_init(0);
 
     /* initialization */
     if (hartid == 0) {

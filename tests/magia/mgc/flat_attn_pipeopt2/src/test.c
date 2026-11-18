@@ -25,7 +25,6 @@ int main(void)
 
     /* once every tile has finished, each tile checks its share of the rows */
     fsync_init();
-    eu_fsync_init(0);
     fsync_sync_global();
     eu_fsync_wait(WFE);
 

@@ -103,9 +103,6 @@ int main(void)
 #if STALLING == 0
     eu_init();
     eu_clear_events(0xFFFFFFFF);
-    eu_fsync_init(0);
-    eu_idma_init(0);
-    eu_redmule_init(0);
 #endif
 
     // Global barrier: ensure all tiles have completed startup (including BSS zeroing

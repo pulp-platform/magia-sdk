@@ -23,12 +23,6 @@ extern void eu_init();
 //=============================================================================
 
 /**
- * @brief Initialize Event Unit for Pulp cluster events
- * @param enable_irq If true, enable IRQ for Pulp-Cluster completion
- */
-extern void eu_pulp_init(uint32_t enable_irq);
-
-/**
  * @brief Wait for Pulp cluster completion specifically
  * @param mode Wait mode (polling, WFE, etc.)
  * @return Non-zero if Pulp cluster completed, 0 if timeout/error
@@ -38,12 +32,6 @@ extern uint32_t eu_pulp_wait(eu_wait_mode_t mode);
 //=============================================================================
 // RedMulE-specific Event Functions
 //=============================================================================
-
-/**
- * @brief Initialize Event Unit for RedMulE events
- * @param enable_irq If true, enable IRQ for RedMulE completion
- */
-extern void eu_redmule_init(uint32_t enable_irq);
 
 /**
  * @brief Wait for RedMulE completion using specified mode
@@ -67,12 +55,6 @@ extern uint32_t eu_redmule_is_done();
 //=============================================================================
 // iDMA-specific Event Functions
 //=============================================================================
-
-/**
- * @brief Initialize Event Unit for iDMA events
- * @param enable_irq If true, enable IRQ for iDMA completion
- */
-extern void eu_idma_init(uint32_t enable_irq);
 
 /**
  * @brief Wait for any iDMA completion using specified mode
@@ -162,12 +144,6 @@ extern uint32_t eu_idma_o2a_is_busy();
 //=============================================================================
 
 /**
- * @brief Initialize Event Unit for FSync events
- * @param enable_irq If true, enable IRQ for FSync completion
- */
-extern void eu_fsync_init(uint32_t enable_irq);
-
-/**
  * @brief Wait for FSync completion using specified mode
  * @param mode Wait mode (polling, WFE, etc.)
  * @return Non-zero if FSync completed, 0 if timeout/error
@@ -189,11 +165,6 @@ extern uint32_t eu_fsync_has_error();
 //=============================================================================
 // Spatz-specific Event Functions
 //=============================================================================
-
-/**
- * @brief Initialize Event Unit for Spatz events
- */
-extern void eu_spatz_init(uint32_t enable_irq);
 
 /**
  * @brief Wait for Spatz completion in WFE mode

@@ -62,7 +62,6 @@ static int run_spatz_task()
     int ret;
 
     eu_init();
-    eu_spatz_init(0);
 
     spatz_init(SPATZ_BINARY_START);
     spatz_run_task_with_params(ONNX_HARDSIGMOID_TASK, ONNX_HARDSIGMOID_PARAMS_BASE);

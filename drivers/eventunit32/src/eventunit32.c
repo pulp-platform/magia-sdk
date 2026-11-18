@@ -36,21 +36,6 @@ void eu32_init()
 //=============================================================================
 
 /**
- * @brief Initialize Event Unit for PULP cluster events
- * @param enable_irq If true, enable IRQ for PULP cluster completion
- */
-void eu32_pulp_init(uint32_t enable_irq)
-{
-    // Enable PULP cluster events
-    eu_enable_events(EU_PULP_DONE_MASK);
-
-    // Optionally enable IRQ for PULP cluster completion
-    if (enable_irq) {
-        eu_enable_irq(EU_PULP_DONE_MASK);
-    }
-}
-
-/**
  * @brief Wait for Pulp cluster completion specifically
  * @param mode Wait mode (polling, WFE, etc.)
  * @return Non-zero if Pulp cluster completed, 0 if timeout/error
@@ -71,27 +56,12 @@ uint32_t eu32_pulp_wait(eu_wait_mode_t mode)
 //=============================================================================
 
 /**
- * @brief Initialize Event Unit for RedMulE events
- * @param enable_irq If true, enable IRQ for RedMulE completion
- */
-void eu32_redmule_init(uint32_t enable_irq)
-{
-    // Enable RedMulE events in mask
-    eu_enable_events(EU_REDMULE_DONE_MASK);
-
-    // Optionally enable IRQ for RedMulE completion
-    if (enable_irq) {
-        eu_enable_irq(EU_REDMULE_DONE_MASK);
-    }
-}
-
-/**
  * @brief Check if RedMulE is currently busy
  * @return Non-zero if RedMulE is busy
  */
 uint32_t eu32_redmule_is_busy()
 {
-    return eu_check_events(EU_REDMULE_BUSY_MASK);
+    return eu_check_events_buffer(EU_REDMULE_BUSY_MASK);
 }
 
 /**
@@ -100,27 +70,12 @@ uint32_t eu32_redmule_is_busy()
  */
 uint32_t eu32_redmule_is_done()
 {
-    return eu_check_events(EU_REDMULE_DONE_MASK);
+    return eu_check_events_buffer(EU_REDMULE_DONE_MASK);
 }
 
 //=============================================================================
 // iDMA-specific Event Functions
 //=============================================================================
-
-/**
- * @brief Initialize Event Unit for iDMA events
- * @param enable_irq If true, enable IRQ for iDMA completion
- */
-void eu32_idma_init(uint32_t enable_irq)
-{
-    // Enable iDMA events in mask (both directions)
-    eu_enable_events(EU_IDMA_ALL_MASK);
-
-    // Optionally enable IRQ for iDMA completion (both directions)
-    if (enable_irq) {
-        eu_enable_irq(EU_IDMA_ALL_DONE_MASK);
-    }
-}
 
 /**
  * @brief Wait for specific iDMA direction completion
@@ -155,7 +110,7 @@ uint32_t eu32_idma_wait_direction(uint32_t direction, eu_wait_mode_t mode)
  */
 uint32_t eu32_idma_is_done()
 {
-    return eu_check_events(EU_IDMA_ALL_DONE_MASK);
+    return eu_check_events_buffer(EU_IDMA_ALL_DONE_MASK);
 }
 
 /**
@@ -164,7 +119,7 @@ uint32_t eu32_idma_is_done()
  */
 uint32_t eu32_idma_a2o_is_done()
 {
-    return eu_check_events(EU_IDMA_A2O_DONE_MASK);
+    return eu_check_events_buffer(EU_IDMA_A2O_DONE_MASK);
 }
 
 /**
@@ -173,7 +128,7 @@ uint32_t eu32_idma_a2o_is_done()
  */
 uint32_t eu32_idma_o2a_is_done()
 {
-    return eu_check_events(EU_IDMA_O2A_DONE_MASK);
+    return eu_check_events_buffer(EU_IDMA_O2A_DONE_MASK);
 }
 
 /**
@@ -192,7 +147,7 @@ uint32_t eu32_idma_has_error()
  */
 uint32_t eu32_idma_a2o_has_error()
 {
-    return eu_check_events(EU_IDMA_A2O_ERROR_MASK);
+    return eu_check_events_buffer(EU_IDMA_A2O_ERROR_MASK);
 }
 
 /**
@@ -201,7 +156,7 @@ uint32_t eu32_idma_a2o_has_error()
  */
 uint32_t eu32_idma_o2a_has_error()
 {
-    return eu_check_events(EU_IDMA_O2A_ERROR_MASK);
+    return eu_check_events_buffer(EU_IDMA_O2A_ERROR_MASK);
 }
 
 /**
@@ -220,7 +175,7 @@ uint32_t eu32_idma_is_busy()
  */
 uint32_t eu32_idma_a2o_is_busy()
 {
-    return eu_check_events(EU_IDMA_A2O_BUSY_MASK);
+    return eu_check_events_buffer(EU_IDMA_A2O_BUSY_MASK);
 }
 
 /**
@@ -229,27 +184,12 @@ uint32_t eu32_idma_a2o_is_busy()
  */
 uint32_t eu32_idma_o2a_is_busy()
 {
-    return eu_check_events(EU_IDMA_O2A_BUSY_MASK);
+    return eu_check_events_buffer(EU_IDMA_O2A_BUSY_MASK);
 }
 
 //=============================================================================
 // FSync-specific Event Functions
 //=============================================================================
-
-/**
- * @brief Initialize Event Unit for FSync events
- * @param enable_irq If true, enable IRQ for FSync completion
- */
-void eu32_fsync_init(uint32_t enable_irq)
-{
-    // Enable FSync events in mask (bits 25:24)
-    eu_enable_events(EU_FSYNC_DONE_MASK);
-
-    // Optionally enable IRQ for FSync completion (bit 24)
-    if (enable_irq) {
-        eu_enable_irq(EU_FSYNC_DONE_MASK);
-    }
-}
 
 /**
  * @brief Wait for FSync completion using specified mode
@@ -277,7 +217,7 @@ uint32_t eu32_fsync_is_done()
 {
     if (MESH_2_POWER == 0)
         return 1;
-    return eu_check_events(EU_FSYNC_DONE_MASK);
+    return eu_check_events_buffer(EU_FSYNC_DONE_MASK);
 }
 
 /**
@@ -288,25 +228,12 @@ uint32_t eu32_fsync_has_error()
 {
     if (MESH_2_POWER == 0)
         return 0;
-    return eu_check_events(EU_FSYNC_ERROR_MASK);
+    return eu_check_events_buffer(EU_FSYNC_ERROR_MASK);
 }
 
 //=============================================================================
 // Spatz-specific Event Functions
 //=============================================================================
-
-/**
- * @brief Initialize Event Unit for Spatz events
- * @param enable_irq If true, enable IRQ for Spatz completion
- */
-void eu32_spatz_init(uint32_t enable_irq)
-{
-    eu_enable_events(EU_SPATZ_DONE_MASK);
-
-    if (enable_irq) {
-        eu_enable_irq(EU_SPATZ_DONE_MASK);
-    }
-}
 
 /**
  * @brief Wait for Spatz completion using specific mode
@@ -330,24 +257,18 @@ uint32_t eu32_spatz_wait(eu_wait_mode_t mode)
  */
 uint32_t eu32_spatz_is_done()
 {
-    return eu_check_events(EU_SPATZ_DONE_MASK);
+    return eu_check_events_buffer(EU_SPATZ_DONE_MASK);
 }
 
 extern void eu_init() __attribute__((alias("eu32_init"), used, visibility("default")));
-extern void eu_pulp_init(uint32_t enable_irq)
-    __attribute__((alias("eu32_pulp_init"), used, visibility("default")));
 extern uint32_t eu_pulp_wait(eu_wait_mode_t mode)
     __attribute__((alias("eu32_pulp_wait"), used, visibility("default")));
-extern void eu_redmule_init(uint32_t enable_irq)
-    __attribute__((alias("eu32_redmule_init"), used, visibility("default")));
 // eu32_redmule_wait is now a static inline (see eventunit32.h), so it cannot be an
 // alias target; expose the external symbol via a thin wrapper for legacy/test callers.
 uint32_t __attribute__((used, visibility("default"))) eu_redmule_wait(eu_wait_mode_t mode)
 {
     return eu32_redmule_wait(mode);
 }
-extern void eu_idma_init(uint32_t enable_irq)
-    __attribute__((alias("eu32_idma_init"), used, visibility("default")));
 // eu32_idma_wait_a2o / eu32_idma_wait_o2a are now static inlines (see
 // eventunit32.h), so they cannot be alias targets; expose the external symbols
 // via thin wrappers for legacy/test callers.
@@ -359,12 +280,8 @@ uint32_t __attribute__((used, visibility("default"))) eu_idma_wait_o2a(eu_wait_m
 {
     return eu32_idma_wait_o2a(mode);
 }
-extern void eu_fsync_init(uint32_t enable_irq)
-    __attribute__((alias("eu32_fsync_init"), used, visibility("default")));
 extern uint32_t eu_fsync_wait(eu_wait_mode_t mode)
     __attribute__((alias("eu32_fsync_wait"), used, visibility("default")));
-extern void eu_spatz_init(uint32_t enable_irq)
-    __attribute__((alias("eu32_spatz_init"), used, visibility("default")));
 extern uint32_t eu_spatz_wait(eu_wait_mode_t mode)
     __attribute__((alias("eu32_spatz_wait"), used, visibility("default")));
 

@@ -32,8 +32,6 @@ int main(void)
 
 #if STALLING == 0
     eu_init();
-    eu_idma_init(0);
-    eu_fsync_init(0);
 #endif
 
     uint8_t *src_buf;

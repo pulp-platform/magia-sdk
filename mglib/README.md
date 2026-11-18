@@ -36,10 +36,6 @@ Then initialize Redmule like this:
 redmule_init();
 ```
 
-Finally, you need to enable the RedMule events on the Event Unit controller instantiated earlier:
-
-`eu_redmule_init(0);`
-
 Once you have both the controllers ready and instantiated a **mg_event_t**, you can start programming and enqueing GEMM operations (MxN * NxK) like this:
 
 ```
@@ -104,10 +100,6 @@ And initialize the IDMA:
 ```
 idma_init();
 ```
-
-Then also enable IDMA events on the Event Unit:
-
-`eu_idma_init(0);`
 
 Once this is done, it is possible to program and run 2D IDMA memory transfers via the following function call:
 

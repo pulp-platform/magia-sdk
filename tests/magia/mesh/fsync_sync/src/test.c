@@ -53,7 +53,6 @@ int main(void)
 
 #if STALLING == 0
     eu_init();
-    eu_fsync_init(0);
 #endif
 
     uint32_t l1_tile_base = get_l1_base(hartid);

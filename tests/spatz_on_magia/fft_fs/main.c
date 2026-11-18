@@ -153,7 +153,6 @@ static bool run_test()
     params = (volatile fft_fs_params_t *)FFT_PARAMS_BASE;
 
     eu_init();
-    eu_spatz_init(0);
 
     ret = init_data((void *)params);
     if (ret != 0) {
@@ -208,7 +207,6 @@ int main(void)
     fsync_init();
 
     eu_init();
-    eu_fsync_init(0);
 
     fsync_sync_global();
     eu_fsync_wait(WFE);

@@ -57,7 +57,6 @@ int main(void)
 
     redmule_init();
     eu_init();
-    eu_redmule_init(0);
 
     uint32_t l1_x  = get_l1_base(hartid);
     uint32_t l1_w  = l1_x + M_SIZE * N_SIZE * 2;

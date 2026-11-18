@@ -124,9 +124,6 @@ int init_idma()
 int init_event_unit()
 {
     eu_init();
-    eu_spatz_init(0);
-    eu_fsync_init(0);
-    eu_idma_init(0);
 
     return 0;
 }
