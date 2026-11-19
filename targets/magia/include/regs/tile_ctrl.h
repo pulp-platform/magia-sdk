@@ -222,70 +222,70 @@ typedef enum {
 //=============================================================================
 
 /* Register offsets (RedMulE hwpe-ctrl) */
-#define REDMULE_REG_OFFS              0x00
-#define REDMULE_TRIGGER               0x00
-#define REDMULE_ACQUIRE               0x04
-#define REDMULE_EVT_ENABLE            0x08
-#define REDMULE_STATUS                0x0C
-#define REDMULE_RUNNING_JOB           0x10
-#define REDMULE_SOFT_CLEAR            0x14
+#define REDMULE_REG_OFFS         0x00
+#define REDMULE_TRIGGER          0x00
+#define REDMULE_ACQUIRE          0x04
+#define REDMULE_EVT_ENABLE       0x08
+#define REDMULE_STATUS           0x0C
+#define REDMULE_RUNNING_JOB      0x10
+#define REDMULE_SOFT_CLEAR       0x14
 
 /* RedMulE configuration registers */
-#define REDMULE_REG_X_PTR             0x2C
-#define REDMULE_REG_W_PTR             0x30
-#define REDMULE_REG_Z_PTR             0x34
-#define REDMULE_MCFG0_PTR             0x20
-#define REDMULE_MCFG1_PTR             0x24
-#define REDMULE_MCFG2_PTR             0x28
+#define REDMULE_REG_X_PTR        0x2C
+#define REDMULE_REG_W_PTR        0x30
+#define REDMULE_REG_Z_PTR        0x34
+#define REDMULE_MCFG0_PTR        0x20
+#define REDMULE_MCFG1_PTR        0x24
+#define REDMULE_MCFG2_PTR        0x28
 
 /* MCFG1 operation field (gemm_ops, bits [22:20]) */
-#define REDMULE_MCFG1_OP_SHIFT        20
-#define REDMULE_OP_MATMUL             0x0 /* Z = X * W */
-#define REDMULE_OP_GEMM               0x1 /* Z = X * W + Z */
-#define REDMULE_ARITH_PTR             0x54
+#define REDMULE_MCFG1_OP_SHIFT   20
+#define REDMULE_OP_MATMUL        0x0 /* Z = X * W */
+#define REDMULE_OP_GEMM          0x1 /* Z = X * W + Z */
+#define REDMULE_ARITH_PTR        0x54
 
-#define REDMULE_STATUS_BUSY_MASK      (0xFFFFFFFF)
+#define REDMULE_STATUS_BUSY_MASK (0xFFFFFFFF)
 
 //=============================================================================
 // FractalSync Register Addresses
 //=============================================================================
 
-#define FSYNC_AGGR_REG_OFFSET         (0x00)
-#define FSYNC_ID_REG_OFFSET           (0x04)
-#define FSYNC_CONTROL_REG_OFFSET      (0x08)
-#define FSYNC_STATUS_REG_OFFSET       (0x0C)
+#define FSYNC_AGGR_REG_OFFSET    (0x00)
+#define FSYNC_ID_REG_OFFSET      (0x04)
+#define FSYNC_CONTROL_REG_OFFSET (0x08)
+#define FSYNC_STATUS_REG_OFFSET  (0x0C)
 
 /* Status register bits */
-#define FSYNC_STATUS_BUSY_MASK        (1 << 2)
+#define FSYNC_STATUS_BUSY_MASK   (1 << 2)
 
 //=============================================================================
 // Collective Utility defines
 //=============================================================================
 
-#define MASK_OFFSET                   20
+#define MASK_OFFSET              20
 
-#define MULTICAST                     1
-#define LSBAND                        2
-#define FP_ADD                        3
-#define FP_MUL                        4
-#define FP_MIN                        5
-#define FP_MAX                        6
-#define INT_ADD                       7
-#define INT_MUL                       8
-#define INT_MINS                      9
-#define INT_MINU                      10
-#define INT_MAXS                      11
-#define INT_MAXU                      12
+#define MULTICAST                1
+#define LSBAND                   2
+#define FP_ADD                   3
+#define FP_MUL                   4
+#define FP_MIN                   5
+#define FP_MAX                   6
+#define INT_ADD                  7
+#define INT_MUL                  8
+#define INT_MINS                 9
+#define INT_MINU                 10
+#define INT_MAXS                 11
+#define INT_MAXU                 12
 
-#define NUM_COMM_GROUPS               (3)
+#define NUM_COMM_GROUPS          (3)
 
-#define MESH                          1
-#define COLUMN                        2
-#define ROW                           3
+#define MESH                     1
+#define COLUMN                   2
+#define ROW                      3
 
-#define X_BITS                        (__builtin_ctz(MESH_Y_TILES))
-#define MESH_MASK                     ((MESH_Y_TILES - 1) << MASK_OFFSET | (MESH_X_TILES - 1) << (MASK_OFFSET + X_BITS))
-#define ROW_MASK                      ((MESH_Y_TILES - 1) << MASK_OFFSET)
+#define X_BITS                   (__builtin_ctz(MESH_Y_TILES))
+#define MESH_MASK ((MESH_Y_TILES - 1) << MASK_OFFSET | (MESH_X_TILES - 1) << (MASK_OFFSET + X_BITS))
+#define ROW_MASK  ((MESH_Y_TILES - 1) << MASK_OFFSET)
 #define COLUMN_MASK                   ((MESH_X_TILES - 1) << (MASK_OFFSET + X_BITS))
 
 //=============================================================================

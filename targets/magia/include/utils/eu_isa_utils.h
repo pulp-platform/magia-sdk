@@ -110,7 +110,8 @@ static inline uint32_t eu_get_events_irq_masked(void)
  */
 static inline uint32_t eu_check_events(uint32_t event_mask)
 {
-    return mmio32(EU_CORE_BUFFER_MASKED) & event_mask;
+    uint32_t retval = (mmio32(EU_CORE_BUFFER_MASKED) & event_mask);
+    return retval;
 }
 
 /**
@@ -139,9 +140,10 @@ static inline uint32_t eu_wait_events_polling(uint32_t event_mask, uint32_t time
     uint32_t detected_events;
 
     do {
-        detected_events = eu_check_events(event_mask);
+        detected_events = eu_check_events_buffer(event_mask);
         if (detected_events) {
             eu_clear_events(event_mask);
+            eu_disable_events(event_mask);
             return detected_events;
         }
 
@@ -150,6 +152,7 @@ static inline uint32_t eu_wait_events_polling(uint32_t event_mask, uint32_t time
 
     } while (timeout_cycles == 0 || cycles < timeout_cycles);
 
+    eu_disable_events(event_mask);
     return 0; // Timeout
 }
 
@@ -177,11 +180,12 @@ static inline unsigned int evt_read32(unsigned int addr)
  */
 static inline uint32_t eu_wait_events_wfe(uint32_t event_mask)
 {
-    while (eu_check_events(event_mask) == 0) {
+    while (eu_check_events_buffer(event_mask) == 0) {
         evt_read32(EU_CORE_EVENT_WAIT);
     }
 
     eu_clear_events(event_mask);
+    eu_disable_events(event_mask);
     return 1;
 }
 
@@ -194,6 +198,7 @@ static inline uint32_t eu_wait_events_wfe(uint32_t event_mask)
  */
 static inline uint32_t eu_wait_events(uint32_t event_mask, int mode, uint32_t timeout_cycles)
 {
+    eu_enable_events(event_mask);
     switch (mode) {
     case 0:
         if (eu_wait_events_polling(event_mask, timeout_cycles) == 0) {
@@ -206,6 +211,7 @@ static inline uint32_t eu_wait_events(uint32_t event_mask, int mode, uint32_t ti
         return eu_wait_events_wfe(event_mask);
 
     default:
+        eu_disable_events(event_mask);
         printf("ERROR: Unrecognized wait mode.\n");
         return 0;
     }

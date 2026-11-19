@@ -20,12 +20,10 @@
  */
 static inline __attribute__((always_inline)) uint32_t eu32_redmule_wait(eu_wait_mode_t mode)
 {
-    eu_enable_events(EU_REDMULE_DONE_MASK);
     uint32_t retval = eu_wait_events(EU_REDMULE_DONE_MASK, mode, 1000000);
 #if PROFILE_CMP == 1
     stnl_cmp_f();
 #endif
-    eu_disable_events(EU_REDMULE_DONE_MASK);
     return retval; // 1M cycle timeout
 }
 
@@ -36,9 +34,7 @@ static inline __attribute__((always_inline)) uint32_t eu32_redmule_wait(eu_wait_
  */
 static inline __attribute__((always_inline)) uint32_t eu32_idma_wait(eu_wait_mode_t mode)
 {
-    eu_enable_events(EU_IDMA_ALL_DONE_MASK);
     return eu_wait_events(EU_IDMA_ALL_DONE_MASK, mode, 1000000); // 1M cycle timeout
-    eu_disable_events(EU_IDMA_ALL_DONE_MASK);
 }
 
 /**
@@ -48,12 +44,10 @@ static inline __attribute__((always_inline)) uint32_t eu32_idma_wait(eu_wait_mod
  */
 static inline __attribute__((always_inline)) uint32_t eu32_idma_wait_a2o(eu_wait_mode_t mode)
 {
-    eu_enable_events(EU_IDMA_A2O_DONE_MASK);
     uint32_t retval = eu_wait_events(EU_IDMA_A2O_DONE_MASK, mode, 1000000);
 #if PROFILE_CMI == 1
     stnl_cmi_f();
 #endif
-    eu_disable_events(EU_IDMA_A2O_DONE_MASK);
     return retval; // 1M cycle timeout
 }
 
@@ -64,11 +58,9 @@ static inline __attribute__((always_inline)) uint32_t eu32_idma_wait_a2o(eu_wait
  */
 static inline __attribute__((always_inline)) uint32_t eu32_idma_wait_o2a(eu_wait_mode_t mode)
 {
-    eu_enable_events(EU_IDMA_O2A_DONE_MASK);
     uint32_t retval = eu_wait_events(EU_IDMA_O2A_DONE_MASK, mode, 1000000);
 #if PROFILE_CMO == 1
     stnl_cmo_f();
 #endif
-    eu_disable_events(EU_IDMA_O2A_DONE_MASK);
     return retval; // 1M cycle timeout
 }
