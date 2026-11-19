@@ -161,6 +161,12 @@ SECTIONS
         _bss_end = .;
     } > dataram :data
 
+    .l2ext : {
+        . = ALIGN(64);
+        *(.l2ext)
+        *(.l2ext.*)
+    } > dataram :l2ext
+
     /* Per-tile-aliased scratch (private to each tile, unlike the shared-L2 .bss).
      * Placed above the stack top so the downward-growing stack never reaches it.
      * Zeroed by every hart in crt0 (see _tile_bss_start/_tile_bss_end). */

@@ -50,7 +50,7 @@ GVSOC_ABS_PATH	?= $(abspath $(GVSOC_DIR))
 # Prebuilt Verilator model. Built in the MAGIA repo with `make verilate`;
 # SDK doesn't modify this model.
 TESTBENCH_NAME      ?= Vmagia_tb
-MAGIA_VERILATOR_BIN_DIR	?= $(MAGIA_DIR_ABS)/verilator/build/obj_dir/
+MAGIA_VERILATOR_BIN_DIR	?= $(MAGIA_DIR_ABS)/verilator/build/obj_dir
 # Waveform a verilator run dumps under gui=1, relative to the test build dir the
 # model runs in. Dumping is off otherwise and costs nothing.
 VERILATOR_FST	?= $(test).fst
