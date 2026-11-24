@@ -56,10 +56,10 @@ int main(void)
 
     spatz_clk_dis();
 
-    if (HID == 0) {
-        ret = compare_fp16_bitwise((uintptr_t)Y, (uintptr_t)G, ROWS * WIDTH);
-        printf("[CV32] Test %s with %d mismatches\n", ret ? "FAILED" : "SUCCESS", ret);
-    }
+    uint32_t offset = (ROWS * WIDTH) / NUM_HARTS;
+    ret             = compare_fp16_bitwise(
+        (uintptr_t)(Y + (HID * offset)), (uintptr_t)(G + (HID * offset)), offset);
+    printf("[CV32] Test %s with %d mismatches\n", ret ? "FAILED" : "SUCCESS", ret);
 
     sync();
 

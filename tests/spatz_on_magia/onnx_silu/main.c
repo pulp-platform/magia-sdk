@@ -56,10 +56,10 @@ int main(void)
 
     spatz_clk_dis();
 
-    if (HID == 0) {
-        ret = compare_fp16_bitwise((uintptr_t)Y, (uintptr_t)G, TENSOR_LEN);
-        printf("[CV32] Test %s with %d mismatches\n", ret ? "FAILED" : "SUCCESS", ret);
-    }
+    uint32_t subset = TENSOR_LEN / NUM_HARTS;
+    ret             = compare_fp16_bitwise(
+        (uintptr_t)(Y + (subset * HID)), (uintptr_t)(G + (subset * HID)), subset);
+    printf("[CV32] Test %s with %d mismatches\n", ret ? "FAILED" : "SUCCESS", ret);
 
     sync();
 

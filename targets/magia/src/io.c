@@ -102,3 +102,9 @@ void *memmove(void *d, const void *s, size_t n)
 
     return d;
 }
+
+int *__errno(void)
+{
+    static int e;
+    return &e;
+}

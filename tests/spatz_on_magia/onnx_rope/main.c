@@ -46,20 +46,18 @@ int main(void)
 
     sync();
 
-    cycle_start = perf_get_cycles();
+    sentinel_start();
     MAGIA_rope_fp16_spatz(X, cos_tab, sin_tab, ROWS, HEADS, HEAD_DIM, Y);
-    cycle_stop = perf_get_cycles();
-
-    printf("[CV32 (%d)] rope completed in %d cycles\n", HID, cycle_stop - cycle_start);
+    sentinel_end();
 
     sync();
 
     spatz_clk_dis();
 
-    if (HID == 0) {
-        ret = compare_fp16_bitwise((uintptr_t)Y, (uintptr_t)G, ROWS * HEADS * HEAD_DIM);
-        printf("[CV32] Test %s with %d mismatches\n", ret ? "FAILED" : "SUCCESS", ret);
-    }
+    uint32_t offset = (ROWS * HEADS * HEAD_DIM) / NUM_HARTS;
+    ret =
+        compare_fp16_bitwise((uintptr_t)Y + (HID * offset), (uintptr_t)G + (HID * offset), offset);
+    printf("[CV32] Test %s with %d mismatches\n", ret ? "FAILED" : "SUCCESS", ret);
 
     sync();
 
