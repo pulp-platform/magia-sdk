@@ -103,12 +103,20 @@ clone_gvsoc:
   artifacts:
     paths: [ "gvsoc" ]
 
+submdule_update:
+  extends: .base
+  stage: clone
+  script:
+    - git submodule update --init --recursive
+  artifacts:
+    paths: [ "kernels" , "mgc" ]
+
 .gvsoc:
   extends: [.base]
   script:
     - source gvsoc_venv/bin/activate && export CC=/usr/sepp/bin/gcc-11.2.0 && export CXX=/usr/sepp/bin/g++-11.2.0 && make gvsoc tiles=${tiles}
   artifacts:
-    paths: [ "gvsoc/install" , "gvsoc/pulp/pulp/chips/magia_v3/arch.py"]
+    paths: [ "gvsoc/install" , "gvsoc/pulp/pulp/chips/magia_v3/arch.py" ]
 
 gvsoc_tiles_4:
   extends: .gvsoc
@@ -200,6 +208,7 @@ build_test_magia_tiles_4_spatz_CV32E40P:
     control_core: CV32E40P
   dependencies:
     - python_gvsoc
+    - submdule_update
 
 build_test_magia_tiles_1_spatz_CV32E40P:
   extends: .build
@@ -213,6 +222,7 @@ build_test_magia_tiles_1_spatz_CV32E40P:
     control_core: CV32E40P
   dependencies:
     - python_gvsoc
+    - submdule_update
 
 build_test_magia_tiles_4_cluster_CV32E40P:
   extends: .build
@@ -226,6 +236,7 @@ build_test_magia_tiles_4_cluster_CV32E40P:
     control_core: CV32E40P
   dependencies:
     - python_gvsoc
+    - submdule_update
 
 build_test_magia_tiles_1_cluster_CV32E40P:
   extends: .build
@@ -239,6 +250,7 @@ build_test_magia_tiles_1_cluster_CV32E40P:
     control_core: CV32E40P
   dependencies:
     - python_gvsoc
+    - submdule_update
 
 build_test_magia_tiles_4_spatz+cluster_CV32E40P:
   extends: .build
@@ -252,6 +264,7 @@ build_test_magia_tiles_4_spatz+cluster_CV32E40P:
     control_core: CV32E40P
   dependencies:
     - python_gvsoc
+    - submdule_update
 
 build_test_magia_tiles_1_spatz+cluster_CV32E40P:
   extends: .build
@@ -265,6 +278,7 @@ build_test_magia_tiles_1_spatz+cluster_CV32E40P:
     control_core: CV32E40P
   dependencies:
     - python_gvsoc
+    - submdule_update
 
 build_test_magia_tiles_4_spatz_CV32E40X:
   extends: .build
@@ -278,6 +292,7 @@ build_test_magia_tiles_4_spatz_CV32E40X:
     control_core: CV32E40X
   dependencies:
     - python_gvsoc
+    - submdule_update
 
 build_test_magia_tiles_1_spatz_CV32E40X:
   extends: .build
@@ -291,6 +306,7 @@ build_test_magia_tiles_1_spatz_CV32E40X:
     control_core: CV32E40X
   dependencies:
     - python_gvsoc
+    - submdule_update
 
 build_test_magia_tiles_4_cluster_CV32E40X:
   extends: .build
@@ -304,6 +320,7 @@ build_test_magia_tiles_4_cluster_CV32E40X:
     control_core: CV32E40X
   dependencies:
     - python_gvsoc
+    - submdule_update
 
 build_test_magia_tiles_1_cluster_CV32E40X:
   extends: .build
@@ -317,6 +334,7 @@ build_test_magia_tiles_1_cluster_CV32E40X:
     control_core: CV32E40X
   dependencies:
     - python_gvsoc
+    - submdule_update
 
 build_test_magia_tiles_4_spatz+cluster_CV32E40X:
   extends: .build
@@ -330,6 +348,7 @@ build_test_magia_tiles_4_spatz+cluster_CV32E40X:
     control_core: CV32E40X
   dependencies:
     - python_gvsoc
+    - submdule_update
 
 build_test_magia_tiles_1_spatz+cluster_CV32E40X:
   extends: .build
@@ -343,6 +362,7 @@ build_test_magia_tiles_1_spatz+cluster_CV32E40X:
     control_core: CV32E40X
   dependencies:
     - python_gvsoc
+    - submdule_update
 
 .sim:
   extends: [.base, .export_path]
