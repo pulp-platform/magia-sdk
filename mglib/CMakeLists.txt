@@ -33,6 +33,12 @@ target_compile_options(mglib PRIVATE
 # silently mismatch a redmule_mm=1 build.
 target_compile_options(mglib PRIVATE -DREDMULE_MM=${REDMULE_MM})
 
+# make hw_mcast=1: mg_idma_mcast_row/col as NoC hardware multicasts (MAGIA v4)
+if(NOT DEFINED HW_MCAST)
+  set(HW_MCAST 0)
+endif()
+target_compile_options(mglib PRIVATE -DMG_HW_MCAST=${HW_MCAST})
+
 target_include_directories(mglib
   PUBLIC
   "include"

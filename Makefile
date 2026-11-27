@@ -81,6 +81,8 @@ stalling		?= 0
 fsync_mm		?= 1
 idma_mm			?= 1
 redmule_mm		?= 1
+# 1: mglib's row/column multicasts (mg_idma_mcast_row/col) as NoC hardware multicasts (MAGIA v4); 0: 2D iDMA unicast jobs
+hw_mcast		?= 0
 profile_cmp		?= 0
 profile_cmi		?= 0
 profile_cmo		?= 0
@@ -230,6 +232,7 @@ endif
 			 -DFSYNC_MM=$(fsync_mm) \
 			 -DIDMA_MM=$(idma_mm) \
 			 -DREDMULE_MM=$(redmule_mm) \
+			 -DHW_MCAST=$(hw_mcast) \
 			 -DCOMPILER=$(compiler) \
 			 -DCMAKE_C_FLAGS="$(NODE_PROFILING_FLAGS)" \
 			 -DCONTROL_CORE=$(control_core) \
