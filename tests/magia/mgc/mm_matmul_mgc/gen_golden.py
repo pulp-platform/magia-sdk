@@ -11,17 +11,24 @@ The entries are small integers, so every product and partial sum is exact in
 fp16 and the result must match bit by bit.
 
 Usage:
-  python3 tests/magia/mgc/mm_matmul_mgc/gen_golden.py
+  python3 tests/magia/mgc/mm_matmul_mgc/gen_golden.py [--m 64 --n 256 --k 64] [--inc_dir DIR]
 """
 
+import argparse
 import os
 
 import numpy as np
 
-M, N, K = 64, 256, 64
-SEED = 42
+parser = argparse.ArgumentParser("MATMUL test")
+parser.add_argument('--m', type=int, default=64)   # M_SIZE
+parser.add_argument('--n', type=int, default=256)  # N_SIZE (reduction)
+parser.add_argument('--k', type=int, default=64)   # K_SIZE
+parser.add_argument('--seed', type=int, default=42)
+parser.add_argument('--inc_dir', type=str, default=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'include'))
+args = parser.parse_args()
+M, N, K, SEED = args.m, args.n, args.k, args.seed
 
-OUTPUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "include", "test.h")
+OUTPUT = os.path.join(args.inc_dir, "test.h")
 
 
 def array(name, a):
@@ -38,6 +45,7 @@ def main():
     # missing store cannot pass for a result)
     y = np.full((M, K), -1, np.float16)
 
+    os.makedirs(args.inc_dir, exist_ok=True)
     with open(OUTPUT, "w") as f:
         f.write("// Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.\n"
                 "// Licensed under the Apache License, Version 2.0, see LICENSE for details.\n"
