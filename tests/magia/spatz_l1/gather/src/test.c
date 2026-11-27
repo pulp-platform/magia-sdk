@@ -1,0 +1,35 @@
+// Copyright 2026 ETH Zurich, University of Bologna and Fondazione Chips-IT.
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+//
+// Francesco Conti <f.conti@unibo.it>
+
+#include "l1check.h"
+#include "gather_fp16_spatz.h"
+
+/* data [13, 5, 3, 7], gather index 3 along axis 1 -> [13, 1, 3, 7] */
+#define NX (13 * 5 * 21)
+#define NY (13 * 21)
+
+uint16_t x[NX], y_ref[NY];
+
+int main(void)
+{
+    uint32_t shape[4] = {13, 5, 3, 7};
+
+    l1c_init();
+    if (get_hartid() == 0)
+        l1c_fill(x, NX, 1, 10, 17, 1);
+    l1c_sync();
+
+    L1C_FULL(MAGIA_gather_fp16_spatz((const float16 *)x, shape, (float16 *)y_ref, 13, 5, 21, 3, 1));
+    l1c_sync();
+
+    l1_alloc_init();
+    uint16_t *x1 = l1c_alloc(NX * 2), *y1 = l1c_alloc(NY * 2);
+    l1c_copy_in(x1, x, NX * 2);
+    L1C_L1(MAGIA_gather_fp16_spatz_l1((const float16 *)x1, shape, (float16 *)y1, 13, 5, 21, 3, 1));
+
+    uint32_t mx, err = l1c_compare(y1, y_ref, NY, 0, &mx);
+    return l1c_report("gather", err, mx);
+}
