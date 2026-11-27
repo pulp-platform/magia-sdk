@@ -20,7 +20,7 @@
  */
 
 /**
- * Set up Spatz on this tile: its event-unit line, its binary (the Spatz tasks linked into the
+ * Set up Spatz on this tile: its binary (the Spatz tasks linked into the
  * program) and its clock. Only the first call does anything, so a kernel may call it every time.
  */
 extern void mg_spatz_init(void);

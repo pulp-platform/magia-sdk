@@ -16,7 +16,6 @@ void mg_spatz_init(void)
 {
     if (mg_spatz_ready)
         return;
-    eu_spatz_init(0);
     spatz_init((uint32_t)&_spatz_binary_start);
     mg_spatz_ready = 1;
 }

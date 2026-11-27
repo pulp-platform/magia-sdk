@@ -17,11 +17,10 @@
  * does both. Only one barrier may be in flight at a time.
  */
 
-/** Set up the barriers on this tile: the fsync controller and its event-unit line. */
+/** Set up the barriers on this tile: the fsync controller. */
 static inline __ALWAYS_INLINE_ void mg_fsync_init(void)
 {
     fsync_init();
-    eu_fsync_init(0);
 }
 
 static inline __ALWAYS_INLINE_ void mg_fsync_row_start(mg_event_t *event, mg_event_callback_t callback)
