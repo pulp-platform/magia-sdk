@@ -34,9 +34,6 @@ int main(void)
 
 #if STALLING == 0
     eu_init();
-    eu_redmule_init(0);
-    eu_idma_init(0);
-    eu_fsync_init(0);
 #endif
 
     uint32_t y_id         = GET_Y_ID(hartid);
@@ -283,7 +280,7 @@ int main(void)
              * 3f. Sync before next timeslot
              */
             pt++;
-            fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+            fsync_sync_global();
 #if STALLING == 0
             eu_fsync_wait(WAIT_MODE);
 #endif

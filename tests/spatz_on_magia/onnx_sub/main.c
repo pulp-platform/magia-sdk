@@ -26,7 +26,6 @@ static int init_data(void *params)
     idma_init();
 
     eu_init();
-    eu_idma_init(0);
 
     sub_params = (volatile onnx_sub_params_t *)params;
 
@@ -72,7 +71,6 @@ static int run_spatz_task()
     int ret;
 
     eu_init();
-    eu_spatz_init(0);
 
     spatz_init(SPATZ_BINARY_START);
     spatz_run_task_with_params(ONNX_SUB_TASK, ONNX_SUB_PARAMS_BASE);

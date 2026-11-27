@@ -380,6 +380,104 @@ fn inject_derived_busy(
 }
 
 // --------------------------------------------------------------------------
+// --pc-in / --or / --keep: reduce PCs and busy bits to a few 1-bit signals.
+// --------------------------------------------------------------------------
+
+// Appends v to a 1-bit change list, only on a change of value.
+fn push_bit(out: &mut Vec<Change>, t: i64, v: bool) {
+    let v = if v { "1" } else { "0" };
+    if out.last().map_or(true, |c| c.val != v) {
+        out.push(Change { t, val: v.to_string() });
+    }
+}
+
+fn bit(v: &str) -> bool {
+    parse_bits_or_int0(v).map_or(false, |x| x != 0)
+}
+
+// 'RE=NAME:LO-HI[,LO-HI...]' (hex): for each signal whose full path matches RE, a sibling
+// NAME that is 1 while its value is in one of the [LO, HI) ranges (x/z: 0).
+fn parse_pc_in_arg(spec: &str) -> Result<(Regex, String, Vec<(u128, u128)>), String> {
+    let err = || format!("--pc-in expects 'RE=NAME:LO-HI[,LO-HI...]' (got {:?})", spec);
+    let (re, rest) = spec.rsplit_once('=').ok_or_else(err)?;
+    let (name, ranges) = rest.split_once(':').ok_or_else(err)?;
+    let hex = |s: &str| u128::from_str_radix(s.trim_start_matches("0x"), 16).map_err(|_| err());
+    let mut rs = Vec::new();
+    for r in ranges.split(',').filter(|r| !r.is_empty()) {
+        let (lo, hi) = r.split_once('-').ok_or_else(err)?;
+        rs.push((hex(lo)?, hex(hi)?));
+    }
+    Ok((Regex::new(re).map_err(|e| e.to_string())?, name.to_string(), rs))
+}
+
+fn inject_pc_in(
+    signals: &mut IndexMap<String, Signal>,
+    changes: &mut HashMap<String, Vec<Change>>,
+    specs: &[(Regex, String, Vec<(u128, u128)>)],
+) -> usize {
+    let mut new_signals: Vec<(String, Signal, Vec<Change>)> = Vec::new();
+    for (re, name, ranges) in specs {
+        for (vid, sig) in signals.iter().filter(|(_, s)| re.is_match(&s.name)) {
+            let parent = sig.name.rsplit_once('.').map_or("", |(p, _)| p);
+            let mut derived = Vec::new();
+            for c in changes.get(vid).map_or(&[][..], |v| &v[..]) {
+                let pc = if is_bits(&c.val) { u128::from_str_radix(&c.val, 2).ok() } else { None };
+                push_bit(&mut derived, c.t, pc.map_or(false, |pc| ranges.iter().any(|&(lo, hi)| lo <= pc && pc < hi)));
+            }
+            let full = format!("{}.{}", parent, name);
+            new_signals.push((format!("__pc_in__{}", full), Signal { name: full, vtype: "wire".to_string(), width: 1 }, derived));
+        }
+    }
+    let n = new_signals.len();
+    for (vid, sig, ch) in new_signals {
+        signals.insert(vid.clone(), sig);
+        changes.insert(vid, ch);
+    }
+    n
+}
+
+// 'NAME=A,B': for each signal <P>.A, a signal <P>.NAME = <P>.A | <P>.B (A alone if no <P>.B);
+// A and B are dotted paths relative to the common prefix P.
+fn inject_or(
+    signals: &mut IndexMap<String, Signal>,
+    changes: &mut HashMap<String, Vec<Change>>,
+    specs: &[(String, String, String)],
+) -> usize {
+    let by_name: HashMap<String, String> = signals.iter().map(|(vid, s)| (s.name.clone(), vid.clone())).collect();
+    let mut new_signals: Vec<(String, Signal, Vec<Change>)> = Vec::new();
+    for (name, a, b) in specs {
+        let suffix = format!(".{}", a);
+        for (full_a, vid_a) in by_name.iter().filter(|(n, _)| n.ends_with(&suffix)) {
+            let prefix = &full_a[..full_a.len() - suffix.len()];
+            let mut merged: Vec<(i64, u8, &str)> = Vec::new();
+            for (k, vid) in [Some(vid_a), by_name.get(&format!("{}.{}", prefix, b))].into_iter().enumerate() {
+                for c in vid.and_then(|v| changes.get(v)).map_or(&[][..], |v| &v[..]) {
+                    merged.push((c.t, k as u8, c.val.as_str()));
+                }
+            }
+            merged.sort_by_key(|x| (x.0, x.1));
+            let (mut va, mut vb) = (false, false);
+            let mut derived = Vec::new();
+            for (i, &(t, k, v)) in merged.iter().enumerate() {
+                if k == 0 { va = bit(v) } else { vb = bit(v) }
+                // one value per timestamp, after all of its changes
+                if merged.get(i + 1).map_or(true, |n| n.0 != t) {
+                    push_bit(&mut derived, t, va || vb);
+                }
+            }
+            let full = format!("{}.{}", prefix, name);
+            new_signals.push((format!("__or__{}", full), Signal { name: full, vtype: "wire".to_string(), width: 1 }, derived));
+        }
+    }
+    let n = new_signals.len();
+    for (vid, sig, ch) in new_signals {
+        signals.insert(vid.clone(), sig);
+        changes.insert(vid, ch);
+    }
+    n
+}
+
+// --------------------------------------------------------------------------
 // --state-map parsing
 // --------------------------------------------------------------------------
 
@@ -1205,6 +1303,9 @@ struct Args {
     exclude: Option<String>,
     state_map: Vec<String>,
     derive_busy: Vec<String>,
+    pc_in: Vec<String>,
+    or: Vec<String>,
+    keep: Option<String>,
     rename: Vec<String>,
     split_asm: bool,
     symbolize: Option<String>,
@@ -1223,6 +1324,9 @@ fn parse_args() -> Result<Args, String> {
         exclude: None,
         state_map: Vec::new(),
         derive_busy: Vec::new(),
+        pc_in: Vec::new(),
+        or: Vec::new(),
+        keep: None,
         rename: Vec::new(),
         split_asm: false,
         symbolize: None,
@@ -1262,6 +1366,9 @@ fn parse_args() -> Result<Args, String> {
             "--exclude" => a.exclude = Some(take_val(&mut i)?),
             "--state-map" => a.state_map.push(take_val(&mut i)?),
             "--derive-busy" => a.derive_busy.push(take_val(&mut i)?),
+            "--pc-in" => a.pc_in.push(take_val(&mut i)?),
+            "--or" => a.or.push(take_val(&mut i)?),
+            "--keep" => a.keep = Some(take_val(&mut i)?),
             "--rename" => a.rename.push(take_val(&mut i)?),
             "--split-asm" => a.split_asm = true,
             "--symbolize" => a.symbolize = Some(take_val(&mut i)?),
@@ -1293,9 +1400,12 @@ fn print_help() {
     eprintln!(
         "gvsoc2perfetto <vcd> [-o OUT] [--format perfetto|json] [--no-intern] [--gzip]\n\
          \x20 [--pid-depth N] [--include RE] [--exclude RE] [--state-map LEAF=V:NAME,...]\n\
-         \x20 [--derive-busy LEAF_A,LEAF_B] [--rename OLD=NEW] [--split-asm]\n\
-         \x20 [--symbolize FILE.s] [--stats]\n\
-         See scripts/gvsoc2perfetto.py for the full documentation of each flag."
+         \x20 [--derive-busy LEAF_A,LEAF_B] [--pc-in RE=NAME:LO-HI,...] [--or NAME=A,B]\n\
+         \x20 [--keep RE] [--rename OLD=NEW] [--split-asm] [--symbolize FILE.s] [--stats]\n\
+         --pc-in: for each signal matching RE, a 1-bit sibling NAME, 1 while its value is in one\n\
+         \x20 of the [LO, HI) hex ranges. --or: for each signal <P>.A, a 1-bit <P>.NAME = <P>.A | <P>.B\n\
+         \x20 (dotted paths). --keep: after the derivations, keep only the signals matching RE.\n\
+         See scripts/gvsoc2perfetto.py for the full documentation of the other flags."
     );
 }
 
@@ -1324,6 +1434,30 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         let n = inject_derived_busy(&mut signals, &mut changes, &specs);
         eprintln!("--derive-busy: synthesized {} busy_derived signal(s)", n);
+    }
+
+    if !args.pc_in.is_empty() {
+        let specs = args.pc_in.iter().map(|s| parse_pc_in_arg(s)).collect::<Result<Vec<_>, _>>()?;
+        let n = inject_pc_in(&mut signals, &mut changes, &specs);
+        eprintln!("--pc-in: synthesized {} signal(s)", n);
+    }
+    if !args.or.is_empty() {
+        let mut specs = Vec::new();
+        for s in &args.or {
+            match s.split_once('=').and_then(|(n, ab)| ab.split_once(',').map(|(a, b)| (n, a, b))) {
+                Some((n, a, b)) if !n.is_empty() && !a.is_empty() && !b.is_empty() => {
+                    specs.push((n.to_string(), a.to_string(), b.to_string()))
+                }
+                _ => return Err(format!("--or expects 'NAME=A,B' (got {:?})", s).into()),
+            }
+        }
+        let n = inject_or(&mut signals, &mut changes, &specs);
+        eprintln!("--or: synthesized {} signal(s)", n);
+    }
+    if let Some(k) = &args.keep {
+        let re = Regex::new(k)?;
+        signals.retain(|_, s| re.is_match(&s.name));
+        changes.retain(|vid, _| signals.contains_key(vid));
     }
 
     let state_maps: Vec<(Regex, HashMap<u128, String>)> =

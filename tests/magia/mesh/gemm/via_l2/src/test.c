@@ -103,15 +103,12 @@ int main(void)
 #if STALLING == 0
     eu_init();
     eu_clear_events(0xFFFFFFFF);
-    eu_fsync_init(0);
-    eu_idma_init(0);
-    eu_redmule_init(0);
 #endif
 
     // Global barrier: ensure all tiles have completed startup (including BSS zeroing
     // in crt0.S) before any tile begins writing results to L2 output buffers.
     // Without this, slow tiles still zeroing BSS can overwrite Phase 1 results.
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     /**
@@ -186,7 +183,7 @@ int main(void)
     }
 
     // Global barrier: wait for Phase 1 to complete
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     /**
@@ -227,7 +224,7 @@ int main(void)
     }
 
     // Global barrier: wait for Phase 2 to complete
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     /**
@@ -267,7 +264,7 @@ int main(void)
     }
 
     // Global barrier: wait for Phase 3 to complete
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     /**

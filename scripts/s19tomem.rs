@@ -23,7 +23,12 @@
 //   Instructions start at 0xcc00_0000
 //   Data         starts at 0xcc01_0000
 //   Stack        starts at 0x0001_0000 (reserved, never populated from S19)
+//
+// Bytes outside the two fixed images (e.g. a .data larger than DATA_SIZE, or
+// .l2ext) are appended to the data file as sparse "@<address>" runs: both
+// files are $readmemh'd into the same (sparse) L2 model, so any address works.
 
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::io::{self, Write, BufWriter};
@@ -102,15 +107,33 @@ fn parse_s3_line(line: &[u8], mut store: impl FnMut(u32, u8)) {
 }
 
 // Writes one $readmemh stimulus file: a "@<hex address>" header line
-// followed by one two-hex-digit byte per line. 
+// followed by one two-hex-digit byte per line, then the `extra` bytes as
+// further "@<hex address>" runs of consecutive addresses.
 // `trailing_newline` selects whether there is a trailing newline
 // after the last byte.
-fn write_mem_file(path: &str, base: u32, mem: &[u8], trailing_newline: bool) -> io::Result<()> {
+fn write_mem_file(
+    path: &str,
+    base: u32,
+    mem: &[u8],
+    extra: &BTreeMap<u32, u8>,
+    trailing_newline: bool,
+) -> io::Result<()> {
     let f = fs::File::create(path)?;
     let mut w = BufWriter::new(f);
     writeln!(w, "@{:08x}", base)?;
-    for (i, b) in mem.iter().enumerate() {
-        if !trailing_newline && i == mem.len() - 1 {
+    let total = mem.len() + extra.len();
+    let mut i = 0;
+    let mut next_addr: Option<u32> = None;
+    let bytes = mem.iter().map(|b| (None, *b)).chain(extra.iter().map(|(a, b)| (Some(*a), *b)));
+    for (addr, b) in bytes {
+        if let Some(a) = addr {
+            if next_addr != Some(a) {
+                writeln!(w, "@{:08x}", a)?;
+            }
+            next_addr = Some(a.wrapping_add(1));
+        }
+        i += 1;
+        if !trailing_newline && i == total {
             write!(w, "{:02x}", b)?;
         } else {
             writeln!(w, "{:02x}", b)?;
@@ -140,6 +163,8 @@ fn main() {
     // Simulated instruction/data memories, zero-filled, to be dumped below.
     let mut instr_mem = vec![0u8; INSTR_MEM_SIZE];
     let mut data_mem = vec![0u8; DATA_MEM_SIZE];
+    // Everything else, written to the data file after data_mem.
+    let mut extra_mem = BTreeMap::new();
 
     for line in bytes.split(|&b| b == b'\n') {
         let line = trim(line);
@@ -147,21 +172,23 @@ fn main() {
             continue;
         }
         // Route each decoded byte to whichever memory its address falls
-        // into (or drop it if it's outside both ranges).
+        // into (or to extra_mem if it's outside both ranges).
         parse_s3_line(line, |addr, byte| {
             if addr >= DATA_BASE && addr < DATA_END {
                 data_mem[(addr - DATA_BASE) as usize] = byte;
             } else if addr >= MEM_START && addr < INSTR_END {
                 instr_mem[(addr - MEM_START) as usize] = byte;
+            } else {
+                extra_mem.insert(addr, byte);
             }
         });
     }
 
-    if let Err(e) = write_mem_file(instr_path, MEM_START, &instr_mem, true) {
+    if let Err(e) = write_mem_file(instr_path, MEM_START, &instr_mem, &BTreeMap::new(), true) {
         eprintln!("error: could not write '{}': {}", instr_path, e);
         process::exit(1);
     }
-    if let Err(e) = write_mem_file(data_path, DATA_BASE, &data_mem, false) {
+    if let Err(e) = write_mem_file(data_path, DATA_BASE, &data_mem, &extra_mem, false) {
         eprintln!("error: could not write '{}': {}", data_path, e);
         process::exit(1);
     }

@@ -53,7 +53,6 @@ int main(void)
 
     // printf("[CV32 %d] Initializing Event Unit for accepting the cluster\n", hartid);
     eu_init();
-    eu_pulp_init(0);
 
     // printf("[CV32 %d] Initializing Data pointers\n", hartid);
     volatile uint32_t a[8]      = {1, 2, 3, 4, 5, 6, 7, 8};

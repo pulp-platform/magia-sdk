@@ -58,7 +58,6 @@ static int run_spatz_task()
     int ret;
 
     eu_init();
-    eu_spatz_init(0);
 
     spatz_init(SPATZ_BINARY_START);
     spatz_run_task_with_params(ONNX_GEMM_TASK, ONNX_GEMM_PARAMS_BASE);

@@ -21,6 +21,7 @@ dependencies = [
     "typing_extensions",
     "deeploy-pulp",
     "pyyaml",
+    "xdsl==0.72.0",  # mgc compiler (mgc/requirements.txt)
 ]
 
 [project.optional-dependencies]

@@ -92,7 +92,7 @@ int fft_fs_task(void)
 
         // Store C vector
         asm volatile("vse16.v v0, (%0)" ::"r"(CR));
-        asm volatile("vse16.v v1, (%0)" ::"r"(CI));
+        asm volatile("vse16.v v1, (%0)" SPATZ_VST_FENCE ::"r"(CI));
 
         // DR = AR - PR
         asm volatile("vfsub.vv v0, v2, v4");
@@ -102,7 +102,7 @@ int fft_fs_task(void)
 
         // Store D vector
         asm volatile("vse16.v v0, (%0)" ::"r"(DR));
-        asm volatile("vse16.v v1, (%0)" ::"r"(DI));
+        asm volatile("vse16.v v1, (%0)" SPATZ_VST_FENCE ::"r"(DI));
 
         AR += vl;
         AI += vl;

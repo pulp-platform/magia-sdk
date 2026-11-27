@@ -32,8 +32,6 @@ int main(void)
 
 #if STALLING == 0
     eu_init();
-    eu_idma_init(0);
-    eu_fsync_init(0);
 #endif
 
     uint8_t *src_buf;
@@ -115,7 +113,7 @@ int main(void)
     // uint32_t perf_scaled = (total_bytes) / avg_cycles;
 
     // // Sync all tiles before printing
-    // fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    // fsync_sync_global();
 
     // // Each tile prints its own performance
     // printf("Tile %u | Total bytes per repetition: %u | Avg cycles: %u | Performance: %u

@@ -106,7 +106,7 @@ static void row_affine(_Float16 *dst, _Float16 mu, _Float16 a, _Float16 b, size_
         asm volatile("vfsub.vf v0, v0, %0" ::"f"(MU));
         asm volatile("vfmul.vf v0, v0, %0" ::"f"(A));
         asm volatile("vfadd.vf v0, v0, %0" ::"f"(B));
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst));
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst));
         p_dst += vl;
     }
 }

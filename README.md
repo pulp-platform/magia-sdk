@@ -145,6 +145,8 @@ The following *optional* parameters can be specified when running the make comma
 
 `control_core`: **CV32E40P**|**CV32E40X** (**Default**: CV32E40P). Selects the control core version.
 
+`clear_bss` : **1**|**0** (**Default**: 0). Inserts a .bss clean routine in the crt0.S. Necessary when offloading multiple tasks.
+
 `verbose`: **0**|**1** (**Default**: 0). When 1, `make build` restores the full CMake configure trace and per-file compiler command lines. Leave at 0 for concise progress output.
 
 `test`: When set on `make build` (e.g. `make build test=<test_name>`), builds only that single test target instead of the whole test suite. The name is the same test binary name used by `make run test=...`.
@@ -194,6 +196,8 @@ To ensure a clean re-build of the RTL, you can run:
 
 before building the RTL back using the `make MAGIA` command.
 
+**RTL simulation also uses a Rust script. You need rustc 1.85 or newer installed to run it.**
+
 ## Simulating with Verilator
 
 `platform=verilator` runs the same RTL as `platform=rtl`, but on a
@@ -222,15 +226,8 @@ Verilator model built from the same checkout).
 
 Requirements:
 
-- A MAGIA checkout containing the Verilator flow (`verilator/verilator.mk`). This is **not** in the
-  commit pinned by `scripts/deps.env` yet, so point `MAGIA_RTL_DIR` at a checkout that has it.
+- A MAGIA checkout containing the Verilator flow (`verilator/verilator.mk`).
 - Verilator >= 5.046 — earlier versions miss the hierarchical-block fixes the flow depends on.
-- `mesh_dv=1`: the flow is mesh-only, so `tiles=1` is rejected (it forces `mesh_dv=0`).
-- Not `target_platform=magia_v1`: it selects CV32E40X, whose hierarchical core traces would need
-  per-tile filenames resolved at run time. Also rejected.
-
-Both constraints are checked by `make MAGIA`, which stops with an explanatory error rather than
-letting the build fail later.
 
 Options:
 
@@ -238,7 +235,9 @@ Options:
 
 `verilator_threads`: **N** (**Default**: 4). Threads the *simulation* runs on. Compiled into the model, so it only has an effect on `make MAGIA platform=verilator`.
 
-`MAGIA_VERILATOR_BIN`: Path to the model. **Default**: `$(MAGIA_RTL_DIR)/verilator/build/obj_dir/Vmagia_tb`. Override to run a model kept outside the MAGIA checkout.
+`TESTBENCH_NAME`: Name of the testbench binary. **Default**: `Vmagia_tb`. On standalone tile, it is called `Vmagia_tile_tb`. This parameter is automatically managed by the SDK.
+
+`MAGIA_VERILATOR_BIN_DIR`: Path to the model. **Default**: `$(MAGIA_RTL_DIR)/verilator/build/obj_dir/`. Override to run a model kept outside the MAGIA checkout. The build folder might have a different generated name if building a standalone-tile model or with CV32E40X as control core.
 
 `gui`: **0**|**1** (**Default**: 0). Dumps an FST waveform of the run to `<test_name>.fst` in the test directory, and prints ready-to-paste `gtkwave` and `surfer` commands when the simulation ends. This is what `gui` means for Verilator — there is no interactive simulator window as with QuestaSim. Dumping is off otherwise and costs nothing. Override the filename with `VERILATOR_FST`.
 
@@ -266,7 +265,7 @@ never reported an end-of-simulation line (hung or killed).
 Two things to keep in mind:
 
 - **Nothing bounds a hung run.** If a tile never signals end-of-computation the simulation waits
-  forever; interrupt it with Ctrl-C.
+  forever; interrupt it with Ctrl-C, or risk a memory overflow with the log!
 - **Let a waveform run reach `$finish`.** A run killed earlier leaves the FST unclosed, and its
   signal hierarchy is still sitting in the `<dump>.fst.hier` companion file — such a dump only reads
   in place and loses every signal name the moment it is moved.
@@ -318,6 +317,30 @@ To add a new test to the SDK:
 
     3. An **include** directory containing your test's header (.h) files
 
+
+## Programming models: mglib and mgc
+
+Besides the HAL and driver APIs (`hal/`, `drivers/`), tests can be written at two higher levels:
+
+- **[mglib](mglib/README.md)** is a C library on top of the HAL: asynchronous iDMA transfers
+  (`mg_idma_*`, also row/column multicast) and RedMulE GEMM/MATMUL jobs (`mg_redmule_*`) tracked by
+  software events (`mg_event_*`), with a WFE or polling wait mode. Hand-written examples are the
+  `tests/magia/mesh/mm_*_mglib` tests.
+- **[mgc](mgc/README.md)** is a Python-syntax DSL and compiler that generates mglib C code from a
+  description of the per-tile schedule: tile splits, L1 buffers, transfers, accelerator jobs and
+  software pipelines. mgc is a submodule; its tests are in `tests/magia/mgc`, each with its `.mgc`
+  source and the generated `src/test.c`, and build and run like any other test:
+
+```sh
+git submodule update --init mgc
+python3 -m venv mgc/.venv && mgc/.venv/bin/pip install -r mgc/requirements.txt
+mgc/.venv/bin/python mgc/mgcc.py tests/magia/mgc/mm_os_mgc/mm_os.mgc -o tests/magia/mgc/mm_os_mgc/src/test.c
+make build tiles=2 test=test_mm_os_mgc
+make run tiles=2 test=test_mm_os_mgc platform=gvsoc
+```
+
+`mgc/scripts/mgc_sweep.py` runs the mgc tests over mesh and problem sizes on GVSoC and reports
+cycles and accelerator utilization (see the [mgc README](mgc/README.md#sweeps-scripts)).
 
 ## Profiling
 
@@ -469,6 +492,15 @@ Contains the weak definitions of this SDK APIs. These are the API instruction th
 
 ### drivers
 Contains the architecture-specific implementation and source code for the HAL APIs. Despite each implementation having different names, thanks to an aliasing system the programmer can use the same name for the same API instruction on different architectures.
+
+### mglib
+C library on top of the HAL for asynchronous iDMA transfers and RedMulE jobs with software events, see [mglib/README.md](mglib/README.md).
+
+### mgc
+A submodule containing mgc, the Python-syntax DSL and compiler that generates mglib-based tests, see [mgc/README.md](mgc/README.md).
+
+### kernels
+fp16 Spatz compute kernels, one directory per operator, used by the `tests/spatz_on_magia` and `tests/magia/mgc` tests and by the Deeploy deployment flow.
 
 ### devices
 Nothing there.

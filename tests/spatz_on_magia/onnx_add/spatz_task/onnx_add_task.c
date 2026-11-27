@@ -31,7 +31,7 @@ int onnx_add_task(void)
 
         asm volatile("vfadd.vv v16, v0, v8");
 
-        asm volatile("vse16.v v16, (%0)" ::"r"(C));
+        asm volatile("vse16.v v16, (%0)" SPATZ_VST_FENCE ::"r"(C));
 
         A += vl;
         B += vl;

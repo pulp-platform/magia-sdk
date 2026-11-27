@@ -1,0 +1,6 @@
+[submodule "mgc"]
+	path = mgc
+	url = https://github.com/FrancescoConti/mgc.git
+[submodule "kernels"]
+	path = kernels
+	url = https://github.com/pulp-platform/magia-kernels.git

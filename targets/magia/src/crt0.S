@@ -71,6 +71,7 @@ _start:
   csrrs   zero, mstatus, t0
 #endif
 
+#if CLEAR_BSS == 1
   # clear the bss segment
   csrr    t2, mhartid
   bnez    t2, skip_bss_clear
@@ -82,6 +83,7 @@ _start:
   bltu    t0, t1, 1b
 
 skip_bss_clear:
+#endif
 
 # clear the per-tile .tile_bss on every hart (per-tile aliased memory, so
   # each control core must zero its own copy - unlike the shared-L2 .bss above)
@@ -131,11 +133,20 @@ exit:
  add     a1, a1, a0
  add     a1, a1, a0
  sh      s0, 0(a1)
+# park the core for good, asleep: no event (or interrupt) may wake it, so
+# that a pending one (e.g. a completion pulse that no wait consumed) neither
+# makes it run past exit nor spin in the loop below
+ csrw    mie, zero
 #if CV32E40P == 1
- li      a1, 0x00000738
- cv.elw	 zero, 0(a1)
+ li      a1, 0x00000700  # EU_CORE_MASK
+ sw      zero, 0(a1)
+exit_park:
+ cv.elw	 zero, 0x38(a1)  # EU_CORE_EVENT_WAIT
+ j       exit_park
 #elif CV32E40X == 1
+exit_park:
  wfi
+ j       exit_park
 #endif
 
 .section .vectors, "ax"

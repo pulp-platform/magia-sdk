@@ -9,23 +9,22 @@
 #include "redmule16.h" // static inline redmule16_gemm_enqueue/_commit/_start
 
 /**
- * Completion counter. Only the low 8 bits are significant (see mg_seq_ge()
- * in mg_event.h): the number of RedMulE jobs ever in flight at once is
- * always far below 256, so wrapping is safe.
+ * Acquire a hardware job id for the next job and stamp `event` with it. If the
+ * hardware queue (depth 2) is full, wait for a completion pulse to free a slot
+ * before retrying the acquire.
  *
- * Advanced from two places: mg_redmule_gemm()'s backpressure spin (below)
- * and mg_redmule_wait(). That is safe because RedMulE jobs retire strictly
- * in FIFO order regardless of which call site happens to observe a given
- * completion pulse.
- *
- * Per-tile completion bookkeeping, so it lives in per-tile-aliased .tile_bss
- * (private per tile, zeroed by every hart in crt0) rather than the shared-L2
- * .bss where all tiles would collide on one copy - hence no initializer here.
+ * Shared by all the job-issuing calls below; always inlined, so each of them
+ * compiles exactly as if the loop were written in place.
  */
-// External linkage (declared in mg_redmule.h): shared with the now-inlined
-// mg_redmule_wait() so both the acquire/backpressure path (here) and the wait
-// path observe a single completion counter.
-uint8_t mg_redmule_completed __attribute__((section(".tile_bss")));
+static inline __attribute__((always_inline)) void
+mg_redmule_acquire_event(eu_wait_mode_t mode, mg_event_t *event, mg_event_callback_t callback)
+{
+    int32_t id;
+    while ((id = redmule_acquire()) < 0) {
+        eu32_redmule_wait(mode);
+    }
+    mg_event_init(event, id, callback);
+}
 
 void mg_redmule_gemm(eu_wait_mode_t mode,
                      uint32_t x,
@@ -37,15 +36,7 @@ void mg_redmule_gemm(eu_wait_mode_t mode,
                      mg_event_t *event,
                      mg_event_callback_t callback)
 {
-    int32_t id;
-    while ((id = redmule_acquire()) < 0) {
-        // Hardware queue (depth 2) is full: drain one completion pulse to
-        // free a slot before retrying the acquire.
-        if (eu32_redmule_wait(mode)) {
-            mg_redmule_completed++;
-        }
-    }
-    mg_event_init(event, id, callback);
+    mg_redmule_acquire_event(mode, event, callback);
     redmule_gemm(x, w, y, m, n, k);
 }
 
@@ -59,17 +50,40 @@ void mg_redmule_gemm_enqueue(eu_wait_mode_t mode,
                              mg_event_t *event,
                              mg_event_callback_t callback)
 {
-    int32_t id;
-    while ((id = redmule_acquire()) < 0) {
-        // Hardware queue (depth 2) is full: drain one completion pulse to
-        // free a slot before retrying the acquire.
-        if (eu32_redmule_wait(mode)) {
-            mg_redmule_completed++;
-        }
-    }
-    mg_event_init(event, id, callback);
+    mg_redmule_acquire_event(mode, event, callback);
     redmule16_gemm_enqueue(x, w, y, m, n, k);
 }
+
+#if REDMULE_MM != 0
+void mg_redmule_matmul(eu_wait_mode_t mode,
+                       uint32_t x,
+                       uint32_t w,
+                       uint32_t y,
+                       uint16_t m,
+                       uint16_t n,
+                       uint16_t k,
+                       mg_event_t *event,
+                       mg_event_callback_t callback)
+{
+    mg_redmule_acquire_event(mode, event, callback);
+    redmule16_matmul_enqueue(x, w, y, m, n, k);
+    redmule16_gemm_commit_start();
+}
+
+void mg_redmule_matmul_enqueue(eu_wait_mode_t mode,
+                               uint32_t x,
+                               uint32_t w,
+                               uint32_t y,
+                               uint16_t m,
+                               uint16_t n,
+                               uint16_t k,
+                               mg_event_t *event,
+                               mg_event_callback_t callback)
+{
+    mg_redmule_acquire_event(mode, event, callback);
+    redmule16_matmul_enqueue(x, w, y, m, n, k);
+}
+#endif
 
 void mg_redmule_gemm_commit_start()
 {

@@ -58,9 +58,6 @@ int main(void)
 #if STALLING == 0
     eu_init();
     eu_clear_events(0xFFFFFFFF);
-    eu_fsync_init(0);
-    eu_idma_init(0);
-    eu_redmule_init(0);
 #endif
 
     int gemm1_idx = get_local_idx(hartid, gemm1_tiles, GEMM1_N_TILES);
@@ -68,11 +65,11 @@ int main(void)
     // int gemm3_idx = get_local_idx(hartid, gemm3_tiles, GEMM3_N_TILES);
     // int gemm4_idx = get_local_idx(hartid, gemm4_tiles, GEMM4_N_TILES);
 
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     /* Barrier: synchronize all tiles after GEMM1 before sandbox transfers */
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     uint32_t m2_size = (uint32_t)(DIM_B * DIM_C * 2);
@@ -82,7 +79,7 @@ int main(void)
         idma_memcpy_1d(0, (uint32_t)m2_inp, get_l1_base(12), m2_size);
         eu_idma_wait_a2o(WAIT_MODE);
     }
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     /* Xfer C: tile 12 L1 → tile 13 L1, pushed by tile 12 */
@@ -90,7 +87,7 @@ int main(void)
         idma_memcpy_1d(1, get_l1_base(13), get_l1_base(12), m2_size);
         eu_idma_wait_o2a(WAIT_MODE);
     }
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     /* Xfer E: tile 12 L1 → tile 13 L1, work split in half:
@@ -105,15 +102,15 @@ int main(void)
         idma_memcpy_1d(0, get_l1_base(12) + half, get_l1_base(13) + half, half);
         eu_idma_wait_a2o(WAIT_MODE);
     }
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     /* ~~~~~~~~~~~~~~~~~~~~ Validation ~~~~~~~~~~~~~~~~~~~~ */
     // Final barrier
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     // Tile 0 checks R1 against golden

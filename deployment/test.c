@@ -57,16 +57,13 @@ int main(void)
     redmule_init();
 
     eu_init();
-    eu_fsync_init(0);
-    eu_redmule_init(0);
-    eu_idma_init(0);
 
     /* initialization */
     if (hartid == 0) {
         InitNetwork();
     }
 
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
     eu_fsync_wait(WAIT_MODE);
 
     /* input copy */

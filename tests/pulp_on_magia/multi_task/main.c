@@ -36,7 +36,6 @@ int main(void)
     printf("[CV32] ===== Multi-task PULP-only test =====\n");
 
     eu_init();
-    eu_pulp_init(0);
 
     printf("[CV32] Init PULP cluster\n");
     pulp_init(PULP_BINARY_START);

@@ -129,8 +129,6 @@ int main(void)
     printf("[CV32] ===== Multi-task Spatz+PULP test =====\n");
 
     eu_init();
-    eu_pulp_init(0);
-    eu_spatz_init(0);
 
     /* ------------------------------------------------------------------
      * Spatz: 2 sequential fp16 tasks

@@ -66,7 +66,7 @@ int idma32_memcpy_1d(uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t
     }
     idma_mm_set_std2_rep2(dir, 0, 0, 1);
     idma_mm_set_std3_rep3(dir, 0, 0, 1);
-    idma_mm_start(dir);
+    return (int)idma_mm_start(dir);
 #endif
 }
 
@@ -112,7 +112,55 @@ int idma32_memcpy_2d(
         idma_mm_set_std2_rep2(dir, len, std, reps);
     }
     idma_mm_set_std3_rep3(dir, 0, 0, 1);
-    idma_mm_start(dir);
+    return (int)idma_mm_start(dir);
+#endif
+    return 0;
+}
+
+/**
+ * Start 2-dimensional memory copy with independent strides on the AXI and the OBI side.
+ *
+ * @param dir Copy Direction. 0 = AXI to OBI (L2 to L1), !0 = OBI to AXI (L1 to L2).
+ * @param axi_addr AXI/L2 memory address of first element.
+ * @param obi_addr OBI/L1 memory address of first element.
+ * @param len Byte length of memory block to transfer for each repetition.
+ * @param axi_std Offset added to the AXI address after each block (may be 0).
+ * @param obi_std Offset added to the OBI address after each block (may be 0).
+ * @param reps Number of repetitions.
+ */
+int idma32_memcpy_2d_strided(uint8_t dir,
+                             uint32_t axi_addr,
+                             uint32_t obi_addr,
+                             uint32_t len,
+                             uint32_t axi_std,
+                             uint32_t obi_std,
+                             uint32_t reps)
+{
+#if IDMA_MM == 0
+    if (dir) { // OBI to AXI (L1 to L2)
+        idma_conf_out();
+        idma_set_addr_len_out(axi_addr, obi_addr, len);
+        idma_set_std2_rep2_out(axi_std, obi_std, reps);
+        idma_set_std3_rep3_out(0, 0, 1);
+        idma_start_out();
+    } else { // AXI to OBI (L2 to L1)
+        idma_conf_in();
+        idma_set_addr_len_in(obi_addr, axi_addr, len);
+        idma_set_std2_rep2_in(obi_std, axi_std, reps);
+        idma_set_std3_rep3_in(0, 0, 1);
+        idma_start_in();
+    }
+#else
+    idma_mm_conf(dir, 0, 0, 0, 0, 0, 0, 3);
+    if (dir) {
+        idma_mm_set_addr_len(dir, axi_addr, obi_addr, len);
+        idma_mm_set_std2_rep2(dir, axi_std, obi_std, reps);
+    } else {
+        idma_mm_set_addr_len(dir, obi_addr, axi_addr, len);
+        idma_mm_set_std2_rep2(dir, obi_std, axi_std, reps);
+    }
+    idma_mm_set_std3_rep3(dir, 0, 0, 1);
+    return (int)idma_mm_start(dir);
 #endif
     return 0;
 }
@@ -136,8 +184,16 @@ int idma32_collective_1d(
     idma_mm_set_std3_rep3(dir, 0, 0, 1);
     idma_mm_set_multicast_mask(dir, mask);
     idma_mm_set_collective_sel(dir, coll_op);
-    idma_mm_start(dir);
-    return 0;
+    return (int)idma_mm_start(dir);
+}
+
+/**
+ * Reads the DONE_ID register of the channel of `dir`: the id of the last job
+ * it has completed.
+ */
+uint32_t idma32_done_id(uint8_t dir)
+{
+    return mmio32(IDMA_DONE_ID_ADDR(dir, 0));
 }
 
 extern int idma_init() __attribute__((alias("idma32_init"), used, visibility("default")));
@@ -146,6 +202,16 @@ extern int idma_memcpy_1d(uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uin
 extern int idma_memcpy_2d(
     uint8_t dir, uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t std, uint32_t reps)
     __attribute__((alias("idma32_memcpy_2d"), used, visibility("default")));
+extern int idma_memcpy_2d_strided(uint8_t dir,
+                                  uint32_t axi_addr,
+                                  uint32_t obi_addr,
+                                  uint32_t len,
+                                  uint32_t axi_std,
+                                  uint32_t obi_std,
+                                  uint32_t reps)
+    __attribute__((alias("idma32_memcpy_2d_strided"), used, visibility("default")));
 extern int idma_collective_1d(
     uint32_t axi_addr, uint32_t obi_addr, uint32_t len, uint32_t mask, uint32_t coll_op)
     __attribute__((alias("idma32_collective_1d"), used, visibility("default")));
+extern uint32_t idma_done_id(uint8_t dir)
+    __attribute__((alias("idma32_done_id"), used, visibility("default")));

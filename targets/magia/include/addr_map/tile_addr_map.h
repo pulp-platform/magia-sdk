@@ -81,7 +81,7 @@
 #define TOTAL_PULP_HARTS      (NUM_HARTS * NUM_PULP_CORES)
 
 #if ((PULP_CORE_COUNT < 1) || (PULP_CORE_COUNT > PULP_STACK_MAX_CORES))
-#if PULP_CLUSTER
+#ifdef PULP_CLUSTER
 #error "PULP_CORE_COUNT must be between 1 and 16"
 #endif
 #endif

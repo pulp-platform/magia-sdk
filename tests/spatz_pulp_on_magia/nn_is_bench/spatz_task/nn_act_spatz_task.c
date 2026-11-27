@@ -52,11 +52,11 @@ act_hardswish(const _Float16 *src, _Float16 *dst, size_t len, _Float16 scale, _F
         /* hardswish: v8 = clamp(v0/6 + 1/2, 0, 1); v0 = v0 * v8 */
         asm volatile("vfmul.vf v8, v0, %0" ::"f"(ALPHA));
         asm volatile("vfadd.vf v8, v8, %0" ::"f"(BETA));
-        asm volatile("vfmin.vf v8, v8, %0" ::"f"(ONE));
+        asm volatile(SPATZ_FPU_FENCE "vfmin.vf v8, v8, %0" ::"f"(ONE));
         asm volatile("vfmax.vf v8, v8, %0" ::"f"(ZERO));
         asm volatile("vfmul.vv v0, v8, v0");
 
-        asm volatile("vse16.v v0, (%0)" ::"r"(p_dst));
+        asm volatile("vse16.v v0, (%0)" SPATZ_VST_FENCE ::"r"(p_dst));
 
         p_src += vl;
         p_dst += vl;

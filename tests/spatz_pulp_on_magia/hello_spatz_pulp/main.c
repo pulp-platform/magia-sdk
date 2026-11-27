@@ -11,8 +11,6 @@ int main(void)
     printf("[CV32] Hello Spatz+PULP Test\n");
 
     eu_init();
-    eu_pulp_init(0);
-    eu_spatz_init(0);
 
     /* NOTE: spatz_init + pulp_init only load addresses / enable clocks;
      * pulp_run could be moved right after spatz_run_task to run both

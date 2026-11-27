@@ -678,11 +678,6 @@ int main(void)
     redmule_init();
 
     eu_init();
-    eu_fsync_init(0);
-    eu_redmule_init(0);
-    eu_idma_init(0);
-    eu_pulp_init(0);
-    eu_spatz_init(0);
 
     spatz_boot(SPATZ_BINARY_START);
     pulp_boot(PULP_BINARY_START);

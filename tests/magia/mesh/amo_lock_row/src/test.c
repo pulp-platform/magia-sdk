@@ -30,7 +30,6 @@ int main(void)
 
 #if STALLING == 0
     eu_init();
-    eu_fsync_init(0);
 #endif
 
     uint32_t l1_tile_base = get_l1_base(hartid);
@@ -50,7 +49,7 @@ int main(void)
     if (hartid == centre_id)
         mmio32(tail_a) = NULL;
     // Synch all the tiles
-    fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+    fsync_sync_global();
 
 #if STALLING == 0
     eu_fsync_wait(WAIT_MODE);
@@ -84,7 +83,7 @@ int main(void)
          * 3. Synch all the tiles and return
          */
         // Synch all the tiles
-        fsync_sync_level(MAX_SYNC_LVL - 1, 0);
+        fsync_sync_global();
 
 #if STALLING == 0
         eu_fsync_wait(WAIT_MODE);

@@ -26,7 +26,6 @@ static int init_data(void *params)
     idma_init();
 
     eu_init();
-    eu_idma_init(0);
 
     clip_params = (volatile onnx_clip_params_t *)params;
 
@@ -61,7 +60,6 @@ static int run_spatz_task()
     int ret;
 
     eu_init();
-    eu_spatz_init(0);
 
     spatz_init(SPATZ_BINARY_START);
     spatz_run_task_with_params(ONNX_CLIP_TASK, ONNX_CLIP_PARAMS_BASE);

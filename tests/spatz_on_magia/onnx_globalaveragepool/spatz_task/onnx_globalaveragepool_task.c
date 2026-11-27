@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "tile.h"
+#include "utils/spatz_recip.h"
 #include "onnx_globalaveragepool_params.h"
 
 static inline void globalaveragepool(const _Float16 *src, _Float16 *dst, const uint32_t len)
@@ -34,7 +35,7 @@ static inline void globalaveragepool(const _Float16 *src, _Float16 *dst, const u
     asm volatile("vfredosum.vs v8, v0, v8");
     asm volatile("vfmv.f.s %0, v8" : "=f"(sum));
 
-    *dst = sum / (_Float16)len;
+    *dst = spatz_div_f16(sum, (_Float16)len);
 }
 
 int onnx_globalaveragepool_task(void)

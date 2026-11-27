@@ -34,9 +34,6 @@ int main(void)
 
 #if STALLING == 0
     eu_init();
-    eu_redmule_init(0);
-    eu_idma_init(0);
-    eu_fsync_init(0);
 #endif
 
     uint32_t y_id         = GET_Y_ID(hartid);

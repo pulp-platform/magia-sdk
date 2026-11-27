@@ -53,6 +53,34 @@ redmule16_gemm_enqueue(uint32_t x, uint32_t w, uint32_t y, uint16_t m, uint16_t 
     return 0;
 }
 
+#if REDMULE_MM != 0
+/**
+ * Configure an FP16 MATMUL on the RedMulE accelerator, without triggering it.
+ * Computes: Y = X * W  where X is [M x N], W is [N x K], Y is [M x K].
+ *
+ * Unlike redmule16_gemm_enqueue, Y is not read: its previous content does not
+ * matter. Only available on the memory-mapped HWPE registers (REDMULE_MM=1):
+ * the custom-instruction path has no way to select the operation.
+ *
+ * @param x    OBI (L1) address of input matrix X [M x N].
+ * @param w    OBI (L1) address of weight matrix W [N x K].
+ * @param y    OBI (L1) address of output matrix Y [M x K].
+ * @param m    Number of rows of X and Y.
+ * @param n    Number of columns of X / rows of W (inner dimension).
+ * @param k    Number of columns of W and Y.
+ *
+ * @return 0 on successful dispatch.
+ */
+static inline __attribute__((always_inline)) int
+redmule16_matmul_enqueue(uint32_t x, uint32_t w, uint32_t y, uint16_t m, uint16_t n, uint16_t k)
+{
+    redmule_mm_mcnfig_op(k, m, n, REDMULE_OP_MATMUL);
+    redmule_mm_marith(y, w, x);
+
+    return 0;
+}
+#endif
+
 /**
  * Commits execution of an enqueued job on the HW queue.
  *

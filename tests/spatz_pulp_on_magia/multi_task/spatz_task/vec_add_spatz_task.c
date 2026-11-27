@@ -21,7 +21,7 @@ int vec_add_spatz_task(void)
         asm volatile("vle16.v v0, (%0)" ::"r"(A));
         asm volatile("vle16.v v8, (%0)" ::"r"(B));
         asm volatile("vfadd.vv v16, v0, v8");
-        asm volatile("vse16.v v16, (%0)" ::"r"(C));
+        asm volatile("vse16.v v16, (%0)" SPATZ_VST_FENCE ::"r"(C));
         A += vl;
         B += vl;
         C += vl;
