@@ -13,8 +13,7 @@
 #include "test.h"
 
 #include "tile.h"
-#include "fsync.h"
-#include "eventunit.h"
+#include "mg_fsync.h"
 
 int main(void)
 {
@@ -23,9 +22,8 @@ int main(void)
     mgc_unfused_attn(q_inp, k_inp, v_inp, o_out, attn_l2, SEQ_LENGTH, PROJ_SIZE, QK_SCALE_FP16);
 
     /* once every tile has finished, each tile checks its share of the rows */
-    fsync_init();
-    fsync_sync_global();
-    eu_fsync_wait(WFE);
+    mg_fsync_init();
+    mg_fsync_global(WFE);
 
     uint32_t share  = (SEQ_LENGTH + NUM_HARTS - 1) / NUM_HARTS;
     uint32_t r_end  = (hartid + 1) * share < SEQ_LENGTH ? (hartid + 1) * share : SEQ_LENGTH;

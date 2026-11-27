@@ -40,6 +40,8 @@ parser.add_argument('--e_size', type=int, default=128)   # EMBED_SIZE
 parser.add_argument('--i_size', type=int, default=512)   # FFN_SIZE (intermediate)
 parser.add_argument('--tiles', type=int, nargs='+', default=[2, 4, 8, 16])
 parser.add_argument('--ci', type=int, default=None)      # force FFN_CI (columns of H per chunk)
+# the kernel's PRJ_NB: blocks of rows of S run in turn, the per-tile buffers sized for one block
+parser.add_argument('--prj_nb', type=int, default=1)
 parser.add_argument('--seed', type=int, default=42)
 # place the L2 arrays in the .l2ext section (above the default gvsoc L2: run with l2_size >= 0x10000000), by
 # default only if they do not fit the 15 MiB of the default data region (with some room for the rest)
@@ -60,7 +62,8 @@ def schedule(mesh):
     largest reduction blocks, whose buffers fit L1 (step 1: double-buffered X, Wg, Wu blocks and G, U chunks;
     step 2: double-buffered H, Wd blocks and resident Y block; the two steps do not share L1)."""
     assert i_size % mesh == 0, "FFN_SIZE must be a multiple of the mesh side"
-    ts, ti, te = ceil_div(s_size, mesh), i_size // mesh, ceil_div(e_size, mesh)
+    assert s_size % args.prj_nb == 0, "PRJ_NB must divide SEQ_LENGTH"
+    ts, ti, te = ceil_div(s_size // args.prj_nb, mesh), i_size // mesh, ceil_div(e_size, mesh)
     cis = [args.ci] if args.ci else [c for c in range(ti // 2, 0, -2) if ti % c == 0]
     for ci in cis:
         assert ti % ci == 0 and ci % 2 == 0, "FFN_CI must be even and divide FFN_SIZE / mesh"
@@ -70,7 +73,7 @@ def schedule(mesh):
                 step2 = 2 * (2 * ts * kb_i + 2 * kb_i * te + z_rows(ts) * te)
                 if step1 + step2 <= L1_BYTES:
                     return ci, kb_e, kb_i
-    raise SystemExit("no FFN_CI / FFN_KB_E / FFN_KB_I fits L1 on a %dx%d mesh" % (mesh, mesh))
+    raise SystemExit("no FFN_CI / FFN_KB_E / FFN_KB_I fits L1 on a %dx%d mesh with PRJ_NB=%d" % (mesh, mesh, args.prj_nb))
 
 
 sched = {mesh: schedule(mesh) for mesh in args.tiles}
